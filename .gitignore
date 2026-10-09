@@ -44,11 +44,9 @@ Release
 
 ### Simse build outputs ###
 /simse_out.cpp
-# The built executables live in bin/ (build.js, smt.bat): the compiler and the `smt`
-# toolset. bin/ itself is not ignored - `bin/smt-tool/` holds sources and a checked-in
-# amalgamation.
-/bin/simse.exe
-/bin/simse
+/simse.exe
+# The smt toolset's built executable lives in bin/ (smt.bat); bin/ itself is not ignored -
+# `bin/smt-tool/` holds its sources and a checked-in amalgamation.
 /bin/smt.exe
 /bin/smt
 /bin/*.obj

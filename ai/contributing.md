@@ -37,7 +37,7 @@ compiler's own sources stayed `@`-free, and only a compiler built *from* those c
 parse an `@` in the prelude. The published bootstrap never needs a hand-patch: refreshing it
 carries the new scanner and parser. If the running compiler cannot compile the tree at all,
 stage a compiler from the published file first (`./build.bat --cpp src/simse_bootstrap.cpp
---exe bin/simse.exe`), then build normally.
+--exe simse.exe`), then build normally.
 
 A `_res.md` under `src` or a module is part of the compiler's own build, not of a program: the `res` generator reads it
 *first* while the tree is being compiled, and at run time the compiler reads it from disk for

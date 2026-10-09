@@ -8,7 +8,7 @@ rem built into bin\smt.exe. This script builds it when that is missing, then
 rem runs it - with the caller's working directory, so `smt` sees the project a
 rem user is standing in.
 rem
-rem With the compiler built (build.bat -> bin\simse.exe) the tool is transpiled
+rem With the compiler built (build.bat -> simse.exe) the tool is transpiled
 rem from its source; without one, the checked-in amalgamation bin\smt-tool\
 rem smt_src.cpp is compiled directly - the same "from a C++ compiler alone"
 rem path the compiler's own bootstrap takes.
@@ -33,7 +33,7 @@ if errorlevel 1 (
 if not exist "%~dp0bin" mkdir "%~dp0bin"
 echo smt: building bin\smt.exe 1>&2
 pushd "%~dp0"
-if exist "bin\simse.exe" (
+if exist "simse.exe" (
     rem The compiler is here: transpile the source and refresh the checked-in amalgamation.
     bun build.js --release --quiet --root bin/smt-tool/src --module modules/io --out bin/smt-tool/smt_src.cpp --exe bin/smt.exe 1>&2
 ) else (

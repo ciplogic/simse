@@ -26,7 +26,7 @@
 //
 // Options:
 //   --filter <text>   only cases whose path contains <text> (repeatable)
-//   --simse <exe>     compiler to test (default: ./bin/simse.exe; build it with
+//   --simse <exe>     compiler to test (default: ./simse.exe; build it with
 //                     `bun build.js`)
 //   --release         compile the generated programs with /O2 /Ob3 (default: /MDd)
 //   --define <d[=v]>  extra preprocessor define for the compile (repeatable)
@@ -43,7 +43,7 @@
 //   --verbose         print the commands, and each program's output
 //   -h, --help        this text
 //
-// The compiler under test is the point: the harness runs `./bin/simse.exe`, the compiler
+// The compiler under test is the point: the harness runs `./simse.exe`, the compiler
 // built from the published bootstrap, and every program it compiles is one translation
 // unit - the runtime is generated into it, so there is nothing to link beside the program.
 
@@ -56,10 +56,6 @@ const TOOL = "stress";
 const fail = (message) => failTool(TOOL, message);
 const STRESS = path.join(REPO, "stress");
 const WORK = path.join(STRESS, ".work");
-// The compiler under test by default: the one the repository builds (build.js),
-// `bin/simse.exe` (`bin/simse` elsewhere).
-const COMPILER = process.platform === "win32" ? "simse.exe" : "simse";
-const COMPILER_PATH = path.join("bin", COMPILER);
 
 function usage() {
   const header = readFileSync(import.meta.path, "utf8");
@@ -154,7 +150,7 @@ function pickCompiler(explicit) {
     if (!existsSync(resolved)) fail(`compiler not found: ${explicit}`);
     return resolved;
   }
-  const selfHosted = path.join(REPO, COMPILER_PATH);
+  const selfHosted = path.join(REPO, "simse.exe");
   if (existsSync(selfHosted)) return selfHosted;
   fail("no compiler to test: build one with `bun build.js` (or point --simse at one)");
 }

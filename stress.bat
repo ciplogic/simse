@@ -9,7 +9,7 @@ rem   stress.bat --list           what the corpus contains
 rem   stress.bat --help           all options
 rem
 rem The cases live in stress\<name>\ (src\ plus what the program must print), and
-rem the compiler under test is .\bin\simse.exe - build it with build.bat first.
+rem the compiler under test is .\simse.exe - build it with build.bat first.
 rem
 rem Requires the bun runtime (https://bun.sh) on PATH.
 rem ---------------------------------------------------------------------------

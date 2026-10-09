@@ -15,13 +15,13 @@ works; a `cl.exe` already on your `PATH` is used only as a fallback.
 ## 1. Build the compiler
 
 `build.js` transpiles the compiler's own Simse sources (`src/**/*.kt`) into
-one `simse_out.cpp` and compiles that one file into `./bin/simse.exe`. It uses
-`./bin/simse.exe` as the transpiler when one exists; on a fresh checkout there is
+one `simse_out.cpp` and compiles that one file into `./simse.exe`. It uses
+`./simse.exe` as the transpiler when one exists; on a fresh checkout there is
 none yet, so it first compiles the published `src/simse_bootstrap.cpp` and
 uses that (section 2).
 
 ```bat
-build.bat                                   :: debug: ./simse_out.cpp -> ./bin/simse.exe
+build.bat                                   :: debug: ./simse_out.cpp -> ./simse.exe
 build.bat my_compiler.exe                   :: ... with another executable name
 build.bat --release                         :: /O2 /Ob3 /DNDEBUG + /GL
 build.bat --release --no-lto                :: ... without whole-program optimization
@@ -51,14 +51,14 @@ includes `"src/rtl/simse.hpp"`, so the repository root is the include path.
 
 The amalgamation is checked in as **`src/simse_bootstrap.cpp`**: the compiler
 source tree as one C++ file, kept in the repository so that Simse can be built by
-someone who has a C++ compiler and nothing else - no `bin/simse.exe`, no previous
+someone who has a C++ compiler and nothing else - no `simse.exe`, no previous
 build, no build script. That is what makes the language self-hosting rather than
 a claims file.
 
 ```bat
 cl /nologo /std:c++20 /EHsc /O2 /Ob3 /DNDEBUG /MD /W3 /I. ^
    src/simse_bootstrap.cpp ^
-   /Fe:bin\simse.exe
+   /Fe:simse.exe
 ```
 
 One translation unit - the amalgamated compiler - plus the RTL headers under
@@ -69,14 +69,14 @@ in from a second file: their C++ lives in the resource sections
 (`src/rtl/_res.md`'s `timeops`, `modules/io/_res.md`'s `fileio`), which are emitted
 into every program's translation unit, so the published bootstrap already carries
 them. The result is a working compiler. Run it from the repository root:
-`bin\simse.exe --root my_project -o my_project.cpp` - the RTL sits at the default
+`simse.exe --root my_project -o my_project.cpp` - the RTL sits at the default
 prelude path `src/rtl`.
 
 To refresh the published file after changing the compiler (it is generated, never
 hand-edited):
 
 ```bat
-bun build.js --release --out src/simse_bootstrap.cpp   :: also builds ./bin/simse.exe
+bun build.js --release --out src/simse_bootstrap.cpp   :: also builds ./simse.exe
 ```
 
 `bun tools/bootstrap.js` measures the whole story and checks the fixed point - the
@@ -96,7 +96,7 @@ bootstrap: release build, 3 run(s) for the transpiles
 
 2. transpile the compiler's own source trees
   simse_boot.exe (just built) --root src --root modules best 1720 ms, median 1752 ms
-  working compiler (bin/simse.exe) --root src --root modules best 1724 ms, median 1743 ms
+  working compiler (simse.exe) --root src --root modules best 1724 ms, median 1743 ms
 
 3. fixed point: both outputs must equal the published bootstrap
   simse_boot.exe's output == the bootstrap             yes, byte for byte
@@ -119,7 +119,7 @@ moves it up from there).
 Using the self-hosted compiler on one of the bundled examples:
 
 ```bat
-bin\simse.exe --root examples/hello -o hello.cpp
+simse.exe --root examples/hello -o hello.cpp
 build.bat --cpp hello.cpp --exe hello.exe
 hello.exe
 :: hello, simse
@@ -128,7 +128,7 @@ hello.exe
 The first command transpiles every `.kt` file under the given module root (the
 `--root` directory) and writes one amalgamated C++ file; the second compiles that
 one file into the executable - the runtime is already in it, emitted from the
-RTL's resource sections. `bin/simse.exe` with no arguments scans the current
+RTL's resource sections. `simse.exe` with no arguments scans the current
 directory, which is rarely what you want here: the repository holds several
 independent programs - the prelude, the examples, the stress cases - that are not
 one module.
@@ -136,7 +136,7 @@ one module.
 The compiler's own CLI is:
 
 ```
-bin\simse.exe --root <dir> -o <out.cpp> [--prelude <dir>] [--profile] [--profile-file <path>] [--profile-nanos] [--no-concat] [--when-first-char] [--showLinearRepresentation]
+simse.exe --root <dir> -o <out.cpp> [--prelude <dir>] [--profile] [--profile-file <path>] [--profile-nanos] [--no-concat] [--when-first-char] [--showLinearRepresentation]
 ```
 
 - `--root <dir>` scans a directory tree for `.kt` files (the compiler's own

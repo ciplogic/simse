@@ -171,7 +171,7 @@ The invariant is a **fixed point**, and machines check it, not discipline:
 1. **`tools/bootstrap.js`** compiles the published `src/simse_bootstrap.cpp`
    with `cl.exe` alone, then has the resulting binary transpile `src` again.
    The output must equal the published
-   file **byte for byte** (and so must `./bin/simse.exe`'s output, when one exists).
+   file **byte for byte** (and so must `./simse.exe`'s output, when one exists).
    This is the strongest statement the project makes: the compiler built from the
    published file behaves exactly like the one that produced it. `build.js`
    bootstraps itself the same way on a fresh checkout, and `bun tools/iterate.js

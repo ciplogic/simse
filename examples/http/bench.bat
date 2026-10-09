@@ -21,9 +21,9 @@ if "%REQ%"=="" set REQ=1000
 if "%PATHQ%"=="" set PATHQ=/
 set /a TOTAL=%CONNS% * %REQ%
 
-bin\simse.exe --root examples/http/server/src --module examples/http/sockets -o examples/http/server/out.cpp
+simse.exe --root examples/http/server/src --module examples/http/sockets -o examples/http/server/out.cpp
 if errorlevel 1 goto :fail
-bin\simse.exe --root examples/http/client/src --module examples/http/sockets -o examples/http/client/out.cpp
+simse.exe --root examples/http/client/src --module examples/http/sockets -o examples/http/client/out.cpp
 if errorlevel 1 goto :fail
 
 call bun build.js --release --cpp examples/http/server/out.cpp --exe examples/http/server/httpd.exe

@@ -21,15 +21,15 @@ From the repository root:
 
 ```sh
 # the bootstrap is one translation unit; the repo root is the include path
-g++ -std=c++20 -O2 -DNDEBUG -I. src/simse_bootstrap.cpp -o bin/simse
+g++ -std=c++20 -O2 -DNDEBUG -I. src/simse_bootstrap.cpp -o simse
 ```
 
-That `bin/simse` is a complete compiler. Check the fixed point (the property that makes the
+That `simse` is a complete compiler. Check the fixed point (the property that makes the
 checked-in file a *bootstrap* and not a snapshot): the compiler it produced must transpile
 `src` and `modules` back into the same bytes.
 
 ```sh
-./bin/simse --root src --root modules -o /tmp/out.cpp
+./simse --root src --root modules -o /tmp/out.cpp
 cmp src/simse_bootstrap.cpp /tmp/out.cpp && echo "fixed point holds"
 ```
 
@@ -79,7 +79,7 @@ so a design can be made for each.
 ## Verification (for the next agent, once on a Linux box)
 
 1. Compile the bootstrap with `g++` (above) — this is the step that proves the C++ is
-   portable; it needs no `bin/simse` and no build system.
-2. Run the fixed-point check (`./bin/simse --root src --root modules -o /tmp/out.cpp; cmp ...`).
+   portable; it needs no `simse` and no build system.
+2. Run the fixed-point check (`./simse --root src --root modules -o /tmp/out.cpp; cmp ...`).
 3. After the tooling scripts are ported: `bun tools/stress.js`, `bun tools/bootstrap.js`, and
    the loop `bun tools/iterate.js`.

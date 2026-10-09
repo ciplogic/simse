@@ -314,12 +314,12 @@ expected `.cpp`) keeps the rest honest.
 Requirements: Windows with Visual Studio (C++ workload) and [bun](https://bun.sh).
 
 ```bat
-:: 1. build the compiler from its sources -> .\bin\simse.exe
+:: 1. build the compiler from its sources -> .\simse.exe
 ::    a fresh checkout first compiles the published bootstrap for this step
 build.bat --release
 
 :: 2. compile and run an example with it
-bin\simse.exe --root examples/hello -o hello.cpp
+simse.exe --root examples/hello -o hello.cpp
 build.bat --cpp hello.cpp --exe hello.exe
 hello.exe
 ```
@@ -327,7 +327,7 @@ hello.exe
 `build.bat` is a thin wrapper over `build.js` (`build.bat --help` lists the options: `--release`,
 `--fast`, `--no-lto`, `--quiet`, `--pdb`, `--define <name>` for the RTL's configuration
 switches, `--arch`). Once
-`./bin/simse.exe` exists, transpiling the whole tree takes about a second; the rest of a build is
+`./simse.exe` exists, transpiling the whole tree takes about a second; the rest of a build is
 `cl.exe` optimizing the emitted C++. After a change to the compiler, the loop is one command:
 `bun tools/iterate.js` (the fast loop — build, corpus and bootstrap check, ~20 s), and
 `bun tools/iterate.js --full` for the commit loop (the release build plus the two-way bootstrap
@@ -373,7 +373,7 @@ runs green on every build, alongside the bootstrap fixed point.
 | --- | --- |
 | `src/` | the compiler in Simse (`lex/`, `parser/`, `sema/`, `linear/`, `codegen/`, `compiler/` - the source generators' package too), plus `src/rtl/` (the prelude `.kt` files, the runtime headers, and the resource file `_res.md`, which holds the runtime's C++) and `src/simse_bootstrap.cpp` - the published transpiled compiler, the output proof |
 | `modules/` | the reusable modules a program (and the compiler itself) names: `json` (with its `generators/`), `jsonnode`, `compiler` (the AST and the generator interface), `io`, `streams`, `linq`, `xml`, `http` - each with its `_res.md` |
-| `bin/` | the built executables - `simse.exe` (the compiler; `simse` elsewhere) and `smt.exe` - and the toolset's home `bin/smt-tool/`: its `src/main.kt` and the checked-in amalgamation `smt_src.cpp` |
+| `bin/` | the `smt` toolset: its built `smt.exe` and its home `bin/smt-tool/` (`src/main.kt` plus the checked-in amalgamation `smt_src.cpp`); the compiler itself builds at the repository root (`simse.exe`) |
 | `specs/` | the language specification (normative): types, declarations, functions, memory model, generics, containers, modules, statics, resources |
 | `impl_specs/` | implementation plans and records: the capability matrix, the RTL ABI, generators, the user-facing roadmap |
 | `stress/` | one folder per end-to-end program: source, arguments, expected output, and where the emitted text is the point, an `expected.cpp` golden |

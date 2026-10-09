@@ -19,7 +19,7 @@ From the repository root (the compiler must be built first: `build.bat --release
 
 ```bat
 :: 1. transpile the demo together with the wrapper module -> app/out.cpp
-bin\simse.exe --root examples/sdl2/app/src --module examples/sdl2/wrapper -o examples/sdl2/app/out.cpp
+simse.exe --root examples/sdl2/app/src --module examples/sdl2/wrapper -o examples/sdl2/app/out.cpp
 
 :: 2. compile the one amalgamated translation unit -> app/sdl2demo.exe
 bun build.js --release --cpp examples/sdl2/app/out.cpp --exe examples/sdl2/app/sdl2demo.exe

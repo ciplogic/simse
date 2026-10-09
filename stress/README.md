@@ -6,7 +6,7 @@ Simse compiler, compiles the generated C++ with `cl.exe`, runs it, and compares
 the result to the folder's expectations:
 
 ```sh
-bun tools/stress.js                     # every case, with ./bin/simse.exe
+bun tools/stress.js                     # every case, with ./simse.exe
 bun tools/stress.js --filter strings    # one case (or a few: repeat --filter)
 bun tools/stress.js --list              # what is here, and what each case checks
 bun tools/stress.js --release           # compile the programs with /O2 /Ob3
@@ -17,7 +17,7 @@ bun tools/stress.js --simse ./some_other_simse.exe   # test another compiler bui
 After a change, the loop is one command: `bun tools/iterate.js` runs this corpus with the build
 and the bootstrap check (`ai/building.md`).
 
-The compiler under test is the point: by default the harness runs `./bin/simse.exe`, the
+The compiler under test is the point: by default the harness runs `./simse.exe`, the
 compiler built from the published bootstrap (`bun build.js`).
 
 ## A case

@@ -34,9 +34,6 @@ import { developerEnv, fail as failTool, hostArch, normalizeArch, REPO, whichCl 
 const TOOL = "bootstrap";
 const fail = (message) => failTool(TOOL, message);
 const BOOTSTRAP = path.join("src", "simse_bootstrap.cpp");
-// The compiler the repository builds (build.js): `bin/simse.exe` (`bin/simse` elsewhere).
-const COMPILER = process.platform === "win32" ? "simse.exe" : "simse";
-const COMPILER_PATH = path.join("bin", COMPILER);
 
 function parseArgs(argv) {
   const opts = { runs: 3, debug: false, fast: false, simse: null, quick: false, write: false };
@@ -107,7 +104,7 @@ function main() {
   const bootExe = path.join(work, "simse_boot.exe");
   const bootOut = path.join(work, "simse_boot_out.cpp");
   const workingOut = path.join(work, "simse_working_out.cpp");
-  const working = opts.simse ? path.resolve(REPO, opts.simse) : path.join(REPO, COMPILER_PATH);
+  const working = opts.simse ? path.resolve(REPO, opts.simse) : path.join(REPO, "simse.exe");
   const hasWorking = existsSync(working);
 
   for (const required of [bootstrap]) {
@@ -185,7 +182,7 @@ function main() {
     workTime = timed(`working compiler (${path.relative(REPO, working)}) --root src --root modules`,
           working, ["--root", "src", "--root", "modules", "-o", workingOut], opts.runs);
   } else {
-    console.log(`  ${"(no ./" + COMPILER_PATH + " to compare with)".padEnd(52)} build one with \`bun build.js\``);
+    console.log(`  ${"(no ./simse.exe to compare with)".padEnd(52)} build one with \`bun build.js\``);
   }
   console.log("");
   console.log("3. fixed point: both outputs must equal the published bootstrap");

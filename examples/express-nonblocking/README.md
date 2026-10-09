@@ -55,7 +55,7 @@ dispatches and keeps whatever of the next request already arrived.
 From the repository root (the compiler must be built first: `build.bat --release`):
 
 ```bat
-bin\simse.exe --root examples/express-nonblocking/src ^
+simse.exe --root examples/express-nonblocking/src ^
     --module examples/express/layers --module examples/http/sockets ^
     --module modules/http --module modules/jsonnode ^
     -o examples/express-nonblocking/out.cpp

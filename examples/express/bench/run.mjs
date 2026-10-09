@@ -9,7 +9,7 @@
 // so the numbers are relative to one client, not a controlled study.
 //
 // Build the Simse server first (see ../README.md):
-//   bin\simse.exe --root examples/express/src --module examples/http/sockets \
+//   simse.exe --root examples/express/src --module examples/http/sockets \
 //       --module modules/http --module modules/jsonnode -o examples/express/out.cpp
 //   bun build.js --release --cpp examples/express/out.cpp --exe examples/express/express.exe
 
