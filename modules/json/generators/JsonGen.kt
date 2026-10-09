@@ -1,13 +1,13 @@
 // JsonGen.kt
 //
-// The `json` module's source generator (src/modules/json/generators/). A declaration
+// The `json` module's source generator (modules/json/generators/). A declaration
 // `@SmGen("json") fun T.toJson<T>(): Str` - the one the module's `api.kt` carries, beside this
 // file - asks the compiler for a JSON serializer, and this generator *builds that Simse source in
 // code* rather than reading it from a resource: it is the generator kind that reads the
 // program's own type structure.
 //
 // A module's generators live in a `generators/` subfolder by convention, and they are part of
-// the compiler's own build - `src/modules/**` is scanned with the rest of the tree, and each
+// the compiler's own build - the `modules` tree is scanned with the rest of the tree, and each
 // generator registers itself (`specs/simse-md.md`). The generated *output* is merged in memory
 // by the driver's reparse pass; nothing is written to disk.
 //
@@ -29,7 +29,7 @@
 // The generated module is package `rtl` (the driver's synthetic module, impl_specs/generators.md)
 // and begins with one `import` per package a serialized class lives in, which is what lets it
 // name a program-defined class. The fixed text - the quoting helper - is the `json:helpers`
-// section of `src/rtl/_res.md`, so it stays readable Simse rather than an escaped literal.
+// section of `modules/json/_res.md`, so it stays readable Simse rather than an escaped literal.
 
 package json
 import compiler
@@ -312,7 +312,7 @@ fun jsonBuildSource(ctx: *SourceGenContext): Str {
     if (flags.has("quoted")) {
         val helper: Str = sourceGenResText(ctx.state, "json:helpers")
         if (helper == "") {
-            ctx.error = "json: the json:helpers resource is missing (a section of src/rtl/_res.md)"
+            ctx.error = "json: the json:helpers resource is missing (a section of modules/json/_res.md)"
             return ""
         }
         out.appendStr(helper)

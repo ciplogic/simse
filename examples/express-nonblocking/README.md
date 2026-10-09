@@ -57,7 +57,7 @@ From the repository root (the compiler must be built first: `build.bat --release
 ```bat
 simse.exe --root examples/express-nonblocking/src ^
     --module examples/express/layers --module examples/http/sockets ^
-    --module src/modules/http --module src/modules/jsonnode ^
+    --module modules/http --module modules/jsonnode ^
     -o examples/express-nonblocking/out.cpp
 bun build.js --release --cpp examples/express-nonblocking/out.cpp ^
     --exe examples/express-nonblocking/express-nonblocking.exe

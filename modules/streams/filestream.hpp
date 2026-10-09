@@ -4,13 +4,13 @@
 #include <fstream>
 #include <string>
 
-#include "../../rtl/containers.hpp"
-#include "../../rtl/types.hpp"
+#include "../../src/rtl/containers.hpp"
+#include "../../src/rtl/types.hpp"
 
 // Reading a file line by line. The Simse surface is the `streams` module
-// (src/modules/streams/fs.kt), and **this header is the struct alone**: its fields, its method
+// (modules/streams/fs.kt), and **this header is the struct alone**: its fields, its method
 // declarations and the three reads' contract. The bodies are the `filestream` section of
-// src/modules/streams/_res.md - the emitter calls a handle's methods as members
+// modules/streams/_res.md - the emitter calls a handle's methods as members
 // (`stream->readLine()`), so the class declares them here and the section defines them, and a
 // program carries the text only when it calls one. `<fstream>`/`<string>` are the fields'
 // includes and `<cstring>` is the section's (`memchr`/`memmove`/`memcpy`), since this header is
@@ -18,9 +18,9 @@
 //
 // The header is placed by the `filestreamhpp` section of the module's `_res.md` (`emit:
 // always`), so a program that names the module carries it and a program that does not, does
-// not. The RTL headers above are spelled relative to this header (`../../rtl/...`) rather than
-// to the repository root, because the include is emitted into arbitrary output directories and
-// only the header's own location is fixed.
+// not. The RTL headers above are spelled relative to this header (`../../src/rtl/...`) rather
+// than to the repository root, because the include is emitted into arbitrary output directories
+// and only the header's own location is fixed.
 //
 // `simse_fileStream_open` is *not* a method: it is a free function in the same `filestream`
 // section, reached when a program opens a stream.

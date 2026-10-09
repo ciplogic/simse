@@ -1,6 +1,6 @@
 Generated C++
 ====
-The `streams` module's C++ - the declarations are src/modules/streams/fs.kt. `FileStream` is a
+The `streams` module's C++ - the declarations are modules/streams/fs.kt. `FileStream` is a
 *type* whose layout only C++ can express (`std::ifstream`, a recycled `std::string`), so the
 struct is hand-written (`filestream.hpp`) and the declaration carries the materialization
 marker (`@SmGen("cpp")`, specs/attributes.md): the emitter must not generate one. `filestreamhpp`
@@ -13,7 +13,7 @@ the method bodies, reached only when a program opens or reads a stream.
 emit: always
 includes:
 ```cpp
-#include "src/modules/streams/filestream.hpp"
+#include "modules/streams/filestream.hpp"
 ```
 
 !filestream
@@ -33,12 +33,12 @@ FileStream* simse_fileStream_open(const Str& path);
 bodies:
 ```cpp
 // `FileStream`'s open and operations. The struct - its fields and the declarations of the
-// methods - is src/modules/streams/filestream.hpp, and the emitter calls them as *members*
+// methods - is modules/streams/filestream.hpp, and the emitter calls them as *members*
 // (`stream->readLine()`), which is why this section needs no forward text for them: the class
 // already declares each one. What a program carries is this text, and only when it reaches one
-// of these declarations - src/modules/streams/fs.kt names the section, and `emit: reached`
+// of these declarations - modules/streams/fs.kt names the section, and `emit: reached`
 // says the section's own text is reach-gated even though the declaration is a program
-// module's. The open is a free function (`src/modules/io/_res.md` held it while the type lived
+// module's. The open is a free function (`modules/io/_res.md` held it while the type lived
 // in the prelude), and its prototype is the `forward` text above.
 
 // Opens `path` in binary mode and sizes the readahead buffer; null when it cannot be opened.

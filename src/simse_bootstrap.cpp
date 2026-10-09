@@ -26,7 +26,7 @@
 #include <cstring>
 #include <string>
 
-#include "src/modules/streams/filestream.hpp"
+#include "modules/streams/filestream.hpp"
 
 
 // Resolves 'symbol' from 'library', loading the library once and caching the handle (a small
@@ -89,6 +89,17 @@ struct Opt;
 template <class T>
 struct Res;
 struct ResourceEntry;
+struct ns3_AstNodeAttribute;
+struct ns3_AstXmlNode;
+struct ns3_SourceGenTransform;
+struct ns3_SourceGenContext;
+struct ns6_JsonTypes;
+struct ns7_JsonNode;
+struct ns7_JsonMember;
+struct ns7_JsonWriter;
+struct ns7_JsonReader;
+struct ns17_Attribute;
+struct ns17_XmlNode;
 struct ns1_CgCallableArg;
 struct ns1_CgProtocolImpl;
 struct ns1_StringTable;
@@ -137,17 +148,6 @@ struct ns9_YldParam;
 struct ns9_YldMethod;
 struct ns9_Yielded;
 struct ns9_YldMachinery;
-struct ns3_AstNodeAttribute;
-struct ns3_AstXmlNode;
-struct ns3_SourceGenTransform;
-struct ns3_SourceGenContext;
-struct ns6_JsonTypes;
-struct ns7_JsonNode;
-struct ns7_JsonMember;
-struct ns7_JsonWriter;
-struct ns7_JsonReader;
-struct ns17_Attribute;
-struct ns17_XmlNode;
 struct ns11_FoldState;
 struct ns11_FoldGlobalConst;
 struct ns11_FoldGlobalScan;
@@ -464,6 +464,297 @@ struct ResourceEntry {
     Span<Char> value;
 };
 SIMSE_PACK_POP
+// modules/compiler/astxml.kt
+enum class ns3_AstNodeKind { None, Module, Import, DataClass, Enum, TypeAlias, Function, Var, TypeParam, Field, Param, EnumMember, Type, Inner, TypeArg, ParamType, ReturnType, TargetType, Receiver, UnionTag, Stmt, Expr, Cond, Then, Else, Body, Label, Init, Value, Target, Operand, Lhs, Rhs, Index, Callee, Arg };
+inline ns3_AstNodeKind ns3_simse_AstNodeKind_fromInt(Int value) { return (ns3_AstNodeKind) value; }
+// modules/compiler/astxml.kt
+enum class ns3_AstNodeAttributeKind { Line, Column, Name, IsVar, IsNative, HasBody, HasReceiver, HasNativeSymbol, NativeSymbol, Attribute, Generator, GeneratorArgs, Package, Path, Params, Op, Value, Text, HasValue, IsPure, IsSuspend, IsBorrow, IsOperator, InitByValue, IsNativeClass, IsRefClass, IsUnionClass, IsUnionGenerated, Protocol, Protocols };
+inline ns3_AstNodeAttributeKind ns3_simse_AstNodeAttributeKind_fromInt(Int value) { return (ns3_AstNodeAttributeKind) value; }
+// modules/compiler/astxml.kt
+enum class ns3_AstNodeCategory { None, Module, DataClass, Enum, TypeAlias, Function, Var, StmtVarDecl, StmtAssign, StmtIf, StmtWhile, StmtReturn, StmtBreak, StmtContinue, StmtExprStmt, StmtLabel, StmtGoto, StmtIfTrue, StmtIfFalse, StmtBlock, StmtYield, ExprIntLit, ExprFloatLit, ExprStrLit, ExprCharLit, ExprBoolLit, ExprNullLit, ExprName, ExprGenericName, ExprMember, ExprCall, ExprIndex, ExprUnary, ExprBinary, ExprLambda, ExprRef, ExprDeref, ExprCopy, TypeIntLit, TypeNamed, TypeGeneric, TypeReference, TypePointer, TypeFunction, TypeYield, ExprPropagate };
+inline ns3_AstNodeCategory ns3_simse_AstNodeCategory_fromInt(Int value) { return (ns3_AstNodeCategory) value; }
+// modules/compiler/astxml.kt
+SIMSE_PACK_PUSH
+struct ns3_AstNodeAttribute {
+    ns3_AstNodeAttributeKind name;
+    Str value;
+};
+SIMSE_PACK_POP
+// modules/compiler/astxml.kt
+SIMSE_PACK_PUSH
+struct ns3_AstXmlNode {
+    ns3_AstNodeKind name;
+    ns3_AstNodeCategory kind;
+    List<ns3_AstNodeAttribute> attributes;
+    Array<ns3_AstXmlNode> Children;
+};
+SIMSE_PACK_POP
+// src/compiler/GenTypes.kt
+enum class ns3_SourceTransformation { None, ChangedOutput, ReparseRequired, AlreadyExisting };
+inline ns3_SourceTransformation ns3_simse_SourceTransformation_fromInt(Int value) { return (ns3_SourceTransformation) value; }
+// modules/compiler/gen.kt
+SIMSE_PACK_PUSH
+struct ns3_SourceGenTransform {
+    ns3_SourceTransformation change;
+    Str key;
+};
+SIMSE_PACK_POP
+// src/compiler/GenTypes.kt
+enum class ns3_SourceGenPhase { Declare, Reparse, Emit };
+inline ns3_SourceGenPhase ns3_simse_SourceGenPhase_fromInt(Int value) { return (ns3_SourceGenPhase) value; }
+// modules/compiler/gen.kt
+SIMSE_PACK_PUSH
+struct ns3_SourceGenContext {
+    Str name;
+    ns3_SourceGenPhase phase;
+    ns3_AstXmlNode declaration;
+    Str declName;
+    List<Str> parameters;
+    Str symbol;
+    Str source;
+    Str error;
+    Str fileName;
+    Bool prelude;
+    ns3_FullCompiledState* state;
+    ns3_Sections* sections;
+    Dictionary<Str, Bool>* reachedNames;
+};
+SIMSE_PACK_POP
+// modules/json/generators/JsonGen.kt
+SIMSE_PACK_PUSH
+struct ns6_JsonTypes {
+    Dictionary<Str, ns3_AstXmlNode> classes;
+    Dictionary<Str, Str> packages;
+    List<Str> order;
+    Dictionary<Str, Bool> declared;
+};
+SIMSE_PACK_POP
+// modules/jsonnode/jsonnode.kt
+enum class ns7_SmJsonNodeTypes { None, Boolean, Number, Text, Items, Members };
+inline ns7_SmJsonNodeTypes ns7_simse_SmJsonNodeTypes_fromInt(Int value) { return (ns7_SmJsonNodeTypes) value; }
+// modules/jsonnode/jsonnode.kt
+SIMSE_PACK_PUSH
+struct ns7_SmJsonNodeStorage {
+    ns7_SmJsonNodeTypes _type = ns7_SmJsonNodeTypes::None;
+    union {
+        Bool Boolean;
+        Float64 Number;
+        Str Text;
+        List<Ref<ns7_JsonNode>> Items;
+        List<Ref<ns7_JsonMember>> Members;
+    };
+    ns7_SmJsonNodeStorage() {}
+    ns7_SmJsonNodeStorage(const ns7_SmJsonNodeStorage& other) { this->copyFrom(other); }
+    ns7_SmJsonNodeStorage(ns7_SmJsonNodeStorage&& other) noexcept { this->moveFrom(other); }
+    ~ns7_SmJsonNodeStorage() { this->destroyActive(); }
+    ns7_SmJsonNodeStorage& operator=(const ns7_SmJsonNodeStorage& other) {
+        if (this != &other) {
+            this->destroyActive();
+            this->copyFrom(other);
+        }
+        return *this;
+    }
+    ns7_SmJsonNodeStorage& operator=(ns7_SmJsonNodeStorage&& other) noexcept {
+        if (this != &other) {
+            this->destroyActive();
+            this->moveFrom(other);
+        }
+        return *this;
+    }
+    void destroyActive() {
+        switch (this->_type) {
+            case ns7_SmJsonNodeTypes::Boolean: simse_destroy(this->Boolean); break;
+            case ns7_SmJsonNodeTypes::Number: simse_destroy(this->Number); break;
+            case ns7_SmJsonNodeTypes::Text: simse_destroy(this->Text); break;
+            case ns7_SmJsonNodeTypes::Items: simse_destroy(this->Items); break;
+            case ns7_SmJsonNodeTypes::Members: simse_destroy(this->Members); break;
+            default: break;
+        }
+        this->_type = ns7_SmJsonNodeTypes::None;
+    }
+    void copyFrom(const ns7_SmJsonNodeStorage& other) {
+        switch (other._type) {
+            case ns7_SmJsonNodeTypes::Boolean: ::new ((void *) &this->Boolean) Bool(other.Boolean); this->_type = ns7_SmJsonNodeTypes::Boolean; break;
+            case ns7_SmJsonNodeTypes::Number: ::new ((void *) &this->Number) Float64(other.Number); this->_type = ns7_SmJsonNodeTypes::Number; break;
+            case ns7_SmJsonNodeTypes::Text: ::new ((void *) &this->Text) Str(other.Text); this->_type = ns7_SmJsonNodeTypes::Text; break;
+            case ns7_SmJsonNodeTypes::Items: ::new ((void *) &this->Items) List<Ref<ns7_JsonNode>>(other.Items); this->_type = ns7_SmJsonNodeTypes::Items; break;
+            case ns7_SmJsonNodeTypes::Members: ::new ((void *) &this->Members) List<Ref<ns7_JsonMember>>(other.Members); this->_type = ns7_SmJsonNodeTypes::Members; break;
+            default: break;
+        }
+    }
+    void moveFrom(ns7_SmJsonNodeStorage& other) {
+        switch (other._type) {
+            case ns7_SmJsonNodeTypes::Boolean: ::new ((void *) &this->Boolean) Bool(std::move(other.Boolean)); this->_type = ns7_SmJsonNodeTypes::Boolean; break;
+            case ns7_SmJsonNodeTypes::Number: ::new ((void *) &this->Number) Float64(std::move(other.Number)); this->_type = ns7_SmJsonNodeTypes::Number; break;
+            case ns7_SmJsonNodeTypes::Text: ::new ((void *) &this->Text) Str(std::move(other.Text)); this->_type = ns7_SmJsonNodeTypes::Text; break;
+            case ns7_SmJsonNodeTypes::Items: ::new ((void *) &this->Items) List<Ref<ns7_JsonNode>>(std::move(other.Items)); this->_type = ns7_SmJsonNodeTypes::Items; break;
+            case ns7_SmJsonNodeTypes::Members: ::new ((void *) &this->Members) List<Ref<ns7_JsonMember>>(std::move(other.Members)); this->_type = ns7_SmJsonNodeTypes::Members; break;
+            default: break;
+        }
+    }
+    void setBoolean(Bool value) {
+        if (_type == ns7_SmJsonNodeTypes::Boolean) {
+            Boolean = std::move(value);
+            return;
+        }
+        this->destroyActive();
+        _type = ns7_SmJsonNodeTypes::Boolean;
+        ::new ((void *) &Boolean) Bool(std::move(value));
+    }
+    void setNumber(Float64 value) {
+        if (_type == ns7_SmJsonNodeTypes::Number) {
+            Number = std::move(value);
+            return;
+        }
+        this->destroyActive();
+        _type = ns7_SmJsonNodeTypes::Number;
+        ::new ((void *) &Number) Float64(std::move(value));
+    }
+    void setText(Str value) {
+        if (_type == ns7_SmJsonNodeTypes::Text) {
+            Text = std::move(value);
+            return;
+        }
+        this->destroyActive();
+        _type = ns7_SmJsonNodeTypes::Text;
+        ::new ((void *) &Text) Str(std::move(value));
+    }
+    void setItems(List<Ref<ns7_JsonNode>> value) {
+        if (_type == ns7_SmJsonNodeTypes::Items) {
+            Items = std::move(value);
+            return;
+        }
+        this->destroyActive();
+        _type = ns7_SmJsonNodeTypes::Items;
+        ::new ((void *) &Items) List<Ref<ns7_JsonNode>>(std::move(value));
+    }
+    void setMembers(List<Ref<ns7_JsonMember>> value) {
+        if (_type == ns7_SmJsonNodeTypes::Members) {
+            Members = std::move(value);
+            return;
+        }
+        this->destroyActive();
+        _type = ns7_SmJsonNodeTypes::Members;
+        ::new ((void *) &Members) List<Ref<ns7_JsonMember>>(std::move(value));
+    }
+    void setNone() {
+        this->destroyActive();
+    }
+};
+struct ns7_JsonNode : ns7_SmJsonNodeStorage {
+};
+SIMSE_PACK_POP
+inline Bool operator==(const ns7_JsonNode& self, ns7_SmJsonNodeTypes tag) { return self._type == tag; }
+inline Bool operator==(const ns7_JsonNode* self, ns7_SmJsonNodeTypes tag) { return self->_type == tag; }
+inline Bool operator!=(const ns7_JsonNode& self, ns7_SmJsonNodeTypes tag) { return self._type != tag; }
+inline Bool operator!=(const ns7_JsonNode* self, ns7_SmJsonNodeTypes tag) { return self->_type != tag; }
+inline ns7_SmJsonNodeTypes ns7_getTypeOf(ns7_JsonNode* self) {
+    return self->_type;
+}
+inline Bool ns7_isOfType(ns7_JsonNode* self, ns7_SmJsonNodeTypes typeToCheck) {
+    return self->_type == typeToCheck;
+}
+inline void ns7_setNone(ns7_JsonNode* self) {
+    self->setNone();
+}
+inline void ns7_initByValue(ns7_JsonNode* self) {
+    self->setNone();
+}
+inline void ns7_setBoolean(ns7_JsonNode* self, Bool value) {
+    self->setBoolean(std::move(value));
+}
+inline Bool* ns7_getBoolean(ns7_JsonNode* self) {
+    if (self->_type == ns7_SmJsonNodeTypes::Boolean) {
+        return &self->Boolean;
+    }
+    return nullptr;
+}
+inline void ns7_initByValue(ns7_JsonNode* self, Bool value) {
+    self->setBoolean(std::move(value));
+}
+inline void ns7_setNumber(ns7_JsonNode* self, Float64 value) {
+    self->setNumber(std::move(value));
+}
+inline Float64* ns7_getNumber(ns7_JsonNode* self) {
+    if (self->_type == ns7_SmJsonNodeTypes::Number) {
+        return &self->Number;
+    }
+    return nullptr;
+}
+inline void ns7_initByValue(ns7_JsonNode* self, Float64 value) {
+    self->setNumber(std::move(value));
+}
+inline void ns7_setText(ns7_JsonNode* self, Str value) {
+    self->setText(std::move(value));
+}
+inline Str* ns7_getText(ns7_JsonNode* self) {
+    if (self->_type == ns7_SmJsonNodeTypes::Text) {
+        return &self->Text;
+    }
+    return nullptr;
+}
+inline void ns7_initByValue(ns7_JsonNode* self, Str value) {
+    self->setText(std::move(value));
+}
+inline void ns7_setItems(ns7_JsonNode* self, List<Ref<ns7_JsonNode>> value) {
+    self->setItems(std::move(value));
+}
+inline List<Ref<ns7_JsonNode>>* ns7_getItems(ns7_JsonNode* self) {
+    if (self->_type == ns7_SmJsonNodeTypes::Items) {
+        return &self->Items;
+    }
+    return nullptr;
+}
+inline void ns7_initByValue(ns7_JsonNode* self, List<Ref<ns7_JsonNode>> value) {
+    self->setItems(std::move(value));
+}
+inline void ns7_setMembers(ns7_JsonNode* self, List<Ref<ns7_JsonMember>> value) {
+    self->setMembers(std::move(value));
+}
+inline List<Ref<ns7_JsonMember>>* ns7_getMembers(ns7_JsonNode* self) {
+    if (self->_type == ns7_SmJsonNodeTypes::Members) {
+        return &self->Members;
+    }
+    return nullptr;
+}
+inline void ns7_initByValue(ns7_JsonNode* self, List<Ref<ns7_JsonMember>> value) {
+    self->setMembers(std::move(value));
+}
+// modules/jsonnode/jsonnode.kt
+SIMSE_PACK_PUSH
+struct ns7_JsonMember {
+    Str key;
+    Ref<ns7_JsonNode> value;
+};
+SIMSE_PACK_POP
+// modules/jsonnode/jsonnode.kt
+SIMSE_PACK_PUSH
+struct ns7_JsonWriter {
+    Str out;
+};
+SIMSE_PACK_POP
+// modules/jsonnode/jsonnode.kt
+SIMSE_PACK_PUSH
+struct ns7_JsonReader {
+    Str text;
+    Int at;
+};
+SIMSE_PACK_POP
+// modules/xml/api.kt
+SIMSE_PACK_PUSH
+struct ns17_Attribute {
+    Str name;
+    Str value;
+};
+SIMSE_PACK_POP
+// modules/xml/api.kt
+SIMSE_PACK_PUSH
+struct ns17_XmlNode {
+    Str name;
+    List<ns17_Attribute> attributes;
+    Array<ns17_XmlNode> Children;
+};
+SIMSE_PACK_POP
 // src/codegen/CgEmitFn.kt
 SIMSE_PACK_PUSH
 struct ns1_CgCallableArg {
@@ -483,31 +774,6 @@ SIMSE_PACK_PUSH
 struct ns1_StringTable {
     List<Str> entries;
     Dictionary<Str, Int> indexAt;
-};
-SIMSE_PACK_POP
-// src/modules/compiler/astxml.kt
-enum class ns3_AstNodeKind { None, Module, Import, DataClass, Enum, TypeAlias, Function, Var, TypeParam, Field, Param, EnumMember, Type, Inner, TypeArg, ParamType, ReturnType, TargetType, Receiver, UnionTag, Stmt, Expr, Cond, Then, Else, Body, Label, Init, Value, Target, Operand, Lhs, Rhs, Index, Callee, Arg };
-inline ns3_AstNodeKind ns3_simse_AstNodeKind_fromInt(Int value) { return (ns3_AstNodeKind) value; }
-// src/modules/compiler/astxml.kt
-enum class ns3_AstNodeCategory { None, Module, DataClass, Enum, TypeAlias, Function, Var, StmtVarDecl, StmtAssign, StmtIf, StmtWhile, StmtReturn, StmtBreak, StmtContinue, StmtExprStmt, StmtLabel, StmtGoto, StmtIfTrue, StmtIfFalse, StmtBlock, StmtYield, ExprIntLit, ExprFloatLit, ExprStrLit, ExprCharLit, ExprBoolLit, ExprNullLit, ExprName, ExprGenericName, ExprMember, ExprCall, ExprIndex, ExprUnary, ExprBinary, ExprLambda, ExprRef, ExprDeref, ExprCopy, TypeIntLit, TypeNamed, TypeGeneric, TypeReference, TypePointer, TypeFunction, TypeYield, ExprPropagate };
-inline ns3_AstNodeCategory ns3_simse_AstNodeCategory_fromInt(Int value) { return (ns3_AstNodeCategory) value; }
-// src/modules/compiler/astxml.kt
-enum class ns3_AstNodeAttributeKind { Line, Column, Name, IsVar, IsNative, HasBody, HasReceiver, HasNativeSymbol, NativeSymbol, Attribute, Generator, GeneratorArgs, Package, Path, Params, Op, Value, Text, HasValue, IsPure, IsSuspend, IsBorrow, IsOperator, InitByValue, IsNativeClass, IsRefClass, IsUnionClass, IsUnionGenerated, Protocol, Protocols };
-inline ns3_AstNodeAttributeKind ns3_simse_AstNodeAttributeKind_fromInt(Int value) { return (ns3_AstNodeAttributeKind) value; }
-// src/modules/compiler/astxml.kt
-SIMSE_PACK_PUSH
-struct ns3_AstNodeAttribute {
-    ns3_AstNodeAttributeKind name;
-    Str value;
-};
-SIMSE_PACK_POP
-// src/modules/compiler/astxml.kt
-SIMSE_PACK_PUSH
-struct ns3_AstXmlNode {
-    ns3_AstNodeKind name;
-    ns3_AstNodeCategory kind;
-    List<ns3_AstNodeAttribute> attributes;
-    Array<ns3_AstXmlNode> Children;
 };
 SIMSE_PACK_POP
 // src/codegen/Codegen.kt
@@ -667,12 +933,6 @@ struct ns2_SourcePos {
     Int column;
 };
 SIMSE_PACK_POP
-// src/compiler/GenTypes.kt
-enum class ns3_SourceTransformation { None, ChangedOutput, ReparseRequired, AlreadyExisting };
-inline ns3_SourceTransformation ns3_simse_SourceTransformation_fromInt(Int value) { return (ns3_SourceTransformation) value; }
-// src/compiler/GenTypes.kt
-enum class ns3_SourceGenPhase { Declare, Reparse, Emit };
-inline ns3_SourceGenPhase ns3_simse_SourceGenPhase_fromInt(Int value) { return (ns3_SourceGenPhase) value; }
 // src/compiler/GenTypes.kt
 SIMSE_PACK_PUSH
 struct ns3_SourceGenRequest {
@@ -1032,266 +1292,6 @@ struct ns9_YldMachinery {
     Str error;
 };
 SIMSE_PACK_POP
-// src/modules/compiler/gen.kt
-SIMSE_PACK_PUSH
-struct ns3_SourceGenTransform {
-    ns3_SourceTransformation change;
-    Str key;
-};
-SIMSE_PACK_POP
-// src/modules/compiler/gen.kt
-SIMSE_PACK_PUSH
-struct ns3_SourceGenContext {
-    Str name;
-    ns3_SourceGenPhase phase;
-    ns3_AstXmlNode declaration;
-    Str declName;
-    List<Str> parameters;
-    Str symbol;
-    Str source;
-    Str error;
-    Str fileName;
-    Bool prelude;
-    ns3_FullCompiledState* state;
-    ns3_Sections* sections;
-    Dictionary<Str, Bool>* reachedNames;
-};
-SIMSE_PACK_POP
-// src/modules/json/generators/JsonGen.kt
-SIMSE_PACK_PUSH
-struct ns6_JsonTypes {
-    Dictionary<Str, ns3_AstXmlNode> classes;
-    Dictionary<Str, Str> packages;
-    List<Str> order;
-    Dictionary<Str, Bool> declared;
-};
-SIMSE_PACK_POP
-// src/modules/jsonnode/jsonnode.kt
-enum class ns7_SmJsonNodeTypes { None, Boolean, Number, Text, Items, Members };
-inline ns7_SmJsonNodeTypes ns7_simse_SmJsonNodeTypes_fromInt(Int value) { return (ns7_SmJsonNodeTypes) value; }
-// src/modules/jsonnode/jsonnode.kt
-SIMSE_PACK_PUSH
-struct ns7_SmJsonNodeStorage {
-    ns7_SmJsonNodeTypes _type = ns7_SmJsonNodeTypes::None;
-    union {
-        Bool Boolean;
-        Float64 Number;
-        Str Text;
-        List<Ref<ns7_JsonNode>> Items;
-        List<Ref<ns7_JsonMember>> Members;
-    };
-    ns7_SmJsonNodeStorage() {}
-    ns7_SmJsonNodeStorage(const ns7_SmJsonNodeStorage& other) { this->copyFrom(other); }
-    ns7_SmJsonNodeStorage(ns7_SmJsonNodeStorage&& other) noexcept { this->moveFrom(other); }
-    ~ns7_SmJsonNodeStorage() { this->destroyActive(); }
-    ns7_SmJsonNodeStorage& operator=(const ns7_SmJsonNodeStorage& other) {
-        if (this != &other) {
-            this->destroyActive();
-            this->copyFrom(other);
-        }
-        return *this;
-    }
-    ns7_SmJsonNodeStorage& operator=(ns7_SmJsonNodeStorage&& other) noexcept {
-        if (this != &other) {
-            this->destroyActive();
-            this->moveFrom(other);
-        }
-        return *this;
-    }
-    void destroyActive() {
-        switch (this->_type) {
-            case ns7_SmJsonNodeTypes::Boolean: simse_destroy(this->Boolean); break;
-            case ns7_SmJsonNodeTypes::Number: simse_destroy(this->Number); break;
-            case ns7_SmJsonNodeTypes::Text: simse_destroy(this->Text); break;
-            case ns7_SmJsonNodeTypes::Items: simse_destroy(this->Items); break;
-            case ns7_SmJsonNodeTypes::Members: simse_destroy(this->Members); break;
-            default: break;
-        }
-        this->_type = ns7_SmJsonNodeTypes::None;
-    }
-    void copyFrom(const ns7_SmJsonNodeStorage& other) {
-        switch (other._type) {
-            case ns7_SmJsonNodeTypes::Boolean: ::new ((void *) &this->Boolean) Bool(other.Boolean); this->_type = ns7_SmJsonNodeTypes::Boolean; break;
-            case ns7_SmJsonNodeTypes::Number: ::new ((void *) &this->Number) Float64(other.Number); this->_type = ns7_SmJsonNodeTypes::Number; break;
-            case ns7_SmJsonNodeTypes::Text: ::new ((void *) &this->Text) Str(other.Text); this->_type = ns7_SmJsonNodeTypes::Text; break;
-            case ns7_SmJsonNodeTypes::Items: ::new ((void *) &this->Items) List<Ref<ns7_JsonNode>>(other.Items); this->_type = ns7_SmJsonNodeTypes::Items; break;
-            case ns7_SmJsonNodeTypes::Members: ::new ((void *) &this->Members) List<Ref<ns7_JsonMember>>(other.Members); this->_type = ns7_SmJsonNodeTypes::Members; break;
-            default: break;
-        }
-    }
-    void moveFrom(ns7_SmJsonNodeStorage& other) {
-        switch (other._type) {
-            case ns7_SmJsonNodeTypes::Boolean: ::new ((void *) &this->Boolean) Bool(std::move(other.Boolean)); this->_type = ns7_SmJsonNodeTypes::Boolean; break;
-            case ns7_SmJsonNodeTypes::Number: ::new ((void *) &this->Number) Float64(std::move(other.Number)); this->_type = ns7_SmJsonNodeTypes::Number; break;
-            case ns7_SmJsonNodeTypes::Text: ::new ((void *) &this->Text) Str(std::move(other.Text)); this->_type = ns7_SmJsonNodeTypes::Text; break;
-            case ns7_SmJsonNodeTypes::Items: ::new ((void *) &this->Items) List<Ref<ns7_JsonNode>>(std::move(other.Items)); this->_type = ns7_SmJsonNodeTypes::Items; break;
-            case ns7_SmJsonNodeTypes::Members: ::new ((void *) &this->Members) List<Ref<ns7_JsonMember>>(std::move(other.Members)); this->_type = ns7_SmJsonNodeTypes::Members; break;
-            default: break;
-        }
-    }
-    void setBoolean(Bool value) {
-        if (_type == ns7_SmJsonNodeTypes::Boolean) {
-            Boolean = std::move(value);
-            return;
-        }
-        this->destroyActive();
-        _type = ns7_SmJsonNodeTypes::Boolean;
-        ::new ((void *) &Boolean) Bool(std::move(value));
-    }
-    void setNumber(Float64 value) {
-        if (_type == ns7_SmJsonNodeTypes::Number) {
-            Number = std::move(value);
-            return;
-        }
-        this->destroyActive();
-        _type = ns7_SmJsonNodeTypes::Number;
-        ::new ((void *) &Number) Float64(std::move(value));
-    }
-    void setText(Str value) {
-        if (_type == ns7_SmJsonNodeTypes::Text) {
-            Text = std::move(value);
-            return;
-        }
-        this->destroyActive();
-        _type = ns7_SmJsonNodeTypes::Text;
-        ::new ((void *) &Text) Str(std::move(value));
-    }
-    void setItems(List<Ref<ns7_JsonNode>> value) {
-        if (_type == ns7_SmJsonNodeTypes::Items) {
-            Items = std::move(value);
-            return;
-        }
-        this->destroyActive();
-        _type = ns7_SmJsonNodeTypes::Items;
-        ::new ((void *) &Items) List<Ref<ns7_JsonNode>>(std::move(value));
-    }
-    void setMembers(List<Ref<ns7_JsonMember>> value) {
-        if (_type == ns7_SmJsonNodeTypes::Members) {
-            Members = std::move(value);
-            return;
-        }
-        this->destroyActive();
-        _type = ns7_SmJsonNodeTypes::Members;
-        ::new ((void *) &Members) List<Ref<ns7_JsonMember>>(std::move(value));
-    }
-    void setNone() {
-        this->destroyActive();
-    }
-};
-struct ns7_JsonNode : ns7_SmJsonNodeStorage {
-};
-SIMSE_PACK_POP
-inline Bool operator==(const ns7_JsonNode& self, ns7_SmJsonNodeTypes tag) { return self._type == tag; }
-inline Bool operator==(const ns7_JsonNode* self, ns7_SmJsonNodeTypes tag) { return self->_type == tag; }
-inline Bool operator!=(const ns7_JsonNode& self, ns7_SmJsonNodeTypes tag) { return self._type != tag; }
-inline Bool operator!=(const ns7_JsonNode* self, ns7_SmJsonNodeTypes tag) { return self->_type != tag; }
-inline ns7_SmJsonNodeTypes ns7_getTypeOf(ns7_JsonNode* self) {
-    return self->_type;
-}
-inline Bool ns7_isOfType(ns7_JsonNode* self, ns7_SmJsonNodeTypes typeToCheck) {
-    return self->_type == typeToCheck;
-}
-inline void ns7_setNone(ns7_JsonNode* self) {
-    self->setNone();
-}
-inline void ns7_initByValue(ns7_JsonNode* self) {
-    self->setNone();
-}
-inline void ns7_setBoolean(ns7_JsonNode* self, Bool value) {
-    self->setBoolean(std::move(value));
-}
-inline Bool* ns7_getBoolean(ns7_JsonNode* self) {
-    if (self->_type == ns7_SmJsonNodeTypes::Boolean) {
-        return &self->Boolean;
-    }
-    return nullptr;
-}
-inline void ns7_initByValue(ns7_JsonNode* self, Bool value) {
-    self->setBoolean(std::move(value));
-}
-inline void ns7_setNumber(ns7_JsonNode* self, Float64 value) {
-    self->setNumber(std::move(value));
-}
-inline Float64* ns7_getNumber(ns7_JsonNode* self) {
-    if (self->_type == ns7_SmJsonNodeTypes::Number) {
-        return &self->Number;
-    }
-    return nullptr;
-}
-inline void ns7_initByValue(ns7_JsonNode* self, Float64 value) {
-    self->setNumber(std::move(value));
-}
-inline void ns7_setText(ns7_JsonNode* self, Str value) {
-    self->setText(std::move(value));
-}
-inline Str* ns7_getText(ns7_JsonNode* self) {
-    if (self->_type == ns7_SmJsonNodeTypes::Text) {
-        return &self->Text;
-    }
-    return nullptr;
-}
-inline void ns7_initByValue(ns7_JsonNode* self, Str value) {
-    self->setText(std::move(value));
-}
-inline void ns7_setItems(ns7_JsonNode* self, List<Ref<ns7_JsonNode>> value) {
-    self->setItems(std::move(value));
-}
-inline List<Ref<ns7_JsonNode>>* ns7_getItems(ns7_JsonNode* self) {
-    if (self->_type == ns7_SmJsonNodeTypes::Items) {
-        return &self->Items;
-    }
-    return nullptr;
-}
-inline void ns7_initByValue(ns7_JsonNode* self, List<Ref<ns7_JsonNode>> value) {
-    self->setItems(std::move(value));
-}
-inline void ns7_setMembers(ns7_JsonNode* self, List<Ref<ns7_JsonMember>> value) {
-    self->setMembers(std::move(value));
-}
-inline List<Ref<ns7_JsonMember>>* ns7_getMembers(ns7_JsonNode* self) {
-    if (self->_type == ns7_SmJsonNodeTypes::Members) {
-        return &self->Members;
-    }
-    return nullptr;
-}
-inline void ns7_initByValue(ns7_JsonNode* self, List<Ref<ns7_JsonMember>> value) {
-    self->setMembers(std::move(value));
-}
-// src/modules/jsonnode/jsonnode.kt
-SIMSE_PACK_PUSH
-struct ns7_JsonMember {
-    Str key;
-    Ref<ns7_JsonNode> value;
-};
-SIMSE_PACK_POP
-// src/modules/jsonnode/jsonnode.kt
-SIMSE_PACK_PUSH
-struct ns7_JsonWriter {
-    Str out;
-};
-SIMSE_PACK_POP
-// src/modules/jsonnode/jsonnode.kt
-SIMSE_PACK_PUSH
-struct ns7_JsonReader {
-    Str text;
-    Int at;
-};
-SIMSE_PACK_POP
-// src/modules/xml/api.kt
-SIMSE_PACK_PUSH
-struct ns17_Attribute {
-    Str name;
-    Str value;
-};
-SIMSE_PACK_POP
-// src/modules/xml/api.kt
-SIMSE_PACK_PUSH
-struct ns17_XmlNode {
-    Str name;
-    List<ns17_Attribute> attributes;
-    Array<ns17_XmlNode> Children;
-};
-SIMSE_PACK_POP
 // src/optimizations/FoldExprs.kt
 using ns11_FoldRule = Func<ns3_AstXmlNode(ns3_AstXmlNode*)>;
 // src/optimizations/FoldExprs.kt
@@ -1601,11 +1601,11 @@ SIMSE_PACK_POP
 // previous value; strtable.hpp has the stream format.
 static const Int __sm_stringCount = 1116;
 static const char __sm_stringPool[] =
-    ": %lld calls\\n\", kMethodNames[nodes[id].body],\n                        (long long) nodes[id].total, (long long) nodes[id].calls);\n                reportNode(out, id, depth + 1);\n            }\n        }\n\n        // The two summaries: one row per body, summed over every path it ran on - the\n        // inclusive total, and the self time (each node's total minus what its children\n        // covered: the time the body itself carried). Biggest 50 of each, in order; a body\n        // the run never entered has no calls and is not listed.\n        void reportTopLists(FILE *out) {\n            Int methodCount = 0;\n            for (Int i = 1; i < nodes.size(); i++) {\n                if (nodes[i].body + 1 > methodCount) {\n                    methodCount = nodes[i].body + 1;\n                }\n            }\n            List<Int64> totals;\n            List<Int64> selfs;\n            List<Int64> calls;\n            for (Int i = 0; i < methodCount; i++) {\n                totals.push_back(0);\n                selfs.push_back(0);\n                calls.push_back(0);\n            }\n            for (Int i = 1; i < nodes.size(); i++) {\n                Int body = nodes[i].body;\n                Int64 childrenTotal = 0;\n                for (Int c = 0; c < nodes[i].children.size(); c++) {\n                    childrenTotal = childrenTotal + nodes[nodes[i].children[c]].total;\n                }\n                totals[body] = totals[body] + nodes[i].total;\n                selfs[body] = selfs[body] + nodes[i].total - childrenTotal;\n                calls[body] = calls[body] + nodes[i].calls;\n            }\n            reportTop(out, \"total\", totals, calls, methodCount);\n            reportTop(out, \"self\", selfs, calls, methodCount);\n        }\n\n        void reportTop(FILE *out, const char *label, List<Int64> &values, List<Int64> &calls, Int methodCount) {\n            Int limit = 50;\n            if (methodCount < limit) {\n                limit = methodCount;\n            }\n            List<Bool> used;\n            for (Int i = 0; i < methodCount; i++) {\n                used.push_back(false);\n            }\n            fprintf(out, \"top %d methods by %s:\\n\", (int) limit, label);\n            Int shown = 0;\n            for (Int k = 0; k < limit; k++) {\n                Int best = -1;\n                for (Int i = 0; i < methodCount; i++) {\n                    if (used[i] || calls[i] == 0) {\n                        continue;\n                    }\n                    if (best < 0 || values[i] > values[best]) {\n                        best = i;\n                    }\n                }\n                if (best < 0) {\n                    break;\n                }\n                used[best] = true;\n                shown = shown + 1;\n                fprintf(out, \"%3d. %-52s %12lld " "() - start;\n            nodes[node].total = nodes[node].total + elapsed;\n            stack.pop_back();\n        }\n\n        // The report, to the profile file: the two top-50 summaries first (every body\n        // aggregated over all its paths, by inclusive total and by self time), then the call\n        // tree. A node is one exact stack, so a child's total is time inside its line's, and\n        // the file needs no sharing rules: nothing is unfolded twice.\n        void report() {\n            FILE *out = stderr;\n            if (kProfileFile[0] != 0 && kProfileFile[0] != '-') {\n                FILE *opened = fopen(kProfileFile, \"w\");\n                if (opened != NULL) out = opened;\n            }\n            reportTopLists(out);\n            fprintf(out, \"tree:\\n\");\n            reportNode(out, 0, 0);\n            if (out != stderr) fclose(out);\n        }\n\n    private:\n        List<CallNode> nodes;\n        Dictionary<Int64, Int> nodeOf;\n        List<Int> stack;\n\n        void reportNode(FILE *out, Int node, Int depth) {\n            if (depth > 256) {\n                return;\n            }\n            List<Int> kids;\n            for (Int i = 0; i < nodes[node].children.size(); i++) {\n                kids.push_back(nodes[node].children[i]);\n            }\n            Int n = kids.size();\n            for (Int i = 0; i < n; i++) {\n                Int best = i;\n                for (Int j = i + 1; j < n; j++) {\n                    if (nodes[kids[j]].total > nodes[kids[best]].total) {\n                        best = j;\n                    }\n                }\n                if (best != i) {\n                    Int tmp = kids[i];\n                    kids[i] = kids[best];\n                    kids[best] = tmp;\n                }\n            }\n            for (Int i = 0; i < n; i++) {\n                Int id = kids[i];\n                for (Int d = 1; d < depth; d++) {\n                    fputc(' ', out);\n                }\n                if (depth > 0) {\n                    fputc('+', out);\n                }\n                fprintf(out, \"%s():%lld " "\";\n\n    class ProfileApp;\n\n    // One body entry: pushes the node it lands on, and banks the elapsed time there when\n    // the body leaves.\n    class ProfileScope {\n    public:\n        ProfileScope(Int index, ProfileApp *app);\n        ProfileScope(const ProfileScope &) = delete;\n        ProfileScope &operator=(const ProfileScope &) = delete;\n        ~ProfileScope();\n\n    private:\n        Int node_;\n        ProfileApp *app_;\n        Int64 start_;\n    };\n\n    class ProfileApp {\n    public:\n        ProfileApp() {\n            // Node 0 is the root: the stack outside main. It has no body and no line.\n            nodes.push_back(CallNode());\n        }\n\n        ProfileScope measure(Int index) {\n            return ProfileScope(index, this);\n        }\n\n        // Answers the node this entry lands on: the node of the stack as it is before this\n        // body is pushed, for this body - created on first sight. Two call sites of a body\n        // are two nodes, because they arrive through two stacks.\n        Int enter(Int index) {\n            Int parent = 0;\n            if (stack.size() > 0) {\n                parent = stack.back();\n            }\n            Int64 key = ((Int64) parent << 32) | (Int64) index;\n            Int *found = nodeOf.valuePtr(key);\n            Int node = 0;\n            if (found == nullptr) {\n                node = (Int) nodes.size();\n                nodes.push_back(CallNode());\n                nodes[node].body = index;\n                nodeOf.insert_or_assign(key, node);\n                nodes[parent].children.push_back(node);\n            } else {\n                node = *found;\n            }\n            nodes[node].calls = nodes[node].calls + 1;\n            stack.push_back(node);\n            return node;\n        }\n\n        void leave(Int node, Int64 start) {\n            Int64 elapsed = " "\n// Resolves 'symbol' from 'library', loading the library once and caching the handle (a small\n// fixed table: a program names a handful of libraries at most). A missing library or symbol\n// answers null, which the thunk turns into the declaration's default value rather than a\n// crash. The handle is the loader's own (a FARPROC on Windows, a void* from dlsym elsewhere);\n// the thunk casts the result to the declaration's function-pointer type, which is the one\n// object-pointer-to-function-pointer conversion the language cannot spell.\n    inline void * __sm_nativeResolve (const char * library, const char* symbol) {\n        struct Entry {\n            const char * library;\n            void * module;\n        };\n        static Entry table[16];\n        static int count = 0;\n        void * module = nullptr;\n        for (int i = 0; i < count; i++) {\n        if (std::strcmp(table[i].library, library) == 0) {\n            module = table[i].module;\n            break;\n        }\n    }\n        if (module == nullptr) {\n            #ifdef _WIN32\n                    module = (void *)::LoadLibraryA(library);\n            #else\n            module = ::dlopen(library, RTLD_NOW | RTLD_LOCAL);\n            #endif\n            if (module != nullptr && count < 16) {\n                table[count].library = library;\n                table[count].module = module;\n                count++;\n            }\n        }\n        if (module == nullptr) {\n            return nullptr;\n        }\n        #ifdef _WIN32\n            return (void *)::GetProcAddress((HMODULE) module, symbol);\n        #else\n        return ::dlsym(module, symbol);\n        #endif\n    }\n    " "#include <cstdio>\n\n// ---- profiling (--profile) ------------------------------------------------\n// Every emitted body starts with a profileApp.measure(<index>) whose constructor counts the\n// entry and whose destructor banks the elapsed time; the report prints when the program\n// leaves. The index is a compile-time constant and the names are the table of constants\n// below, so a measurement is one array index and no string compare. An entry lands on a\n// *node* of a call tree: a node is one exact call stack - the pair (the stack it was reached\n// through, the body) - so two call sites of one body are two nodes, and a node's totals are\n// exactly the calls that reached it. The report prints the two top-50 summaries (by\n// inclusive total, by self time), then every node's children beneath it, largest total\n// first: a child is time inside its own line, never more.\nnamespace simse_profiling {\n    // One node of the call tree: the body that ran, the path's inclusive totals, and the\n    // nodes created under it. The ordinal of a node stands for the whole stack that reaches\n    // it, so a child is keyed by (parent ordinal, body).\n    struct CallNode {\n        Int body;\n        Int64 total;\n        Int64 calls;\n        List<Int> children;\n        CallNode() : body(0), total(0), calls(0) {}\n    };\n\n    // Index -> name, by the same constant measure receives; defined with the bodies.\n    extern const char *const kMethodNames[];\n\n    // Where the tree goes when the program leaves (--profile-file, default\n    // simse_profile.txt; a lone '-' keeps it on stderr).\n    static const char *const kProfileFile = \"" "\n// NativeInvoke (impl_specs/native-interop.md): the shared-library loader a\n// declaration with the SmGen(\"native\", ...) attribute binds its symbol with. Windows loads through\n// windows.h's LoadLibraryA/GetProcAddress, everywhere else through dlfcn.h's\n// dlopen/dlsym; either way the lookup is at run time rather than a link-time\n// import, so the program links nothing.\n    #ifdef _WIN32\n    #ifndef WIN32_LEAN_AND_MEAN\n    #define WIN32_LEAN_AND_MEAN\n    #endif\n    #ifndef NOMINMAX\n    #define NOMINMAX\n    #endif\n    #include<windows.h>\n    #else\n    #include<dlfcn.h>\n    #endif\n    #include<cstring>\n    " "();\n        node_ = app_->enter(index);\n    }\n\n    ProfileScope::~ProfileScope() {\n        app_->leave(node_, start_);\n    }\n}\n\nnamespace {\n    simse_profiling::ProfileApp profileApp;\n\n    // The tree, when the program leaves: a static outlives every automatic scope, so this\n    // runs after main returned - whichever return it took.\n    struct ProfileReport {\n        ~ProfileReport() { profileApp.report(); }\n    } profileReport;\n}\n\n" "usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module <dir>]... [--no-concat] [--no-borrow] [--no-escape] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showBorrow] [--showEscape] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos] [--version]" ": %8lld calls\\n\", (int) shown, kMethodNames[best],\n                        (long long) values[best], (long long) calls[best]);\n            }\n            fprintf(out, \"\\n\");\n        }\n    };\n\n    ProfileScope::ProfileScope(Int index, ProfileApp *app) : node_(0), app_(app) {\n        start_ = " "ambiguous call of '@': a lambda argument fits a declaration taking a callable and one taking a plain value (C++ would silently take the plain one); pass the type arguments explicitly ('@<...>(...)')" "'@' takes a counted reference ('&@') and the argument is a raw pointer: a pointer cannot become a reference in place - make a reference variable one line before the call (var ref: &@ = &value)" "invalid interpolation string: `@(` must hold one name and be closed by `)` (`@(name)`); for a literal `@`, write it in a \"...\" string or in a raw string that does not interpolate" "invalid interpolation string: `@` must be followed by a name (`@name`) or `@(name)`; for a literal `@`, write it in a \"...\" string or in a raw string that does not interpolate" "json: field '@' of '@' is not a data class or a scalar (a generated serializer for a generic or pointer field is not implemented yet)" "a `for` iterates a machine (`..T`) or a type with a `|`, and | has neither; iterate a container with `while` and an index" "the lambda parameter '@' has no type: annotate it (e.g. '@: T') or use the lambda where a callable type expects one" "suspend: a body-less `suspend` declaration has no lowering yet (the leaves arrive with the file and socket steps)" "cannot infer @@ of '@': no argument names @ (a callable argument does not); pass @ explicitly ('@<...>(...)')" "// Generated by the Simse compiler. Do not edit.\n#include \"src/rtl/simse.hpp\"\n#include <type_traits>\n\n" "suspend: a body that also yields is not supported (a `for` machine is a local and cannot cross a suspension)" "unsupported: construct a union class in a 'var'/'val' declaration ('var x = U(...)') or as 'return (value)'" "yield: a `this` parameter cannot be a field; write the receiver before the name (`fun T.name`) instead" "static_assert(sizeof(__sm_stringPool) - 1 == @, \"the string pool and its length index disagree\");" "'@' is a prelude type: give the declaration another name (the prelude's types are emitted by name)" "a lambda cannot reach `this` yet: a lambda captures by value, and reference captures are deferred" "suspend: a `for` over a machine cannot cross a suspension; collect the values into a `List` first" "`!!` inside a lambda propagates into the lambda's own result, and this parameter's type has none" "construct a union class in a 'var'/'val' declaration ('var x = U(...)') or as 'return (value)'" "resourcesInstall(__sm_stringTable, __sm_stringCount, __sm_resourceIndex, __sm_resourceCount);" "'@' is not a type parameter of this declaration; a protocol constraint names one of its own" "'set' is not declared for this receiver: an index write needs 'operator set(index, value)'" "'@' is not an operator: 'get', 'set', 'compareTo', 'equals' and 'plus' are the operators" "// them into the program's `Resources` table (`resourcesInstall`, src/rtl/resources.kt)." "unsupported: no protocol of '@' declares '@'; add it to a protocol in the 'when' clause" "'@' has an unInit: hold it by '*@' or '&@' - a value copy would run its destructor too" "'@' is constrained by both '@' and '@', which declare '@': the call would be ambiguous" "Generated C++:may name one of its symbols itself. (`filestream` moved on with the type" "case @::@: ::new ((void *) &this->@) @(std::move(other.@)); this->_type = @::@; break;" "protocol '@': the receiver must be the first type parameter ('fun <@> @.method(...)')" "unInit is a type's destructor: it is not called - the value's last owner destroys it" "unsupported: '@' on type parameter '@' needs a protocol: 'fun f<@>(...) when @: P'" "// string-table indices, key then value; the generated initialization pass builds" "// File-level static storage (specs/statics.md): initialized before main's body." "'@' is a ref class: build it as '&@(...)' - a ref class is held by '&@' or '*@'" "// series (offsets as deltas, then lengths), each as what to subtract from the" "`!!` propagates a failure, and this function returns nothing to propagate into" "legend: async! is declared suspend, async is inferred from the callee it shows" "native: '|' names no library (@SmGen(\"native\", \"<library>\", \"<symbol>\"))" "// The resources the compiler read from `_res.md` files (specs/resources.md):" "native: '@' (@) generates the thunk '@' with a different binding - rename one" "suspend: the body nests deeper than the lowering allows (a cycle in the AST?)" "// The program's string literals: one pool, and two run-length encoded index" "case @::@: ::new ((void *) &this->@) @(other.@); this->_type = @::@; break;" "inline Bool operator!=(const @* self, @ tag) { return self->_type != tag; }" "inline Bool operator==(const @* self, @ tag) { return self->_type == tag; }" "inline Bool operator!=(const @& self, @ tag) { return self._type != tag; }" "inline Bool operator==(const @& self, @ tag) { return self._type == tag; }" "`!!` propagates a failure, so the enclosing function must return `Res<T>`" "json: the json:helpers resource is missing (a section of src/rtl/_res.md)" "`!!` must be the whole right-hand side of a `val`/`var`, an assignment, " "this index has no 'operator set(index, value)': an index write needs one" "    if (this) {\n        return \"true\"\n    }\n    return \"false\"\n" "namespace simse_profiling {\n    const char *const kMethodNames[] = {\n" "suspend: a `return` of a suspension in a function that answers nothing" "simse_strTableDecode(__sm_stringPool, starts, lens, __sm_stringTable," "'@' declares unInit: a class with a destructor must be a 'ref class'" "std::memcpy(@, simse_strBoolView(@).ptr, simse_strBoolView(@).len);" "'@' does not satisfy protocol '@': no '@' matching '@' is in scope" "simse_strTableExpand(__sm_stringStarts, starts, __sm_stringCount);" "union class '@': 'None' is the tag's empty state; rename the field" "a `for (*x in m)` needs an `iter`, and a machine yields values " "types are not compatible: '@' takes '@' and the argument is '@'" "union class '@': '_type' is the tag's storage; rename the field" "simse_strTableExpand(__sm_stringLens, lens, __sm_stringCount);" "suspend: an extension function's receiver is not supported yet" "Generated C++:marker (`@SmGen(\"cpp\")`, specs/attributes.md)" "expected the receiver of the protocol's method ('T.toString')" "reached`, so a program that never fetches carries none of it." "unsupported: no symbol for the implementation of protocol '@'" "json: two data classes are named '@'; a serializer needs one" "suspend: a suspension's callee must be a plain function name" "union class '@': '@' is a generated member; rename the field" "Generated C++:type* whose layout only C++ can express (`std" "suspend: a generic suspending function is not supported yet" "internal: the body of '@' is not expressible in the IL (@)" "no source for @SmGen(\"kt\", \"|\") (needs the resource |)" "suspend: a `main(args)` that suspends is not supported yet" "unknown protocol '@': declare it with 'protocol @ fun ...'" "    static Fn fn = (Fn) __sm_nativeResolve(\"@\", \"@\");" "native: '@' has a parameter type the generator cannot map" "protocol '@': the receiver must name the implemented type" "unsupported: namespaced symbol '@' needs a global wrapper" "cannot resolve import '@': no file declares package '@'" "// previous value; strtable.hpp has the stream format." "native: '@' has a return type the generator cannot map" "an operator function needs a receiver: 'fun T.@(...)'" "json: the generic data class '@' is not supported yet" "static Span<Char> __sm_stringTable[__sm_stringCount];" "suspend: the local '@' has no type to make a field of" "'@' declares unInit twice: a type has one destructor" "a method whose C++ is generated must not have a body" "name the protocol before 'fun' or after it, not both" "unsupported: a lambda outside a closure construction" "json: '@' is not a data class or a supported scalar" "suspend: an extension function is not supported yet" "unsupported: a machine's type has no class to spell" "unsupported: generated parameter '@' without a type" "yield: a `for` over a machine cannot cross a yield " "yield: the local '@' has no type to make a field of" "(the machine a call creates has no type to make a " "a `>` closer ran into `=`: write a space before it" "attribute arguments are string or integer literals" "internal: a closure class could not be written (@)" "rather than places: iterate it with `for (x in m)`" "the emitter must not generate one. `filestreamhpp`" "the slot '@' has neither a type nor an initializer" "unsupported: generic-qualified expression '@<...>'" "field of); collect the values into a `List` first" "@(@&& other) noexcept { this->moveFrom(other); }" "suspend: a `this` parameter is not supported yet" "union class '@' generates '@': rename the method" "unsupported: typealias '@' without a target type" "'when' matches a value or 'else', not a pattern" "expected 'TypeParameter: Protocol' after 'when'" "expected 'fun' or an attribute after 'operator'" "isOfType(simse_addressOf(@), SmOptTypes::Value)" "union class '@': the argument's type is unknown" "expected 'fun' or an attribute after 'suspend'" "makeRef<std::remove_cvref_t<decltype((@))>>(@)" "union class '@' has no arm '@'; the arms are @" "expected 'fun' or an attribute after 'borrow'" "@(const @& other) { this->copyFrom(other); }" "    out.append('\"')\n    out.append(':')\n" "`|` stands on its own as a statement (`i|`)" "a concatenation into a slot with no storage" "a protocol declares a signature, not a body" "data class '@' expects @ field(s) but got @" "inline @ @(Int value) { return (@) value; }" "no overload of '@' takes @ type argument(s)" "simse_spanOfStr(simse_addressOf((@).get()))" "'@' is a C++ keyword; give it another name" "an index write with no operator arguments" "auto __smProfile = profileApp.measure(@);" "case @::@: simse_destroy(this->@); break;" "unsupported: '..' without an element type" "unsupported: parameter '@' without a type" "    out.append('}')\n    return out\n}\n" "    return jsonQuoted(this.toString())\n" "'@' expects @ type argument(s) but got @" "::new ((void *) &@) @(std::move(value));" "protocol '@': parameter '@' needs a type" "static const Int __sm_resourceCount = @;" "union class '@' has no field of type '@'" "'else' must be the last arm of a 'when'" "@return simse_closureFunc<@>(@, *this);" "static const @ __sm_stringStarts[] = @;" "static struct __SmStringTableInitType {" "sync @ declarations reach no suspension" "union class '@' takes at most one value" "unsupported: Opt-vs-null comparison '@'" "`!!` is not allowed inside a condition" "an initializer with no expression form" "expected 'class' or 'fun' after 'data'" "no overload of '@' takes @ argument(s)" "static const Int __sm_stringCount = @;" "suspend: the parameter '@' has no type" "task->loop = &simse_tasks::taskLoop();" "template <Bool SmManaged, @> struct @;" "a body-less method needs an attribute" "simse: --profile-file requires a path" "static const @ __sm_stringLens[] = @;" "static const char __sm_stringPool[] =" "unInit: the receiver has no type name" "unsupported: field '@' without a type" "writes a field, an index or a pointer" "constructor call with no destination" "internal: task field '@' has no type" "simse_argIndex = simse_argIndex + 1;" "static Int __sm_resourceIndex[] = @;" "yield: the parameter '@' has no type" "'when' can have only one 'else' arm" "a concatenation in a value position" "a concatenation with no destination" "simse_spanOfStr(simse_addressOf(@))" "std::memcpy(@, @.data(), @.size());" "structured statement reached the IL" "@& operator=(@&& other) noexcept {" "return self->_type == typeToCheck;" "the slot '@' has no type to assign" "@ = @ + simse_strBoolView(@).len;" "expected 'fun' after an attribute" "template <@> struct @<false, @> {" "unsupported: main with parameters" "'set' takes an index and a value" "@(@, Str(argv[simse_argIndex]));" "borrow- @ C++ calls it (prelude)" "simse: --prelude requires a path" "template <@> struct @<true, @> {" "yield: the field '@' has no type" "'get' takes one index parameter" "int main(int argc, char** argv)" "simse: --module requires a path" "simse_rc = (int) simse_root->@;" "the type '@' is reached through" "void copyFrom(const @& other) {" "while (simse_argIndex < argc) {" "~@() { this->destroyActive(); }" "@& operator=(const @& other) {" "@:@: Unexpected character: '@'" "Generated C++:section is `emit" "expected '->' in function type" "expected 'class' after 'union'" "expected 'package' declaration" "struct @ : simse_tasks::Task {" "    return jsonQuoted(this)\n" "Int starts[__sm_stringCount];" "a static write with no target" "enum value must be an integer" "json: trailing text at byte |" "simse: --root requires a path" "simse_tasksStart(simse_root);" "type name in a value position" "unInit: no declaration of '@'" "    return this.toString()\n" "@ = simse_strCountDigits(@);" "a concatenation with no part" "unknown source generator '@'" "'@' cannot be expressed yet" "'@' takes the other operand" "Int lens[__sm_stringCount];" "__SmStringTableInitType() {" "expected method declaration" "the capture '@' has no type" "    if (fn == nullptr) {\n" "--showLinearRepresentation" "List<Str> @ = List<Str>();" "a cast with no destination" "a cast with no target type" "a field write with no name" "compound assignment target" "if (self->_type == @::@) {" "self->@(std::move(value));" "simse: prelude not found: " "simse_println((@), stdout)" "unInit takes no parameters" "void simse_initStatics() {" "'continue' outside a loop" "@* simse_root = (@*) @();" "a part of a concatenation" "duplicate declaration '@'" "expected lambda parameter" "or a statement of its own" "simse: -o requires a path" "simse_strAddInt(@, @, @);" "void moveFrom(@& other) {" "    operator @() const {" "    var out: Str = \"{\"" "a jump with no condition" "cannot assign to val '@'" "expected 'class' after '" "expected a protocol name" "simse_print((@), stdout)" "simse_strBoolView(@).len" "unsupported: call target" "    out.appendStr(this." "a store with no pointer" "expected 'val' or 'var'" "expected parameter name" "int simse_argIndex = 1;" "return ((@*) _sm_h)->@;" "unexpected end of input" "writes a file-level var" "} __sm_stringTableInit;" "    out.append('\"')\n" "'break' outside a loop" "`FileStream`, the open" "a cast with no operand" "a closure with no body" "a declare with no slot" "a return with no value" "a write with no target" "duplicate protocol '@'" "reinterpret_cast<@>(@)" "simse_root->release();" "switch (other._type) {" "switch (this->_type) {" "this->_type = @::None;" "this->copyFrom(other);" "this->destroyActive();" "this->moveFrom(other);" "unInit returns nothing" "void destroyActive() {" "    out.append(',')\n" "@ = std::move(value);" "a call with no callee" "expected a string key" "fun @.toJson(): Str {" "if (this != &other) {" "return (RawPtr) task;" "simse_tasksRunLoop();" "std::memcpy(@, @, @);" "    out.appendStr(\"" "  (declared suspend)" "Var,Text,Value,Value" "a jump with no label" "a label with no name" "an unsupported shape" "expected declaration" "expression statement" "if (_type == @::@) {" "simse: cannot write " "simse_initStatics();" "struct @ : @<@, @> {" "unsupported type '@'" "void run() override;" "--when-copy-subject" "@ @(RawPtr _sm_h) {" "Var,Method,Value..." "__sm_stringTable[@]" "enum class @ { @ };" "expected ',' or ']'" "expected ',' or '}'" "expected enum value" "expected expression" "machine.branch = 0;" "return self->_type;" "static_cast<Int>(@)" "the instruction '@'" "the receiver of '@'" "unterminated object" "unterminated string" "--no-when-dispatch" "@ _type = @::None;" "@* task = new @();" "__sm_stringCount);" "an argument of '@'" "bad unicode escape" "return Str(fn(@));" "simse_addressOf(@)" "simse_spanOfStr(@)" "tasksReleaseHandle" "unterminated array" "    using Fn = @;" "'@' must answer @" "--when-first-char" "<generated>/kt.kt" "@ = @ + @.size();" "@ = @.data() + @;" "Var,Type,Value..." "assignment target" "if (!(@)) goto @;" "int simse_rc = 0;" "json: | at byte |" "machine.@ = self;" "return (@) fn(@);" "simse_list_append" "simse_optHasValue" "simse_profile.txt" "simse_resHasValue" "simse_tasksFinish" "void @(@ value) {" "!std::is_same_v<" "*@ = (char) (@);" "0123456789ABCDEF" "<unsupported: @>" "@.resize(@ + @);" "CallIndirectVoid" "Expr.GenericName" "InternetReadFile" "Var,Var,Value..." "_type = @::None;" "char* __sm_catP;" "expected a value" "reinterpret_cast" "resourcesEntries" "resourcesInstall" "return &self->@;" "return simse_rc;" "self->setNone();" "sm_suspend_point" "type parameters " "unknown type '@'" "void setNone() {" "--profile-nanos" "/*unsupported*/" ": unsupported: " "@ @_invoke(@) {" "Int __sm_catAt;" "InternetOpenUrl" "Method,Value..." "SIMSE_PACK_PUSH" "SmUnionManaged<" "Var,Value,Value" "a concatenation" "async  @   <- @" "cannot express " "default: break;" "inline @ @(@) {" "return machine;" "return nullptr;" "simse_@_fromInt" "simse_nowMicros" "simse_spanOfStr" "simse_strAddInt" "type parameter " "void @::run() {" "        \"\"\n" "(a value call)" "--profile-file" "@ @_invoke(@);" "SIMSE_PACK_POP" "Type.Reference" "Var,Text,Value" "\\generators\\" "_closure_owner" "bad number '|'" "if (!@) goto @" "if (@) goto @;" "machine.@ = @;" "simse_argIndex" "simse_nowNanos" "simse_optValue" "simse_resError" "simse_resValue" "struct @ : @ {" "tasksSuspendAt" "--module-root" "@ = @.data();" "@ = @.size();" "@ = concat(@)" "@_@_yieldable" "Expr.FloatLit" "GetStaticAddr" "RawPtr @(@) {" "Stmt.Continue" "Stmt.ExprStmt" "Type.Function" "Var,Var,Value" "\n## closure " "__sm_native_@" "_type = @::@;" "a lambda body" "destroyActive" "expected '->'" "expected 'in'" "expected name" "expected type" "if (@) goto @" "makeList<@>()" "makeRef<@>(@)" "package rtl\n" "resourceStore" "return *this;" "return Str();" "return fn(@);" "simse_optNone" "simse_optSome" "simse_out.cpp" "static_assert" "unsupported: " "  captures (" "(@) (@) -> @" "--showBorrow" "--showEscape" "-=!<>&|+*%^." ".toJson())\n" "/generators/" "@ = new @(@)" "@.resize(@);" "CallIndirect" "Expr.BoolLit" "Expr.CharLit" "Expr.NullLit" "InternetOpen" "Stmt.IfFalse" "Stmt.VarDecl" "Type.Generic" "Type.Pointer" "Var,Value..." "Var,Var,Text" "dynamic_cast" "expected '('" "expected ')'" "expected ':'" "expected '>'" "expected '@'" "generators\\" "int main() {" "json:helpers" "nativeinvoke" "return @(@);" "return @{0};" "simse_listOf" "simse_resErr" "task->@ = @;" "template <@>" "thread_local" "using @ = @;" "    };\n}\n" " = <lambda>" " machine{};" "--no-borrow" "--no-concat" "--no-escape" "--showAsync" ".hasValue()" "/*machine*/" "@ = copy(@)" "@_yieldable" "Constructor" "DeclareInit" "Expr.Binary" "Expr.IntLit" "Expr.Lambda" "Expr.Member" "Expr.StrLit" "SetVar_Null" "SmallVector" "Stmt.Assign" "Stmt.IfTrue" "Stmt.Return" "Type.IntLit" "Unsupported" "Value,Label" "a void call" "advance(&@)" "auto @ = @;" "borrow+ @ @" "borrow- @ @" "const char*" "generators/" "initByValue" "json:source" "mergeLocals" "simse_resOk" "spanOfArray" "static_cast" "tasksFinish" "threadJumps" "typeToCheck" "~?:;,()[]{}" "        \"" "@ = @ + 1;" "@ = @ + @;" "@ = cast @" "@<@>::@(@)" "@_closure@" "Dictionary" "Expr.Deref" "Expr.Index" "Expr.Unary" "Expression" "Func<@(@)>" "ReturnVoid" "Stmt.Block" "Stmt.Break" "Stmt.Label" "Stmt.While" "Stmt.Yield" "Text,Value" "Type.Named" "Type.Yield" "__sm_catAt" "__sm_catC@" "_yieldable" "advance(@)" "bad escape" "const @& @" "const_cast" "deadLocals" "deadStores" "expression" "fmtStrWith" "foldBranch" "foldLabels" "iterValues" "prototypes" "requires (" "struct @ {" "        @" "&@_invoke" "(@).get()" "(void*) @" "--prelude" "--profile" "--version" "/simse.md" "@ = &@[@]" "@ = @ @ @" "@.c_str()" "@.lambda@" "@: @:@: @" "@::~@() {" "CopyValue" "DataClass" "Expr.Call" "Expr.Copy" "Expr.Name" "FieldAddr" "GetStatic" "IndexAddr" "Ref<void>" "SetStatic" "Simse/1.0" "Stmt.Goto" "TypeAlias" "Var,Value" "__sm_catP" "_smResult" "_sm_ctor@" "_sm_index" "_sm_prop@" "co_return" "compareTo" "consteval" "constexpr" "constinit" "foldConst" "getTypeOf" "labels:  " "machine:@" "methods: " "namespace" "pool:    " "protected" "resources" "return @;" "spanOfStr" "statement" "struct @;" "typealias" "types:   " "vars:    " "    @ @;" "  (line " "(@ <= 0)" "(@ >= 0)" "(@) -> @" "--module" ":static=" "@ (*)(@)" "@ = &@.@" "@ = @[@]" "@ @(@) {" "@.size()" "@:@:@: @" "@[@] = @" "Argument" "BinaryOp" "CallCtor" "CallVoid" "Expr.Ref" "Function" "GetField" "GetIndex" "Opt<@>()" "RawArray" "SetField" "SetIndex" "Var,Text" "_closure" "_fromInt" "_sm_base" "_sm_ctor" "_sm_expr" "_sm_self" "_sm_task" "_sm_when" "async! @" "char16_t" "char32_t" "closures" "co_await" "co_yield" "continue" "copyFrom" "decltype" "explicit" "hasValue" "includes" "isOfType" "lambda:@" "moveFrom" "noexcept" "operator" "protocol" "refcount" "register" "requires" "template" "toString" "typename" "unsigned" "var @: @" "volatile" "    }\n" " = null" "(*@)[@]" "(*self)" "(*this)" "(@ < 0)" "(@ > 0)" ":source" ":symbol" "@ = @.@" "@ = [@]" "@ @(@);" "@ @:@:@" "@(@, @)" "@* self" "@.@ = @" "@::~@()" "@<@>(@)" "@<@>{@}" "@?m@(@)" "@@.@(@)" "Declare" "Escapes" "Float32" "Float64" "IfFalse" "Stmt.If" "Storage" "StrView" "UnaryOp" "Unknown" "Var,Var" "_SmIter" "_invoke" "_proto_" "_res.md" "_sm_@_@" "_sm_for" "_sm_stk" "advance" "alignas" "alignof" "char8_t" "concept" "current" "default" "escape " "float:@" "foldAll" "forward" "fromInt" "goto @;" "import " "mutable" "nullptr" "package" "println" "private" "profile" "reached" "return " "return;" "setNone" "simse: " "src/rtl" "statics" "strings" "support" "suspend" "typedef" "union {" "virtual" "wchar_t" "* self" "*@ = @" "--help" "--root" "@ = &@" "@ = *@" "@ = @;" "@ = @@" "@ @(@)" "@ @{};" "@ self" "@() {}" "@(@) {" "@,  @@" "@::run" "Concat" "IfTrue" "Int @;" "Lambda" "Method" "Module" "RawPtr" "Ref<@>" "Return" "SetVar" "Str(@)" "_sm_cb" "_sm_f_" "_sm_sc" "always" "and_eq" "bitand" "bodies" "bool:@" "borrow" "branch" "calls " "char:@" "class " "delete" "double" "dtor:@" "equals" "export" "extern" "fmtStr" "fn(@);" "friend" "import" "inline" "module" "native" "not_eq" "parent" "public" "quoted" "result" "return" "self->" "signed" "simse " "simse_" "sizeof" "spanOf" "static" "status" "struct" "switch" "this->" "toJson" "typeid" "unInit" "xor_eq" "};\n\n" "    @" " self" "'\\''" ") -> " "0.1.0" ":emit" ":ret=" "@ + @" "@ = @" "@ @ @" "@(@);" "@@(@)" "Array" "Clean" "Deref" "Error" "Int16" "Int32" "Int64" "LTend" "LYend" "Label" "Local" "PList" "PtrOf" "Store" "Types" "Value" "\")\n" "\",\n" "\"@\"" "\n// " "_sm_f" "_sm_h" "_task" "_type" "bitor" "break" "catch" "class" "compl" "const" "count" "error" "false" "float" "getAs" "goto " "int:@" "or_eq" "print" "short" "str:@" "task:" "throw" "toInt" "types" "union" "using" "value" "void*" "while" "yield" "}\n\n" "~@();" "    " " && " " {\n" "(!@)" "(*@)" "*(@)" ".hpp" "@ @;" "@# @" "@(@)" "@, @" "@: @" "@::@" "@<@>" "@[@]" "@{@}" "Bool" "Call" "Cast" "Char" "Enum" "Goto" "Int8" "List" "None" "Pack" "Span" "Task" "Temp" "Text" "Type" "Unit" "\"\"" "\\\"" "\\\\" "\n\n" "\n\r" "auto" "bool" "case" "char" "copy" "data" "else" "enum" "fn:@" "fun " "goto" "init" "isOk" "iter" "json" "long" "loop" "main" "none" "ns@_" "null" "plus" "self" "size" "some" "them" "this" "true" "void" "when" "   " " = " " \t" "'@'" "(@)" ")  " ".kt" ".md" "// " "<<=" ">>=" "@ @" "@#@" "@.@" "@/@" "@:@" "@_@" "Box" "Int" "Opt" "Res" "Str" "Var" "\\n" "\\r" "\\t" "```" "and" "asm" "cpp" "err" "for" "fun" "get" "int" "new" "not" "ref" "res" "rtl" "set" "try" "val" "var" "xor" "}\n" "  " " {" "!=" "# " "%=" "&&" "&=" ");" "*=" "*?" "++" "+=" ", " "--" "-=" "->" "-h" "-o" ".." "/=" ": " "::" ":;" "<<" "<=" "==" ">=" ">>" "?L" "?m" "?p" "?t" "?v" "@;" "LT" "LY" "Sm" "\"" "\\" "\n" "^=" "_n" "_v" "do" "if" "in" "is" "it" "kt" "ns" "ok" "or" "us" "|#" "|=" "||" "};" " " "!" "%" "&" "'" "(" ")" "*" "+" "," "-" "." "/" "0" "1" ":" ";" "<" "=" ">" "?" "@" "F" "L" "P" "R" "T" "Y" "[" "]" "^" "_" "`" "u" "x" "{" "|" "}" "" 
+    ": %lld calls\\n\", kMethodNames[nodes[id].body],\n                        (long long) nodes[id].total, (long long) nodes[id].calls);\n                reportNode(out, id, depth + 1);\n            }\n        }\n\n        // The two summaries: one row per body, summed over every path it ran on - the\n        // inclusive total, and the self time (each node's total minus what its children\n        // covered: the time the body itself carried). Biggest 50 of each, in order; a body\n        // the run never entered has no calls and is not listed.\n        void reportTopLists(FILE *out) {\n            Int methodCount = 0;\n            for (Int i = 1; i < nodes.size(); i++) {\n                if (nodes[i].body + 1 > methodCount) {\n                    methodCount = nodes[i].body + 1;\n                }\n            }\n            List<Int64> totals;\n            List<Int64> selfs;\n            List<Int64> calls;\n            for (Int i = 0; i < methodCount; i++) {\n                totals.push_back(0);\n                selfs.push_back(0);\n                calls.push_back(0);\n            }\n            for (Int i = 1; i < nodes.size(); i++) {\n                Int body = nodes[i].body;\n                Int64 childrenTotal = 0;\n                for (Int c = 0; c < nodes[i].children.size(); c++) {\n                    childrenTotal = childrenTotal + nodes[nodes[i].children[c]].total;\n                }\n                totals[body] = totals[body] + nodes[i].total;\n                selfs[body] = selfs[body] + nodes[i].total - childrenTotal;\n                calls[body] = calls[body] + nodes[i].calls;\n            }\n            reportTop(out, \"total\", totals, calls, methodCount);\n            reportTop(out, \"self\", selfs, calls, methodCount);\n        }\n\n        void reportTop(FILE *out, const char *label, List<Int64> &values, List<Int64> &calls, Int methodCount) {\n            Int limit = 50;\n            if (methodCount < limit) {\n                limit = methodCount;\n            }\n            List<Bool> used;\n            for (Int i = 0; i < methodCount; i++) {\n                used.push_back(false);\n            }\n            fprintf(out, \"top %d methods by %s:\\n\", (int) limit, label);\n            Int shown = 0;\n            for (Int k = 0; k < limit; k++) {\n                Int best = -1;\n                for (Int i = 0; i < methodCount; i++) {\n                    if (used[i] || calls[i] == 0) {\n                        continue;\n                    }\n                    if (best < 0 || values[i] > values[best]) {\n                        best = i;\n                    }\n                }\n                if (best < 0) {\n                    break;\n                }\n                used[best] = true;\n                shown = shown + 1;\n                fprintf(out, \"%3d. %-52s %12lld " "() - start;\n            nodes[node].total = nodes[node].total + elapsed;\n            stack.pop_back();\n        }\n\n        // The report, to the profile file: the two top-50 summaries first (every body\n        // aggregated over all its paths, by inclusive total and by self time), then the call\n        // tree. A node is one exact stack, so a child's total is time inside its line's, and\n        // the file needs no sharing rules: nothing is unfolded twice.\n        void report() {\n            FILE *out = stderr;\n            if (kProfileFile[0] != 0 && kProfileFile[0] != '-') {\n                FILE *opened = fopen(kProfileFile, \"w\");\n                if (opened != NULL) out = opened;\n            }\n            reportTopLists(out);\n            fprintf(out, \"tree:\\n\");\n            reportNode(out, 0, 0);\n            if (out != stderr) fclose(out);\n        }\n\n    private:\n        List<CallNode> nodes;\n        Dictionary<Int64, Int> nodeOf;\n        List<Int> stack;\n\n        void reportNode(FILE *out, Int node, Int depth) {\n            if (depth > 256) {\n                return;\n            }\n            List<Int> kids;\n            for (Int i = 0; i < nodes[node].children.size(); i++) {\n                kids.push_back(nodes[node].children[i]);\n            }\n            Int n = kids.size();\n            for (Int i = 0; i < n; i++) {\n                Int best = i;\n                for (Int j = i + 1; j < n; j++) {\n                    if (nodes[kids[j]].total > nodes[kids[best]].total) {\n                        best = j;\n                    }\n                }\n                if (best != i) {\n                    Int tmp = kids[i];\n                    kids[i] = kids[best];\n                    kids[best] = tmp;\n                }\n            }\n            for (Int i = 0; i < n; i++) {\n                Int id = kids[i];\n                for (Int d = 1; d < depth; d++) {\n                    fputc(' ', out);\n                }\n                if (depth > 0) {\n                    fputc('+', out);\n                }\n                fprintf(out, \"%s():%lld " "\";\n\n    class ProfileApp;\n\n    // One body entry: pushes the node it lands on, and banks the elapsed time there when\n    // the body leaves.\n    class ProfileScope {\n    public:\n        ProfileScope(Int index, ProfileApp *app);\n        ProfileScope(const ProfileScope &) = delete;\n        ProfileScope &operator=(const ProfileScope &) = delete;\n        ~ProfileScope();\n\n    private:\n        Int node_;\n        ProfileApp *app_;\n        Int64 start_;\n    };\n\n    class ProfileApp {\n    public:\n        ProfileApp() {\n            // Node 0 is the root: the stack outside main. It has no body and no line.\n            nodes.push_back(CallNode());\n        }\n\n        ProfileScope measure(Int index) {\n            return ProfileScope(index, this);\n        }\n\n        // Answers the node this entry lands on: the node of the stack as it is before this\n        // body is pushed, for this body - created on first sight. Two call sites of a body\n        // are two nodes, because they arrive through two stacks.\n        Int enter(Int index) {\n            Int parent = 0;\n            if (stack.size() > 0) {\n                parent = stack.back();\n            }\n            Int64 key = ((Int64) parent << 32) | (Int64) index;\n            Int *found = nodeOf.valuePtr(key);\n            Int node = 0;\n            if (found == nullptr) {\n                node = (Int) nodes.size();\n                nodes.push_back(CallNode());\n                nodes[node].body = index;\n                nodeOf.insert_or_assign(key, node);\n                nodes[parent].children.push_back(node);\n            } else {\n                node = *found;\n            }\n            nodes[node].calls = nodes[node].calls + 1;\n            stack.push_back(node);\n            return node;\n        }\n\n        void leave(Int node, Int64 start) {\n            Int64 elapsed = " "\n// Resolves 'symbol' from 'library', loading the library once and caching the handle (a small\n// fixed table: a program names a handful of libraries at most). A missing library or symbol\n// answers null, which the thunk turns into the declaration's default value rather than a\n// crash. The handle is the loader's own (a FARPROC on Windows, a void* from dlsym elsewhere);\n// the thunk casts the result to the declaration's function-pointer type, which is the one\n// object-pointer-to-function-pointer conversion the language cannot spell.\n    inline void * __sm_nativeResolve (const char * library, const char* symbol) {\n        struct Entry {\n            const char * library;\n            void * module;\n        };\n        static Entry table[16];\n        static int count = 0;\n        void * module = nullptr;\n        for (int i = 0; i < count; i++) {\n        if (std::strcmp(table[i].library, library) == 0) {\n            module = table[i].module;\n            break;\n        }\n    }\n        if (module == nullptr) {\n            #ifdef _WIN32\n                    module = (void *)::LoadLibraryA(library);\n            #else\n            module = ::dlopen(library, RTLD_NOW | RTLD_LOCAL);\n            #endif\n            if (module != nullptr && count < 16) {\n                table[count].library = library;\n                table[count].module = module;\n                count++;\n            }\n        }\n        if (module == nullptr) {\n            return nullptr;\n        }\n        #ifdef _WIN32\n            return (void *)::GetProcAddress((HMODULE) module, symbol);\n        #else\n        return ::dlsym(module, symbol);\n        #endif\n    }\n    " "#include <cstdio>\n\n// ---- profiling (--profile) ------------------------------------------------\n// Every emitted body starts with a profileApp.measure(<index>) whose constructor counts the\n// entry and whose destructor banks the elapsed time; the report prints when the program\n// leaves. The index is a compile-time constant and the names are the table of constants\n// below, so a measurement is one array index and no string compare. An entry lands on a\n// *node* of a call tree: a node is one exact call stack - the pair (the stack it was reached\n// through, the body) - so two call sites of one body are two nodes, and a node's totals are\n// exactly the calls that reached it. The report prints the two top-50 summaries (by\n// inclusive total, by self time), then every node's children beneath it, largest total\n// first: a child is time inside its own line, never more.\nnamespace simse_profiling {\n    // One node of the call tree: the body that ran, the path's inclusive totals, and the\n    // nodes created under it. The ordinal of a node stands for the whole stack that reaches\n    // it, so a child is keyed by (parent ordinal, body).\n    struct CallNode {\n        Int body;\n        Int64 total;\n        Int64 calls;\n        List<Int> children;\n        CallNode() : body(0), total(0), calls(0) {}\n    };\n\n    // Index -> name, by the same constant measure receives; defined with the bodies.\n    extern const char *const kMethodNames[];\n\n    // Where the tree goes when the program leaves (--profile-file, default\n    // simse_profile.txt; a lone '-' keeps it on stderr).\n    static const char *const kProfileFile = \"" "\n// NativeInvoke (impl_specs/native-interop.md): the shared-library loader a\n// declaration with the SmGen(\"native\", ...) attribute binds its symbol with. Windows loads through\n// windows.h's LoadLibraryA/GetProcAddress, everywhere else through dlfcn.h's\n// dlopen/dlsym; either way the lookup is at run time rather than a link-time\n// import, so the program links nothing.\n    #ifdef _WIN32\n    #ifndef WIN32_LEAN_AND_MEAN\n    #define WIN32_LEAN_AND_MEAN\n    #endif\n    #ifndef NOMINMAX\n    #define NOMINMAX\n    #endif\n    #include<windows.h>\n    #else\n    #include<dlfcn.h>\n    #endif\n    #include<cstring>\n    " "();\n        node_ = app_->enter(index);\n    }\n\n    ProfileScope::~ProfileScope() {\n        app_->leave(node_, start_);\n    }\n}\n\nnamespace {\n    simse_profiling::ProfileApp profileApp;\n\n    // The tree, when the program leaves: a static outlives every automatic scope, so this\n    // runs after main returned - whichever return it took.\n    struct ProfileReport {\n        ~ProfileReport() { profileApp.report(); }\n    } profileReport;\n}\n\n" "usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>]... [--module <dir>]... [--no-concat] [--no-borrow] [--no-escape] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showBorrow] [--showEscape] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos] [--version]" ": %8lld calls\\n\", (int) shown, kMethodNames[best],\n                        (long long) values[best], (long long) calls[best]);\n            }\n            fprintf(out, \"\\n\");\n        }\n    };\n\n    ProfileScope::ProfileScope(Int index, ProfileApp *app) : node_(0), app_(app) {\n        start_ = " "ambiguous call of '@': a lambda argument fits a declaration taking a callable and one taking a plain value (C++ would silently take the plain one); pass the type arguments explicitly ('@<...>(...)')" "'@' takes a counted reference ('&@') and the argument is a raw pointer: a pointer cannot become a reference in place - make a reference variable one line before the call (var ref: &@ = &value)" "invalid interpolation string: `@(` must hold one name and be closed by `)` (`@(name)`); for a literal `@`, write it in a \"...\" string or in a raw string that does not interpolate" "invalid interpolation string: `@` must be followed by a name (`@name`) or `@(name)`; for a literal `@`, write it in a \"...\" string or in a raw string that does not interpolate" "json: field '@' of '@' is not a data class or a scalar (a generated serializer for a generic or pointer field is not implemented yet)" "a `for` iterates a machine (`..T`) or a type with a `|`, and | has neither; iterate a container with `while` and an index" "the lambda parameter '@' has no type: annotate it (e.g. '@: T') or use the lambda where a callable type expects one" "suspend: a body-less `suspend` declaration has no lowering yet (the leaves arrive with the file and socket steps)" "cannot infer @@ of '@': no argument names @ (a callable argument does not); pass @ explicitly ('@<...>(...)')" "// Generated by the Simse compiler. Do not edit.\n#include \"src/rtl/simse.hpp\"\n#include <type_traits>\n\n" "suspend: a body that also yields is not supported (a `for` machine is a local and cannot cross a suspension)" "unsupported: construct a union class in a 'var'/'val' declaration ('var x = U(...)') or as 'return (value)'" "yield: a `this` parameter cannot be a field; write the receiver before the name (`fun T.name`) instead" "static_assert(sizeof(__sm_stringPool) - 1 == @, \"the string pool and its length index disagree\");" "'@' is a prelude type: give the declaration another name (the prelude's types are emitted by name)" "a lambda cannot reach `this` yet: a lambda captures by value, and reference captures are deferred" "suspend: a `for` over a machine cannot cross a suspension; collect the values into a `List` first" "`!!` inside a lambda propagates into the lambda's own result, and this parameter's type has none" "construct a union class in a 'var'/'val' declaration ('var x = U(...)') or as 'return (value)'" "resourcesInstall(__sm_stringTable, __sm_stringCount, __sm_resourceIndex, __sm_resourceCount);" "'@' is not a type parameter of this declaration; a protocol constraint names one of its own" "'set' is not declared for this receiver: an index write needs 'operator set(index, value)'" "'@' is not an operator: 'get', 'set', 'compareTo', 'equals' and 'plus' are the operators" "// them into the program's `Resources` table (`resourcesInstall`, src/rtl/resources.kt)." "unsupported: no protocol of '@' declares '@'; add it to a protocol in the 'when' clause" "'@' has an unInit: hold it by '*@' or '&@' - a value copy would run its destructor too" "'@' is constrained by both '@' and '@', which declare '@': the call would be ambiguous" "Generated C++:may name one of its symbols itself. (`filestream` moved on with the type" "case @::@: ::new ((void *) &this->@) @(std::move(other.@)); this->_type = @::@; break;" "protocol '@': the receiver must be the first type parameter ('fun <@> @.method(...)')" "unInit is a type's destructor: it is not called - the value's last owner destroys it" "unsupported: '@' on type parameter '@' needs a protocol: 'fun f<@>(...) when @: P'" "// string-table indices, key then value; the generated initialization pass builds" "// File-level static storage (specs/statics.md): initialized before main's body." "'@' is a ref class: build it as '&@(...)' - a ref class is held by '&@' or '*@'" "// series (offsets as deltas, then lengths), each as what to subtract from the" "`!!` propagates a failure, and this function returns nothing to propagate into" "json: the json:helpers resource is missing (a section of modules/json/_res.md)" "legend: async! is declared suspend, async is inferred from the callee it shows" "native: '|' names no library (@SmGen(\"native\", \"<library>\", \"<symbol>\"))" "// The resources the compiler read from `_res.md` files (specs/resources.md):" "native: '@' (@) generates the thunk '@' with a different binding - rename one" "suspend: the body nests deeper than the lowering allows (a cycle in the AST?)" "// The program's string literals: one pool, and two run-length encoded index" "case @::@: ::new ((void *) &this->@) @(other.@); this->_type = @::@; break;" "inline Bool operator!=(const @* self, @ tag) { return self->_type != tag; }" "inline Bool operator==(const @* self, @ tag) { return self->_type == tag; }" "inline Bool operator!=(const @& self, @ tag) { return self._type != tag; }" "inline Bool operator==(const @& self, @ tag) { return self._type == tag; }" "`!!` propagates a failure, so the enclosing function must return `Res<T>`" "`!!` must be the whole right-hand side of a `val`/`var`, an assignment, " "this index has no 'operator set(index, value)': an index write needs one" "    if (this) {\n        return \"true\"\n    }\n    return \"false\"\n" "namespace simse_profiling {\n    const char *const kMethodNames[] = {\n" "suspend: a `return` of a suspension in a function that answers nothing" "simse_strTableDecode(__sm_stringPool, starts, lens, __sm_stringTable," "'@' declares unInit: a class with a destructor must be a 'ref class'" "std::memcpy(@, simse_strBoolView(@).ptr, simse_strBoolView(@).len);" "'@' does not satisfy protocol '@': no '@' matching '@' is in scope" "simse_strTableExpand(__sm_stringStarts, starts, __sm_stringCount);" "union class '@': 'None' is the tag's empty state; rename the field" "a `for (*x in m)` needs an `iter`, and a machine yields values " "types are not compatible: '@' takes '@' and the argument is '@'" "union class '@': '_type' is the tag's storage; rename the field" "simse_strTableExpand(__sm_stringLens, lens, __sm_stringCount);" "suspend: an extension function's receiver is not supported yet" "Generated C++:marker (`@SmGen(\"cpp\")`, specs/attributes.md)" "expected the receiver of the protocol's method ('T.toString')" "reached`, so a program that never fetches carries none of it." "unsupported: no symbol for the implementation of protocol '@'" "json: two data classes are named '@'; a serializer needs one" "suspend: a suspension's callee must be a plain function name" "union class '@': '@' is a generated member; rename the field" "Generated C++:type* whose layout only C++ can express (`std" "suspend: a generic suspending function is not supported yet" "internal: the body of '@' is not expressible in the IL (@)" "no source for @SmGen(\"kt\", \"|\") (needs the resource |)" "suspend: a `main(args)` that suspends is not supported yet" "unknown protocol '@': declare it with 'protocol @ fun ...'" "    static Fn fn = (Fn) __sm_nativeResolve(\"@\", \"@\");" "native: '@' has a parameter type the generator cannot map" "protocol '@': the receiver must name the implemented type" "unsupported: namespaced symbol '@' needs a global wrapper" "cannot resolve import '@': no file declares package '@'" "// previous value; strtable.hpp has the stream format." "native: '@' has a return type the generator cannot map" "an operator function needs a receiver: 'fun T.@(...)'" "json: the generic data class '@' is not supported yet" "static Span<Char> __sm_stringTable[__sm_stringCount];" "suspend: the local '@' has no type to make a field of" "'@' declares unInit twice: a type has one destructor" "a method whose C++ is generated must not have a body" "name the protocol before 'fun' or after it, not both" "unsupported: a lambda outside a closure construction" "json: '@' is not a data class or a supported scalar" "suspend: an extension function is not supported yet" "unsupported: a machine's type has no class to spell" "unsupported: generated parameter '@' without a type" "yield: a `for` over a machine cannot cross a yield " "yield: the local '@' has no type to make a field of" "(the machine a call creates has no type to make a " "a `>` closer ran into `=`: write a space before it" "attribute arguments are string or integer literals" "internal: a closure class could not be written (@)" "rather than places: iterate it with `for (x in m)`" "the emitter must not generate one. `filestreamhpp`" "the slot '@' has neither a type nor an initializer" "unsupported: generic-qualified expression '@<...>'" "field of); collect the values into a `List` first" "@(@&& other) noexcept { this->moveFrom(other); }" "suspend: a `this` parameter is not supported yet" "union class '@' generates '@': rename the method" "unsupported: typealias '@' without a target type" "'when' matches a value or 'else', not a pattern" "expected 'TypeParameter: Protocol' after 'when'" "expected 'fun' or an attribute after 'operator'" "isOfType(simse_addressOf(@), SmOptTypes::Value)" "union class '@': the argument's type is unknown" "expected 'fun' or an attribute after 'suspend'" "makeRef<std::remove_cvref_t<decltype((@))>>(@)" "union class '@' has no arm '@'; the arms are @" "expected 'fun' or an attribute after 'borrow'" "@(const @& other) { this->copyFrom(other); }" "    out.append('\"')\n    out.append(':')\n" "`|` stands on its own as a statement (`i|`)" "a concatenation into a slot with no storage" "a protocol declares a signature, not a body" "data class '@' expects @ field(s) but got @" "inline @ @(Int value) { return (@) value; }" "no overload of '@' takes @ type argument(s)" "simse_spanOfStr(simse_addressOf((@).get()))" "'@' is a C++ keyword; give it another name" "an index write with no operator arguments" "auto __smProfile = profileApp.measure(@);" "case @::@: simse_destroy(this->@); break;" "unsupported: '..' without an element type" "unsupported: parameter '@' without a type" "    out.append('}')\n    return out\n}\n" "    return jsonQuoted(this.toString())\n" "'@' expects @ type argument(s) but got @" "::new ((void *) &@) @(std::move(value));" "protocol '@': parameter '@' needs a type" "static const Int __sm_resourceCount = @;" "union class '@' has no field of type '@'" "'else' must be the last arm of a 'when'" "@return simse_closureFunc<@>(@, *this);" "static const @ __sm_stringStarts[] = @;" "static struct __SmStringTableInitType {" "sync @ declarations reach no suspension" "union class '@' takes at most one value" "unsupported: Opt-vs-null comparison '@'" "`!!` is not allowed inside a condition" "an initializer with no expression form" "expected 'class' or 'fun' after 'data'" "no overload of '@' takes @ argument(s)" "static const Int __sm_stringCount = @;" "suspend: the parameter '@' has no type" "task->loop = &simse_tasks::taskLoop();" "template <Bool SmManaged, @> struct @;" "a body-less method needs an attribute" "simse: --profile-file requires a path" "static const @ __sm_stringLens[] = @;" "static const char __sm_stringPool[] =" "unInit: the receiver has no type name" "unsupported: field '@' without a type" "writes a field, an index or a pointer" "constructor call with no destination" "internal: task field '@' has no type" "simse_argIndex = simse_argIndex + 1;" "static Int __sm_resourceIndex[] = @;" "yield: the parameter '@' has no type" "'when' can have only one 'else' arm" "a concatenation in a value position" "a concatenation with no destination" "simse_spanOfStr(simse_addressOf(@))" "std::memcpy(@, @.data(), @.size());" "structured statement reached the IL" "@& operator=(@&& other) noexcept {" "return self->_type == typeToCheck;" "the slot '@' has no type to assign" "@ = @ + simse_strBoolView(@).len;" "expected 'fun' after an attribute" "template <@> struct @<false, @> {" "unsupported: main with parameters" "'set' takes an index and a value" "@(@, Str(argv[simse_argIndex]));" "borrow- @ C++ calls it (prelude)" "simse: --prelude requires a path" "template <@> struct @<true, @> {" "yield: the field '@' has no type" "'get' takes one index parameter" "int main(int argc, char** argv)" "simse: --module requires a path" "simse_rc = (int) simse_root->@;" "the type '@' is reached through" "void copyFrom(const @& other) {" "while (simse_argIndex < argc) {" "~@() { this->destroyActive(); }" "@& operator=(const @& other) {" "@:@: Unexpected character: '@'" "Generated C++:section is `emit" "expected '->' in function type" "expected 'class' after 'union'" "expected 'package' declaration" "struct @ : simse_tasks::Task {" "    return jsonQuoted(this)\n" "Int starts[__sm_stringCount];" "a static write with no target" "enum value must be an integer" "json: trailing text at byte |" "simse: --root requires a path" "simse_tasksStart(simse_root);" "type name in a value position" "unInit: no declaration of '@'" "    return this.toString()\n" "@ = simse_strCountDigits(@);" "a concatenation with no part" "unknown source generator '@'" "'@' cannot be expressed yet" "'@' takes the other operand" "Int lens[__sm_stringCount];" "__SmStringTableInitType() {" "expected method declaration" "the capture '@' has no type" "    if (fn == nullptr) {\n" "--showLinearRepresentation" "List<Str> @ = List<Str>();" "a cast with no destination" "a cast with no target type" "a field write with no name" "compound assignment target" "if (self->_type == @::@) {" "self->@(std::move(value));" "simse: prelude not found: " "simse_println((@), stdout)" "unInit takes no parameters" "void simse_initStatics() {" "'continue' outside a loop" "@* simse_root = (@*) @();" "a part of a concatenation" "duplicate declaration '@'" "expected lambda parameter" "or a statement of its own" "simse: -o requires a path" "simse_strAddInt(@, @, @);" "void moveFrom(@& other) {" "    operator @() const {" "    var out: Str = \"{\"" "a jump with no condition" "cannot assign to val '@'" "expected 'class' after '" "expected a protocol name" "simse_print((@), stdout)" "simse_strBoolView(@).len" "unsupported: call target" "    out.appendStr(this." "a store with no pointer" "expected 'val' or 'var'" "expected parameter name" "int simse_argIndex = 1;" "return ((@*) _sm_h)->@;" "unexpected end of input" "writes a file-level var" "} __sm_stringTableInit;" "    out.append('\"')\n" "'break' outside a loop" "`FileStream`, the open" "a cast with no operand" "a closure with no body" "a declare with no slot" "a return with no value" "a write with no target" "duplicate protocol '@'" "reinterpret_cast<@>(@)" "simse_root->release();" "switch (other._type) {" "switch (this->_type) {" "this->_type = @::None;" "this->copyFrom(other);" "this->destroyActive();" "this->moveFrom(other);" "unInit returns nothing" "void destroyActive() {" "    out.append(',')\n" "@ = std::move(value);" "a call with no callee" "expected a string key" "fun @.toJson(): Str {" "if (this != &other) {" "return (RawPtr) task;" "simse_tasksRunLoop();" "std::memcpy(@, @, @);" "    out.appendStr(\"" "  (declared suspend)" "Var,Text,Value,Value" "a jump with no label" "a label with no name" "an unsupported shape" "expected declaration" "expression statement" "if (_type == @::@) {" "simse: cannot write " "simse_initStatics();" "struct @ : @<@, @> {" "unsupported type '@'" "void run() override;" "--when-copy-subject" "@ @(RawPtr _sm_h) {" "Var,Method,Value..." "__sm_stringTable[@]" "enum class @ { @ };" "expected ',' or ']'" "expected ',' or '}'" "expected enum value" "expected expression" "machine.branch = 0;" "return self->_type;" "static_cast<Int>(@)" "the instruction '@'" "the receiver of '@'" "unterminated object" "unterminated string" "--no-when-dispatch" "@ _type = @::None;" "@* task = new @();" "__sm_stringCount);" "an argument of '@'" "bad unicode escape" "return Str(fn(@));" "simse_addressOf(@)" "simse_spanOfStr(@)" "tasksReleaseHandle" "unterminated array" "    using Fn = @;" "'@' must answer @" "--when-first-char" "<generated>/kt.kt" "@ = @ + @.size();" "@ = @.data() + @;" "Var,Type,Value..." "assignment target" "if (!(@)) goto @;" "int simse_rc = 0;" "json: | at byte |" "machine.@ = self;" "return (@) fn(@);" "simse_list_append" "simse_optHasValue" "simse_profile.txt" "simse_resHasValue" "simse_tasksFinish" "void @(@ value) {" "!std::is_same_v<" "*@ = (char) (@);" "0123456789ABCDEF" "<unsupported: @>" "@.resize(@ + @);" "CallIndirectVoid" "Expr.GenericName" "InternetReadFile" "Var,Var,Value..." "_type = @::None;" "char* __sm_catP;" "expected a value" "reinterpret_cast" "resourcesEntries" "resourcesInstall" "return &self->@;" "return simse_rc;" "self->setNone();" "sm_suspend_point" "type parameters " "unknown type '@'" "void setNone() {" "--profile-nanos" "/*unsupported*/" ": unsupported: " "@ @_invoke(@) {" "Int __sm_catAt;" "InternetOpenUrl" "Method,Value..." "SIMSE_PACK_PUSH" "SmUnionManaged<" "Var,Value,Value" "a concatenation" "async  @   <- @" "cannot express " "default: break;" "inline @ @(@) {" "return machine;" "return nullptr;" "simse_@_fromInt" "simse_nowMicros" "simse_spanOfStr" "simse_strAddInt" "type parameter " "void @::run() {" "        \"\"\n" "(a value call)" "--profile-file" "@ @_invoke(@);" "SIMSE_PACK_POP" "Type.Reference" "Var,Text,Value" "\\generators\\" "_closure_owner" "bad number '|'" "if (!@) goto @" "if (@) goto @;" "machine.@ = @;" "simse_argIndex" "simse_nowNanos" "simse_optValue" "simse_resError" "simse_resValue" "struct @ : @ {" "tasksSuspendAt" "--module-root" "@ = @.data();" "@ = @.size();" "@ = concat(@)" "@_@_yieldable" "Expr.FloatLit" "GetStaticAddr" "RawPtr @(@) {" "Stmt.Continue" "Stmt.ExprStmt" "Type.Function" "Var,Var,Value" "\n## closure " "__sm_native_@" "_type = @::@;" "a lambda body" "destroyActive" "expected '->'" "expected 'in'" "expected name" "expected type" "if (@) goto @" "makeList<@>()" "makeRef<@>(@)" "package rtl\n" "resourceStore" "return *this;" "return Str();" "return fn(@);" "simse_optNone" "simse_optSome" "simse_out.cpp" "static_assert" "unsupported: " "  captures (" "(@) (@) -> @" "--showBorrow" "--showEscape" "-=!<>&|+*%^." ".toJson())\n" "/generators/" "@ = new @(@)" "@.resize(@);" "CallIndirect" "Expr.BoolLit" "Expr.CharLit" "Expr.NullLit" "InternetOpen" "Stmt.IfFalse" "Stmt.VarDecl" "Type.Generic" "Type.Pointer" "Var,Value..." "Var,Var,Text" "dynamic_cast" "expected '('" "expected ')'" "expected ':'" "expected '>'" "expected '@'" "generators\\" "int main() {" "json:helpers" "nativeinvoke" "return @(@);" "return @{0};" "simse_listOf" "simse_resErr" "task->@ = @;" "template <@>" "thread_local" "using @ = @;" "    };\n}\n" " = <lambda>" " machine{};" "--no-borrow" "--no-concat" "--no-escape" "--showAsync" ".hasValue()" "/*machine*/" "@ = copy(@)" "@_yieldable" "Constructor" "DeclareInit" "Expr.Binary" "Expr.IntLit" "Expr.Lambda" "Expr.Member" "Expr.StrLit" "SetVar_Null" "SmallVector" "Stmt.Assign" "Stmt.IfTrue" "Stmt.Return" "Type.IntLit" "Unsupported" "Value,Label" "a void call" "advance(&@)" "auto @ = @;" "borrow+ @ @" "borrow- @ @" "const char*" "generators/" "initByValue" "json:source" "mergeLocals" "simse_resOk" "spanOfArray" "static_cast" "tasksFinish" "threadJumps" "typeToCheck" "~?:;,()[]{}" "        \"" "@ = @ + 1;" "@ = @ + @;" "@ = cast @" "@<@>::@(@)" "@_closure@" "Dictionary" "Expr.Deref" "Expr.Index" "Expr.Unary" "Expression" "Func<@(@)>" "ReturnVoid" "Stmt.Block" "Stmt.Break" "Stmt.Label" "Stmt.While" "Stmt.Yield" "Text,Value" "Type.Named" "Type.Yield" "__sm_catAt" "__sm_catC@" "_yieldable" "advance(@)" "bad escape" "const @& @" "const_cast" "deadLocals" "deadStores" "expression" "fmtStrWith" "foldBranch" "foldLabels" "iterValues" "prototypes" "requires (" "struct @ {" "        @" "&@_invoke" "(@).get()" "(void*) @" "--prelude" "--profile" "--version" "/simse.md" "@ = &@[@]" "@ = @ @ @" "@.c_str()" "@.lambda@" "@: @:@: @" "@::~@() {" "CopyValue" "DataClass" "Expr.Call" "Expr.Copy" "Expr.Name" "FieldAddr" "GetStatic" "IndexAddr" "Ref<void>" "SetStatic" "Simse/1.0" "Stmt.Goto" "TypeAlias" "Var,Value" "__sm_catP" "_smResult" "_sm_ctor@" "_sm_index" "_sm_prop@" "co_return" "compareTo" "consteval" "constexpr" "constinit" "foldConst" "getTypeOf" "labels:  " "machine:@" "methods: " "namespace" "pool:    " "protected" "resources" "return @;" "spanOfStr" "statement" "struct @;" "typealias" "types:   " "vars:    " "    @ @;" "  (line " "(@ <= 0)" "(@ >= 0)" "(@) -> @" "--module" ":static=" "@ (*)(@)" "@ = &@.@" "@ = @[@]" "@ @(@) {" "@.size()" "@:@:@: @" "@[@] = @" "Argument" "BinaryOp" "CallCtor" "CallVoid" "Expr.Ref" "Function" "GetField" "GetIndex" "Opt<@>()" "RawArray" "SetField" "SetIndex" "Var,Text" "_closure" "_fromInt" "_sm_base" "_sm_ctor" "_sm_expr" "_sm_self" "_sm_task" "_sm_when" "async! @" "char16_t" "char32_t" "closures" "co_await" "co_yield" "continue" "copyFrom" "decltype" "explicit" "hasValue" "includes" "isOfType" "lambda:@" "moveFrom" "noexcept" "operator" "protocol" "refcount" "register" "requires" "template" "toString" "typename" "unsigned" "var @: @" "volatile" "    }\n" " = null" "(*@)[@]" "(*self)" "(*this)" "(@ < 0)" "(@ > 0)" ":source" ":symbol" "@ = @.@" "@ = [@]" "@ @(@);" "@ @:@:@" "@(@, @)" "@* self" "@.@ = @" "@::~@()" "@<@>(@)" "@<@>{@}" "@?m@(@)" "@@.@(@)" "Declare" "Escapes" "Float32" "Float64" "IfFalse" "Stmt.If" "Storage" "StrView" "UnaryOp" "Unknown" "Var,Var" "_SmIter" "_invoke" "_proto_" "_res.md" "_sm_@_@" "_sm_for" "_sm_stk" "advance" "alignas" "alignof" "char8_t" "concept" "current" "default" "escape " "float:@" "foldAll" "forward" "fromInt" "goto @;" "import " "mutable" "nullptr" "package" "println" "private" "profile" "reached" "return " "return;" "setNone" "simse: " "src/rtl" "statics" "strings" "support" "suspend" "typedef" "union {" "virtual" "wchar_t" "* self" "*@ = @" "--help" "--root" "@ = &@" "@ = *@" "@ = @;" "@ = @@" "@ @(@)" "@ @{};" "@ self" "@() {}" "@(@) {" "@,  @@" "@::run" "Concat" "IfTrue" "Int @;" "Lambda" "Method" "Module" "RawPtr" "Ref<@>" "Return" "SetVar" "Str(@)" "_sm_cb" "_sm_f_" "_sm_sc" "always" "and_eq" "bitand" "bodies" "bool:@" "borrow" "branch" "calls " "char:@" "class " "delete" "double" "dtor:@" "equals" "export" "extern" "fmtStr" "fn(@);" "friend" "import" "inline" "module" "native" "not_eq" "parent" "public" "quoted" "result" "return" "self->" "signed" "simse " "simse_" "sizeof" "spanOf" "static" "status" "struct" "switch" "this->" "toJson" "typeid" "unInit" "xor_eq" "};\n\n" "    @" " self" "'\\''" ") -> " "0.1.0" ":emit" ":ret=" "@ + @" "@ = @" "@ @ @" "@(@);" "@@(@)" "Array" "Clean" "Deref" "Error" "Int16" "Int32" "Int64" "LTend" "LYend" "Label" "Local" "PList" "PtrOf" "Store" "Types" "Value" "\")\n" "\",\n" "\"@\"" "\n// " "_sm_f" "_sm_h" "_task" "_type" "bitor" "break" "catch" "class" "compl" "const" "count" "error" "false" "float" "getAs" "goto " "int:@" "or_eq" "print" "short" "str:@" "task:" "throw" "toInt" "types" "union" "using" "value" "void*" "while" "yield" "}\n\n" "~@();" "    " " && " " {\n" "(!@)" "(*@)" "*(@)" ".hpp" "@ @;" "@# @" "@(@)" "@, @" "@: @" "@::@" "@<@>" "@[@]" "@{@}" "Bool" "Call" "Cast" "Char" "Enum" "Goto" "Int8" "List" "None" "Pack" "Span" "Task" "Temp" "Text" "Type" "Unit" "\"\"" "\\\"" "\\\\" "\n\n" "\n\r" "auto" "bool" "case" "char" "copy" "data" "else" "enum" "fn:@" "fun " "goto" "init" "isOk" "iter" "json" "long" "loop" "main" "none" "ns@_" "null" "plus" "self" "size" "some" "them" "this" "true" "void" "when" "   " " = " " \t" "'@'" "(@)" ")  " ".kt" ".md" "// " "<<=" ">>=" "@ @" "@#@" "@.@" "@/@" "@:@" "@_@" "Box" "Int" "Opt" "Res" "Str" "Var" "\\n" "\\r" "\\t" "```" "and" "asm" "cpp" "err" "for" "fun" "get" "int" "new" "not" "ref" "res" "rtl" "set" "try" "val" "var" "xor" "}\n" "  " " {" "!=" "# " "%=" "&&" "&=" ");" "*=" "*?" "++" "+=" ", " "--" "-=" "->" "-h" "-o" ".." "/=" ": " "::" ":;" "<<" "<=" "==" ">=" ">>" "?L" "?m" "?p" "?t" "?v" "@;" "LT" "LY" "Sm" "\"" "\\" "\n" "^=" "_n" "_v" "do" "if" "in" "is" "it" "kt" "ns" "ok" "or" "us" "|#" "|=" "||" "};" " " "!" "%" "&" "'" "(" ")" "*" "+" "," "-" "." "/" "0" "1" ":" ";" "<" "=" ">" "?" "@" "F" "L" "P" "R" "T" "Y" "[" "]" "^" "_" "`" "u" "x" "{" "|" "}" "" 
 ;
-static const Int16 __sm_stringStarts[] = {1116,22,0,-2772,711,233,184,17,1014,176,95,51,93,6,14,3,42,12,6,2,4,7,-6,1,1,2,5,10,-1,1,0,1,2,1,2,1,2,0,3,2,1,3,0,2,1,1,2,2,4,1,2,0,2,6,-5,3,2,0,2,1,2,0,9,1,0,1,0,1,0,9,-6,-1,2,4,1,2,0,1,3,1,2,0,4,1,0,3,-2,1,2,0,1,1,1,2,0,8,1,0,1,4,-4,0,5,-4,1,2,0,4,2,1,0,1,1,3,0,1,1,1,3,0,1,1,1,5,0,1,1,3,7,0,2,1,3,0,1,1,1,4,0,1,1,2,2,0,2,1,2,4,-3,3,6,0,2,1,4,0,3,4,-2,-1,1,4,0,1,1,1,6,0,1,1,1,7,0,1,1,1,6,0,1,1,1,4,0,1,1,1,5,0,1,1,1,2,0,1,1,1,3,0,1,1,1,5,0,1,1,1,7,0,1,1,1,6,0,2,2,-1,1,7,0,2,2,-1,1,2,0,1,1,1,5,0,2,2,-1,1,11,0,1,1,1,8,0,3,1,2,-2,1,6,0,1,1,1,8,0,2,3,-2,1,17,0,2,2,-1,1,7,0,2,2,-1,1,12,0,1,1,1,15,0,1,1,1,10,0,1,1,1,18,0,1,1,1,21,0,1,1,1,22,0,2,4,-3,1,5,0,2,2,-2,1,11,0,1,1,1,11,0,2,1,-1,1,10,0,2,1,-1,1,8,0,1,1,1,4,0,2,1,-1,1,19,0,2,1,-1,1,10,0,2,3,-2,1,41,0,2,2,-1,1,36,0,1,1,1,53,0,1,1,1,61,0,2,2,-1,1,71,0,1,1,1,72,0,5,2,-1,0,1,-1,1,24,0,1,2,3,2,0,2,-1,30,0,6,2,-2,1,0,1,-1,1,28,0,1,2,1,4,0,1,-2,1,29,0,4,1,0,1,-1,1,19,0,1,1,1,2,0,1,-1,1,18,0,1,1,1,37,0,1,1,1,2,0,1,-1,1,16,0,1,1,1,37,0};
-static const Int16 __sm_stringLens[] = {1116,21,-2772,711,233,184,17,1014,176,95,51,93,6,14,3,42,12,6,2,4,7,-6,1,1,2,5,10,-1,1,0,1,2,1,2,1,2,0,3,2,1,3,0,2,1,1,2,2,4,1,2,0,2,6,-5,3,2,0,2,1,2,0,9,1,0,1,0,1,0,9,-6,-1,2,4,1,2,0,1,3,1,2,0,4,1,0,3,-2,1,2,0,1,1,1,2,0,8,1,0,1,4,-4,0,5,-4,1,2,0,4,2,1,0,1,1,3,0,1,1,1,3,0,1,1,1,5,0,1,1,3,7,0,2,1,3,0,1,1,1,4,0,1,1,2,2,0,2,1,2,4,-3,3,6,0,2,1,4,0,3,4,-2,-1,1,4,0,1,1,1,6,0,1,1,1,7,0,1,1,1,6,0,1,1,1,4,0,1,1,1,5,0,1,1,1,2,0,1,1,1,3,0,1,1,1,5,0,1,1,1,7,0,1,1,1,6,0,2,2,-1,1,7,0,2,2,-1,1,2,0,1,1,1,5,0,2,2,-1,1,11,0,1,1,1,8,0,3,1,2,-2,1,6,0,1,1,1,8,0,2,3,-2,1,17,0,2,2,-1,1,7,0,2,2,-1,1,12,0,1,1,1,15,0,1,1,1,10,0,1,1,1,18,0,1,1,1,21,0,1,1,1,22,0,2,4,-3,1,5,0,2,2,-2,1,11,0,1,1,1,11,0,2,1,-1,1,10,0,2,1,-1,1,8,0,1,1,1,4,0,2,1,-1,1,19,0,2,1,-1,1,10,0,2,3,-2,1,41,0,2,2,-1,1,36,0,1,1,1,53,0,1,1,1,61,0,2,2,-1,1,71,0,1,1,1,72,0,5,2,-1,0,1,-1,1,24,0,1,2,3,2,0,2,-1,30,0,6,2,-2,1,0,1,-1,1,28,0,1,2,1,4,0,1,-2,1,29,0,4,1,0,1,-1,1,19,0,1,1,1,2,0,1,-1,1,18,0,1,1,1,37,0,1,1,1,2,0,1,-1,1,16,0,1,1,1,37,0,1,1};
-static_assert(sizeof(__sm_stringPool) - 1 == 32198, "the string pool and its length index disagree");
+static const Int16 __sm_stringStarts[] = {1116,22,0,-2772,711,233,184,17,1014,176,92,54,93,6,14,3,42,12,6,2,4,7,-6,1,1,2,5,10,-1,1,0,1,2,1,2,1,2,0,3,2,1,3,0,2,1,1,2,2,4,1,3,0,2,6,-5,3,2,0,2,1,2,0,2,1,0,1,2,1,4,0,9,-6,-1,2,4,1,2,0,1,3,1,2,0,4,1,0,3,-2,1,2,0,1,1,1,2,0,8,1,0,1,4,-4,0,5,-4,1,2,0,4,2,1,0,1,1,3,0,1,1,1,3,0,1,1,1,5,0,1,1,3,7,0,2,1,3,0,1,1,1,4,0,1,1,2,2,0,2,1,2,4,-3,3,6,0,2,1,4,0,3,4,-2,-1,1,4,0,1,1,1,6,0,1,1,1,7,0,1,1,1,6,0,1,1,1,4,0,1,1,1,5,0,1,1,1,2,0,1,1,1,3,0,1,1,1,5,0,1,1,1,7,0,1,1,1,6,0,2,2,-1,1,7,0,2,2,-1,1,2,0,1,1,1,5,0,2,2,-1,1,11,0,1,1,1,8,0,3,1,2,-2,1,6,0,1,1,1,8,0,2,3,-2,1,17,0,2,2,-1,1,7,0,2,2,-1,1,12,0,1,1,1,15,0,1,1,1,10,0,1,1,1,18,0,1,1,1,21,0,1,1,1,22,0,2,4,-3,1,5,0,2,2,-2,1,11,0,1,1,1,11,0,2,1,-1,1,10,0,2,1,-1,1,8,0,1,1,1,4,0,2,1,-1,1,19,0,2,1,-1,1,10,0,2,3,-2,1,41,0,2,2,-1,1,36,0,1,1,1,53,0,1,1,1,61,0,2,2,-1,1,71,0,1,1,1,72,0,5,2,-1,0,1,-1,1,24,0,1,2,3,2,0,2,-1,30,0,6,2,-2,1,0,1,-1,1,28,0,1,2,1,4,0,1,-2,1,29,0,4,1,0,1,-1,1,19,0,1,1,1,2,0,1,-1,1,18,0,1,1,1,37,0,1,1,1,2,0,1,-1,1,16,0,1,1,1,37,0};
+static const Int16 __sm_stringLens[] = {1116,21,-2772,711,233,184,17,1014,176,92,54,93,6,14,3,42,12,6,2,4,7,-6,1,1,2,5,10,-1,1,0,1,2,1,2,1,2,0,3,2,1,3,0,2,1,1,2,2,4,1,3,0,2,6,-5,3,2,0,2,1,2,0,2,1,0,1,2,1,4,0,9,-6,-1,2,4,1,2,0,1,3,1,2,0,4,1,0,3,-2,1,2,0,1,1,1,2,0,8,1,0,1,4,-4,0,5,-4,1,2,0,4,2,1,0,1,1,3,0,1,1,1,3,0,1,1,1,5,0,1,1,3,7,0,2,1,3,0,1,1,1,4,0,1,1,2,2,0,2,1,2,4,-3,3,6,0,2,1,4,0,3,4,-2,-1,1,4,0,1,1,1,6,0,1,1,1,7,0,1,1,1,6,0,1,1,1,4,0,1,1,1,5,0,1,1,1,2,0,1,1,1,3,0,1,1,1,5,0,1,1,1,7,0,1,1,1,6,0,2,2,-1,1,7,0,2,2,-1,1,2,0,1,1,1,5,0,2,2,-1,1,11,0,1,1,1,8,0,3,1,2,-2,1,6,0,1,1,1,8,0,2,3,-2,1,17,0,2,2,-1,1,7,0,2,2,-1,1,12,0,1,1,1,15,0,1,1,1,10,0,1,1,1,18,0,1,1,1,21,0,1,1,1,22,0,2,4,-3,1,5,0,2,2,-2,1,11,0,1,1,1,11,0,2,1,-1,1,10,0,2,1,-1,1,8,0,1,1,1,4,0,2,1,-1,1,19,0,2,1,-1,1,10,0,2,3,-2,1,41,0,2,2,-1,1,36,0,1,1,1,53,0,1,1,1,61,0,2,2,-1,1,71,0,1,1,1,72,0,5,2,-1,0,1,-1,1,24,0,1,2,3,2,0,2,-1,30,0,6,2,-2,1,0,1,-1,1,28,0,1,2,1,4,0,1,-2,1,29,0,4,1,0,1,-1,1,19,0,1,1,1,2,0,1,-1,1,18,0,1,1,1,37,0,1,1,1,2,0,1,-1,1,16,0,1,1,1,37,0,1,1};
+static_assert(sizeof(__sm_stringPool) - 1 == 32206, "the string pool and its length index disagree");
 static Span<Char> __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
@@ -1742,6 +1742,19 @@ Int simse_strCountDigits(Int64 value);
 void simse_strAddInt(char* target, Int64 value, Int count);
 Span<Char> simse_strBoolView(Bool value);
 
+void* __sm_native_internetOpen(const Str& agent, const Int32& accessType, Int8* proxy, Int8* proxyBypass, const Int32& flags);
+void* __sm_native_internetOpenUrl(void* session, const Str& url, Int8* headers, const Int32& headersLength, const Int32& flags, void* context);
+Int32 __sm_native_internetReadFile(void* request, Char* buffer, const Int32& toRead, Int32* read);
+Int32 __sm_native_internetCloseHandle(void* handle);
+Int32 __sm_native_internetSetOption(void* handle, const Int32& option, Int32* value, const Int32& length);
+Int32 simse_http_flags();
+Int32 simse_http_connectTimeout();
+Int32 simse_http_receiveTimeout();
+Str simse_http_errorText(const Str& step);
+void simse_http_bufferInit(List<Char>* buffer, Int32 size);
+void simse_http_append(List<Char>* out, const Char* bytes, Int32 count);
+Str simse_http_charsToStr(const List<Char>* chars);
+
 #include <algorithm>
 #include <cstdio>
 #include <filesystem>
@@ -1756,19 +1769,6 @@ Str simse_pathCanonical(const Str& path);
 Bool simse_pathIsDirectory(const Str& path);
 Bool simse_pathExists(const Str& path);
 void simse_eprintln(const Str& text);
-
-void* __sm_native_internetOpen(const Str& agent, const Int32& accessType, Int8* proxy, Int8* proxyBypass, const Int32& flags);
-void* __sm_native_internetOpenUrl(void* session, const Str& url, Int8* headers, const Int32& headersLength, const Int32& flags, void* context);
-Int32 __sm_native_internetReadFile(void* request, Char* buffer, const Int32& toRead, Int32* read);
-Int32 __sm_native_internetCloseHandle(void* handle);
-Int32 __sm_native_internetSetOption(void* handle, const Int32& option, Int32* value, const Int32& length);
-Int32 simse_http_flags();
-Int32 simse_http_connectTimeout();
-Int32 simse_http_receiveTimeout();
-Str simse_http_errorText(const Str& step);
-void simse_http_bufferInit(List<Char>* buffer, Int32 size);
-void simse_http_append(List<Char>* out, const Char* bytes, Int32 count);
-Str simse_http_charsToStr(const List<Char>* chars);
 
 #include <filesystem>
 #include <system_error>
@@ -1841,6 +1841,8 @@ inline void simse_println(const T& value, FILE* out) {
 
 // src/rtl
 List<ResourceEntry> resourceStore{};
+// modules/json/generators/JsonGen.kt
+Bool ns6_jsonGenRegistered{};
 // src/codegen/IlSlot.kt
 Int ns1_kIlDeclWidth{};
 // src/common/xmlutil.kt
@@ -1879,8 +1881,6 @@ List<Str> ns9_ilOpKindTexts{};
 Bool ns9_ilNoConcatFlag{};
 // src/linear/ReusePure.kt
 Dictionary<Int, List<Str>> ns9_ilReuseTokenAt{};
-// src/modules/json/generators/JsonGen.kt
-Bool ns6_jsonGenRegistered{};
 // src/optimizations/FoldGlobals.kt
 ns11_FoldGlobalScan ns11_linGlobalScan{};
 // src/optimizations/FoldGlobals.kt
@@ -2165,6 +2165,499 @@ Bool isDigit(Char* self);
 Bool isAlpha(Char* self);
 Bool isAlphaOrDigit(Char* self);
 Bool isSpace(Char* self);
+Bool ns3_isReached(ns3_SourceGenContext* self);
+Str ns3_parameter(ns3_SourceGenContext* self, Int index);
+Int ns4_httpChunk();
+Int ns4_httpTimeout();
+Res<List<Char>> ns4_httpGet(Str url);
+Res<Str> ns4_httpGetText(Str url);
+ns3_SourceGenTransform ns6_jsonGen(ns3_SourceGenContext* ctx);
+Bool ns6_jsonWants(ns3_AstXmlNode* module);
+Str ns6_jsonModulePackage(ns3_SourceGenContext* ctx);
+ns6_JsonTypes ns6_jsonCollect(ns3_SourceGenContext* ctx);
+Bool ns6_jsonIsScalar(Str* name);
+Str ns6_jsonScalarBody(Str* name);
+Str ns6_jsonClassBody(Str* name, List<ns3_AstXmlNode>* fields);
+void ns6_jsonEnsure(Str* name, ns3_SourceGenContext* ctx, ns6_JsonTypes* types, Dictionary<Str, Bool>* keys, List<Str>* bodies, Dictionary<Str, Bool>* flags);
+Str ns6_jsonBuildSource(ns3_SourceGenContext* ctx);
+Bool ns7_isNull(ns7_JsonNode* self);
+Bool ns7_isArray(ns7_JsonNode* self);
+Bool ns7_isObject(ns7_JsonNode* self);
+Bool ns7_isBool(ns7_JsonNode* self);
+Bool ns7_isNumber(ns7_JsonNode* self);
+Bool ns7_isText(ns7_JsonNode* self);
+Str ns7_text(ns7_JsonNode* self);
+Float64 ns7_number(ns7_JsonNode* self);
+Bool ns7_boolean(ns7_JsonNode* self);
+Int ns7_size(ns7_JsonNode* self);
+ns7_JsonNode ns7_at(ns7_JsonNode* self, Int index);
+ns7_JsonNode ns7_get(ns7_JsonNode* self, Str key);
+Bool ns7_has(ns7_JsonNode* self, Str key);
+ns7_JsonNode ns7_jsonNull();
+ns7_JsonNode ns7_jsonBool(Bool value);
+ns7_JsonNode ns7_jsonNumber(Float64 value);
+ns7_JsonNode ns7_jsonText(Str value);
+Ref<ns7_JsonMember> ns7_jsonField(Str key, ns7_JsonNode* value);
+ns7_JsonNode ns7_jsonArray(List<ns7_JsonNode> items);
+ns7_JsonNode ns7_jsonObject(List<Ref<ns7_JsonMember>> members);
+Str ns7_jsonNumberText(Float64 value);
+void ns7_jsonWriteQuoted(Str* out, Str value);
+void ns7_write(ns7_JsonWriter* self, ns7_JsonNode node);
+Str ns7_toJson(ns7_JsonNode* self);
+Res<ns7_JsonNode> ns7_fail(ns7_JsonReader* self, Str message);
+Res<Str> ns7_failText(ns7_JsonReader* self, Str message);
+Res<Char> ns7_failChar(ns7_JsonReader* self, Str message);
+void ns7_skipSpace(ns7_JsonReader* self);
+Bool ns7_consume(ns7_JsonReader* self, Str word);
+Res<ns7_JsonNode> ns7_parseValue(ns7_JsonReader* self);
+Res<ns7_JsonNode> ns7_parseLiteral(ns7_JsonReader* self);
+Res<ns7_JsonNode> ns7_parseNumber(ns7_JsonReader* self);
+Res<Str> ns7_parseString(ns7_JsonReader* self);
+Res<Char> ns7_parseUnicodeEscape(ns7_JsonReader* self);
+Res<ns7_JsonNode> ns7_parseArray(ns7_JsonReader* self);
+ns7_JsonNode ns7_arrayNode(ns7_JsonReader* self, List<Ref<ns7_JsonNode>> items);
+Res<ns7_JsonNode> ns7_parseObject(ns7_JsonReader* self);
+Int ns7_jsonHexValue(Char ch);
+Res<ns7_JsonNode> ns7_parseJson(Str text);
+// modules/linq/linq.kt
+template <class T>
+struct ns10_List_iter_yieldable {
+    Int branch{};
+    T* current{};
+    List<T>* _sm_self{};
+    Int i{};
+    Int len{};
+};
+
+template <class T>
+Bool advance(ns10_List_iter_yieldable<T>* self) {
+    Bool _sm_base1, _sm_base3, _sm_expr1;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base11, _sm_base12, _sm_base13;
+    List<T>* _sm_base6, * _sm_base10;
+    T* _sm_base9, * _sm_expr2;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto L2;
+    _sm_base4 = self->branch;
+    _sm_base3 = _sm_base4 == 1;
+    if (_sm_base3) goto LY1;
+    self->i = 0;
+    _sm_base6 = self->_sm_self;
+    _sm_base5 = simse_lenOf((*_sm_base6));
+    self->len = _sm_base5;
+    L1:;
+    _sm_base7 = self->i;
+    _sm_base8 = self->len;
+    _sm_expr1 = _sm_base7 < _sm_base8;
+    if (!(_sm_expr1)) goto L2;
+    _sm_base10 = self->_sm_self;
+    _sm_base11 = self->i;
+    _sm_base9 = simse_addressOf((*_sm_base10)[_sm_base11]);
+    _sm_expr2 = _sm_base9;
+    self->current = _sm_expr2;
+    self->branch = 1;
+    return true;
+    LY1:;
+    _sm_base13 = self->i;
+    _sm_base12 = _sm_base13 + 1;
+    self->i = _sm_base12;
+    goto L1;
+    L2:;
+    self->branch = -1;
+    return false;
+}
+
+template <class T>
+ns10_List_iter_yieldable<T> ns10_iter(List<T>* self);
+// modules/linq/linq.kt
+template <class T, class U, class _SmIter>
+struct ns10_select_yieldable {
+    Int branch{};
+    U* current{};
+    _SmIter* _sm_self{};
+    Func<U(T*)> f{};
+    U mapped{};
+};
+
+template <class T, class U, class _SmIter>
+Bool advance(ns10_select_yieldable<T, U, _SmIter>* self) {
+    Bool _sm_base1, _sm_expr1;
+    Int _sm_base2;
+    _SmIter* _sm_base3, * _sm_base6;
+    T* _sm_base5;
+    U* _sm_base7, * _sm_expr2;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto L2;
+    _sm_base3 = self->_sm_self;
+    _sm_expr1 = advance(_sm_base3);
+    if (!(_sm_expr1)) goto L2;
+    _sm_base6 = self->_sm_self;
+    _sm_base5 = _sm_base6->current;
+    self->mapped = self->f(_sm_base5);
+    _sm_base7 = simse_addressOf(self->mapped);
+    _sm_expr2 = _sm_base7;
+    self->current = _sm_expr2;
+    self->branch = 1;
+    return true;
+    L2:;
+    self->branch = -1;
+    return false;
+}
+
+template <class T, class U, class _SmIter>
+ns10_select_yieldable<T, U, _SmIter> ns10_select(_SmIter* self, Func<U(T*)> f);
+template <class T, class U, class _SmIter, class _sm_cb1>
+ns10_select_yieldable<T, U, _SmIter> ns10_select(_SmIter* self, _sm_cb1 f);
+// modules/linq/linq.kt
+template <class T, class _SmIter>
+struct ns10_where_yieldable {
+    Int branch{};
+    T* current{};
+    _SmIter* _sm_self{};
+    Func<Bool(T*)> keep{};
+};
+
+template <class T, class _SmIter>
+Bool advance(ns10_where_yieldable<T, _SmIter>* self) {
+    Bool _sm_base1, _sm_expr1;
+    Int _sm_base2;
+    _SmIter* _sm_base3, * _sm_base5, * _sm_base6;
+    T* _sm_base4, * _sm_expr3;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto L2;
+    L1:;
+    _sm_base3 = self->_sm_self;
+    _sm_expr1 = advance(_sm_base3);
+    if (!(_sm_expr1)) goto L2;
+    _sm_base5 = self->_sm_self;
+    _sm_base4 = _sm_base5->current;
+    _sm_expr1 = self->keep(_sm_base4);
+    if (_sm_expr1) goto L3;
+    goto L1;
+    L3:;
+    _sm_base6 = self->_sm_self;
+    _sm_expr3 = _sm_base6->current;
+    self->current = _sm_expr3;
+    self->branch = 1;
+    return true;
+    L2:;
+    self->branch = -1;
+    return false;
+}
+
+template <class T, class _SmIter>
+ns10_where_yieldable<T, _SmIter> ns10_where(_SmIter* self, Func<Bool(T*)> keep);
+template <class T, class _SmIter, class _sm_cb1>
+ns10_where_yieldable<T, _SmIter> ns10_where(_SmIter* self, _sm_cb1 keep);
+// modules/linq/linq.kt
+template <class T, class _SmIter>
+struct ns10_take_yieldable {
+    Int branch{};
+    T* current{};
+    _SmIter* _sm_self{};
+    Int count{};
+    Int taken{};
+};
+
+template <class T, class _SmIter>
+Bool advance(ns10_take_yieldable<T, _SmIter>* self) {
+    Bool _sm_base1, _sm_base3, _sm_expr1, _sm_expr3;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base6, _sm_base9, _sm_base10;
+    _SmIter* _sm_base7, * _sm_base8;
+    T* _sm_expr4;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto L2;
+    _sm_base4 = self->branch;
+    _sm_base3 = _sm_base4 == 1;
+    if (_sm_base3) goto LY1;
+    self->taken = 0;
+    L1:;
+    _sm_base5 = self->taken;
+    _sm_base6 = self->count;
+    _sm_expr1 = _sm_base5 < _sm_base6;
+    if (!(_sm_expr1)) goto L2;
+    _sm_base7 = self->_sm_self;
+    _sm_expr1 = advance(_sm_base7);
+    _sm_expr3 = !_sm_expr1;
+    if (_sm_expr3) goto L2;
+    _sm_base8 = self->_sm_self;
+    _sm_expr4 = _sm_base8->current;
+    self->current = _sm_expr4;
+    self->branch = 1;
+    return true;
+    LY1:;
+    _sm_base10 = self->taken;
+    _sm_base9 = _sm_base10 + 1;
+    self->taken = _sm_base9;
+    goto L1;
+    L2:;
+    self->branch = -1;
+    return false;
+}
+
+template <class T, class _SmIter>
+ns10_take_yieldable<T, _SmIter> ns10_take(_SmIter* self, Int count);
+// modules/linq/linq.kt
+template <class T, class _SmIter>
+struct ns10_skip_yieldable {
+    Int branch{};
+    T* current{};
+    _SmIter* _sm_self{};
+    Int count{};
+    Int skipped{};
+};
+
+template <class T, class _SmIter>
+Bool advance(ns10_skip_yieldable<T, _SmIter>* self) {
+    Bool _sm_base1, _sm_base3, _sm_expr1;
+    Int _sm_base2, _sm_base4, _sm_base6, _sm_base7, _sm_base8, _sm_base9;
+    _SmIter* _sm_base5, * _sm_base10;
+    T* _sm_expr3;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto L2;
+    _sm_base4 = self->branch;
+    _sm_base3 = _sm_base4 == 1;
+    if (_sm_base3) goto L1;
+    self->skipped = 0;
+    L1:;
+    _sm_base5 = self->_sm_self;
+    _sm_expr1 = advance(_sm_base5);
+    if (!(_sm_expr1)) goto L2;
+    _sm_base6 = self->skipped;
+    _sm_base7 = self->count;
+    _sm_expr1 = _sm_base6 < _sm_base7;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    _sm_base9 = self->skipped;
+    _sm_base8 = _sm_base9 + 1;
+    self->skipped = _sm_base8;
+    goto L1;
+    L4:;
+    _sm_base10 = self->_sm_self;
+    _sm_expr3 = _sm_base10->current;
+    self->current = _sm_expr3;
+    self->branch = 1;
+    return true;
+    L2:;
+    self->branch = -1;
+    return false;
+}
+
+template <class T, class _SmIter>
+ns10_skip_yieldable<T, _SmIter> ns10_skip(_SmIter* self, Int count);
+template <class T, class _SmIter>
+List<T> ns10_toList(_SmIter* self);
+template <class T, class _SmIter>
+void ns10_forEach(_SmIter* self, Func<void(T*)> action);
+template <class T, class _SmIter, class _sm_cb1>
+void ns10_forEach(_SmIter* self, _sm_cb1 action);
+// modules/linq/linq.kt
+struct ns10_Str_splitIter_yieldable_StrView {
+    Int branch{};
+    Span<Char>* current{};
+    Str* _sm_self{};
+    Span<Char> separator{};
+    Span<Char> source{};
+    Span<Char> whole{};
+    Int pos{};
+    Span<Char> rest{};
+    Int found{};
+    Span<Char> head{};
+};
+
+Bool advance(ns10_Str_splitIter_yieldable_StrView* self) {
+    Bool _sm_base1, _sm_base3, _sm_base5, _sm_base7, _sm_expr2;
+    Int _sm_base2, _sm_base4, _sm_base6, _sm_base8, _sm_base16, _sm_base19, _sm_base20, _sm_base23,
+        _sm_base27, _sm_base28, _sm_base29, _sm_base31, _sm_expr1, _sm_expr5, _sm_expr9;
+    Span<Char> _sm_base9, _sm_base13, _sm_base17, _sm_base22, _sm_base25;
+    Str* _sm_base10, * _sm_base11;
+    Span<Char>* _sm_base12, * _sm_base14, * _sm_base15, * _sm_base21, * _sm_base24, * _sm_base26,
+        * _sm_base30, * _sm_base32, * _sm_expr3;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto LYend;
+    _sm_base4 = self->branch;
+    _sm_base3 = _sm_base4 == 1;
+    if (_sm_base3) goto LY1;
+    _sm_base6 = self->branch;
+    _sm_base5 = _sm_base6 == 2;
+    if (_sm_base5) goto LY2;
+    _sm_base8 = self->branch;
+    _sm_base7 = _sm_base8 == 3;
+    if (_sm_base7) goto L3;
+    _sm_base11 = self->_sm_self;
+    _sm_base10 = _sm_base11;
+    _sm_base9 = simse_spanOfStr(_sm_base10);
+    self->source = _sm_base9;
+    _sm_base12 = simse_addressOf(self->separator);
+    _sm_expr1 = size(_sm_base12);
+    _sm_expr2 = _sm_expr1 == 0;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    _sm_base13 = self->source;
+    self->whole = _sm_base13;
+    _sm_base14 = simse_addressOf(self->whole);
+    _sm_expr3 = _sm_base14;
+    self->current = _sm_expr3;
+    self->branch = 1;
+    return true;
+    LY1:;
+    self->branch = -1;
+    return false;
+    L2:;
+    self->pos = 0;
+    L3:;
+    _sm_base15 = simse_addressOf(self->source);
+    _sm_expr1 = size(_sm_base15);
+    _sm_base16 = self->pos;
+    _sm_expr5 = _sm_expr1 - _sm_base16;
+    _sm_base19 = self->pos;
+    _sm_base17 = slice(_sm_base15, _sm_base19, _sm_expr5);
+    self->rest = _sm_base17;
+    _sm_base21 = simse_addressOf(self->rest);
+    _sm_base22 = self->separator;
+    _sm_base20 = findView(_sm_base21, _sm_base22);
+    self->found = _sm_base20;
+    _sm_base23 = self->found;
+    _sm_expr2 = _sm_base23 < 0;
+    if (_sm_expr2) goto L5;
+    goto L6;
+    L5:;
+    _sm_base24 = simse_addressOf(self->rest);
+    _sm_expr3 = _sm_base24;
+    self->current = _sm_expr3;
+    self->branch = 2;
+    return true;
+    LY2:;
+    self->branch = -1;
+    return false;
+    L6:;
+    _sm_base26 = simse_addressOf(self->rest);
+    _sm_base27 = self->found;
+    _sm_base25 = slice(_sm_base26, 0, _sm_base27);
+    self->head = _sm_base25;
+    _sm_base28 = self->pos;
+    _sm_base29 = self->found;
+    _sm_expr1 = _sm_base28 + _sm_base29;
+    _sm_base30 = simse_addressOf(self->separator);
+    _sm_expr9 = size(_sm_base30);
+    _sm_base31 = _sm_expr1 + _sm_expr9;
+    self->pos = _sm_base31;
+    _sm_base32 = simse_addressOf(self->head);
+    _sm_expr3 = _sm_base32;
+    self->current = _sm_expr3;
+    self->branch = 3;
+    return true;
+    LYend:;
+    self->branch = -1;
+    return false;
+}
+
+ns10_Str_splitIter_yieldable_StrView ns10_splitIter(Str* self, Span<Char> separator);
+// modules/linq/linq.kt
+struct ns10_Str_splitIter_yieldable_Char {
+    Int branch{};
+    Span<Char>* current{};
+    Str* _sm_self{};
+    Char separator{};
+    Span<Char> source{};
+    Int len{};
+    Int pos{};
+    Int end{};
+    Span<Char> part{};
+};
+
+Bool advance(ns10_Str_splitIter_yieldable_Char* self) {
+    Bool _sm_base1, _sm_base3, _sm_base5, _sm_expr1;
+    Int _sm_base2, _sm_base4, _sm_base6, _sm_base10, _sm_base12, _sm_base13, _sm_base14, _sm_base16,
+        _sm_base18, _sm_base19, _sm_base20, _sm_base21, _sm_base24, _sm_base25, _sm_base26, _sm_base28,
+        _sm_base29, _sm_expr4;
+    Span<Char> _sm_base7, _sm_base22;
+    Str* _sm_base8, * _sm_base9;
+    Span<Char>* _sm_base11, * _sm_base15, * _sm_base23, * _sm_base27, * _sm_base30, * _sm_expr6;
+    Char _sm_base17, _sm_expr2;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto LYend;
+    _sm_base4 = self->branch;
+    _sm_base3 = _sm_base4 == 1;
+    if (_sm_base3) goto LY1;
+    _sm_base6 = self->branch;
+    _sm_base5 = _sm_base6 == 2;
+    if (_sm_base5) goto L1;
+    _sm_base9 = self->_sm_self;
+    _sm_base8 = _sm_base9;
+    _sm_base7 = simse_spanOfStr(_sm_base8);
+    self->source = _sm_base7;
+    _sm_base11 = simse_addressOf(self->source);
+    _sm_base10 = size(_sm_base11);
+    self->len = _sm_base10;
+    self->pos = 0;
+    L1:;
+    _sm_base12 = self->pos;
+    self->end = _sm_base12;
+    L3:;
+    _sm_base13 = self->end;
+    _sm_base14 = self->len;
+    _sm_expr1 = _sm_base13 < _sm_base14;
+    if (_sm_expr1) goto L6;
+    goto L4;
+    L6:;
+    _sm_base15 = simse_addressOf(self->source);
+    _sm_base16 = self->end;
+    _sm_expr2 = charAt(_sm_base15, _sm_base16);
+    _sm_base17 = self->separator;
+    _sm_expr1 = _sm_expr2 != _sm_base17;
+    if (_sm_expr1) goto L5;
+    goto L4;
+    L5:;
+    _sm_base19 = self->end;
+    _sm_base18 = _sm_base19 + 1;
+    self->end = _sm_base18;
+    goto L3;
+    L4:;
+    _sm_base20 = self->end;
+    _sm_base21 = self->pos;
+    _sm_expr4 = _sm_base20 - _sm_base21;
+    _sm_base23 = simse_addressOf(self->source);
+    _sm_base24 = self->pos;
+    _sm_base22 = slice(_sm_base23, _sm_base24, _sm_expr4);
+    self->part = _sm_base22;
+    _sm_base25 = self->end;
+    _sm_base26 = self->len;
+    _sm_expr1 = _sm_base25 >= _sm_base26;
+    if (_sm_expr1) goto L7;
+    goto L8;
+    L7:;
+    _sm_base27 = simse_addressOf(self->part);
+    _sm_expr6 = _sm_base27;
+    self->current = _sm_expr6;
+    self->branch = 1;
+    return true;
+    LY1:;
+    self->branch = -1;
+    return false;
+    L8:;
+    _sm_base29 = self->end;
+    _sm_base28 = _sm_base29 + 1;
+    self->pos = _sm_base28;
+    _sm_base30 = simse_addressOf(self->part);
+    _sm_expr6 = _sm_base30;
+    self->current = _sm_expr6;
+    self->branch = 2;
+    return true;
+    LYend:;
+    self->branch = -1;
+    return false;
+}
+
+ns10_Str_splitIter_yieldable_Char ns10_splitIter(Str* self, Char separator);
 Str ns1_exprInner(ns1_Emitter* self, ns3_AstXmlNode* e, ns3_AstXmlNode* expected);
 Str ns1_call(ns1_Emitter* self, ns3_AstXmlNode* e);
 List<Str> ns1_cgMethodStrArgs(ns1_Emitter* self, ns1_CgFn* fn, List<ns3_AstXmlNode>* argNodes, List<Str>* args);
@@ -2899,499 +3392,6 @@ ns3_AstXmlNode ns9_exprAt(ns9_YldMachinery* self, ns3_AstXmlNode node, Bool base
 ns3_AstXmlNode ns9_ilPointerOf(ns3_AstXmlNode inner);
 Bool ns9_linHasYield(List<ns3_AstXmlNode> body);
 ns9_Yielded ns9_linLowerYield(ns3_AstXmlNode* decl, ns3_AstXmlNode elementType, List<ns3_AstXmlNode> linearBody);
-Bool ns3_isReached(ns3_SourceGenContext* self);
-Str ns3_parameter(ns3_SourceGenContext* self, Int index);
-Int ns4_httpChunk();
-Int ns4_httpTimeout();
-Res<List<Char>> ns4_httpGet(Str url);
-Res<Str> ns4_httpGetText(Str url);
-ns3_SourceGenTransform ns6_jsonGen(ns3_SourceGenContext* ctx);
-Bool ns6_jsonWants(ns3_AstXmlNode* module);
-Str ns6_jsonModulePackage(ns3_SourceGenContext* ctx);
-ns6_JsonTypes ns6_jsonCollect(ns3_SourceGenContext* ctx);
-Bool ns6_jsonIsScalar(Str* name);
-Str ns6_jsonScalarBody(Str* name);
-Str ns6_jsonClassBody(Str* name, List<ns3_AstXmlNode>* fields);
-void ns6_jsonEnsure(Str* name, ns3_SourceGenContext* ctx, ns6_JsonTypes* types, Dictionary<Str, Bool>* keys, List<Str>* bodies, Dictionary<Str, Bool>* flags);
-Str ns6_jsonBuildSource(ns3_SourceGenContext* ctx);
-Bool ns7_isNull(ns7_JsonNode* self);
-Bool ns7_isArray(ns7_JsonNode* self);
-Bool ns7_isObject(ns7_JsonNode* self);
-Bool ns7_isBool(ns7_JsonNode* self);
-Bool ns7_isNumber(ns7_JsonNode* self);
-Bool ns7_isText(ns7_JsonNode* self);
-Str ns7_text(ns7_JsonNode* self);
-Float64 ns7_number(ns7_JsonNode* self);
-Bool ns7_boolean(ns7_JsonNode* self);
-Int ns7_size(ns7_JsonNode* self);
-ns7_JsonNode ns7_at(ns7_JsonNode* self, Int index);
-ns7_JsonNode ns7_get(ns7_JsonNode* self, Str key);
-Bool ns7_has(ns7_JsonNode* self, Str key);
-ns7_JsonNode ns7_jsonNull();
-ns7_JsonNode ns7_jsonBool(Bool value);
-ns7_JsonNode ns7_jsonNumber(Float64 value);
-ns7_JsonNode ns7_jsonText(Str value);
-Ref<ns7_JsonMember> ns7_jsonField(Str key, ns7_JsonNode* value);
-ns7_JsonNode ns7_jsonArray(List<ns7_JsonNode> items);
-ns7_JsonNode ns7_jsonObject(List<Ref<ns7_JsonMember>> members);
-Str ns7_jsonNumberText(Float64 value);
-void ns7_jsonWriteQuoted(Str* out, Str value);
-void ns7_write(ns7_JsonWriter* self, ns7_JsonNode node);
-Str ns7_toJson(ns7_JsonNode* self);
-Res<ns7_JsonNode> ns7_fail(ns7_JsonReader* self, Str message);
-Res<Str> ns7_failText(ns7_JsonReader* self, Str message);
-Res<Char> ns7_failChar(ns7_JsonReader* self, Str message);
-void ns7_skipSpace(ns7_JsonReader* self);
-Bool ns7_consume(ns7_JsonReader* self, Str word);
-Res<ns7_JsonNode> ns7_parseValue(ns7_JsonReader* self);
-Res<ns7_JsonNode> ns7_parseLiteral(ns7_JsonReader* self);
-Res<ns7_JsonNode> ns7_parseNumber(ns7_JsonReader* self);
-Res<Str> ns7_parseString(ns7_JsonReader* self);
-Res<Char> ns7_parseUnicodeEscape(ns7_JsonReader* self);
-Res<ns7_JsonNode> ns7_parseArray(ns7_JsonReader* self);
-ns7_JsonNode ns7_arrayNode(ns7_JsonReader* self, List<Ref<ns7_JsonNode>> items);
-Res<ns7_JsonNode> ns7_parseObject(ns7_JsonReader* self);
-Int ns7_jsonHexValue(Char ch);
-Res<ns7_JsonNode> ns7_parseJson(Str text);
-// src/modules/linq/linq.kt
-template <class T>
-struct ns10_List_iter_yieldable {
-    Int branch{};
-    T* current{};
-    List<T>* _sm_self{};
-    Int i{};
-    Int len{};
-};
-
-template <class T>
-Bool advance(ns10_List_iter_yieldable<T>* self) {
-    Bool _sm_base1, _sm_base3, _sm_expr1;
-    Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base11, _sm_base12, _sm_base13;
-    List<T>* _sm_base6, * _sm_base10;
-    T* _sm_base9, * _sm_expr2;
-    _sm_base2 = self->branch;
-    _sm_base1 = _sm_base2 == -1;
-    if (_sm_base1) goto L2;
-    _sm_base4 = self->branch;
-    _sm_base3 = _sm_base4 == 1;
-    if (_sm_base3) goto LY1;
-    self->i = 0;
-    _sm_base6 = self->_sm_self;
-    _sm_base5 = simse_lenOf((*_sm_base6));
-    self->len = _sm_base5;
-    L1:;
-    _sm_base7 = self->i;
-    _sm_base8 = self->len;
-    _sm_expr1 = _sm_base7 < _sm_base8;
-    if (!(_sm_expr1)) goto L2;
-    _sm_base10 = self->_sm_self;
-    _sm_base11 = self->i;
-    _sm_base9 = simse_addressOf((*_sm_base10)[_sm_base11]);
-    _sm_expr2 = _sm_base9;
-    self->current = _sm_expr2;
-    self->branch = 1;
-    return true;
-    LY1:;
-    _sm_base13 = self->i;
-    _sm_base12 = _sm_base13 + 1;
-    self->i = _sm_base12;
-    goto L1;
-    L2:;
-    self->branch = -1;
-    return false;
-}
-
-template <class T>
-ns10_List_iter_yieldable<T> ns10_iter(List<T>* self);
-// src/modules/linq/linq.kt
-template <class T, class U, class _SmIter>
-struct ns10_select_yieldable {
-    Int branch{};
-    U* current{};
-    _SmIter* _sm_self{};
-    Func<U(T*)> f{};
-    U mapped{};
-};
-
-template <class T, class U, class _SmIter>
-Bool advance(ns10_select_yieldable<T, U, _SmIter>* self) {
-    Bool _sm_base1, _sm_expr1;
-    Int _sm_base2;
-    _SmIter* _sm_base3, * _sm_base6;
-    T* _sm_base5;
-    U* _sm_base7, * _sm_expr2;
-    _sm_base2 = self->branch;
-    _sm_base1 = _sm_base2 == -1;
-    if (_sm_base1) goto L2;
-    _sm_base3 = self->_sm_self;
-    _sm_expr1 = advance(_sm_base3);
-    if (!(_sm_expr1)) goto L2;
-    _sm_base6 = self->_sm_self;
-    _sm_base5 = _sm_base6->current;
-    self->mapped = self->f(_sm_base5);
-    _sm_base7 = simse_addressOf(self->mapped);
-    _sm_expr2 = _sm_base7;
-    self->current = _sm_expr2;
-    self->branch = 1;
-    return true;
-    L2:;
-    self->branch = -1;
-    return false;
-}
-
-template <class T, class U, class _SmIter>
-ns10_select_yieldable<T, U, _SmIter> ns10_select(_SmIter* self, Func<U(T*)> f);
-template <class T, class U, class _SmIter, class _sm_cb1>
-ns10_select_yieldable<T, U, _SmIter> ns10_select(_SmIter* self, _sm_cb1 f);
-// src/modules/linq/linq.kt
-template <class T, class _SmIter>
-struct ns10_where_yieldable {
-    Int branch{};
-    T* current{};
-    _SmIter* _sm_self{};
-    Func<Bool(T*)> keep{};
-};
-
-template <class T, class _SmIter>
-Bool advance(ns10_where_yieldable<T, _SmIter>* self) {
-    Bool _sm_base1, _sm_expr1;
-    Int _sm_base2;
-    _SmIter* _sm_base3, * _sm_base5, * _sm_base6;
-    T* _sm_base4, * _sm_expr3;
-    _sm_base2 = self->branch;
-    _sm_base1 = _sm_base2 == -1;
-    if (_sm_base1) goto L2;
-    L1:;
-    _sm_base3 = self->_sm_self;
-    _sm_expr1 = advance(_sm_base3);
-    if (!(_sm_expr1)) goto L2;
-    _sm_base5 = self->_sm_self;
-    _sm_base4 = _sm_base5->current;
-    _sm_expr1 = self->keep(_sm_base4);
-    if (_sm_expr1) goto L3;
-    goto L1;
-    L3:;
-    _sm_base6 = self->_sm_self;
-    _sm_expr3 = _sm_base6->current;
-    self->current = _sm_expr3;
-    self->branch = 1;
-    return true;
-    L2:;
-    self->branch = -1;
-    return false;
-}
-
-template <class T, class _SmIter>
-ns10_where_yieldable<T, _SmIter> ns10_where(_SmIter* self, Func<Bool(T*)> keep);
-template <class T, class _SmIter, class _sm_cb1>
-ns10_where_yieldable<T, _SmIter> ns10_where(_SmIter* self, _sm_cb1 keep);
-// src/modules/linq/linq.kt
-template <class T, class _SmIter>
-struct ns10_take_yieldable {
-    Int branch{};
-    T* current{};
-    _SmIter* _sm_self{};
-    Int count{};
-    Int taken{};
-};
-
-template <class T, class _SmIter>
-Bool advance(ns10_take_yieldable<T, _SmIter>* self) {
-    Bool _sm_base1, _sm_base3, _sm_expr1, _sm_expr3;
-    Int _sm_base2, _sm_base4, _sm_base5, _sm_base6, _sm_base9, _sm_base10;
-    _SmIter* _sm_base7, * _sm_base8;
-    T* _sm_expr4;
-    _sm_base2 = self->branch;
-    _sm_base1 = _sm_base2 == -1;
-    if (_sm_base1) goto L2;
-    _sm_base4 = self->branch;
-    _sm_base3 = _sm_base4 == 1;
-    if (_sm_base3) goto LY1;
-    self->taken = 0;
-    L1:;
-    _sm_base5 = self->taken;
-    _sm_base6 = self->count;
-    _sm_expr1 = _sm_base5 < _sm_base6;
-    if (!(_sm_expr1)) goto L2;
-    _sm_base7 = self->_sm_self;
-    _sm_expr1 = advance(_sm_base7);
-    _sm_expr3 = !_sm_expr1;
-    if (_sm_expr3) goto L2;
-    _sm_base8 = self->_sm_self;
-    _sm_expr4 = _sm_base8->current;
-    self->current = _sm_expr4;
-    self->branch = 1;
-    return true;
-    LY1:;
-    _sm_base10 = self->taken;
-    _sm_base9 = _sm_base10 + 1;
-    self->taken = _sm_base9;
-    goto L1;
-    L2:;
-    self->branch = -1;
-    return false;
-}
-
-template <class T, class _SmIter>
-ns10_take_yieldable<T, _SmIter> ns10_take(_SmIter* self, Int count);
-// src/modules/linq/linq.kt
-template <class T, class _SmIter>
-struct ns10_skip_yieldable {
-    Int branch{};
-    T* current{};
-    _SmIter* _sm_self{};
-    Int count{};
-    Int skipped{};
-};
-
-template <class T, class _SmIter>
-Bool advance(ns10_skip_yieldable<T, _SmIter>* self) {
-    Bool _sm_base1, _sm_base3, _sm_expr1;
-    Int _sm_base2, _sm_base4, _sm_base6, _sm_base7, _sm_base8, _sm_base9;
-    _SmIter* _sm_base5, * _sm_base10;
-    T* _sm_expr3;
-    _sm_base2 = self->branch;
-    _sm_base1 = _sm_base2 == -1;
-    if (_sm_base1) goto L2;
-    _sm_base4 = self->branch;
-    _sm_base3 = _sm_base4 == 1;
-    if (_sm_base3) goto L1;
-    self->skipped = 0;
-    L1:;
-    _sm_base5 = self->_sm_self;
-    _sm_expr1 = advance(_sm_base5);
-    if (!(_sm_expr1)) goto L2;
-    _sm_base6 = self->skipped;
-    _sm_base7 = self->count;
-    _sm_expr1 = _sm_base6 < _sm_base7;
-    if (_sm_expr1) goto L3;
-    goto L4;
-    L3:;
-    _sm_base9 = self->skipped;
-    _sm_base8 = _sm_base9 + 1;
-    self->skipped = _sm_base8;
-    goto L1;
-    L4:;
-    _sm_base10 = self->_sm_self;
-    _sm_expr3 = _sm_base10->current;
-    self->current = _sm_expr3;
-    self->branch = 1;
-    return true;
-    L2:;
-    self->branch = -1;
-    return false;
-}
-
-template <class T, class _SmIter>
-ns10_skip_yieldable<T, _SmIter> ns10_skip(_SmIter* self, Int count);
-template <class T, class _SmIter>
-List<T> ns10_toList(_SmIter* self);
-template <class T, class _SmIter>
-void ns10_forEach(_SmIter* self, Func<void(T*)> action);
-template <class T, class _SmIter, class _sm_cb1>
-void ns10_forEach(_SmIter* self, _sm_cb1 action);
-// src/modules/linq/linq.kt
-struct ns10_Str_splitIter_yieldable_StrView {
-    Int branch{};
-    Span<Char>* current{};
-    Str* _sm_self{};
-    Span<Char> separator{};
-    Span<Char> source{};
-    Span<Char> whole{};
-    Int pos{};
-    Span<Char> rest{};
-    Int found{};
-    Span<Char> head{};
-};
-
-Bool advance(ns10_Str_splitIter_yieldable_StrView* self) {
-    Bool _sm_base1, _sm_base3, _sm_base5, _sm_base7, _sm_expr2;
-    Int _sm_base2, _sm_base4, _sm_base6, _sm_base8, _sm_base16, _sm_base19, _sm_base20, _sm_base23,
-        _sm_base27, _sm_base28, _sm_base29, _sm_base31, _sm_expr1, _sm_expr5, _sm_expr9;
-    Span<Char> _sm_base9, _sm_base13, _sm_base17, _sm_base22, _sm_base25;
-    Str* _sm_base10, * _sm_base11;
-    Span<Char>* _sm_base12, * _sm_base14, * _sm_base15, * _sm_base21, * _sm_base24, * _sm_base26,
-        * _sm_base30, * _sm_base32, * _sm_expr3;
-    _sm_base2 = self->branch;
-    _sm_base1 = _sm_base2 == -1;
-    if (_sm_base1) goto LYend;
-    _sm_base4 = self->branch;
-    _sm_base3 = _sm_base4 == 1;
-    if (_sm_base3) goto LY1;
-    _sm_base6 = self->branch;
-    _sm_base5 = _sm_base6 == 2;
-    if (_sm_base5) goto LY2;
-    _sm_base8 = self->branch;
-    _sm_base7 = _sm_base8 == 3;
-    if (_sm_base7) goto L3;
-    _sm_base11 = self->_sm_self;
-    _sm_base10 = _sm_base11;
-    _sm_base9 = simse_spanOfStr(_sm_base10);
-    self->source = _sm_base9;
-    _sm_base12 = simse_addressOf(self->separator);
-    _sm_expr1 = size(_sm_base12);
-    _sm_expr2 = _sm_expr1 == 0;
-    if (_sm_expr2) goto L1;
-    goto L2;
-    L1:;
-    _sm_base13 = self->source;
-    self->whole = _sm_base13;
-    _sm_base14 = simse_addressOf(self->whole);
-    _sm_expr3 = _sm_base14;
-    self->current = _sm_expr3;
-    self->branch = 1;
-    return true;
-    LY1:;
-    self->branch = -1;
-    return false;
-    L2:;
-    self->pos = 0;
-    L3:;
-    _sm_base15 = simse_addressOf(self->source);
-    _sm_expr1 = size(_sm_base15);
-    _sm_base16 = self->pos;
-    _sm_expr5 = _sm_expr1 - _sm_base16;
-    _sm_base19 = self->pos;
-    _sm_base17 = slice(_sm_base15, _sm_base19, _sm_expr5);
-    self->rest = _sm_base17;
-    _sm_base21 = simse_addressOf(self->rest);
-    _sm_base22 = self->separator;
-    _sm_base20 = findView(_sm_base21, _sm_base22);
-    self->found = _sm_base20;
-    _sm_base23 = self->found;
-    _sm_expr2 = _sm_base23 < 0;
-    if (_sm_expr2) goto L5;
-    goto L6;
-    L5:;
-    _sm_base24 = simse_addressOf(self->rest);
-    _sm_expr3 = _sm_base24;
-    self->current = _sm_expr3;
-    self->branch = 2;
-    return true;
-    LY2:;
-    self->branch = -1;
-    return false;
-    L6:;
-    _sm_base26 = simse_addressOf(self->rest);
-    _sm_base27 = self->found;
-    _sm_base25 = slice(_sm_base26, 0, _sm_base27);
-    self->head = _sm_base25;
-    _sm_base28 = self->pos;
-    _sm_base29 = self->found;
-    _sm_expr1 = _sm_base28 + _sm_base29;
-    _sm_base30 = simse_addressOf(self->separator);
-    _sm_expr9 = size(_sm_base30);
-    _sm_base31 = _sm_expr1 + _sm_expr9;
-    self->pos = _sm_base31;
-    _sm_base32 = simse_addressOf(self->head);
-    _sm_expr3 = _sm_base32;
-    self->current = _sm_expr3;
-    self->branch = 3;
-    return true;
-    LYend:;
-    self->branch = -1;
-    return false;
-}
-
-ns10_Str_splitIter_yieldable_StrView ns10_splitIter(Str* self, Span<Char> separator);
-// src/modules/linq/linq.kt
-struct ns10_Str_splitIter_yieldable_Char {
-    Int branch{};
-    Span<Char>* current{};
-    Str* _sm_self{};
-    Char separator{};
-    Span<Char> source{};
-    Int len{};
-    Int pos{};
-    Int end{};
-    Span<Char> part{};
-};
-
-Bool advance(ns10_Str_splitIter_yieldable_Char* self) {
-    Bool _sm_base1, _sm_base3, _sm_base5, _sm_expr1;
-    Int _sm_base2, _sm_base4, _sm_base6, _sm_base10, _sm_base12, _sm_base13, _sm_base14, _sm_base16,
-        _sm_base18, _sm_base19, _sm_base20, _sm_base21, _sm_base24, _sm_base25, _sm_base26, _sm_base28,
-        _sm_base29, _sm_expr4;
-    Span<Char> _sm_base7, _sm_base22;
-    Str* _sm_base8, * _sm_base9;
-    Span<Char>* _sm_base11, * _sm_base15, * _sm_base23, * _sm_base27, * _sm_base30, * _sm_expr6;
-    Char _sm_base17, _sm_expr2;
-    _sm_base2 = self->branch;
-    _sm_base1 = _sm_base2 == -1;
-    if (_sm_base1) goto LYend;
-    _sm_base4 = self->branch;
-    _sm_base3 = _sm_base4 == 1;
-    if (_sm_base3) goto LY1;
-    _sm_base6 = self->branch;
-    _sm_base5 = _sm_base6 == 2;
-    if (_sm_base5) goto L1;
-    _sm_base9 = self->_sm_self;
-    _sm_base8 = _sm_base9;
-    _sm_base7 = simse_spanOfStr(_sm_base8);
-    self->source = _sm_base7;
-    _sm_base11 = simse_addressOf(self->source);
-    _sm_base10 = size(_sm_base11);
-    self->len = _sm_base10;
-    self->pos = 0;
-    L1:;
-    _sm_base12 = self->pos;
-    self->end = _sm_base12;
-    L3:;
-    _sm_base13 = self->end;
-    _sm_base14 = self->len;
-    _sm_expr1 = _sm_base13 < _sm_base14;
-    if (_sm_expr1) goto L6;
-    goto L4;
-    L6:;
-    _sm_base15 = simse_addressOf(self->source);
-    _sm_base16 = self->end;
-    _sm_expr2 = charAt(_sm_base15, _sm_base16);
-    _sm_base17 = self->separator;
-    _sm_expr1 = _sm_expr2 != _sm_base17;
-    if (_sm_expr1) goto L5;
-    goto L4;
-    L5:;
-    _sm_base19 = self->end;
-    _sm_base18 = _sm_base19 + 1;
-    self->end = _sm_base18;
-    goto L3;
-    L4:;
-    _sm_base20 = self->end;
-    _sm_base21 = self->pos;
-    _sm_expr4 = _sm_base20 - _sm_base21;
-    _sm_base23 = simse_addressOf(self->source);
-    _sm_base24 = self->pos;
-    _sm_base22 = slice(_sm_base23, _sm_base24, _sm_expr4);
-    self->part = _sm_base22;
-    _sm_base25 = self->end;
-    _sm_base26 = self->len;
-    _sm_expr1 = _sm_base25 >= _sm_base26;
-    if (_sm_expr1) goto L7;
-    goto L8;
-    L7:;
-    _sm_base27 = simse_addressOf(self->part);
-    _sm_expr6 = _sm_base27;
-    self->current = _sm_expr6;
-    self->branch = 1;
-    return true;
-    LY1:;
-    self->branch = -1;
-    return false;
-    L8:;
-    _sm_base29 = self->end;
-    _sm_base28 = _sm_base29 + 1;
-    self->pos = _sm_base28;
-    _sm_base30 = simse_addressOf(self->part);
-    _sm_expr6 = _sm_base30;
-    self->current = _sm_expr6;
-    self->branch = 2;
-    return true;
-    LYend:;
-    self->branch = -1;
-    return false;
-}
-
-ns10_Str_splitIter_yieldable_Char ns10_splitIter(Str* self, Char separator);
 ns11_FoldKind ns11_foldKindOf(ns3_AstXmlNode* e);
 Str ns11_foldLiteralText(ns3_AstXmlNode* e);
 List<ns3_AstNodeAttribute> ns11_foldPosAttrs(ns3_AstXmlNode* like);
@@ -4145,6 +4145,7 @@ Bool ns15_semWithType_closure1_invoke(ns15_semWithType_closure1 self, ns3_AstXml
 // File-level static storage (specs/statics.md): initialized before main's body.
 void simse_initStatics() {
     resourcesInstall(__sm_stringTable, __sm_stringCount, __sm_resourceIndex, __sm_resourceCount);
+    ns6_jsonGenRegistered = ns3_registerSourceGen(__sm_stringTable[958], ns6_jsonGen, false, false);
     ns1_kIlDeclWidth = 100;
     ns2_xmlMissingAttr = __sm_stringTable[1115];
     ns2_xmlMissingNode = ns3_AstXmlNode{ns3_AstNodeKind::None, ns3_AstNodeCategory::None, List<ns3_AstNodeAttribute>(), Array<ns3_AstXmlNode>()};
@@ -4163,7 +4164,6 @@ void simse_initStatics() {
     ns9_ilOpKindTexts = ns9_makeIlOpKindTexts();
     ns9_ilNoConcatFlag = false;
     ns9_ilReuseTokenAt = Dictionary<Int, List<Str>>();
-    ns6_jsonGenRegistered = ns3_registerSourceGen(__sm_stringTable[958], ns6_jsonGen, false, false);
     ns11_foldAllRuleList = ns11_foldAllRules();
     ns11_linFoldAllPass = ns11_registerLinOptPass(__sm_stringTable[743], ns11_linFoldAllBody);
     ns11_linFoldBranchPass = ns11_registerLinOptPass(__sm_stringTable[573], ns11_linFoldBranchIn);
@@ -5004,6 +5004,2332 @@ Bool isSpace(Char* self) {
     _sm_expr1 = _sm_expr2;
     _sm_sc1:;
     return _sm_expr1;
+}
+// modules/compiler/gen.kt
+Bool ns3_isReached(ns3_SourceGenContext* self) {
+    Dictionary<Str, Bool>* _sm_base2, * _sm_base4, * _sm_expr1;
+    Str _sm_base3, _sm_base5;
+    Bool _sm_expr2;
+    _sm_expr1 = self->reachedNames;
+    _sm_expr2 = _sm_expr1 == nullptr;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    return true;
+    L2:;
+    _sm_base2 = self->reachedNames;
+    _sm_base3 = self->declName;
+    _sm_expr2 = simse_dict_has((*_sm_base2), _sm_base3);
+    if (_sm_expr2) goto L3;
+    goto L4;
+    L3:;
+    return true;
+    L4:;
+    _sm_base4 = self->reachedNames;
+    _sm_base5 = self->symbol;
+    _sm_expr2 = simse_dict_has((*_sm_base4), _sm_base5);
+    return _sm_expr2;
+}
+// modules/compiler/gen.kt
+Str ns3_parameter(ns3_SourceGenContext* self, Int index) {
+    List<Str>* _sm_base1, * _sm_base2;
+    Bool _sm_expr1;
+    Int _sm_expr2;
+    Str _sm_expr4;
+    _sm_expr1 = index < 0;
+    if (_sm_expr1) goto L1;
+    _sm_base1 = simse_addressOf(self->parameters);
+    _sm_expr2 = simse_lenOf((*_sm_base1));
+    _sm_expr1 = index >= _sm_expr2;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    return __sm_stringTable[1115];
+    L2:;
+    _sm_base2 = simse_addressOf(self->parameters);
+    _sm_expr4 = (*_sm_base2)[index];
+    return _sm_expr4;
+}
+// modules/http/api.kt
+Int ns4_httpChunk() {
+    return 16384;
+}
+// modules/http/api.kt
+Int ns4_httpTimeout() {
+    return 15000;
+}
+// modules/http/api.kt
+Res<List<Char>> ns4_httpGet(Str url) {
+    Int* _sm_base4, * _sm_base5, * _sm_base11;
+    List<Char>* _sm_base9, * _sm_base10, * _sm_base12, * _sm_base13;
+    RawPtr session, request;
+    Bool _sm_expr1;
+    Str _sm_expr2, message, error;
+    Res<List<Char>> _sm_expr3;
+    Int timeout, _sm_expr4, _sm_expr5, _sm_expr6, _sm_expr9, read, _sm_expr12, _sm_expr13;
+    List<Char> buffer, out;
+    Span<Char> _sm_expr10, _sm_expr16;
+    Char* _sm_expr11, * _sm_expr17;
+    session = __sm_native_internetOpen(__sm_stringTable[603], 0, nullptr, nullptr, 0);
+    _sm_expr1 = session == nullptr;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = simse_http_errorText(__sm_stringTable[473]);
+    _sm_expr3 = simse_resErr<List<Char>>(_sm_expr2);
+    return _sm_expr3;
+    L2:;
+    timeout = ns4_httpTimeout();
+    _sm_expr4 = simse_http_connectTimeout();
+    _sm_base4 = &timeout;
+    __sm_native_internetSetOption(session, _sm_expr4, _sm_base4, 4);
+    _sm_expr5 = simse_http_receiveTimeout();
+    _sm_base5 = &timeout;
+    __sm_native_internetSetOption(session, _sm_expr5, _sm_base5, 4);
+    _sm_expr6 = simse_http_flags();
+    request = __sm_native_internetOpenUrl(session, url, nullptr, 0, _sm_expr6, nullptr);
+    _sm_expr1 = request == nullptr;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    message = simse_http_errorText(__sm_stringTable[388]);
+    __sm_native_internetCloseHandle(session);
+    _sm_expr3 = simse_resErr<List<Char>>(message);
+    return _sm_expr3;
+    L4:;
+    buffer = List<Char>();
+    _sm_expr9 = ns4_httpChunk();
+    _sm_base9 = &buffer;
+    simse_http_bufferInit(_sm_base9, _sm_expr9);
+    out = List<Char>();
+    error = __sm_stringTable[1115];
+    L5:;
+    read = 0;
+    _sm_base10 = &buffer;
+    _sm_expr10 = simse_spanOf(_sm_base10);
+    _sm_expr11 = atPtr(simse_addressOf(_sm_expr10), 0);
+    _sm_expr12 = ns4_httpChunk();
+    _sm_base11 = &read;
+    _sm_expr13 = __sm_native_internetReadFile(request, _sm_expr11, _sm_expr12, _sm_base11);
+    _sm_expr1 = _sm_expr13 == 0;
+    if (_sm_expr1) goto L7;
+    goto L8;
+    L7:;
+    error = simse_http_errorText(__sm_stringTable[368]);
+    goto L6;
+    L8:;
+    _sm_expr1 = read <= 0;
+    if (_sm_expr1) goto L6;
+    _sm_base12 = &buffer;
+    _sm_expr16 = simse_spanOf(_sm_base12);
+    _sm_expr17 = atPtr(simse_addressOf(_sm_expr16), 0);
+    _sm_base13 = &out;
+    simse_http_append(_sm_base13, _sm_expr17, read);
+    goto L5;
+    L6:;
+    __sm_native_internetCloseHandle(request);
+    __sm_native_internetCloseHandle(session);
+    _sm_expr13 = simse_lenOf(error);
+    _sm_expr1 = _sm_expr13 > 0;
+    if (_sm_expr1) goto L11;
+    goto L12;
+    L11:;
+    _sm_expr3 = simse_resErr<List<Char>>(error);
+    return _sm_expr3;
+    L12:;
+    _sm_expr3 = simse_resOk<List<Char>>(out);
+    return _sm_expr3;
+}
+// modules/http/api.kt
+Res<Str> ns4_httpGetText(Str url) {
+    Str _sm_base1, _sm_expr4;
+    List<Char>* _sm_base2, * _sm_base3;
+    Res<List<Char>> body;
+    Bool _sm_expr1, _sm_expr2;
+    Res<Str> _sm_expr3;
+    body = ns4_httpGet(url);
+    _sm_expr1 = simse_resHasValue(simse_addressOf(body));
+    _sm_expr2 = !_sm_expr1;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    _sm_base1 = body.Error;
+    _sm_expr3 = simse_resErr<Str>(_sm_base1);
+    return _sm_expr3;
+    L2:;
+    _sm_base3 = simse_addressOf(body.Value);
+    _sm_base2 = _sm_base3;
+    _sm_expr4 = simse_http_charsToStr(_sm_base2);
+    _sm_expr3 = simse_resOk<Str>(_sm_expr4);
+    return _sm_expr3;
+}
+// modules/json/generators/JsonGen.kt
+ns3_SourceGenTransform ns6_jsonGen(ns3_SourceGenContext* ctx) {
+    ns3_SourceTransformation _sm_base1, _sm_base2, _sm_base5, _sm_base10, _sm_base12, _sm_base13;
+    Dictionary<Str, Str>* _sm_base3, * _sm_base6;
+    ns3_FullCompiledState* _sm_base4, * _sm_base7;
+    Str _sm_base8, source;
+    Str* _sm_base9, * _sm_base11;
+    ns3_SourceGenPhase _sm_expr1, _sm_expr2;
+    Bool _sm_expr3;
+    ns3_SourceGenTransform _sm_expr4;
+    Int _sm_expr11;
+    Span<Char> _sm_expr14;
+    _sm_expr1 = ctx->phase;
+    _sm_expr2 = ns3_SourceGenPhase::Declare;
+    _sm_expr3 = _sm_expr1 == _sm_expr2;
+    if (_sm_expr3) goto L1;
+    goto L2;
+    L1:;
+    _sm_base1 = ns3_SourceTransformation::ChangedOutput;
+    _sm_expr4 = ns3_SourceGenTransform{_sm_base1, __sm_stringTable[1115]};
+    return _sm_expr4;
+    L2:;
+    _sm_expr1 = ctx->phase;
+    _sm_expr2 = ns3_SourceGenPhase::Reparse;
+    _sm_expr3 = _sm_expr1 != _sm_expr2;
+    if (_sm_expr3) goto L3;
+    goto L4;
+    L3:;
+    _sm_base2 = ns3_SourceTransformation::None;
+    _sm_expr4 = ns3_SourceGenTransform{_sm_base2, __sm_stringTable[1115]};
+    return _sm_expr4;
+    L4:;
+    _sm_base4 = ctx->state;
+    _sm_base3 = simse_addressOf(_sm_base4->definitions);
+    _sm_expr3 = simse_dict_has((*_sm_base3), __sm_stringTable[532]);
+    if (_sm_expr3) goto L5;
+    goto L6;
+    L5:;
+    _sm_base5 = ns3_SourceTransformation::AlreadyExisting;
+    _sm_expr4 = ns3_SourceGenTransform{_sm_base5, __sm_stringTable[1115]};
+    return _sm_expr4;
+    L6:;
+    _sm_base7 = ctx->state;
+    _sm_base6 = simse_addressOf(_sm_base7->definitions);
+    _sm_base8 = ctx->name;
+    simse_dict_insert((*_sm_base6), __sm_stringTable[532], _sm_base8);
+    source = ns6_jsonBuildSource(ctx);
+    _sm_base9 = simse_addressOf(ctx->error);
+    _sm_expr11 = simse_lenOf((*_sm_base9));
+    _sm_expr3 = _sm_expr11 > 0;
+    if (_sm_expr3) goto L7;
+    goto L8;
+    L7:;
+    _sm_base10 = ns3_SourceTransformation::None;
+    _sm_expr4 = ns3_SourceGenTransform{_sm_base10, __sm_stringTable[1115]};
+    return _sm_expr4;
+    L8:;
+    _sm_base11 = &source;
+    _sm_expr14 = simse_spanOfStr(_sm_base11);
+    _sm_expr3 = equals(simse_addressOf(_sm_expr14), __sm_stringTable[1115]);
+    if (_sm_expr3) goto L9;
+    goto L10;
+    L9:;
+    _sm_base12 = ns3_SourceTransformation::None;
+    _sm_expr4 = ns3_SourceGenTransform{_sm_base12, __sm_stringTable[1115]};
+    return _sm_expr4;
+    L10:;
+    ctx->source = source;
+    _sm_base13 = ns3_SourceTransformation::ReparseRequired;
+    _sm_expr4 = ns3_SourceGenTransform{_sm_base13, __sm_stringTable[532]};
+    return _sm_expr4;
+}
+// modules/json/generators/JsonGen.kt
+Bool ns6_jsonWants(ns3_AstXmlNode* module) {
+    ns3_AstNodeKind _sm_base1;
+    List<ns3_AstXmlNode>* _sm_base2;
+    ns3_AstNodeAttributeKind _sm_base3;
+    Str _sm_base4;
+    List<ns3_AstXmlNode> imports;
+    Span<ns3_AstXmlNode> _sm_expr1;
+    Span_iter_yieldable<ns3_AstXmlNode> _sm_for1;
+    Bool _sm_expr2;
+    ns3_AstXmlNode* imp;
+    Str* _sm_expr3;
+    _sm_base1 = ns3_AstNodeKind::Import;
+    imports = ns2_xmlChildren(module, _sm_base1);
+    _sm_base2 = &imports;
+    _sm_expr1 = simse_spanOf(_sm_base2);
+    _sm_for1 = iter(simse_addressOf(_sm_expr1));
+    L1:;
+    _sm_expr2 = advance(&_sm_for1);
+    if (!(_sm_expr2)) goto L2;
+    imp = _sm_for1.current;
+    _sm_base3 = ns3_AstNodeAttributeKind::Path;
+    _sm_expr3 = ns2_xmlAttr(imp, _sm_base3);
+    _sm_base4 = *(_sm_expr3);
+    _sm_expr2 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_base4))), __sm_stringTable[958]);
+    if (_sm_expr2) goto L3;
+    goto L1;
+    L3:;
+    return true;
+    L2:;
+    return false;
+}
+// modules/json/generators/JsonGen.kt
+Str ns6_jsonModulePackage(ns3_SourceGenContext* ctx) {
+    ns3_FullCompiledState* _sm_base1, * _sm_base3, * _sm_base6;
+    List<ns3_AstXmlNode>* _sm_base2, * _sm_base5, * _sm_base7;
+    ns3_AstXmlNode* _sm_base4, * module, * decl;
+    ns3_AstNodeAttributeKind _sm_base8, _sm_base10;
+    Str _sm_base9;
+    Int m, _sm_expr1;
+    Bool _sm_expr2;
+    List<ns3_AstXmlNode> decls;
+    Span<ns3_AstXmlNode> _sm_expr3;
+    Span_iter_yieldable<ns3_AstXmlNode> _sm_for2;
+    ns3_AstNodeKind _sm_expr5, _sm_expr6;
+    Str* _sm_expr8;
+    _sm_base1 = ctx->state;
+    m = _sm_base1->preludeCount;
+    L1:;
+    _sm_base3 = ctx->state;
+    _sm_base2 = simse_addressOf(_sm_base3->modules);
+    _sm_expr1 = simse_lenOf((*_sm_base2));
+    _sm_expr2 = m < _sm_expr1;
+    if (!(_sm_expr2)) goto L2;
+    _sm_base6 = ctx->state;
+    _sm_base5 = simse_addressOf(_sm_base6->modules);
+    _sm_base4 = simse_addressOf((*_sm_base5)[m]);
+    module = _sm_base4;
+    decls = ns2_xmlDecls(module);
+    _sm_base7 = &decls;
+    _sm_expr3 = simse_spanOf(_sm_base7);
+    _sm_for2 = iter(simse_addressOf(_sm_expr3));
+    L3:;
+    _sm_expr2 = advance(&_sm_for2);
+    if (!(_sm_expr2)) goto L4;
+    decl = _sm_for2.current;
+    _sm_expr5 = decl->name;
+    _sm_expr6 = ns3_AstNodeKind::Function;
+    _sm_expr2 = _sm_expr5 == _sm_expr6;
+    if (_sm_expr2) goto L7;
+    goto L3;
+    L7:;
+    _sm_base8 = ns3_AstNodeAttributeKind::Generator;
+    _sm_expr8 = ns2_xmlAttr(decl, _sm_base8);
+    _sm_base9 = *(_sm_expr8);
+    _sm_expr2 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_base9))), __sm_stringTable[958]);
+    if (_sm_expr2) goto L5;
+    goto L3;
+    L5:;
+    _sm_base10 = ns3_AstNodeAttributeKind::Package;
+    _sm_expr8 = ns2_xmlAttr(module, _sm_base10);
+    return *(_sm_expr8);
+    L4:;
+    m = m + 1;
+    goto L1;
+    L2:;
+    return __sm_stringTable[1115];
+}
+// modules/json/generators/JsonGen.kt
+ns6_JsonTypes ns6_jsonCollect(ns3_SourceGenContext* ctx) {
+    char* __sm_catP;
+    ns3_FullCompiledState* _sm_base1, * _sm_base3, * _sm_base7, * _sm_base8, * _sm_base10, * _sm_base13;
+    List<ns3_AstXmlNode>* _sm_base2, * _sm_base6, * _sm_base9, * _sm_base12, * _sm_base15;
+    ns3_AstXmlNode* _sm_base4, * _sm_base5, * _sm_base11, * module, * decl, * receiver;
+    ns3_AstNodeAttributeKind _sm_base14, _sm_base16, _sm_base21, _sm_base23, _sm_base26;
+    Str _sm_base17, _sm_base22, _sm_base24, _sm_base27, modulePackage, pkg, name;
+    ns3_AstXmlNode _sm_base20;
+    ns3_AstNodeKind _sm_base25, _sm_expr11, _sm_expr12;
+    Dictionary<Str, ns3_AstXmlNode> classes;
+    Dictionary<Str, Str> packages;
+    List<Str> order;
+    Dictionary<Str, Bool> declared;
+    Bool wanted, _sm_expr2;
+    Int m, _sm_expr1;
+    ns6_JsonTypes _sm_expr5;
+    List<ns3_AstXmlNode> decls;
+    Span<ns3_AstXmlNode> _sm_expr9;
+    Span_iter_yieldable<ns3_AstXmlNode> _sm_for3;
+    Str* _sm_expr19, * _sm_expr27;
+    ns3_AstNodeCategory _sm_expr24, _sm_expr25;
+    classes = Dictionary<Str, ns3_AstXmlNode>();
+    packages = Dictionary<Str, Str>();
+    order = List<Str>();
+    declared = Dictionary<Str, Bool>();
+    wanted = false;
+    _sm_base1 = ctx->state;
+    m = _sm_base1->preludeCount;
+    L1:;
+    _sm_base3 = ctx->state;
+    _sm_base2 = simse_addressOf(_sm_base3->modules);
+    _sm_expr1 = simse_lenOf((*_sm_base2));
+    _sm_expr2 = m < _sm_expr1;
+    if (!(_sm_expr2)) goto L2;
+    _sm_base7 = ctx->state;
+    _sm_base6 = simse_addressOf(_sm_base7->modules);
+    _sm_base5 = simse_addressOf((*_sm_base6)[m]);
+    _sm_base4 = _sm_base5;
+    _sm_expr2 = ns6_jsonWants(_sm_base4);
+    if (_sm_expr2) goto L3;
+    goto L4;
+    L3:;
+    wanted = true;
+    L4:;
+    m = m + 1;
+    goto L1;
+    L2:;
+    _sm_expr2 = !wanted;
+    if (_sm_expr2) goto L5;
+    goto L6;
+    L5:;
+    _sm_expr5 = ns6_JsonTypes{classes, packages, order, declared};
+    return _sm_expr5;
+    L6:;
+    _sm_base8 = ctx->state;
+    m = _sm_base8->preludeCount;
+    modulePackage = ns6_jsonModulePackage(ctx);
+    L7:;
+    _sm_base10 = ctx->state;
+    _sm_base9 = simse_addressOf(_sm_base10->modules);
+    _sm_expr1 = simse_lenOf((*_sm_base9));
+    _sm_expr2 = m < _sm_expr1;
+    if (!(_sm_expr2)) goto L8;
+    _sm_base13 = ctx->state;
+    _sm_base12 = simse_addressOf(_sm_base13->modules);
+    _sm_base11 = simse_addressOf((*_sm_base12)[m]);
+    module = _sm_base11;
+    _sm_base14 = ns3_AstNodeAttributeKind::Package;
+    pkg = *(ns2_xmlAttr(module, _sm_base14));
+    _sm_expr2 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(pkg))), simse_spanOfStr(simse_addressOf(modulePackage)));
+    if (_sm_expr2) goto L9;
+    goto L10;
+    L9:;
+    m = m + 1;
+    goto L7;
+    L10:;
+    decls = ns2_xmlDecls(module);
+    _sm_base15 = &decls;
+    _sm_expr9 = simse_spanOf(_sm_base15);
+    _sm_for3 = iter(simse_addressOf(_sm_expr9));
+    L11:;
+    _sm_expr2 = advance(&_sm_for3);
+    if (!(_sm_expr2)) goto L12;
+    decl = _sm_for3.current;
+    _sm_expr11 = decl->name;
+    _sm_expr12 = ns3_AstNodeKind::DataClass;
+    _sm_expr2 = _sm_expr11 == _sm_expr12;
+    if (_sm_expr2) goto L13;
+    goto L14;
+    L13:;
+    _sm_base16 = ns3_AstNodeAttributeKind::Name;
+    name = *(ns2_xmlAttr(decl, _sm_base16));
+    _sm_expr2 = simse_dict_has(classes, name);
+    if (_sm_expr2) goto L15;
+    goto L16;
+    L15:;
+    _sm_base17.resize(59 + name.size());
+    __sm_catP = _sm_base17.data();
+    std::memcpy(__sm_catP, "json: two data classes are named '", 34);
+    __sm_catP = __sm_catP + 34;
+    std::memcpy(__sm_catP, name.data(), name.size());
+    __sm_catP = __sm_catP + name.size();
+    std::memcpy(__sm_catP, "'; a serializer needs one", 25);
+    ctx->error = _sm_base17;
+    _sm_expr5 = ns6_JsonTypes{classes, packages, order, declared};
+    return _sm_expr5;
+    L16:;
+    _sm_base20 = *(decl);
+    simse_dict_insert(classes, name, _sm_base20);
+    simse_dict_insert(packages, name, pkg);
+    simse_list_append(order, name);
+    L14:;
+    _sm_expr11 = decl->name;
+    _sm_expr12 = ns3_AstNodeKind::Function;
+    _sm_expr2 = _sm_expr11 == _sm_expr12;
+    if (_sm_expr2) goto L20;
+    goto L11;
+    L20:;
+    _sm_base21 = ns3_AstNodeAttributeKind::Name;
+    _sm_expr19 = ns2_xmlAttr(decl, _sm_base21);
+    _sm_base22 = *(_sm_expr19);
+    _sm_expr2 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_base22))), __sm_stringTable[837]);
+    if (_sm_expr2) goto L19;
+    goto L11;
+    L19:;
+    _sm_base23 = ns3_AstNodeAttributeKind::HasReceiver;
+    _sm_expr19 = ns2_xmlAttr(decl, _sm_base23);
+    _sm_base24 = *(_sm_expr19);
+    _sm_expr2 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_base24))), __sm_stringTable[971]);
+    if (_sm_expr2) goto L17;
+    goto L11;
+    L17:;
+    _sm_base25 = ns3_AstNodeKind::Receiver;
+    receiver = ns2_xmlChildPtr(decl, _sm_base25);
+    _sm_expr2 = ns2_xmlIsEmpty(receiver);
+    if (_sm_expr2) goto L11;
+    _sm_expr24 = ns2_xmlKind(receiver);
+    _sm_expr25 = ns3_AstNodeCategory::TypeNamed;
+    _sm_expr2 = _sm_expr24 == _sm_expr25;
+    if (_sm_expr2) goto L21;
+    goto L11;
+    L21:;
+    _sm_base26 = ns3_AstNodeAttributeKind::Name;
+    _sm_expr27 = ns2_xmlAttr(receiver, _sm_base26);
+    _sm_base27 = *(_sm_expr27);
+    simse_dict_insert(declared, _sm_base27, true);
+    goto L11;
+    L12:;
+    m = m + 1;
+    goto L7;
+    L8:;
+    _sm_expr5 = ns6_JsonTypes{classes, packages, order, declared};
+    return _sm_expr5;
+}
+// modules/json/generators/JsonGen.kt
+Bool ns6_jsonIsScalar(Str* name) {
+    Span<Char> _sm_expr2;
+    Bool _sm_expr3, _sm_expr1;
+    _sm_expr2 = simse_spanOfStr(name);
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[992]);
+    _sm_expr1 = _sm_expr3;
+    if (_sm_expr1) goto _sm_sc1;
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[929]);
+    _sm_expr1 = _sm_expr3;
+    if (_sm_expr1) goto _sm_sc1;
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[858]);
+    _sm_expr1 = _sm_expr3;
+    if (_sm_expr1) goto _sm_sc1;
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[859]);
+    _sm_expr1 = _sm_expr3;
+    if (_sm_expr1) goto _sm_sc1;
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[860]);
+    _sm_expr1 = _sm_expr3;
+    if (_sm_expr1) goto _sm_sc1;
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[718]);
+    _sm_expr1 = _sm_expr3;
+    if (_sm_expr1) goto _sm_sc1;
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[719]);
+    _sm_expr1 = _sm_expr3;
+    if (_sm_expr1) goto _sm_sc1;
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[923]);
+    _sm_expr1 = _sm_expr3;
+    if (_sm_expr1) goto _sm_sc1;
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[995]);
+    _sm_expr1 = _sm_expr3;
+    if (_sm_expr1) goto _sm_sc1;
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[926]);
+    _sm_expr1 = _sm_expr3;
+    _sm_sc1:;
+    return _sm_expr1;
+}
+// modules/json/generators/JsonGen.kt
+Str ns6_jsonScalarBody(Str* name) {
+    char* __sm_catP;
+    Str _sm_base2, out;
+    Span<Char> _sm_expr2;
+    Bool _sm_expr3;
+    _sm_base2 = *(name);
+    out.resize(21 + _sm_base2.size());
+    __sm_catP = out.data();
+    std::memcpy(__sm_catP, "fun ", 4);
+    __sm_catP = __sm_catP + 4;
+    std::memcpy(__sm_catP, _sm_base2.data(), _sm_base2.size());
+    __sm_catP = __sm_catP + _sm_base2.size();
+    std::memcpy(__sm_catP, ".toJson(): Str {", 16);
+    __sm_catP = __sm_catP + 16;
+    *__sm_catP = (char) ('\n');
+    _sm_expr2 = simse_spanOfStr(name);
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[923]);
+    if (_sm_expr3) goto L1;
+    goto L2;
+    L1:;
+    simse_str_appendStr(out, __sm_stringTable[61]);
+    goto L9;
+    L2:;
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[995]);
+    if (_sm_expr3) goto L4;
+    goto L5;
+    L4:;
+    simse_str_appendStr(out, __sm_stringTable[214]);
+    goto L9;
+    L5:;
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[926]);
+    if (_sm_expr3) goto L7;
+    goto L8;
+    L7:;
+    simse_str_appendStr(out, __sm_stringTable[147]);
+    goto L9;
+    L8:;
+    simse_str_appendStr(out, __sm_stringTable[223]);
+    L9:;
+    simse_str_appendStr(out, __sm_stringTable[1019]);
+    return out;
+}
+// modules/json/generators/JsonGen.kt
+Str ns6_jsonClassBody(Str* name, List<ns3_AstXmlNode>* fields) {
+    char* __sm_catP;
+    Str _sm_base2, out, fieldName;
+    ns3_AstXmlNode* _sm_base4, * _sm_base5;
+    ns3_AstNodeAttributeKind _sm_base6;
+    Int i, _sm_expr4;
+    Bool _sm_expr5;
+    _sm_base2 = *(name);
+    out.resize(44 + _sm_base2.size());
+    __sm_catP = out.data();
+    std::memcpy(__sm_catP, "fun ", 4);
+    __sm_catP = __sm_catP + 4;
+    std::memcpy(__sm_catP, _sm_base2.data(), _sm_base2.size());
+    __sm_catP = __sm_catP + _sm_base2.size();
+    std::memcpy(__sm_catP, ".toJson(): Str {", 16);
+    __sm_catP = __sm_catP + 16;
+    *__sm_catP = (char) ('\n');
+    __sm_catP = __sm_catP + 1;
+    std::memcpy(__sm_catP, "    var out: Str = \"{\"", 22);
+    __sm_catP = __sm_catP + 22;
+    *__sm_catP = (char) ('\n');
+    i = 0;
+    L1:;
+    _sm_expr4 = simse_lenOf((*fields));
+    _sm_expr5 = i < _sm_expr4;
+    if (!(_sm_expr5)) goto L2;
+    _sm_base5 = simse_addressOf((*fields)[i]);
+    _sm_base4 = _sm_base5;
+    _sm_base6 = ns3_AstNodeAttributeKind::Name;
+    fieldName = *(ns2_xmlAttr(_sm_base4, _sm_base6));
+    _sm_expr5 = i > 0;
+    if (_sm_expr5) goto L3;
+    goto L4;
+    L3:;
+    simse_str_appendStr(out, __sm_stringTable[292]);
+    L4:;
+    simse_str_appendStr(out, __sm_stringTable[273]);
+    simse_str_appendStr(out, __sm_stringTable[301]);
+    simse_str_appendStr(out, fieldName);
+    simse_str_appendStr(out, __sm_stringTable[870]);
+    simse_str_appendStr(out, __sm_stringTable[132]);
+    simse_str_appendStr(out, __sm_stringTable[264]);
+    simse_str_appendStr(out, fieldName);
+    simse_str_appendStr(out, __sm_stringTable[465]);
+    i = i + 1;
+    goto L1;
+    L2:;
+    simse_str_appendStr(out, __sm_stringTable[146]);
+    return out;
+}
+// modules/json/generators/JsonGen.kt
+void ns6_jsonEnsure(Str* name, ns3_SourceGenContext* ctx, ns6_JsonTypes* types, Dictionary<Str, Bool>* keys, List<Str>* bodies, Dictionary<Str, Bool>* flags) {
+    char* __sm_catP;
+    Str _sm_base1, _sm_base3, _sm_base4, _sm_base6, _sm_base8, _sm_base10, _sm_base13, _sm_base15,
+        _sm_base25, _sm_base27, _sm_expr4, _sm_expr12, fieldName;
+    Dictionary<Str, Bool>* _sm_base2;
+    Dictionary<Str, ns3_AstXmlNode>* _sm_base5;
+    ns3_AstNodeKind _sm_base12, _sm_base17, _sm_base24;
+    List<ns3_AstXmlNode>* _sm_base18;
+    ns3_AstXmlNode* _sm_base19, * _sm_base20, * _sm_base22, * decl, * typeNode;
+    ns3_AstNodeAttributeKind _sm_base21, _sm_base29;
+    Str* _sm_base30, * _sm_expr19;
+    Bool _sm_expr1;
+    Span<Char> _sm_expr5;
+    Int _sm_expr10, i;
+    List<ns3_AstXmlNode> fields;
+    ns3_AstNodeCategory _sm_expr16, _sm_expr17;
+    _sm_base1 = *(name);
+    _sm_expr1 = simse_dict_has((*keys), _sm_base1);
+    if (_sm_expr1) goto L1;
+    _sm_base2 = simse_addressOf(types->declared);
+    _sm_base3 = *(name);
+    _sm_expr1 = simse_dict_has((*_sm_base2), _sm_base3);
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    return;
+    L2:;
+    _sm_base4 = *(name);
+    simse_dict_insert((*keys), _sm_base4, true);
+    _sm_expr1 = ns6_jsonIsScalar(name);
+    if (_sm_expr1) goto L4;
+    goto L5;
+    L4:;
+    _sm_expr4 = ns6_jsonScalarBody(name);
+    simse_list_append((*bodies), _sm_expr4);
+    _sm_expr5 = simse_spanOfStr(name);
+    _sm_expr1 = equals(simse_addressOf(_sm_expr5), __sm_stringTable[995]);
+    if (_sm_expr1) goto L6;
+    _sm_expr5 = simse_spanOfStr(name);
+    _sm_expr1 = equals(simse_addressOf(_sm_expr5), __sm_stringTable[926]);
+    if (_sm_expr1) goto L6;
+    goto L7;
+    L6:;
+    simse_dict_insert((*flags), __sm_stringTable[823], true);
+    L7:;
+    return;
+    L5:;
+    _sm_base5 = simse_addressOf(types->classes);
+    _sm_base6 = *(name);
+    decl = simse_dict_getPtr((*_sm_base5), _sm_base6);
+    _sm_expr1 = decl == nullptr;
+    if (_sm_expr1) goto L9;
+    goto L10;
+    L9:;
+    _sm_base10 = *(name);
+    _sm_base8.resize(50 + _sm_base10.size());
+    __sm_catP = _sm_base8.data();
+    std::memcpy(__sm_catP, "json: '", 7);
+    __sm_catP = __sm_catP + 7;
+    std::memcpy(__sm_catP, _sm_base10.data(), _sm_base10.size());
+    __sm_catP = __sm_catP + _sm_base10.size();
+    std::memcpy(__sm_catP, "' is not a data class or a supported scalar", 43);
+    ctx->error = _sm_base8;
+    return;
+    L10:;
+    _sm_base12 = ns3_AstNodeKind::TypeParam;
+    _sm_expr10 = ns2_xmlCount(decl, _sm_base12);
+    _sm_expr1 = _sm_expr10 > 0;
+    if (_sm_expr1) goto L11;
+    goto L12;
+    L11:;
+    _sm_base15 = *(name);
+    _sm_base13.resize(52 + _sm_base15.size());
+    __sm_catP = _sm_base13.data();
+    std::memcpy(__sm_catP, "json: the generic data class '", 30);
+    __sm_catP = __sm_catP + 30;
+    std::memcpy(__sm_catP, _sm_base15.data(), _sm_base15.size());
+    __sm_catP = __sm_catP + _sm_base15.size();
+    std::memcpy(__sm_catP, "' is not supported yet", 22);
+    ctx->error = _sm_base13;
+    return;
+    L12:;
+    _sm_base17 = ns3_AstNodeKind::Field;
+    fields = ns2_xmlChildren(decl, _sm_base17);
+    _sm_base18 = &fields;
+    _sm_expr12 = ns6_jsonClassBody(name, _sm_base18);
+    simse_list_append((*bodies), _sm_expr12);
+    i = 0;
+    L13:;
+    _sm_expr10 = simse_lenOf(fields);
+    _sm_expr1 = i < _sm_expr10;
+    if (!(_sm_expr1)) goto L14;
+    _sm_base20 = simse_addressOf(fields[i]);
+    _sm_base19 = _sm_base20;
+    _sm_base21 = ns3_AstNodeAttributeKind::Name;
+    fieldName = *(ns2_xmlAttr(_sm_base19, _sm_base21));
+    _sm_base22 = _sm_base20;
+    _sm_base24 = ns3_AstNodeKind::Type;
+    typeNode = ns2_xmlChildPtr(_sm_base22, _sm_base24);
+    _sm_expr1 = ns2_xmlIsEmpty(typeNode);
+    if (_sm_expr1) goto L15;
+    _sm_expr16 = ns2_xmlKind(typeNode);
+    _sm_expr17 = ns3_AstNodeCategory::TypeNamed;
+    _sm_expr1 = _sm_expr16 != _sm_expr17;
+    if (_sm_expr1) goto L15;
+    goto L16;
+    L15:;
+    _sm_base27 = *(name);
+    _sm_base25.resize(131 + fieldName.size() + _sm_base27.size());
+    __sm_catP = _sm_base25.data();
+    std::memcpy(__sm_catP, "json: field '", 13);
+    __sm_catP = __sm_catP + 13;
+    std::memcpy(__sm_catP, fieldName.data(), fieldName.size());
+    __sm_catP = __sm_catP + fieldName.size();
+    std::memcpy(__sm_catP, "' of '", 6);
+    __sm_catP = __sm_catP + 6;
+    std::memcpy(__sm_catP, _sm_base27.data(), _sm_base27.size());
+    __sm_catP = __sm_catP + _sm_base27.size();
+    std::memcpy(__sm_catP, "' is not a data class or a scalar (a generated serializer for a generic or pointer field is not implemented yet)", 112);
+    ctx->error = _sm_base25;
+    return;
+    L16:;
+    _sm_base29 = ns3_AstNodeAttributeKind::Name;
+    _sm_expr19 = ns2_xmlAttr(typeNode, _sm_base29);
+    ns6_jsonEnsure(_sm_expr19, ctx, types, keys, bodies, flags);
+    _sm_base30 = simse_addressOf(ctx->error);
+    _sm_expr10 = simse_lenOf((*_sm_base30));
+    _sm_expr1 = _sm_expr10 > 0;
+    if (_sm_expr1) goto L18;
+    goto L19;
+    L18:;
+    return;
+    L19:;
+    i = i + 1;
+    goto L13;
+    L14:;
+}
+// modules/json/generators/JsonGen.kt
+Str ns6_jsonBuildSource(ns3_SourceGenContext* ctx) {
+    Str* _sm_base1, * _sm_base3, * _sm_base4, * _sm_base10, * _sm_base15, * _sm_base16, * _sm_base21,
+        * _sm_base23, * pkg;
+    List<Str>* _sm_base2, * _sm_base5, * _sm_base8, * _sm_base11, * _sm_base12;
+    ns6_JsonTypes* _sm_base6;
+    Dictionary<Str, Bool>* _sm_base7, * _sm_base9;
+    Dictionary<Str, Str>* _sm_base13;
+    Str _sm_base17, _sm_base18, _sm_base19, _sm_base22, _sm_base24, name, helper;
+    ns3_FullCompiledState* _sm_base20;
+    ns6_JsonTypes types;
+    Int _sm_expr1, i;
+    Bool _sm_expr2;
+    Dictionary<Str, Bool> keys, flags;
+    List<Str> bodies, imports;
+    Span<Char> _sm_expr13;
+    types = ns6_jsonCollect(ctx);
+    _sm_base1 = simse_addressOf(ctx->error);
+    _sm_expr1 = simse_lenOf((*_sm_base1));
+    _sm_expr2 = _sm_expr1 > 0;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    return __sm_stringTable[1115];
+    L2:;
+    keys = Dictionary<Str, Bool>();
+    bodies = List<Str>();
+    flags = Dictionary<Str, Bool>();
+    i = 0;
+    L3:;
+    _sm_base2 = simse_addressOf(types.order);
+    _sm_expr1 = simse_lenOf((*_sm_base2));
+    _sm_expr2 = i < _sm_expr1;
+    if (!(_sm_expr2)) goto L4;
+    _sm_base5 = simse_addressOf(types.order);
+    _sm_base4 = simse_addressOf((*_sm_base5)[i]);
+    _sm_base3 = _sm_base4;
+    _sm_base6 = &types;
+    _sm_base7 = &keys;
+    _sm_base8 = &bodies;
+    _sm_base9 = &flags;
+    ns6_jsonEnsure(_sm_base3, ctx, _sm_base6, _sm_base7, _sm_base8, _sm_base9);
+    _sm_base10 = simse_addressOf(ctx->error);
+    _sm_expr1 = simse_lenOf((*_sm_base10));
+    _sm_expr2 = _sm_expr1 > 0;
+    if (_sm_expr2) goto L5;
+    goto L6;
+    L5:;
+    return __sm_stringTable[1115];
+    L6:;
+    i = i + 1;
+    goto L3;
+    L4:;
+    _sm_expr1 = simse_lenOf(bodies);
+    _sm_expr2 = _sm_expr1 == 0;
+    if (_sm_expr2) goto L7;
+    goto L8;
+    L7:;
+    return __sm_stringTable[1115];
+    L8:;
+    imports = List<Str>();
+    i = 0;
+    L9:;
+    _sm_base11 = simse_addressOf(types.order);
+    _sm_expr1 = simse_lenOf((*_sm_base11));
+    _sm_expr2 = i < _sm_expr1;
+    if (!(_sm_expr2)) goto L10;
+    _sm_base12 = simse_addressOf(types.order);
+    name = (*_sm_base12)[i];
+    _sm_expr2 = simse_dict_has(keys, name);
+    if (_sm_expr2) goto L11;
+    goto L14;
+    L11:;
+    _sm_base13 = simse_addressOf(types.packages);
+    pkg = simse_dict_getPtr((*_sm_base13), name);
+    _sm_expr2 = pkg != nullptr;
+    if (_sm_expr2) goto L17;
+    goto L14;
+    L17:;
+    _sm_base15 = pkg;
+    _sm_expr13 = simse_spanOfStr(_sm_base15);
+    _sm_expr2 = (!equals(simse_addressOf(_sm_expr13), __sm_stringTable[1115]));
+    if (_sm_expr2) goto L16;
+    goto L14;
+    L16:;
+    _sm_base16 = pkg;
+    _sm_expr13 = simse_spanOfStr(_sm_base16);
+    _sm_expr2 = (!equals(simse_addressOf(_sm_expr13), __sm_stringTable[1013]));
+    if (_sm_expr2) goto L15;
+    goto L14;
+    L15:;
+    _sm_base17 = *pkg;
+    _sm_expr2 = simse_list_contains(imports, _sm_base17);
+    if (_sm_expr2) goto L14;
+    _sm_base18 = *pkg;
+    simse_list_append(imports, _sm_base18);
+    L14:;
+    i = i + 1;
+    goto L9;
+    L10:;
+    Str out;
+    initByValue(simse_addressOf(out));
+    i = 0;
+    L18:;
+    _sm_expr1 = simse_lenOf(imports);
+    _sm_expr2 = i < _sm_expr1;
+    if (!(_sm_expr2)) goto L19;
+    simse_str_appendStr(out, __sm_stringTable[747]);
+    _sm_base19 = imports[i];
+    simse_str_appendStr(out, _sm_base19);
+    simse_str_append(out, '\n');
+    i = i + 1;
+    goto L18;
+    L19:;
+    _sm_expr1 = simse_lenOf(imports);
+    _sm_expr2 = _sm_expr1 > 0;
+    if (_sm_expr2) goto L20;
+    goto L21;
+    L20:;
+    simse_str_append(out, '\n');
+    L21:;
+    _sm_expr2 = simse_dict_has(flags, __sm_stringTable[823]);
+    if (_sm_expr2) goto L22;
+    goto L23;
+    L22:;
+    _sm_base20 = ctx->state;
+    _sm_base22 = __sm_stringTable[488];
+    _sm_base21 = &_sm_base22;
+    helper = ns3_sourceGenResText(_sm_base20, _sm_base21);
+    _sm_base23 = &helper;
+    _sm_expr13 = simse_spanOfStr(_sm_base23);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr13), __sm_stringTable[1115]);
+    if (_sm_expr2) goto L24;
+    goto L25;
+    L24:;
+    ctx->error = __sm_stringTable[46];
+    return __sm_stringTable[1115];
+    L25:;
+    simse_str_appendStr(out, helper);
+    L23:;
+    i = 0;
+    L26:;
+    _sm_expr1 = simse_lenOf(bodies);
+    _sm_expr2 = i < _sm_expr1;
+    if (!(_sm_expr2)) goto L27;
+    _sm_base24 = bodies[i];
+    simse_str_appendStr(out, _sm_base24);
+    i = i + 1;
+    goto L26;
+    L27:;
+    return out;
+}
+// modules/jsonnode/jsonnode.kt
+Bool ns7_isNull(ns7_JsonNode* self) {
+    ns7_SmJsonNodeTypes _sm_base1;
+    Bool _sm_expr1;
+    _sm_base1 = ns7_SmJsonNodeTypes::None;
+    _sm_expr1 = ns7_isOfType(self, _sm_base1);
+    return _sm_expr1;
+}
+// modules/jsonnode/jsonnode.kt
+Bool ns7_isArray(ns7_JsonNode* self) {
+    ns7_SmJsonNodeTypes _sm_base1;
+    Bool _sm_expr1;
+    _sm_base1 = ns7_SmJsonNodeTypes::Items;
+    _sm_expr1 = ns7_isOfType(self, _sm_base1);
+    return _sm_expr1;
+}
+// modules/jsonnode/jsonnode.kt
+Bool ns7_isObject(ns7_JsonNode* self) {
+    ns7_SmJsonNodeTypes _sm_base1;
+    Bool _sm_expr1;
+    _sm_base1 = ns7_SmJsonNodeTypes::Members;
+    _sm_expr1 = ns7_isOfType(self, _sm_base1);
+    return _sm_expr1;
+}
+// modules/jsonnode/jsonnode.kt
+Bool ns7_isBool(ns7_JsonNode* self) {
+    ns7_SmJsonNodeTypes _sm_base1;
+    Bool _sm_expr1;
+    _sm_base1 = ns7_SmJsonNodeTypes::Boolean;
+    _sm_expr1 = ns7_isOfType(self, _sm_base1);
+    return _sm_expr1;
+}
+// modules/jsonnode/jsonnode.kt
+Bool ns7_isNumber(ns7_JsonNode* self) {
+    ns7_SmJsonNodeTypes _sm_base1;
+    Bool _sm_expr1;
+    _sm_base1 = ns7_SmJsonNodeTypes::Number;
+    _sm_expr1 = ns7_isOfType(self, _sm_base1);
+    return _sm_expr1;
+}
+// modules/jsonnode/jsonnode.kt
+Bool ns7_isText(ns7_JsonNode* self) {
+    ns7_SmJsonNodeTypes _sm_base1;
+    Bool _sm_expr1;
+    _sm_base1 = ns7_SmJsonNodeTypes::Text;
+    _sm_expr1 = ns7_isOfType(self, _sm_base1);
+    return _sm_expr1;
+}
+// modules/jsonnode/jsonnode.kt
+Str ns7_text(ns7_JsonNode* self) {
+    ns7_SmJsonNodeTypes _sm_base1;
+    Bool _sm_expr1;
+    Str _sm_expr2;
+    _sm_base1 = ns7_SmJsonNodeTypes::Text;
+    _sm_expr1 = ns7_isOfType(self, _sm_base1);
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = self->Text;
+    return _sm_expr2;
+    L2:;
+    return __sm_stringTable[1115];
+}
+// modules/jsonnode/jsonnode.kt
+Float64 ns7_number(ns7_JsonNode* self) {
+    ns7_SmJsonNodeTypes _sm_base1;
+    Bool _sm_expr1;
+    Float64 _sm_expr2;
+    _sm_base1 = ns7_SmJsonNodeTypes::Number;
+    _sm_expr1 = ns7_isOfType(self, _sm_base1);
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = self->Number;
+    return _sm_expr2;
+    L2:;
+    return 0.0;
+}
+// modules/jsonnode/jsonnode.kt
+Bool ns7_boolean(ns7_JsonNode* self) {
+    ns7_SmJsonNodeTypes _sm_base1;
+    Bool _sm_expr1;
+    _sm_base1 = ns7_SmJsonNodeTypes::Boolean;
+    _sm_expr1 = ns7_isOfType(self, _sm_base1);
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr1 = self->Boolean;
+    return _sm_expr1;
+    L2:;
+    return false;
+}
+// modules/jsonnode/jsonnode.kt
+Int ns7_size(ns7_JsonNode* self) {
+    ns7_SmJsonNodeTypes _sm_base1, _sm_base3;
+    List<Ref<ns7_JsonNode>>* _sm_base2;
+    List<Ref<ns7_JsonMember>>* _sm_base4;
+    Bool _sm_expr1;
+    Int _sm_expr2;
+    _sm_base1 = ns7_SmJsonNodeTypes::Items;
+    _sm_expr1 = ns7_isOfType(self, _sm_base1);
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_base2 = simse_addressOf(self->Items);
+    _sm_expr2 = simse_lenOf((*_sm_base2));
+    return _sm_expr2;
+    L2:;
+    _sm_base3 = ns7_SmJsonNodeTypes::Members;
+    _sm_expr1 = ns7_isOfType(self, _sm_base3);
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    _sm_base4 = simse_addressOf(self->Members);
+    _sm_expr2 = simse_lenOf((*_sm_base4));
+    return _sm_expr2;
+    L4:;
+    return 0;
+}
+// modules/jsonnode/jsonnode.kt
+ns7_JsonNode ns7_at(ns7_JsonNode* self, Int index) {
+    ns7_SmJsonNodeTypes _sm_base1;
+    List<Ref<ns7_JsonNode>>* _sm_base2, * _sm_base3;
+    Bool _sm_expr1;
+    Int _sm_expr3;
+    Ref<ns7_JsonNode> handle;
+    ns7_JsonNode* _sm_expr5;
+    _sm_base1 = ns7_SmJsonNodeTypes::Items;
+    _sm_expr1 = ns7_isOfType(self, _sm_base1);
+    if (_sm_expr1) goto L4;
+    goto L2;
+    L4:;
+    _sm_expr1 = index >= 0;
+    if (_sm_expr1) goto L3;
+    goto L2;
+    L3:;
+    _sm_base2 = simse_addressOf(self->Items);
+    _sm_expr3 = simse_lenOf((*_sm_base2));
+    _sm_expr1 = index < _sm_expr3;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_base3 = simse_addressOf(self->Items);
+    handle = (*_sm_base3)[index];
+    _sm_expr5 = (handle).get();
+    return *(_sm_expr5);
+    L2:;
+    ns7_JsonNode _sm_expr6;
+    ns7_initByValue(simse_addressOf(_sm_expr6));
+    return _sm_expr6;
+}
+// modules/jsonnode/jsonnode.kt
+ns7_JsonNode ns7_get(ns7_JsonNode* self, Str key) {
+    ns7_SmJsonNodeTypes _sm_base1;
+    List<Ref<ns7_JsonMember>>* _sm_base2, * _sm_base3;
+    Bool _sm_expr1, _sm_expr2;
+    Int i, _sm_expr4;
+    Ref<ns7_JsonMember> member;
+    Str _sm_expr6;
+    Ref<ns7_JsonNode> handle;
+    ns7_JsonNode* _sm_expr8;
+    _sm_base1 = ns7_SmJsonNodeTypes::Members;
+    _sm_expr1 = ns7_isOfType(self, _sm_base1);
+    _sm_expr2 = !_sm_expr1;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    {
+        ns7_JsonNode _sm_expr3;
+        ns7_initByValue(simse_addressOf(_sm_expr3));
+        return _sm_expr3;
+    }
+    L2:;
+    i = 0;
+    L3:;
+    _sm_base2 = simse_addressOf(self->Members);
+    _sm_expr4 = simse_lenOf((*_sm_base2));
+    _sm_expr1 = i < _sm_expr4;
+    if (!(_sm_expr1)) goto L4;
+    _sm_base3 = simse_addressOf(self->Members);
+    member = (*_sm_base3)[i];
+    _sm_expr6 = member->key;
+    _sm_expr1 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_expr6))), simse_spanOfStr(simse_addressOf(key)));
+    if (_sm_expr1) goto L5;
+    goto L6;
+    L5:;
+    handle = member->value;
+    _sm_expr8 = (handle).get();
+    return *(_sm_expr8);
+    L6:;
+    i = i + 1;
+    goto L3;
+    L4:;
+    ns7_JsonNode _sm_expr9;
+    ns7_initByValue(simse_addressOf(_sm_expr9));
+    return _sm_expr9;
+}
+// modules/jsonnode/jsonnode.kt
+Bool ns7_has(ns7_JsonNode* self, Str key) {
+    ns7_SmJsonNodeTypes _sm_base1;
+    List<Ref<ns7_JsonMember>>* _sm_base2, * _sm_base3;
+    Bool _sm_expr1, _sm_expr2;
+    Int i, _sm_expr3;
+    Ref<ns7_JsonMember> member;
+    Str _sm_expr5;
+    _sm_base1 = ns7_SmJsonNodeTypes::Members;
+    _sm_expr1 = ns7_isOfType(self, _sm_base1);
+    _sm_expr2 = !_sm_expr1;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    return false;
+    L2:;
+    i = 0;
+    L3:;
+    _sm_base2 = simse_addressOf(self->Members);
+    _sm_expr3 = simse_lenOf((*_sm_base2));
+    _sm_expr1 = i < _sm_expr3;
+    if (!(_sm_expr1)) goto L4;
+    _sm_base3 = simse_addressOf(self->Members);
+    member = (*_sm_base3)[i];
+    _sm_expr5 = member->key;
+    _sm_expr1 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_expr5))), simse_spanOfStr(simse_addressOf(key)));
+    if (_sm_expr1) goto L5;
+    goto L6;
+    L5:;
+    return true;
+    L6:;
+    i = i + 1;
+    goto L3;
+    L4:;
+    return false;
+}
+// modules/jsonnode/jsonnode.kt
+ns7_JsonNode ns7_jsonNull() {
+    ns7_JsonNode _sm_expr1;
+    ns7_initByValue(simse_addressOf(_sm_expr1));
+    return _sm_expr1;
+}
+// modules/jsonnode/jsonnode.kt
+ns7_JsonNode ns7_jsonBool(Bool value) {
+    ns7_JsonNode node;
+    ns7_initByValue(simse_addressOf(node));
+    ns7_setBoolean(simse_addressOf(node), value);
+    return node;
+}
+// modules/jsonnode/jsonnode.kt
+ns7_JsonNode ns7_jsonNumber(Float64 value) {
+    ns7_JsonNode node;
+    ns7_initByValue(simse_addressOf(node));
+    ns7_setNumber(simse_addressOf(node), value);
+    return node;
+}
+// modules/jsonnode/jsonnode.kt
+ns7_JsonNode ns7_jsonText(Str value) {
+    ns7_JsonNode node;
+    ns7_initByValue(simse_addressOf(node));
+    ns7_setText(simse_addressOf(node), value);
+    return node;
+}
+// modules/jsonnode/jsonnode.kt
+Ref<ns7_JsonMember> ns7_jsonField(Str key, ns7_JsonNode* value) {
+    ns7_JsonNode boxed;
+    Ref<ns7_JsonNode> _sm_expr1;
+    Ref<ns7_JsonMember> _sm_expr2;
+    boxed = *(value);
+    _sm_expr1 = makeRef<std::remove_cvref_t<decltype((boxed))>>(boxed);
+    _sm_expr2 = makeRef<ns7_JsonMember>(key, _sm_expr1);
+    return _sm_expr2;
+}
+// modules/jsonnode/jsonnode.kt
+ns7_JsonNode ns7_jsonArray(List<ns7_JsonNode> items) {
+    List<Ref<ns7_JsonNode>> handles;
+    Int i, _sm_expr1;
+    Bool _sm_expr2;
+    ns7_JsonNode boxed;
+    Ref<ns7_JsonNode> _sm_expr3;
+    handles = List<Ref<ns7_JsonNode>>();
+    i = 0;
+    L1:;
+    _sm_expr1 = simse_lenOf(items);
+    _sm_expr2 = i < _sm_expr1;
+    if (!(_sm_expr2)) goto L2;
+    boxed = items[i];
+    _sm_expr3 = makeRef<std::remove_cvref_t<decltype((boxed))>>(boxed);
+    simse_list_append(handles, _sm_expr3);
+    i = i + 1;
+    goto L1;
+    L2:;
+    ns7_JsonNode node;
+    ns7_initByValue(simse_addressOf(node));
+    ns7_setItems(simse_addressOf(node), handles);
+    return node;
+}
+// modules/jsonnode/jsonnode.kt
+ns7_JsonNode ns7_jsonObject(List<Ref<ns7_JsonMember>> members) {
+    ns7_JsonNode node;
+    ns7_initByValue(simse_addressOf(node));
+    ns7_setMembers(simse_addressOf(node), members);
+    return node;
+}
+// modules/jsonnode/jsonnode.kt
+Str ns7_jsonNumberText(Float64 value) {
+    Str printed, _sm_expr11;
+    Int _sm_expr1, end, _sm_expr4, _sm_expr8;
+    Bool _sm_expr2;
+    Char _sm_expr5;
+    printed = simse_num_toString(value);
+    _sm_expr1 = simse_str_find(printed, __sm_stringTable[1088]);
+    _sm_expr2 = _sm_expr1 < 0;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    return printed;
+    L2:;
+    end = simse_lenOf(printed);
+    L3:;
+    _sm_expr2 = end > 0;
+    if (_sm_expr2) goto L6;
+    goto L4;
+    L6:;
+    _sm_expr4 = end - 1;
+    _sm_expr5 = simse_str_charAt(printed, _sm_expr4);
+    _sm_expr2 = _sm_expr5 == '0';
+    if (_sm_expr2) goto L5;
+    goto L4;
+    L5:;
+    end = end - 1;
+    goto L3;
+    L4:;
+    _sm_expr2 = end > 0;
+    if (_sm_expr2) goto L9;
+    goto L8;
+    L9:;
+    _sm_expr8 = end - 1;
+    _sm_expr5 = simse_str_charAt(printed, _sm_expr8);
+    _sm_expr2 = _sm_expr5 == '.';
+    if (_sm_expr2) goto L7;
+    goto L8;
+    L7:;
+    end = end - 1;
+    L8:;
+    _sm_expr11 = substr(simse_addressOf(printed), 0, end);
+    return _sm_expr11;
+}
+// modules/jsonnode/jsonnode.kt
+void ns7_jsonWriteQuoted(Str* out, Str value) {
+    Int i, _sm_expr1;
+    Bool _sm_expr2;
+    Char ch;
+    simse_str_append((*out), '"');
+    i = 0;
+    L1:;
+    _sm_expr1 = simse_lenOf(value);
+    _sm_expr2 = i < _sm_expr1;
+    if (!(_sm_expr2)) goto L2;
+    ch = simse_str_charAt(value, i);
+    _sm_expr2 = ch == '"';
+    if (_sm_expr2) goto L3;
+    goto L4;
+    L3:;
+    simse_str_append((*out), '\\');
+    simse_str_append((*out), '"');
+    goto L17;
+    L4:;
+    _sm_expr2 = ch == '\\';
+    if (_sm_expr2) goto L6;
+    goto L7;
+    L6:;
+    simse_str_append((*out), '\\');
+    simse_str_append((*out), '\\');
+    goto L17;
+    L7:;
+    _sm_expr2 = ch == '\n';
+    if (_sm_expr2) goto L9;
+    goto L10;
+    L9:;
+    simse_str_append((*out), '\\');
+    simse_str_append((*out), 'n');
+    goto L17;
+    L10:;
+    _sm_expr2 = ch == '\r';
+    if (_sm_expr2) goto L12;
+    goto L13;
+    L12:;
+    simse_str_append((*out), '\\');
+    simse_str_append((*out), 'r');
+    goto L17;
+    L13:;
+    _sm_expr2 = ch == '\t';
+    if (_sm_expr2) goto L15;
+    goto L16;
+    L15:;
+    simse_str_append((*out), '\\');
+    simse_str_append((*out), 't');
+    goto L17;
+    L16:;
+    simse_str_append((*out), ch);
+    L17:;
+    i = i + 1;
+    goto L1;
+    L2:;
+    simse_str_append((*out), '"');
+}
+// modules/jsonnode/jsonnode.kt
+void ns7_write(ns7_JsonWriter* self, ns7_JsonNode node) {
+    Str* _sm_base1, * _sm_base2, * _sm_base3, * _sm_base5, * _sm_base6, * _sm_base7, * _sm_base9,
+        * _sm_base11, * _sm_base15, * _sm_base16, * _sm_base18, * _sm_base20, * _sm_base21, * _sm_base26;
+    Float64 _sm_base4;
+    Str _sm_base8, _sm_base22, _sm_expr8;
+    List<Ref<ns7_JsonNode>>* _sm_base10, * _sm_base12;
+    ns7_JsonNode* _sm_base13, * _sm_base24;
+    ns7_JsonNode _sm_base14, _sm_base25;
+    List<Ref<ns7_JsonMember>>* _sm_base17, * _sm_base19;
+    ns7_SmJsonNodeTypes _sm_expr1;
+    Bool _sm_expr2;
+    Int i, _sm_expr13, _sm_i_2;
+    Ref<ns7_JsonNode> handle, _sm_handle_2;
+    Ref<ns7_JsonMember> member;
+    _sm_expr1 = ns7_SmJsonNodeTypes::None;
+    _sm_expr2 = node == _sm_expr1;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    _sm_base1 = simse_addressOf(self->out);
+    simse_str_appendStr((*_sm_base1), __sm_stringTable[964]);
+    goto L24;
+    L2:;
+    _sm_expr1 = ns7_SmJsonNodeTypes::Boolean;
+    _sm_expr2 = node == _sm_expr1;
+    if (_sm_expr2) goto L4;
+    goto L5;
+    L4:;
+    _sm_expr2 = node.Boolean;
+    if (_sm_expr2) goto L6;
+    goto L7;
+    L6:;
+    _sm_base2 = simse_addressOf(self->out);
+    simse_str_appendStr((*_sm_base2), __sm_stringTable[971]);
+    goto L24;
+    L7:;
+    _sm_base3 = simse_addressOf(self->out);
+    simse_str_appendStr((*_sm_base3), __sm_stringTable[886]);
+    goto L24;
+    L5:;
+    _sm_expr1 = ns7_SmJsonNodeTypes::Number;
+    _sm_expr2 = node == _sm_expr1;
+    if (_sm_expr2) goto L10;
+    goto L11;
+    L10:;
+    _sm_base4 = node.Number;
+    _sm_expr8 = ns7_jsonNumberText(_sm_base4);
+    _sm_base5 = simse_addressOf(self->out);
+    simse_str_appendStr((*_sm_base5), _sm_expr8);
+    goto L24;
+    L11:;
+    _sm_expr1 = ns7_SmJsonNodeTypes::Text;
+    _sm_expr2 = node == _sm_expr1;
+    if (_sm_expr2) goto L13;
+    goto L14;
+    L13:;
+    _sm_base7 = simse_addressOf(self->out);
+    _sm_base6 = _sm_base7;
+    _sm_base8 = node.Text;
+    ns7_jsonWriteQuoted(_sm_base6, _sm_base8);
+    goto L24;
+    L14:;
+    _sm_expr1 = ns7_SmJsonNodeTypes::Items;
+    _sm_expr2 = node == _sm_expr1;
+    if (_sm_expr2) goto L16;
+    goto L17;
+    L16:;
+    _sm_base9 = simse_addressOf(self->out);
+    simse_str_append((*_sm_base9), '[');
+    i = 0;
+    L18:;
+    _sm_base10 = simse_addressOf(node.Items);
+    _sm_expr13 = simse_lenOf((*_sm_base10));
+    _sm_expr2 = i < _sm_expr13;
+    if (!(_sm_expr2)) goto L19;
+    _sm_expr2 = i > 0;
+    if (_sm_expr2) goto L20;
+    goto L21;
+    L20:;
+    _sm_base11 = simse_addressOf(self->out);
+    simse_str_append((*_sm_base11), ',');
+    L21:;
+    _sm_base12 = simse_addressOf(node.Items);
+    handle = (*_sm_base12)[i];
+    _sm_base13 = (handle).get();
+    _sm_base14 = *(_sm_base13);
+    ns7_write(self, _sm_base14);
+    i = i + 1;
+    goto L18;
+    L19:;
+    _sm_base15 = simse_addressOf(self->out);
+    simse_str_append((*_sm_base15), ']');
+    goto L24;
+    L17:;
+    _sm_expr1 = ns7_SmJsonNodeTypes::Members;
+    _sm_expr2 = node == _sm_expr1;
+    if (_sm_expr2) goto L23;
+    goto L24;
+    L23:;
+    _sm_base16 = simse_addressOf(self->out);
+    simse_str_append((*_sm_base16), '{');
+    _sm_i_2 = 0;
+    L25:;
+    _sm_base17 = simse_addressOf(node.Members);
+    _sm_expr13 = simse_lenOf((*_sm_base17));
+    _sm_expr2 = _sm_i_2 < _sm_expr13;
+    if (!(_sm_expr2)) goto L26;
+    _sm_expr2 = _sm_i_2 > 0;
+    if (_sm_expr2) goto L27;
+    goto L28;
+    L27:;
+    _sm_base18 = simse_addressOf(self->out);
+    simse_str_append((*_sm_base18), ',');
+    L28:;
+    _sm_base19 = simse_addressOf(node.Members);
+    member = (*_sm_base19)[_sm_i_2];
+    _sm_base21 = simse_addressOf(self->out);
+    _sm_base20 = _sm_base21;
+    _sm_base22 = member->key;
+    ns7_jsonWriteQuoted(_sm_base20, _sm_base22);
+    simse_str_append((*_sm_base21), ':');
+    _sm_handle_2 = member->value;
+    _sm_base24 = (_sm_handle_2).get();
+    _sm_base25 = *(_sm_base24);
+    ns7_write(self, _sm_base25);
+    _sm_i_2 = _sm_i_2 + 1;
+    goto L25;
+    L26:;
+    _sm_base26 = simse_addressOf(self->out);
+    simse_str_append((*_sm_base26), '}');
+    L24:;
+}
+// modules/jsonnode/jsonnode.kt
+Str ns7_toJson(ns7_JsonNode* self) {
+    ns7_JsonWriter writer;
+    Str _sm_expr2;
+    Str _sm_expr1;
+    initByValue(simse_addressOf(_sm_expr1));
+    writer = ns7_JsonWriter{_sm_expr1};
+    ns7_write(simse_addressOf(writer), (*self));
+    _sm_expr2 = writer.out;
+    return _sm_expr2;
+}
+// modules/jsonnode/jsonnode.kt
+Res<ns7_JsonNode> ns7_fail(ns7_JsonReader* self, Str message) {
+    char* __sm_catP;
+    Int* _sm_base1;
+    Str _sm_expr1, _sm_expr2;
+    Res<ns7_JsonNode> _sm_expr3;
+    _sm_base1 = simse_addressOf(self->at);
+    _sm_expr1 = simse_int_toString((*_sm_base1));
+    _sm_expr2.resize(15 + message.size() + _sm_expr1.size());
+    __sm_catP = _sm_expr2.data();
+    std::memcpy(__sm_catP, "json: ", 6);
+    __sm_catP = __sm_catP + 6;
+    std::memcpy(__sm_catP, message.data(), message.size());
+    __sm_catP = __sm_catP + message.size();
+    std::memcpy(__sm_catP, " at byte ", 9);
+    __sm_catP = __sm_catP + 9;
+    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
+    _sm_expr3 = simse_resErr<ns7_JsonNode>(_sm_expr2);
+    return _sm_expr3;
+}
+// modules/jsonnode/jsonnode.kt
+Res<Str> ns7_failText(ns7_JsonReader* self, Str message) {
+    char* __sm_catP;
+    Int* _sm_base1;
+    Str _sm_expr1, _sm_expr2;
+    Res<Str> _sm_expr3;
+    _sm_base1 = simse_addressOf(self->at);
+    _sm_expr1 = simse_int_toString((*_sm_base1));
+    _sm_expr2.resize(15 + message.size() + _sm_expr1.size());
+    __sm_catP = _sm_expr2.data();
+    std::memcpy(__sm_catP, "json: ", 6);
+    __sm_catP = __sm_catP + 6;
+    std::memcpy(__sm_catP, message.data(), message.size());
+    __sm_catP = __sm_catP + message.size();
+    std::memcpy(__sm_catP, " at byte ", 9);
+    __sm_catP = __sm_catP + 9;
+    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
+    _sm_expr3 = simse_resErr<Str>(_sm_expr2);
+    return _sm_expr3;
+}
+// modules/jsonnode/jsonnode.kt
+Res<Char> ns7_failChar(ns7_JsonReader* self, Str message) {
+    char* __sm_catP;
+    Int* _sm_base1;
+    Str _sm_expr1, _sm_expr2;
+    Res<Char> _sm_expr3;
+    _sm_base1 = simse_addressOf(self->at);
+    _sm_expr1 = simse_int_toString((*_sm_base1));
+    _sm_expr2.resize(15 + message.size() + _sm_expr1.size());
+    __sm_catP = _sm_expr2.data();
+    std::memcpy(__sm_catP, "json: ", 6);
+    __sm_catP = __sm_catP + 6;
+    std::memcpy(__sm_catP, message.data(), message.size());
+    __sm_catP = __sm_catP + message.size();
+    std::memcpy(__sm_catP, " at byte ", 9);
+    __sm_catP = __sm_catP + 9;
+    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
+    _sm_expr3 = simse_resErr<Char>(_sm_expr2);
+    return _sm_expr3;
+}
+// modules/jsonnode/jsonnode.kt
+void ns7_skipSpace(ns7_JsonReader* self) {
+    Str* _sm_base1, * _sm_base2;
+    Int _sm_base3, _sm_base4, _sm_expr1, _sm_expr2;
+    Bool _sm_expr3, _sm_expr5;
+    Char ch;
+    L1:;
+    _sm_expr1 = self->at;
+    _sm_base1 = simse_addressOf(self->text);
+    _sm_expr2 = simse_lenOf((*_sm_base1));
+    _sm_expr3 = _sm_expr1 < _sm_expr2;
+    if (!(_sm_expr3)) goto L2;
+    _sm_base2 = simse_addressOf(self->text);
+    _sm_base3 = self->at;
+    ch = simse_str_charAt((*_sm_base2), _sm_base3);
+    _sm_expr3 = isSpace(simse_addressOf(ch));
+    _sm_expr5 = !_sm_expr3;
+    if (_sm_expr5) goto L2;
+    _sm_expr1 = self->at;
+    _sm_base4 = _sm_expr1 + 1;
+    self->at = _sm_base4;
+    goto L1;
+    L2:;
+}
+// modules/jsonnode/jsonnode.kt
+Bool ns7_consume(ns7_JsonReader* self, Str word) {
+    Str* _sm_base1, * _sm_base2;
+    Int _sm_base3, _sm_base4, _sm_expr1, _sm_expr2, _sm_expr3, _sm_expr4;
+    Bool _sm_expr5;
+    Str _sm_expr7;
+    _sm_expr1 = self->at;
+    _sm_expr2 = simse_lenOf(word);
+    _sm_expr3 = _sm_expr1 + _sm_expr2;
+    _sm_base1 = simse_addressOf(self->text);
+    _sm_expr4 = simse_lenOf((*_sm_base1));
+    _sm_expr5 = _sm_expr3 > _sm_expr4;
+    if (_sm_expr5) goto L1;
+    goto L2;
+    L1:;
+    return false;
+    L2:;
+    _sm_base2 = simse_addressOf(self->text);
+    _sm_base3 = self->at;
+    _sm_expr7 = substr(_sm_base2, _sm_base3, _sm_expr2);
+    _sm_expr5 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_expr7))), simse_spanOfStr(simse_addressOf(word)));
+    if (_sm_expr5) goto L3;
+    goto L4;
+    L3:;
+    _sm_expr1 = self->at;
+    _sm_base4 = _sm_expr1 + _sm_expr2;
+    self->at = _sm_base4;
+    return true;
+    L4:;
+    return false;
+}
+// modules/jsonnode/jsonnode.kt
+Res<ns7_JsonNode> ns7_parseValue(ns7_JsonReader* self) {
+    Str* _sm_base1, * _sm_base2;
+    Int _sm_base3, _sm_expr1, _sm_expr2;
+    Str _sm_base4, text;
+    Bool _sm_expr3, _sm_expr11;
+    Res<ns7_JsonNode> _sm_expr4;
+    Char ch;
+    Res<Str> parsedText, _sm_prop1;
+    ns7_JsonNode _sm_expr13;
+    ns7_skipSpace(self);
+    _sm_expr1 = self->at;
+    _sm_base1 = simse_addressOf(self->text);
+    _sm_expr2 = simse_lenOf((*_sm_base1));
+    _sm_expr3 = _sm_expr1 >= _sm_expr2;
+    if (_sm_expr3) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr4 = ns7_fail(self, __sm_stringTable[270]);
+    return _sm_expr4;
+    L2:;
+    _sm_base2 = simse_addressOf(self->text);
+    _sm_base3 = self->at;
+    ch = simse_str_charAt((*_sm_base2), _sm_base3);
+    _sm_expr3 = ch == '{';
+    if (_sm_expr3) goto L3;
+    goto L4;
+    L3:;
+    _sm_expr4 = ns7_parseObject(self);
+    return _sm_expr4;
+    L4:;
+    _sm_expr3 = ch == '[';
+    if (_sm_expr3) goto L5;
+    goto L6;
+    L5:;
+    _sm_expr4 = ns7_parseArray(self);
+    return _sm_expr4;
+    L6:;
+    _sm_expr3 = ch == '"';
+    if (_sm_expr3) goto L7;
+    goto L8;
+    L7:;
+    parsedText = ns7_parseString(self);
+    _sm_prop1 = parsedText;
+    _sm_expr3 = simse_resHasValue(simse_addressOf(_sm_prop1));
+    _sm_expr11 = !_sm_expr3;
+    if (_sm_expr11) goto L9;
+    goto L10;
+    L9:;
+    _sm_base4 = _sm_prop1.Error;
+    _sm_expr4 = simse_resErr<ns7_JsonNode>(_sm_base4);
+    return _sm_expr4;
+    L10:;
+    text = _sm_prop1.Value;
+    _sm_expr13 = ns7_jsonText(text);
+    _sm_expr4 = simse_resOk<ns7_JsonNode>(_sm_expr13);
+    return _sm_expr4;
+    L8:;
+    _sm_expr3 = ch == 't';
+    if (_sm_expr3) goto L11;
+    _sm_expr3 = ch == 'f';
+    if (_sm_expr3) goto L11;
+    _sm_expr3 = ch == 'n';
+    if (_sm_expr3) goto L11;
+    goto L12;
+    L11:;
+    _sm_expr4 = ns7_parseLiteral(self);
+    return _sm_expr4;
+    L12:;
+    _sm_expr4 = ns7_parseNumber(self);
+    return _sm_expr4;
+}
+// modules/jsonnode/jsonnode.kt
+Res<ns7_JsonNode> ns7_parseLiteral(ns7_JsonReader* self) {
+    Bool _sm_expr1;
+    ns7_JsonNode _sm_expr2, _sm_expr5, _sm_expr8;
+    Res<ns7_JsonNode> _sm_expr3;
+    _sm_expr1 = ns7_consume(self, __sm_stringTable[971]);
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = ns7_jsonBool(true);
+    _sm_expr3 = simse_resOk<ns7_JsonNode>(_sm_expr2);
+    return _sm_expr3;
+    L2:;
+    _sm_expr1 = ns7_consume(self, __sm_stringTable[886]);
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    _sm_expr5 = ns7_jsonBool(false);
+    _sm_expr3 = simse_resOk<ns7_JsonNode>(_sm_expr5);
+    return _sm_expr3;
+    L4:;
+    _sm_expr1 = ns7_consume(self, __sm_stringTable[964]);
+    if (_sm_expr1) goto L5;
+    goto L6;
+    L5:;
+    _sm_expr8 = ns7_jsonNull();
+    _sm_expr3 = simse_resOk<ns7_JsonNode>(_sm_expr8);
+    return _sm_expr3;
+    L6:;
+    _sm_expr3 = ns7_fail(self, __sm_stringTable[372]);
+    return _sm_expr3;
+}
+// modules/jsonnode/jsonnode.kt
+Res<ns7_JsonNode> ns7_parseNumber(ns7_JsonReader* self) {
+    char* __sm_catP;
+    Str* _sm_base1, * _sm_base2, * _sm_base5;
+    Int _sm_base3, _sm_base4, start, _sm_expr1, _sm_expr2, _sm_expr15;
+    Bool _sm_expr3, _sm_expr17;
+    Char ch;
+    Res<ns7_JsonNode> _sm_expr13;
+    Str token, _sm_expr18;
+    Opt<Float64> value;
+    Float64 _sm_expr20;
+    ns7_JsonNode _sm_expr21;
+    start = self->at;
+    L1:;
+    _sm_expr1 = self->at;
+    _sm_base1 = simse_addressOf(self->text);
+    _sm_expr2 = simse_lenOf((*_sm_base1));
+    _sm_expr3 = _sm_expr1 < _sm_expr2;
+    if (!(_sm_expr3)) goto L2;
+    _sm_base2 = simse_addressOf(self->text);
+    _sm_base3 = self->at;
+    ch = simse_str_charAt((*_sm_base2), _sm_base3);
+    _sm_expr3 = isDigit(simse_addressOf(ch));
+    if (_sm_expr3) goto L3;
+    _sm_expr3 = ch == '-';
+    if (_sm_expr3) goto L3;
+    _sm_expr3 = ch == '+';
+    if (_sm_expr3) goto L3;
+    _sm_expr3 = ch == '.';
+    if (_sm_expr3) goto L3;
+    _sm_expr3 = ch == 'e';
+    if (_sm_expr3) goto L3;
+    _sm_expr3 = ch == 'E';
+    if (_sm_expr3) goto L3;
+    goto L2;
+    L3:;
+    _sm_expr1 = self->at;
+    _sm_base4 = _sm_expr1 + 1;
+    self->at = _sm_base4;
+    goto L1;
+    L2:;
+    _sm_expr1 = self->at;
+    _sm_expr3 = _sm_expr1 == start;
+    if (_sm_expr3) goto L11;
+    goto L12;
+    L11:;
+    _sm_expr13 = ns7_fail(self, __sm_stringTable[372]);
+    return _sm_expr13;
+    L12:;
+    _sm_expr1 = self->at;
+    _sm_expr15 = _sm_expr1 - start;
+    _sm_base5 = simse_addressOf(self->text);
+    token = substr(_sm_base5, start, _sm_expr15);
+    value = simse_str_toFloat(token);
+    _sm_expr3 = simse_optHasValue(simse_addressOf(value));
+    _sm_expr17 = !_sm_expr3;
+    if (_sm_expr17) goto L13;
+    goto L14;
+    L13:;
+    _sm_expr18.resize(13 + token.size());
+    __sm_catP = _sm_expr18.data();
+    std::memcpy(__sm_catP, "bad number '", 12);
+    __sm_catP = __sm_catP + 12;
+    std::memcpy(__sm_catP, token.data(), token.size());
+    __sm_catP = __sm_catP + token.size();
+    *__sm_catP = (char) ('\'');
+    _sm_expr13 = ns7_fail(self, _sm_expr18);
+    return _sm_expr13;
+    L14:;
+    _sm_expr20 = simse_optValue(simse_addressOf(value));
+    _sm_expr21 = ns7_jsonNumber(_sm_expr20);
+    _sm_expr13 = simse_resOk<ns7_JsonNode>(_sm_expr21);
+    return _sm_expr13;
+}
+// modules/jsonnode/jsonnode.kt
+Res<Str> ns7_parseString(ns7_JsonReader* self) {
+    Int _sm_base1, _sm_base4, _sm_base5, _sm_base8, _sm_base9, _sm_expr1, _sm_expr3;
+    Str* _sm_base2, * _sm_base3, * _sm_base6, * _sm_base7;
+    Str _sm_base10, out;
+    Bool _sm_expr4, _sm_expr23;
+    Char ch, esc, decoded;
+    Res<Str> _sm_expr7;
+    Res<Char> parsedHex, _sm_prop1;
+    _sm_expr1 = self->at;
+    _sm_base1 = _sm_expr1 + 1;
+    self->at = _sm_base1;
+    out = Str();
+    L1:;
+    _sm_expr1 = self->at;
+    _sm_base2 = simse_addressOf(self->text);
+    _sm_expr3 = simse_lenOf((*_sm_base2));
+    _sm_expr4 = _sm_expr1 < _sm_expr3;
+    if (!(_sm_expr4)) goto L2;
+    _sm_base3 = simse_addressOf(self->text);
+    _sm_base4 = self->at;
+    ch = simse_str_charAt((*_sm_base3), _sm_base4);
+    _sm_expr1 = self->at;
+    _sm_base5 = _sm_expr1 + 1;
+    self->at = _sm_base5;
+    _sm_expr4 = ch == '"';
+    if (_sm_expr4) goto L3;
+    goto L4;
+    L3:;
+    _sm_expr7 = simse_resOk<Str>(out);
+    return _sm_expr7;
+    L4:;
+    _sm_expr4 = ch != '\\';
+    if (_sm_expr4) goto L5;
+    goto L6;
+    L5:;
+    simse_str_append(out, ch);
+    goto L1;
+    L6:;
+    _sm_expr1 = self->at;
+    _sm_base6 = simse_addressOf(self->text);
+    _sm_expr3 = simse_lenOf((*_sm_base6));
+    _sm_expr4 = _sm_expr1 >= _sm_expr3;
+    if (_sm_expr4) goto L2;
+    _sm_base7 = simse_addressOf(self->text);
+    _sm_base8 = self->at;
+    esc = simse_str_charAt((*_sm_base7), _sm_base8);
+    _sm_expr1 = self->at;
+    _sm_base9 = _sm_expr1 + 1;
+    self->at = _sm_base9;
+    _sm_expr4 = esc == '"';
+    if (_sm_expr4) goto L9;
+    goto L10;
+    L9:;
+    simse_str_append(out, '"');
+    goto L1;
+    L10:;
+    _sm_expr4 = esc == '\\';
+    if (_sm_expr4) goto L12;
+    goto L13;
+    L12:;
+    simse_str_append(out, '\\');
+    goto L1;
+    L13:;
+    _sm_expr4 = esc == '/';
+    if (_sm_expr4) goto L15;
+    goto L16;
+    L15:;
+    simse_str_append(out, '/');
+    goto L1;
+    L16:;
+    _sm_expr4 = esc == 'n';
+    if (_sm_expr4) goto L18;
+    goto L19;
+    L18:;
+    simse_str_append(out, '\n');
+    goto L1;
+    L19:;
+    _sm_expr4 = esc == 'r';
+    if (_sm_expr4) goto L21;
+    goto L22;
+    L21:;
+    simse_str_append(out, '\r');
+    goto L1;
+    L22:;
+    _sm_expr4 = esc == 't';
+    if (_sm_expr4) goto L24;
+    goto L25;
+    L24:;
+    simse_str_append(out, '\t');
+    goto L1;
+    L25:;
+    _sm_expr4 = esc == 'b';
+    if (_sm_expr4) goto L27;
+    goto L28;
+    L27:;
+    simse_str_append(out, '\b');
+    goto L1;
+    L28:;
+    _sm_expr4 = esc == 'f';
+    if (_sm_expr4) goto L30;
+    goto L31;
+    L30:;
+    simse_str_append(out, '\f');
+    goto L1;
+    L31:;
+    _sm_expr4 = esc == 'u';
+    if (_sm_expr4) goto L33;
+    goto L34;
+    L33:;
+    parsedHex = ns7_parseUnicodeEscape(self);
+    _sm_prop1 = parsedHex;
+    _sm_expr4 = simse_resHasValue(simse_addressOf(_sm_prop1));
+    _sm_expr23 = !_sm_expr4;
+    if (_sm_expr23) goto L35;
+    goto L36;
+    L35:;
+    _sm_base10 = _sm_prop1.Error;
+    _sm_expr7 = simse_resErr<Str>(_sm_base10);
+    return _sm_expr7;
+    L36:;
+    decoded = _sm_prop1.Value;
+    simse_str_append(out, decoded);
+    goto L1;
+    L34:;
+    _sm_expr7 = ns7_failText(self, __sm_stringTable[566]);
+    return _sm_expr7;
+    L2:;
+    _sm_expr7 = ns7_failText(self, __sm_stringTable[330]);
+    return _sm_expr7;
+}
+// modules/jsonnode/jsonnode.kt
+Res<Char> ns7_parseUnicodeEscape(ns7_JsonReader* self) {
+    Str* _sm_base1, * _sm_base2;
+    Int _sm_base3, _sm_base4, _sm_expr1, _sm_expr2, _sm_expr3, code, i, digit;
+    Bool _sm_expr4;
+    Res<Char> _sm_expr5;
+    Char ch, _sm_expr13;
+    _sm_expr1 = self->at;
+    _sm_expr2 = _sm_expr1 + 4;
+    _sm_base1 = simse_addressOf(self->text);
+    _sm_expr3 = simse_lenOf((*_sm_base1));
+    _sm_expr4 = _sm_expr2 > _sm_expr3;
+    if (_sm_expr4) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr5 = ns7_failChar(self, __sm_stringTable[336]);
+    return _sm_expr5;
+    L2:;
+    code = 0;
+    i = 0;
+    L3:;
+    _sm_expr4 = i < 4;
+    if (!(_sm_expr4)) goto L4;
+    _sm_base2 = simse_addressOf(self->text);
+    _sm_base3 = self->at;
+    ch = simse_str_charAt((*_sm_base2), _sm_base3);
+    _sm_expr1 = self->at;
+    _sm_base4 = _sm_expr1 + 1;
+    self->at = _sm_base4;
+    digit = ns7_jsonHexValue(ch);
+    _sm_expr4 = digit < 0;
+    if (_sm_expr4) goto L5;
+    goto L6;
+    L5:;
+    _sm_expr5 = ns7_failChar(self, __sm_stringTable[336]);
+    return _sm_expr5;
+    L6:;
+    _sm_expr1 = code * 16;
+    code = _sm_expr1 + digit;
+    i = i + 1;
+    goto L3;
+    L4:;
+    _sm_expr4 = code > 127;
+    if (_sm_expr4) goto L7;
+    goto L8;
+    L7:;
+    _sm_expr5 = simse_resOk<Char>('?');
+    return _sm_expr5;
+    L8:;
+    _sm_expr13 = '\0' + code;
+    _sm_expr5 = simse_resOk<Char>(_sm_expr13);
+    return _sm_expr5;
+}
+// modules/jsonnode/jsonnode.kt
+Res<ns7_JsonNode> ns7_parseArray(ns7_JsonReader* self) {
+    Int _sm_base1, _sm_base4, _sm_base5, _sm_base8, _sm_base9, _sm_expr1, _sm_expr2, _sm_expr3;
+    Str* _sm_base2, * _sm_base3, * _sm_base6, * _sm_base7;
+    List<Ref<ns7_JsonNode>> items;
+    Bool _sm_expr4, _sm_expr11;
+    Char _sm_expr5, ch;
+    ns7_JsonNode _sm_expr8, value, _sm_expr19;
+    Res<ns7_JsonNode> _sm_expr9, _sm_prop1;
+    Ref<ns7_JsonNode> _sm_expr12;
+    _sm_expr1 = self->at;
+    _sm_base1 = _sm_expr1 + 1;
+    self->at = _sm_base1;
+    items = List<Ref<ns7_JsonNode>>();
+    ns7_skipSpace(self);
+    _sm_expr2 = self->at;
+    _sm_base2 = simse_addressOf(self->text);
+    _sm_expr3 = simse_lenOf((*_sm_base2));
+    _sm_expr4 = _sm_expr2 < _sm_expr3;
+    if (_sm_expr4) goto L3;
+    goto L2;
+    L3:;
+    _sm_base3 = simse_addressOf(self->text);
+    _sm_base4 = self->at;
+    _sm_expr5 = simse_str_charAt((*_sm_base3), _sm_base4);
+    _sm_expr4 = _sm_expr5 == ']';
+    if (_sm_expr4) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr1 = self->at;
+    _sm_base5 = _sm_expr1 + 1;
+    self->at = _sm_base5;
+    _sm_expr8 = ns7_arrayNode(self, items);
+    _sm_expr9 = simse_resOk<ns7_JsonNode>(_sm_expr8);
+    return _sm_expr9;
+    L2:;
+    _sm_expr9 = ns7_parseValue(self);
+    _sm_prop1 = _sm_expr9;
+    _sm_expr4 = simse_resHasValue(simse_addressOf(_sm_prop1));
+    _sm_expr11 = !_sm_expr4;
+    if (_sm_expr11) goto L6;
+    goto L7;
+    L6:;
+    return _sm_prop1;
+    L7:;
+    value = _sm_prop1.Value;
+    _sm_expr12 = makeRef<std::remove_cvref_t<decltype((value))>>(value);
+    simse_list_append(items, _sm_expr12);
+    ns7_skipSpace(self);
+    _sm_expr1 = self->at;
+    _sm_base6 = simse_addressOf(self->text);
+    _sm_expr2 = simse_lenOf((*_sm_base6));
+    _sm_expr4 = _sm_expr1 >= _sm_expr2;
+    if (_sm_expr4) goto L8;
+    goto L9;
+    L8:;
+    _sm_expr9 = ns7_fail(self, __sm_stringTable[341]);
+    return _sm_expr9;
+    L9:;
+    _sm_base7 = simse_addressOf(self->text);
+    _sm_base8 = self->at;
+    ch = simse_str_charAt((*_sm_base7), _sm_base8);
+    _sm_expr1 = self->at;
+    _sm_base9 = _sm_expr1 + 1;
+    self->at = _sm_base9;
+    _sm_expr4 = ch == ']';
+    if (_sm_expr4) goto L10;
+    goto L11;
+    L10:;
+    _sm_expr19 = ns7_arrayNode(self, items);
+    _sm_expr9 = simse_resOk<ns7_JsonNode>(_sm_expr19);
+    return _sm_expr9;
+    L11:;
+    _sm_expr4 = ch != ',';
+    if (_sm_expr4) goto L12;
+    goto L2;
+    L12:;
+    _sm_expr9 = ns7_fail(self, __sm_stringTable[320]);
+    return _sm_expr9;
+}
+// modules/jsonnode/jsonnode.kt
+ns7_JsonNode ns7_arrayNode(ns7_JsonReader* self, List<Ref<ns7_JsonNode>> items) {
+    ns7_JsonNode node;
+    ns7_initByValue(simse_addressOf(node));
+    ns7_setItems(simse_addressOf(node), items);
+    return node;
+}
+// modules/jsonnode/jsonnode.kt
+Res<ns7_JsonNode> ns7_parseObject(ns7_JsonReader* self) {
+    Int _sm_base1, _sm_base4, _sm_base5, _sm_base8, _sm_base12, _sm_base13, _sm_base16, _sm_base17,
+        _sm_expr1, _sm_expr2, _sm_expr3;
+    Str* _sm_base2, * _sm_base3, * _sm_base6, * _sm_base7, * _sm_base10, * _sm_base11, * _sm_base14,
+        * _sm_base15;
+    Str _sm_base9, key;
+    List<Ref<ns7_JsonMember>> members;
+    Bool _sm_expr4, _sm_expr17;
+    Char _sm_expr5, ch;
+    ns7_JsonNode _sm_expr8, value, _sm_expr36;
+    Res<ns7_JsonNode> _sm_expr9, _sm_prop2;
+    Res<Str> parsedKey, _sm_prop1;
+    Ref<ns7_JsonNode> _sm_expr28;
+    Ref<ns7_JsonMember> _sm_expr29;
+    _sm_expr1 = self->at;
+    _sm_base1 = _sm_expr1 + 1;
+    self->at = _sm_base1;
+    members = List<Ref<ns7_JsonMember>>();
+    ns7_skipSpace(self);
+    _sm_expr2 = self->at;
+    _sm_base2 = simse_addressOf(self->text);
+    _sm_expr3 = simse_lenOf((*_sm_base2));
+    _sm_expr4 = _sm_expr2 < _sm_expr3;
+    if (_sm_expr4) goto L3;
+    goto L2;
+    L3:;
+    _sm_base3 = simse_addressOf(self->text);
+    _sm_base4 = self->at;
+    _sm_expr5 = simse_str_charAt((*_sm_base3), _sm_base4);
+    _sm_expr4 = _sm_expr5 == '}';
+    if (_sm_expr4) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr1 = self->at;
+    _sm_base5 = _sm_expr1 + 1;
+    self->at = _sm_base5;
+    _sm_expr8 = ns7_jsonObject(members);
+    _sm_expr9 = simse_resOk<ns7_JsonNode>(_sm_expr8);
+    return _sm_expr9;
+    L2:;
+    ns7_skipSpace(self);
+    _sm_expr1 = self->at;
+    _sm_base6 = simse_addressOf(self->text);
+    _sm_expr2 = simse_lenOf((*_sm_base6));
+    _sm_expr4 = _sm_expr1 >= _sm_expr2;
+    if (_sm_expr4) goto L6;
+    _sm_base7 = simse_addressOf(self->text);
+    _sm_base8 = self->at;
+    _sm_expr5 = simse_str_charAt((*_sm_base7), _sm_base8);
+    _sm_expr4 = _sm_expr5 != '"';
+    if (_sm_expr4) goto L6;
+    goto L7;
+    L6:;
+    _sm_expr9 = ns7_fail(self, __sm_stringTable[295]);
+    return _sm_expr9;
+    L7:;
+    parsedKey = ns7_parseString(self);
+    _sm_prop1 = parsedKey;
+    _sm_expr4 = simse_resHasValue(simse_addressOf(_sm_prop1));
+    _sm_expr17 = !_sm_expr4;
+    if (_sm_expr17) goto L9;
+    goto L10;
+    L9:;
+    _sm_base9 = _sm_prop1.Error;
+    _sm_expr9 = simse_resErr<ns7_JsonNode>(_sm_base9);
+    return _sm_expr9;
+    L10:;
+    key = _sm_prop1.Value;
+    ns7_skipSpace(self);
+    _sm_expr1 = self->at;
+    _sm_base10 = simse_addressOf(self->text);
+    _sm_expr2 = simse_lenOf((*_sm_base10));
+    _sm_expr4 = _sm_expr1 >= _sm_expr2;
+    if (_sm_expr4) goto L11;
+    _sm_base11 = simse_addressOf(self->text);
+    _sm_base12 = self->at;
+    _sm_expr5 = simse_str_charAt((*_sm_base11), _sm_base12);
+    _sm_expr4 = _sm_expr5 != ':';
+    if (_sm_expr4) goto L11;
+    goto L12;
+    L11:;
+    _sm_expr9 = ns7_fail(self, __sm_stringTable[483]);
+    return _sm_expr9;
+    L12:;
+    _sm_expr1 = self->at;
+    _sm_base13 = _sm_expr1 + 1;
+    self->at = _sm_base13;
+    _sm_expr9 = ns7_parseValue(self);
+    _sm_prop2 = _sm_expr9;
+    _sm_expr4 = simse_resHasValue(simse_addressOf(_sm_prop2));
+    _sm_expr17 = !_sm_expr4;
+    if (_sm_expr17) goto L14;
+    goto L15;
+    L14:;
+    return _sm_prop2;
+    L15:;
+    value = _sm_prop2.Value;
+    _sm_expr28 = makeRef<std::remove_cvref_t<decltype((value))>>(value);
+    _sm_expr29 = makeRef<ns7_JsonMember>(key, _sm_expr28);
+    simse_list_append(members, _sm_expr29);
+    ns7_skipSpace(self);
+    _sm_expr1 = self->at;
+    _sm_base14 = simse_addressOf(self->text);
+    _sm_expr2 = simse_lenOf((*_sm_base14));
+    _sm_expr4 = _sm_expr1 >= _sm_expr2;
+    if (_sm_expr4) goto L16;
+    goto L17;
+    L16:;
+    _sm_expr9 = ns7_fail(self, __sm_stringTable[329]);
+    return _sm_expr9;
+    L17:;
+    _sm_base15 = simse_addressOf(self->text);
+    _sm_base16 = self->at;
+    ch = simse_str_charAt((*_sm_base15), _sm_base16);
+    _sm_expr1 = self->at;
+    _sm_base17 = _sm_expr1 + 1;
+    self->at = _sm_base17;
+    _sm_expr4 = ch == '}';
+    if (_sm_expr4) goto L18;
+    goto L19;
+    L18:;
+    _sm_expr36 = ns7_jsonObject(members);
+    _sm_expr9 = simse_resOk<ns7_JsonNode>(_sm_expr36);
+    return _sm_expr9;
+    L19:;
+    _sm_expr4 = ch != ',';
+    if (_sm_expr4) goto L20;
+    goto L2;
+    L20:;
+    _sm_expr9 = ns7_fail(self, __sm_stringTable[321]);
+    return _sm_expr9;
+}
+// modules/jsonnode/jsonnode.kt
+Int ns7_jsonHexValue(Char ch) {
+    Bool _sm_expr1;
+    Char _sm_expr3, _sm_expr7;
+    Int _sm_expr12;
+    _sm_expr1 = ch >= '0';
+    if (_sm_expr1) goto L3;
+    goto L2;
+    L3:;
+    _sm_expr1 = ch <= '9';
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr3 = ch - '0';
+    return _sm_expr3;
+    L2:;
+    _sm_expr1 = ch >= 'a';
+    if (_sm_expr1) goto L6;
+    goto L5;
+    L6:;
+    _sm_expr1 = ch <= 'f';
+    if (_sm_expr1) goto L4;
+    goto L5;
+    L4:;
+    _sm_expr3 = ch - 'a';
+    _sm_expr7 = _sm_expr3 + 10;
+    return _sm_expr7;
+    L5:;
+    _sm_expr1 = ch >= 'A';
+    if (_sm_expr1) goto L9;
+    goto L8;
+    L9:;
+    _sm_expr1 = ch <= 'F';
+    if (_sm_expr1) goto L7;
+    goto L8;
+    L7:;
+    _sm_expr3 = ch - 'A';
+    _sm_expr7 = _sm_expr3 + 10;
+    return _sm_expr7;
+    L8:;
+    _sm_expr12 = -1;
+    return _sm_expr12;
+}
+// modules/jsonnode/jsonnode.kt
+Res<ns7_JsonNode> ns7_parseJson(Str text) {
+    char* __sm_catP;
+    Int* _sm_base1;
+    ns7_JsonReader reader;
+    Res<ns7_JsonNode> parsed, _sm_prop1;
+    Bool _sm_expr1, _sm_expr2;
+    ns7_JsonNode node;
+    Int _sm_expr3, _sm_expr4;
+    Str _sm_expr6, _sm_expr7;
+    reader = ns7_JsonReader{text, 0};
+    parsed = ns7_parseValue(simse_addressOf(reader));
+    _sm_prop1 = parsed;
+    _sm_expr1 = simse_resHasValue(simse_addressOf(_sm_prop1));
+    _sm_expr2 = !_sm_expr1;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    return _sm_prop1;
+    L2:;
+    node = _sm_prop1.Value;
+    ns7_skipSpace(simse_addressOf(reader));
+    _sm_expr3 = reader.at;
+    _sm_expr4 = simse_lenOf(text);
+    _sm_expr1 = _sm_expr3 != _sm_expr4;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    _sm_base1 = simse_addressOf(reader.at);
+    _sm_expr6 = simse_int_toString((*_sm_base1));
+    _sm_expr7.resize(28 + _sm_expr6.size());
+    __sm_catP = _sm_expr7.data();
+    std::memcpy(__sm_catP, "json: trailing text at byte ", 28);
+    __sm_catP = __sm_catP + 28;
+    std::memcpy(__sm_catP, _sm_expr6.data(), _sm_expr6.size());
+    parsed = simse_resErr<ns7_JsonNode>(_sm_expr7);
+    return parsed;
+    L4:;
+    parsed = simse_resOk<ns7_JsonNode>(node);
+    return parsed;
+}
+// modules/linq/linq.kt
+template <class T>
+ns10_List_iter_yieldable<T> ns10_iter(List<T>* self) {
+    ns10_List_iter_yieldable<T> machine{};
+    machine._sm_self = self;
+    machine.branch = 0;
+    return machine;
+}
+// modules/linq/linq.kt
+template <class T, class U, class _SmIter>
+ns10_select_yieldable<T, U, _SmIter> ns10_select(_SmIter* self, Func<U(T*)> f) {
+    ns10_select_yieldable<T, U, _SmIter> machine{};
+    machine.f = f;
+    machine._sm_self = self;
+    machine.branch = 0;
+    return machine;
+}
+template <class T, class U, class _SmIter, class _sm_cb1>
+ns10_select_yieldable<T, U, _SmIter> ns10_select(_SmIter* self, _sm_cb1 f) {
+    return ns10_select<T, U, _SmIter>(self, Func<U(T*)>(f));
+}
+// modules/linq/linq.kt
+template <class T, class _SmIter>
+ns10_where_yieldable<T, _SmIter> ns10_where(_SmIter* self, Func<Bool(T*)> keep) {
+    ns10_where_yieldable<T, _SmIter> machine{};
+    machine.keep = keep;
+    machine._sm_self = self;
+    machine.branch = 0;
+    return machine;
+}
+template <class T, class _SmIter, class _sm_cb1>
+ns10_where_yieldable<T, _SmIter> ns10_where(_SmIter* self, _sm_cb1 keep) {
+    return ns10_where<T, _SmIter>(self, Func<Bool(T*)>(keep));
+}
+// modules/linq/linq.kt
+template <class T, class _SmIter>
+ns10_take_yieldable<T, _SmIter> ns10_take(_SmIter* self, Int count) {
+    ns10_take_yieldable<T, _SmIter> machine{};
+    machine.count = count;
+    machine._sm_self = self;
+    machine.branch = 0;
+    return machine;
+}
+// modules/linq/linq.kt
+template <class T, class _SmIter>
+ns10_skip_yieldable<T, _SmIter> ns10_skip(_SmIter* self, Int count) {
+    ns10_skip_yieldable<T, _SmIter> machine{};
+    machine.count = count;
+    machine._sm_self = self;
+    machine.branch = 0;
+    return machine;
+}
+// modules/linq/linq.kt
+template <class T, class _SmIter>
+List<T> ns10_toList(_SmIter* self) {
+    T _sm_base1;
+    T* _sm_base2;
+    List<T> out;
+    Bool _sm_expr1;
+    out = List<T>();
+    L1:;
+    _sm_expr1 = advance(self);
+    if (!(_sm_expr1)) goto L2;
+    _sm_base2 = self->current;
+    _sm_base1 = *_sm_base2;
+    simse_list_append(out, _sm_base1);
+    goto L1;
+    L2:;
+    return out;
+}
+// modules/linq/linq.kt
+template <class T, class _SmIter>
+void ns10_forEach(_SmIter* self, Func<void(T*)> action) {
+    T* _sm_base1;
+    Bool _sm_expr1;
+    L1:;
+    _sm_expr1 = advance(self);
+    if (!(_sm_expr1)) goto L2;
+    _sm_base1 = self->current;
+    action(_sm_base1);
+    goto L1;
+    L2:;
+}
+template <class T, class _SmIter, class _sm_cb1>
+void ns10_forEach(_SmIter* self, _sm_cb1 action) {
+    ns10_forEach<T, _SmIter>(self, Func<void(T*)>(action));
+}
+// modules/linq/linq.kt
+ns10_Str_splitIter_yieldable_StrView ns10_splitIter(Str* self, Span<Char> separator) {
+    ns10_Str_splitIter_yieldable_StrView machine{};
+    machine.separator = separator;
+    machine._sm_self = self;
+    machine.branch = 0;
+    return machine;
+}
+// modules/linq/linq.kt
+ns10_Str_splitIter_yieldable_Char ns10_splitIter(Str* self, Char separator) {
+    ns10_Str_splitIter_yieldable_Char machine{};
+    machine.separator = separator;
+    machine._sm_self = self;
+    machine.branch = 0;
+    return machine;
 }
 // src/codegen/CgCall.kt
 Str ns1_exprInner(ns1_Emitter* self, ns3_AstXmlNode* e, ns3_AstXmlNode* expected) {
@@ -13317,7 +15643,7 @@ void ns1_emitResourceTable(ns1_Emitter* self) {
     simse_list_append(indices, _sm_expr5);
     goto L3;
     L4:;
-    ns1_line(self, 0, __sm_stringTable[48]);
+    ns1_line(self, 0, __sm_stringTable[49]);
     ns1_line(self, 0, __sm_stringTable[41]);
     ns1_line(self, 0, __sm_stringTable[32]);
     _sm_base5 = &indices;
@@ -13437,7 +15763,7 @@ void ns1_emitStringTable(ns1_Emitter* self) {
     L13:;
     element = __sm_stringTable[858];
     L14:;
-    ns1_line(self, 0, __sm_stringTable[51]);
+    ns1_line(self, 0, __sm_stringTable[52]);
     ns1_line(self, 0, __sm_stringTable[44]);
     ns1_line(self, 0, __sm_stringTable[93]);
     __sm_catC0 = simse_strCountDigits(count);
@@ -28592,34 +30918,33 @@ int main(int argc, char** argv) {
         simse_argIndex = simse_argIndex + 1;
     }
     char* __sm_catP;
-    Str* _sm_base1, * _sm_base3, * _sm_base4, * _sm_base5, * _sm_base8, * _sm_base9, * _sm_base15,
-        * _sm_base16, * _sm_base17, * _sm_base35, * _sm_base36, * _sm_base38, * _sm_base39, * _sm_base50,
-        * _sm_base51, * _sm_base52, * _sm_base53, * _sm_base54, * _sm_base58, * _sm_base72, * _sm_base73,
-        * _sm_base75, * _sm_base77, * _sm_base78, * _sm_base80, * _sm_base85, * _sm_base86, * resourceRoot,
+    Str* _sm_base1, * _sm_base4, * _sm_base5, * _sm_base6, * _sm_base9, * _sm_base10, * _sm_base16,
+        * _sm_base17, * _sm_base18, * _sm_base36, * _sm_base37, * _sm_base39, * _sm_base40, * _sm_base51,
+        * _sm_base52, * _sm_base53, * _sm_base54, * _sm_base55, * _sm_base59, * _sm_base73, * _sm_base74,
+        * _sm_base76, * _sm_base78, * _sm_base79, * _sm_base81, * _sm_base86, * _sm_base87, * resourceRoot,
         * header, * moduleRoot, * _sm_header_2, * borrowLine, * escapeLine;
-    Str _sm_base2, _sm_base6, _sm_base18, _sm_base19, _sm_base20, _sm_base40, _sm_base41, _sm_base49,
-        _sm_base55, _sm_base56, _sm_base59, _sm_base82, _sm_base84, _sm_base88, _sm_base90, _sm_base92,
-        _sm_base94, _sm_base101, _sm_base103, _sm_base104, _sm_base106, _sm_base109, _sm_base110,
-        _sm_base114, _sm_base115, output, preludePath, rootDir, arg, _sm_expr58, _sm_expr61, _sm_expr74,
-        _sm_expr75, resolvedPrelude, _sm_expr80, _sm_expr85, error, _sm_error_2, _sm_expr128, _sm_expr134,
-        _sm_expr161;
-    Bool _sm_base7, _sm_base10, haveRoot, preludeExplicit, showAsync, _sm_expr2, _sm_expr73, hasPrelude;
-    List<Str>* _sm_base11, * _sm_base13, * _sm_base29, * _sm_base31, * _sm_base32, * _sm_base33,
-        * _sm_base37, * _sm_base43, * _sm_base45, * _sm_base66, * _sm_base87, * _sm_base89, * _sm_base91,
-        * _sm_base93, * _sm_base95, * _sm_base100, * _sm_base102, * _sm_base113;
-    List<Bool>* _sm_base12, * _sm_base14, * _sm_base30;
-    ns3_AstXmlNode _sm_base21, _sm_base42, _sm_base57, _sm_base105, _sm_base107, _sm_base111,
+    Str _sm_base2, _sm_base3, _sm_base7, _sm_base19, _sm_base20, _sm_base21, _sm_base41, _sm_base42,
+        _sm_base50, _sm_base56, _sm_base57, _sm_base60, _sm_base83, _sm_base85, _sm_base89, _sm_base91,
+        _sm_base93, _sm_base95, _sm_base102, _sm_base104, _sm_base105, _sm_base107, _sm_base110, _sm_base111,
+        _sm_base115, _sm_base116, output, preludePath, arg, _sm_expr58, _sm_expr61, _sm_expr74, _sm_expr75,
+        resolvedPrelude, _sm_expr80, _sm_expr85, error, _sm_error_2, _sm_expr128, _sm_expr134, _sm_expr161;
+    Bool _sm_base8, _sm_base11, preludeExplicit, showAsync, _sm_expr2, _sm_expr73, hasPrelude;
+    List<Str>* _sm_base12, * _sm_base14, * _sm_base30, * _sm_base32, * _sm_base33, * _sm_base34,
+        * _sm_base38, * _sm_base44, * _sm_base46, * _sm_base67, * _sm_base88, * _sm_base90, * _sm_base92,
+        * _sm_base94, * _sm_base96, * _sm_base101, * _sm_base103, * _sm_base114;
+    List<Bool>* _sm_base13, * _sm_base15, * _sm_base31;
+    ns3_AstXmlNode _sm_base22, _sm_base43, _sm_base58, _sm_base106, _sm_base108, _sm_base112,
         mergedPrelude, preludeTarget, programTarget;
-    ns3_AstXmlNode* _sm_base22, * _sm_base23, * _sm_base24, * _sm_base26, * _sm_base27, * _sm_base60,
-        * _sm_base61, * _sm_base71, * _sm_base76, * _sm_base97, * _sm_base99, * preludeModule, * mod,
+    ns3_AstXmlNode* _sm_base23, * _sm_base24, * _sm_base25, * _sm_base27, * _sm_base28, * _sm_base61,
+        * _sm_base62, * _sm_base72, * _sm_base77, * _sm_base98, * _sm_base100, * preludeModule, * mod,
         * preMod, * progMod, * pre;
-    ns3_AstNodeKind _sm_base25, _sm_base98;
-    List<ns14_ResourceItem>* _sm_base34, * _sm_base47, * _sm_base48, * _sm_base81, * _sm_base83;
-    List<ns3_AstXmlNode>* _sm_base44, * _sm_base46, * _sm_base62, * _sm_base63, * _sm_base64,
-        * _sm_base65, * _sm_base67, * _sm_base68, * _sm_base69, * _sm_base70, * _sm_base74, * _sm_base79,
-        * _sm_base96;
-    List<ns15_SemaInput>* _sm_base108;
-    List<ns1_CgInput>* _sm_base112;
+    ns3_AstNodeKind _sm_base26, _sm_base99;
+    List<ns14_ResourceItem>* _sm_base35, * _sm_base48, * _sm_base49, * _sm_base82, * _sm_base84;
+    List<ns3_AstXmlNode>* _sm_base45, * _sm_base47, * _sm_base63, * _sm_base64, * _sm_base65,
+        * _sm_base66, * _sm_base68, * _sm_base69, * _sm_base70, * _sm_base71, * _sm_base75, * _sm_base80,
+        * _sm_base97;
+    List<ns15_SemaInput>* _sm_base109;
+    List<ns1_CgInput>* _sm_base113;
     List<Str> inputs, extraRoots, roots, moduleRoots, dedupedRoots, preludeFiles, preludeNames,
         preludeCanon, files, resourceStored, _sm_expr89, fileNames, asyncReasons, asyncNames, cppTexts,
         _sm_expr122, _sm_expr125, _sm_expr131, borrowLines, escapeLines, diagnostics;
@@ -28645,8 +30970,6 @@ int main(int argc, char** argv) {
     inputs = List<Str>();
     output = __sm_stringTable[1115];
     preludePath = __sm_stringTable[1115];
-    rootDir = __sm_stringTable[1115];
-    haveRoot = false;
     extraRoots = List<Str>();
     extraTrees = List<Bool>();
     preludeExplicit = false;
@@ -28721,8 +31044,9 @@ int main(int argc, char** argv) {
     return 2;
     L19:;
     i = i + 1;
-    rootDir = args[i];
-    haveRoot = true;
+    _sm_base2 = args[i];
+    simse_list_append(extraRoots, _sm_base2);
+    simse_list_append(extraTrees, true);
     goto L92;
     L16:;
     _sm_expr2 = _sm_when2_n == 13;
@@ -28750,8 +31074,8 @@ int main(int argc, char** argv) {
     return 2;
     L27:;
     i = i + 1;
-    _sm_base2 = args[i];
-    simse_list_append(extraRoots, _sm_base2);
+    _sm_base3 = args[i];
+    simse_list_append(extraRoots, _sm_base3);
     simse_list_append(extraTrees, false);
     goto L92;
     L22:;
@@ -28894,9 +31218,9 @@ int main(int argc, char** argv) {
     return 2;
     L77:;
     i = i + 1;
-    _sm_base4 = simse_addressOf(args[i]);
-    _sm_base3 = _sm_base4;
-    ns13_profSetFile(_sm_base3);
+    _sm_base5 = simse_addressOf(args[i]);
+    _sm_base4 = _sm_base5;
+    ns13_profSetFile(_sm_base4);
     goto L92;
     L74:;
     _sm_expr2 = _sm_when2_n == 15;
@@ -28957,64 +31281,57 @@ int main(int argc, char** argv) {
     L2:;
     _sm_expr1 = simse_lenOf(inputs);
     _sm_expr2 = _sm_expr1 == 0;
-    if (_sm_expr2) goto L96;
+    if (_sm_expr2) goto L95;
     goto L94;
-    L96:;
-    if (haveRoot) goto L94;
+    L95:;
     _sm_expr1 = simse_lenOf(extraRoots);
     _sm_expr2 = _sm_expr1 == 0;
     if (_sm_expr2) goto L93;
     goto L94;
     L93:;
-    rootDir = __sm_stringTable[1088];
-    haveRoot = true;
+    simse_list_append(extraRoots, __sm_stringTable[1088]);
+    simse_list_append(extraTrees, true);
     L94:;
-    _sm_base5 = &output;
-    _sm_expr66 = simse_spanOfStr(_sm_base5);
+    _sm_base6 = &output;
+    _sm_expr66 = simse_spanOfStr(_sm_base6);
     _sm_expr2 = equals(simse_addressOf(_sm_expr66), __sm_stringTable[1115]);
-    if (_sm_expr2) goto L97;
-    goto L98;
-    L97:;
+    if (_sm_expr2) goto L96;
+    goto L97;
+    L96:;
     output = __sm_stringTable[457];
-    L98:;
+    L97:;
     roots = List<Str>();
     rootTrees = List<Bool>();
-    if (haveRoot) goto L99;
-    goto L100;
-    L99:;
-    simse_list_append(roots, rootDir);
-    simse_list_append(rootTrees, true);
-    L100:;
     e = 0;
-    L101:;
+    L98:;
     _sm_expr1 = simse_lenOf(extraRoots);
     _sm_expr2 = e < _sm_expr1;
-    if (!(_sm_expr2)) goto L102;
-    _sm_base6 = extraRoots[e];
-    simse_list_append(roots, _sm_base6);
-    _sm_base7 = extraTrees[e];
-    simse_list_append(rootTrees, _sm_base7);
+    if (!(_sm_expr2)) goto L99;
+    _sm_base7 = extraRoots[e];
+    simse_list_append(roots, _sm_base7);
+    _sm_base8 = extraTrees[e];
+    simse_list_append(rootTrees, _sm_base8);
     e = e + 1;
-    goto L101;
-    L102:;
+    goto L98;
+    L99:;
     moduleRoots = List<Str>();
     moduleTrees = List<Bool>();
     r = 0;
-    L103:;
+    L100:;
     _sm_expr1 = simse_lenOf(roots);
     _sm_expr2 = r < _sm_expr1;
-    if (!(_sm_expr2)) goto L104;
-    _sm_base9 = simse_addressOf(roots[r]);
-    _sm_base8 = _sm_base9;
-    _sm_base10 = rootTrees[r];
-    _sm_base11 = &moduleRoots;
-    _sm_base12 = &moduleTrees;
-    expanded = ns3_driverExpandRoot(_sm_base8, _sm_base10, _sm_base11, _sm_base12);
+    if (!(_sm_expr2)) goto L101;
+    _sm_base10 = simse_addressOf(roots[r]);
+    _sm_base9 = _sm_base10;
+    _sm_base11 = rootTrees[r];
+    _sm_base12 = &moduleRoots;
+    _sm_base13 = &moduleTrees;
+    expanded = ns3_driverExpandRoot(_sm_base9, _sm_base11, _sm_base12, _sm_base13);
     _sm_expr2 = simse_resHasValue(simse_addressOf(expanded));
     _sm_expr73 = !_sm_expr2;
-    if (_sm_expr73) goto L105;
-    goto L106;
-    L105:;
+    if (_sm_expr73) goto L102;
+    goto L103;
+    L102:;
     _sm_expr74 = expanded.Error;
     _sm_expr75.resize(7 + _sm_expr74.size());
     __sm_catP = _sm_expr75.data();
@@ -29023,47 +31340,47 @@ int main(int argc, char** argv) {
     std::memcpy(__sm_catP, _sm_expr74.data(), _sm_expr74.size());
     simse_eprintln(_sm_expr75);
     return 2;
-    L106:;
+    L103:;
     r = r + 1;
-    goto L103;
-    L104:;
+    goto L100;
+    L101:;
     dedupedRoots = List<Str>();
     dedupedTrees = List<Bool>();
-    _sm_base13 = &dedupedRoots;
-    _sm_base14 = &dedupedTrees;
-    ns3_driverDedupRoots(moduleRoots, moduleTrees, _sm_base13, _sm_base14);
+    _sm_base14 = &dedupedRoots;
+    _sm_base15 = &dedupedTrees;
+    ns3_driverDedupRoots(moduleRoots, moduleTrees, _sm_base14, _sm_base15);
     moduleRoots = dedupedRoots;
     moduleTrees = dedupedTrees;
     resolvedPrelude = __sm_stringTable[759];
-    if (preludeExplicit) goto L107;
-    goto L108;
-    L107:;
+    if (preludeExplicit) goto L104;
+    goto L105;
+    L104:;
     resolvedPrelude = preludePath;
-    L108:;
+    L105:;
     preludeFiles = List<Str>();
-    _sm_base15 = &resolvedPrelude;
-    _sm_expr66 = simse_spanOfStr(_sm_base15);
+    _sm_base16 = &resolvedPrelude;
+    _sm_expr66 = simse_spanOfStr(_sm_base16);
     _sm_expr2 = (!equals(simse_addressOf(_sm_expr66), __sm_stringTable[1115]));
-    if (_sm_expr2) goto L109;
-    goto L118;
-    L109:;
+    if (_sm_expr2) goto L106;
+    goto L115;
+    L106:;
     _sm_expr2 = simse_pathIsDirectory(resolvedPrelude);
+    if (_sm_expr2) goto L108;
+    goto L109;
+    L108:;
+    preludeFiles = simse_listFiles(resolvedPrelude, __sm_stringTable[980]);
+    goto L115;
+    L109:;
+    _sm_expr2 = simse_pathExists(resolvedPrelude);
     if (_sm_expr2) goto L111;
     goto L112;
     L111:;
-    preludeFiles = simse_listFiles(resolvedPrelude, __sm_stringTable[980]);
-    goto L118;
+    simse_list_append(preludeFiles, resolvedPrelude);
+    goto L115;
     L112:;
-    _sm_expr2 = simse_pathExists(resolvedPrelude);
-    if (_sm_expr2) goto L114;
+    if (preludeExplicit) goto L114;
     goto L115;
     L114:;
-    simse_list_append(preludeFiles, resolvedPrelude);
-    goto L118;
-    L115:;
-    if (preludeExplicit) goto L117;
-    goto L118;
-    L117:;
     _sm_expr80.resize(26 + resolvedPrelude.size());
     __sm_catP = _sm_expr80.data();
     std::memcpy(__sm_catP, "simse: prelude not found: ", 26);
@@ -29071,450 +31388,450 @@ int main(int argc, char** argv) {
     std::memcpy(__sm_catP, resolvedPrelude.data(), resolvedPrelude.size());
     simse_eprintln(_sm_expr80);
     return 2;
-    L118:;
+    L115:;
     preludeModules = List<ns3_AstXmlNode>();
     preludeNames = List<Str>();
     preludeCanon = List<Str>();
     mergedPrelude = ns3_driverNewModule();
     p = 0;
-    L119:;
+    L116:;
     _sm_expr1 = simse_lenOf(preludeFiles);
     _sm_expr2 = p < _sm_expr1;
-    if (!(_sm_expr2)) goto L120;
-    _sm_base17 = simse_addressOf(preludeFiles[p]);
-    _sm_base16 = _sm_base17;
-    parsedPrelude = ns3_driverParseFile(_sm_base16);
+    if (!(_sm_expr2)) goto L117;
+    _sm_base18 = simse_addressOf(preludeFiles[p]);
+    _sm_base17 = _sm_base18;
+    parsedPrelude = ns3_driverParseFile(_sm_base17);
     _sm_expr2 = simse_resHasValue(simse_addressOf(parsedPrelude));
     _sm_expr73 = !_sm_expr2;
-    if (_sm_expr73) goto L121;
-    goto L122;
-    L121:;
-    _sm_base18 = parsedPrelude.Error;
-    simse_eprintln(_sm_base18);
-    return 1;
-    L122:;
-    _sm_base19 = preludeFiles[p];
-    _sm_expr85 = simse_pathCanonical(_sm_base19);
-    simse_list_append(preludeCanon, _sm_expr85);
-    _sm_base20 = preludeFiles[p];
-    simse_list_append(preludeNames, _sm_base20);
-    _sm_base21 = parsedPrelude.Value;
-    simse_list_append(preludeModules, _sm_base21);
-    _sm_base22 = &mergedPrelude;
-    _sm_base24 = simse_addressOf(parsedPrelude.Value);
-    _sm_base23 = _sm_base24;
-    _sm_base25 = ns3_AstNodeKind::Import;
-    ns3_driverAppendNamed(_sm_base22, _sm_base23, _sm_base25);
-    _sm_base26 = &mergedPrelude;
-    _sm_base27 = _sm_base24;
-    ns3_driverAppendDecls(_sm_base26, _sm_base27);
-    p = p + 1;
+    if (_sm_expr73) goto L118;
     goto L119;
-    L120:;
+    L118:;
+    _sm_base19 = parsedPrelude.Error;
+    simse_eprintln(_sm_base19);
+    return 1;
+    L119:;
+    _sm_base20 = preludeFiles[p];
+    _sm_expr85 = simse_pathCanonical(_sm_base20);
+    simse_list_append(preludeCanon, _sm_expr85);
+    _sm_base21 = preludeFiles[p];
+    simse_list_append(preludeNames, _sm_base21);
+    _sm_base22 = parsedPrelude.Value;
+    simse_list_append(preludeModules, _sm_base22);
+    _sm_base23 = &mergedPrelude;
+    _sm_base25 = simse_addressOf(parsedPrelude.Value);
+    _sm_base24 = _sm_base25;
+    _sm_base26 = ns3_AstNodeKind::Import;
+    ns3_driverAppendNamed(_sm_base23, _sm_base24, _sm_base26);
+    _sm_base27 = &mergedPrelude;
+    _sm_base28 = _sm_base25;
+    ns3_driverAppendDecls(_sm_base27, _sm_base28);
+    p = p + 1;
+    goto L116;
+    L117:;
     _sm_expr1 = simse_lenOf(preludeFiles);
     hasPrelude = _sm_expr1 > 0;
-    _sm_base29 = &moduleRoots;
-    _sm_base30 = &moduleTrees;
-    _sm_base31 = &inputs;
-    _sm_base32 = &preludeCanon;
-    files = ns3_driverGatherFiles(_sm_base29, _sm_base30, _sm_base31, _sm_base32);
-    _sm_base33 = &moduleRoots;
-    resources = ns14_resLoad(_sm_base33);
-    _sm_base34 = &resources;
-    resourceStored = ns14_resStoredLiterals(_sm_base34);
+    _sm_base30 = &moduleRoots;
+    _sm_base31 = &moduleTrees;
+    _sm_base32 = &inputs;
+    _sm_base33 = &preludeCanon;
+    files = ns3_driverGatherFiles(_sm_base30, _sm_base31, _sm_base32, _sm_base33);
+    _sm_base34 = &moduleRoots;
+    resources = ns14_resLoad(_sm_base34);
+    _sm_base35 = &resources;
+    resourceStored = ns14_resStoredLiterals(_sm_base35);
     compilerResources = List<ns14_ResourceItem>();
-    _sm_base35 = &resolvedPrelude;
-    _sm_expr66 = simse_spanOfStr(_sm_base35);
-    _sm_expr2 = (!equals(simse_addressOf(_sm_expr66), __sm_stringTable[1115]));
-    if (_sm_expr2) goto L123;
-    goto L124;
-    L123:;
     _sm_base36 = &resolvedPrelude;
-    _sm_expr89 = ns3_driverResourceRoots(_sm_base36);
-    _sm_base37 = &_sm_expr89;
-    compilerResources = ns14_resLoad(_sm_base37);
-    L124:;
+    _sm_expr66 = simse_spanOfStr(_sm_base36);
+    _sm_expr2 = (!equals(simse_addressOf(_sm_expr66), __sm_stringTable[1115]));
+    if (_sm_expr2) goto L120;
+    goto L121;
+    L120:;
+    _sm_base37 = &resolvedPrelude;
+    _sm_expr89 = ns3_driverResourceRoots(_sm_base37);
+    _sm_base38 = &_sm_expr89;
+    compilerResources = ns14_resLoad(_sm_base38);
+    L121:;
     fileNames = List<Str>();
     modules = List<ns3_AstXmlNode>();
     f = 0;
-    L125:;
+    L122:;
     _sm_expr1 = simse_lenOf(files);
     _sm_expr2 = f < _sm_expr1;
-    if (!(_sm_expr2)) goto L126;
-    _sm_base39 = simse_addressOf(files[f]);
-    _sm_base38 = _sm_base39;
-    parsed = ns3_driverParseFile(_sm_base38);
+    if (!(_sm_expr2)) goto L123;
+    _sm_base40 = simse_addressOf(files[f]);
+    _sm_base39 = _sm_base40;
+    parsed = ns3_driverParseFile(_sm_base39);
     _sm_expr2 = simse_resHasValue(simse_addressOf(parsed));
     _sm_expr73 = !_sm_expr2;
-    if (_sm_expr73) goto L127;
-    goto L128;
-    L127:;
-    _sm_base40 = parsed.Error;
-    simse_eprintln(_sm_base40);
-    return 1;
-    L128:;
-    _sm_base41 = files[f];
-    simse_list_append(fileNames, _sm_base41);
-    _sm_base42 = parsed.Value;
-    simse_list_append(modules, _sm_base42);
-    f = f + 1;
+    if (_sm_expr73) goto L124;
     goto L125;
-    L126:;
-    _sm_base43 = &preludeNames;
-    _sm_base44 = &preludeModules;
-    _sm_base45 = &fileNames;
-    _sm_base46 = &modules;
-    _sm_base47 = &resources;
-    _sm_base48 = &compilerResources;
-    ns3_sourceGenBegin(_sm_base43, _sm_base44, _sm_base45, _sm_base46, _sm_base47, _sm_base48);
+    L124:;
+    _sm_base41 = parsed.Error;
+    simse_eprintln(_sm_base41);
+    return 1;
+    L125:;
+    _sm_base42 = files[f];
+    simse_list_append(fileNames, _sm_base42);
+    _sm_base43 = parsed.Value;
+    simse_list_append(modules, _sm_base43);
+    f = f + 1;
+    goto L122;
+    L123:;
+    _sm_base44 = &preludeNames;
+    _sm_base45 = &preludeModules;
+    _sm_base46 = &fileNames;
+    _sm_base47 = &modules;
+    _sm_base48 = &resources;
+    _sm_base49 = &compilerResources;
+    ns3_sourceGenBegin(_sm_base44, _sm_base45, _sm_base46, _sm_base47, _sm_base48, _sm_base49);
     generated = ns3_sourceGenReparseSource();
     _sm_expr2 = simse_resHasValue(simse_addressOf(generated));
     _sm_expr73 = !_sm_expr2;
-    if (_sm_expr73) goto L129;
-    goto L130;
-    L129:;
-    _sm_base49 = generated.Error;
-    simse_eprintln(_sm_base49);
+    if (_sm_expr73) goto L126;
+    goto L127;
+    L126:;
+    _sm_base50 = generated.Error;
+    simse_eprintln(_sm_base50);
     return 1;
-    L130:;
-    _sm_base51 = simse_addressOf(generated.Value);
-    _sm_base50 = _sm_base51;
-    _sm_expr66 = simse_spanOfStr(_sm_base50);
+    L127:;
+    _sm_base52 = simse_addressOf(generated.Value);
+    _sm_base51 = _sm_base52;
+    _sm_expr66 = simse_spanOfStr(_sm_base51);
     _sm_expr2 = (!equals(simse_addressOf(_sm_expr66), __sm_stringTable[1115]));
-    if (_sm_expr2) goto L131;
-    goto L132;
-    L131:;
-    _sm_base53 = simse_addressOf(generated.Value);
-    _sm_base52 = _sm_base53;
-    _sm_base55 = __sm_stringTable[345];
-    _sm_base54 = &_sm_base55;
-    parsedGenerated = ns3_driverParseSource(_sm_base52, _sm_base54);
+    if (_sm_expr2) goto L128;
+    goto L129;
+    L128:;
+    _sm_base54 = simse_addressOf(generated.Value);
+    _sm_base53 = _sm_base54;
+    _sm_base56 = __sm_stringTable[345];
+    _sm_base55 = &_sm_base56;
+    parsedGenerated = ns3_driverParseSource(_sm_base53, _sm_base55);
     _sm_expr2 = simse_resHasValue(simse_addressOf(parsedGenerated));
     _sm_expr73 = !_sm_expr2;
-    if (_sm_expr73) goto L133;
-    goto L134;
-    L133:;
-    _sm_base56 = parsedGenerated.Error;
-    simse_eprintln(_sm_base56);
+    if (_sm_expr73) goto L130;
+    goto L131;
+    L130:;
+    _sm_base57 = parsedGenerated.Error;
+    simse_eprintln(_sm_base57);
     return 1;
-    L134:;
+    L131:;
     simse_list_append(fileNames, __sm_stringTable[345]);
-    _sm_base57 = parsedGenerated.Value;
-    simse_list_append(modules, _sm_base57);
-    _sm_base59 = __sm_stringTable[345];
-    _sm_base58 = &_sm_base59;
-    _sm_base61 = simse_addressOf(parsedGenerated.Value);
-    _sm_base60 = _sm_base61;
-    ns3_sourceGenAddModule(_sm_base58, _sm_base60);
+    _sm_base58 = parsedGenerated.Value;
+    simse_list_append(modules, _sm_base58);
+    _sm_base60 = __sm_stringTable[345];
+    _sm_base59 = &_sm_base60;
+    _sm_base62 = simse_addressOf(parsedGenerated.Value);
+    _sm_base61 = _sm_base62;
+    ns3_sourceGenAddModule(_sm_base59, _sm_base61);
+    L129:;
+    if (showAsync) goto L132;
+    goto L133;
     L132:;
-    if (showAsync) goto L135;
-    goto L136;
-    L135:;
     asyncFunctions = List<ns3_AstXmlNode>();
-    _sm_base62 = &preludeModules;
-    _sm_expr100 = simse_spanOf(_sm_base62);
+    _sm_base63 = &preludeModules;
+    _sm_expr100 = simse_spanOf(_sm_base63);
     _sm_for3 = iter(simse_addressOf(_sm_expr100));
-    L137:;
+    L134:;
     _sm_expr2 = advance(&_sm_for3);
-    if (!(_sm_expr2)) goto L138;
+    if (!(_sm_expr2)) goto L135;
     preludeModule = _sm_for3.current;
-    _sm_base63 = &asyncFunctions;
-    ns15_asyncCollect(preludeModule, _sm_base63);
-    goto L137;
-    L138:;
-    _sm_base64 = &modules;
-    _sm_expr102 = simse_spanOf(_sm_base64);
+    _sm_base64 = &asyncFunctions;
+    ns15_asyncCollect(preludeModule, _sm_base64);
+    goto L134;
+    L135:;
+    _sm_base65 = &modules;
+    _sm_expr102 = simse_spanOf(_sm_base65);
     _sm_for4 = iter(simse_addressOf(_sm_expr102));
-    L139:;
+    L136:;
     _sm_expr2 = advance(&_sm_for4);
-    if (!(_sm_expr2)) goto L140;
+    if (!(_sm_expr2)) goto L137;
     mod = _sm_for4.current;
-    _sm_base65 = &asyncFunctions;
-    ns15_asyncCollect(mod, _sm_base65);
-    goto L139;
-    L140:;
+    _sm_base66 = &asyncFunctions;
+    ns15_asyncCollect(mod, _sm_base66);
+    goto L136;
+    L137:;
     asyncReasons = List<Str>();
-    _sm_base66 = &asyncReasons;
-    asyncNames = ns15_asyncColor(asyncFunctions, _sm_base66);
+    _sm_base67 = &asyncReasons;
+    asyncNames = ns15_asyncColor(asyncFunctions, _sm_base67);
     ns15_asyncDump(asyncFunctions, asyncNames, asyncReasons);
     return 0;
-    L136:;
+    L133:;
     propagateDecls = List<ns3_AstXmlNode>();
-    _sm_base67 = &preludeModules;
-    _sm_expr104 = simse_spanOf(_sm_base67);
+    _sm_base68 = &preludeModules;
+    _sm_expr104 = simse_spanOf(_sm_base68);
     _sm_for5 = iter(simse_addressOf(_sm_expr104));
-    L141:;
+    L138:;
     _sm_expr2 = advance(&_sm_for5);
-    if (!(_sm_expr2)) goto L142;
+    if (!(_sm_expr2)) goto L139;
     preMod = _sm_for5.current;
-    _sm_base68 = &propagateDecls;
-    ns12_propCollectDecls(preMod, _sm_base68);
-    goto L141;
-    L142:;
-    _sm_base69 = &modules;
-    _sm_expr106 = simse_spanOf(_sm_base69);
+    _sm_base69 = &propagateDecls;
+    ns12_propCollectDecls(preMod, _sm_base69);
+    goto L138;
+    L139:;
+    _sm_base70 = &modules;
+    _sm_expr106 = simse_spanOf(_sm_base70);
     _sm_for6 = iter(simse_addressOf(_sm_expr106));
-    L143:;
+    L140:;
     _sm_expr2 = advance(&_sm_for6);
-    if (!(_sm_expr2)) goto L144;
+    if (!(_sm_expr2)) goto L141;
     progMod = _sm_for6.current;
-    _sm_base70 = &propagateDecls;
-    ns12_propCollectDecls(progMod, _sm_base70);
-    goto L143;
-    L144:;
+    _sm_base71 = &propagateDecls;
+    ns12_propCollectDecls(progMod, _sm_base71);
+    goto L140;
+    L141:;
     pmod = 0;
-    L145:;
+    L142:;
     _sm_expr1 = simse_lenOf(preludeModules);
     _sm_expr2 = pmod < _sm_expr1;
-    if (!(_sm_expr2)) goto L146;
+    if (!(_sm_expr2)) goto L143;
     preludeTarget = preludeModules[pmod];
-    _sm_base71 = &preludeTarget;
-    _sm_base73 = simse_addressOf(preludeNames[pmod]);
-    _sm_base72 = _sm_base73;
-    _sm_base74 = &propagateDecls;
-    error = ns12_propRewriteModule(_sm_base71, _sm_base72, _sm_base74);
-    _sm_base75 = &error;
-    _sm_expr66 = simse_spanOfStr(_sm_base75);
+    _sm_base72 = &preludeTarget;
+    _sm_base74 = simse_addressOf(preludeNames[pmod]);
+    _sm_base73 = _sm_base74;
+    _sm_base75 = &propagateDecls;
+    error = ns12_propRewriteModule(_sm_base72, _sm_base73, _sm_base75);
+    _sm_base76 = &error;
+    _sm_expr66 = simse_spanOfStr(_sm_base76);
     _sm_expr2 = (!equals(simse_addressOf(_sm_expr66), __sm_stringTable[1115]));
-    if (_sm_expr2) goto L147;
-    goto L148;
-    L147:;
+    if (_sm_expr2) goto L144;
+    goto L145;
+    L144:;
     simse_eprintln(error);
     return 1;
-    L148:;
+    L145:;
     pmod = pmod + 1;
-    goto L145;
-    L146:;
+    goto L142;
+    L143:;
     rmod = 0;
-    L149:;
+    L146:;
     _sm_expr1 = simse_lenOf(modules);
     _sm_expr2 = rmod < _sm_expr1;
-    if (!(_sm_expr2)) goto L150;
+    if (!(_sm_expr2)) goto L147;
     programTarget = modules[rmod];
-    _sm_base76 = &programTarget;
-    _sm_base78 = simse_addressOf(fileNames[rmod]);
-    _sm_base77 = _sm_base78;
-    _sm_base79 = &propagateDecls;
-    _sm_error_2 = ns12_propRewriteModule(_sm_base76, _sm_base77, _sm_base79);
-    _sm_base80 = &_sm_error_2;
-    _sm_expr66 = simse_spanOfStr(_sm_base80);
+    _sm_base77 = &programTarget;
+    _sm_base79 = simse_addressOf(fileNames[rmod]);
+    _sm_base78 = _sm_base79;
+    _sm_base80 = &propagateDecls;
+    _sm_error_2 = ns12_propRewriteModule(_sm_base77, _sm_base78, _sm_base80);
+    _sm_base81 = &_sm_error_2;
+    _sm_expr66 = simse_spanOfStr(_sm_base81);
     _sm_expr2 = (!equals(simse_addressOf(_sm_expr66), __sm_stringTable[1115]));
-    if (_sm_expr2) goto L151;
-    goto L152;
-    L151:;
+    if (_sm_expr2) goto L148;
+    goto L149;
+    L148:;
     simse_eprintln(_sm_error_2);
     return 1;
-    L152:;
+    L149:;
     rmod = rmod + 1;
-    goto L149;
-    L150:;
+    goto L146;
+    L147:;
     modules = ns12_cpFoldConstParams(preludeModules, modules);
     cppTexts = List<Str>();
-    _sm_base81 = &resources;
-    _sm_expr116 = simse_spanOf(_sm_base81);
+    _sm_base82 = &resources;
+    _sm_expr116 = simse_spanOf(_sm_base82);
     _sm_for7 = iter(simse_addressOf(_sm_expr116));
-    L153:;
+    L150:;
     _sm_expr2 = advance(&_sm_for7);
-    if (!(_sm_expr2)) goto L154;
+    if (!(_sm_expr2)) goto L151;
     resource = _sm_for7.current;
-    _sm_base82 = resource->value;
-    simse_list_append(cppTexts, _sm_base82);
-    goto L153;
-    L154:;
-    _sm_base83 = &compilerResources;
-    _sm_expr118 = simse_spanOf(_sm_base83);
+    _sm_base83 = resource->value;
+    simse_list_append(cppTexts, _sm_base83);
+    goto L150;
+    L151:;
+    _sm_base84 = &compilerResources;
+    _sm_expr118 = simse_spanOf(_sm_base84);
     _sm_for8 = iter(simse_addressOf(_sm_expr118));
-    L155:;
+    L152:;
     _sm_expr2 = advance(&_sm_for8);
-    if (!(_sm_expr2)) goto L156;
+    if (!(_sm_expr2)) goto L153;
     resource = _sm_for8.current;
-    _sm_base84 = resource->value;
-    simse_list_append(cppTexts, _sm_base84);
-    goto L155;
-    L156:;
-    _sm_base85 = &resolvedPrelude;
-    _sm_expr66 = simse_spanOfStr(_sm_base85);
-    _sm_expr2 = (!equals(simse_addressOf(_sm_expr66), __sm_stringTable[1115]));
-    if (_sm_expr2) goto L157;
-    goto L160;
-    L157:;
+    _sm_base85 = resource->value;
+    simse_list_append(cppTexts, _sm_base85);
+    goto L152;
+    L153:;
     _sm_base86 = &resolvedPrelude;
-    _sm_expr122 = ns3_driverResourceRoots(_sm_base86);
-    _sm_base87 = &_sm_expr122;
-    _sm_expr123 = simse_spanOf(_sm_base87);
+    _sm_expr66 = simse_spanOfStr(_sm_base86);
+    _sm_expr2 = (!equals(simse_addressOf(_sm_expr66), __sm_stringTable[1115]));
+    if (_sm_expr2) goto L154;
+    goto L157;
+    L154:;
+    _sm_base87 = &resolvedPrelude;
+    _sm_expr122 = ns3_driverResourceRoots(_sm_base87);
+    _sm_base88 = &_sm_expr122;
+    _sm_expr123 = simse_spanOf(_sm_base88);
     _sm_for10 = iter(simse_addressOf(_sm_expr123));
-    L159:;
+    L156:;
     _sm_expr2 = advance(&_sm_for10);
-    if (!(_sm_expr2)) goto L160;
+    if (!(_sm_expr2)) goto L157;
     resourceRoot = _sm_for10.current;
-    _sm_base88 = *(resourceRoot);
-    _sm_expr125 = simse_listFiles(_sm_base88, __sm_stringTable[913]);
-    _sm_base89 = &_sm_expr125;
-    _sm_expr126 = simse_spanOf(_sm_base89);
+    _sm_base89 = *(resourceRoot);
+    _sm_expr125 = simse_listFiles(_sm_base89, __sm_stringTable[913]);
+    _sm_base90 = &_sm_expr125;
+    _sm_expr126 = simse_spanOf(_sm_base90);
     _sm_for9 = iter(simse_addressOf(_sm_expr126));
-    L161:;
+    L158:;
     _sm_expr2 = advance(&_sm_for9);
-    if (!(_sm_expr2)) goto L159;
+    if (!(_sm_expr2)) goto L156;
     header = _sm_for9.current;
-    _sm_base90 = *(header);
-    _sm_expr128 = simse_native_readFile(_sm_base90);
+    _sm_base91 = *(header);
+    _sm_expr128 = simse_native_readFile(_sm_base91);
     simse_list_append(cppTexts, _sm_expr128);
-    goto L161;
-    L160:;
-    _sm_base91 = &moduleRoots;
-    _sm_expr129 = simse_spanOf(_sm_base91);
+    goto L158;
+    L157:;
+    _sm_base92 = &moduleRoots;
+    _sm_expr129 = simse_spanOf(_sm_base92);
     _sm_for12 = iter(simse_addressOf(_sm_expr129));
-    L163:;
+    L160:;
     _sm_expr2 = advance(&_sm_for12);
-    if (!(_sm_expr2)) goto L164;
+    if (!(_sm_expr2)) goto L161;
     moduleRoot = _sm_for12.current;
-    _sm_base92 = *(moduleRoot);
-    _sm_expr131 = simse_listFiles(_sm_base92, __sm_stringTable[913]);
-    _sm_base93 = &_sm_expr131;
-    _sm_expr132 = simse_spanOf(_sm_base93);
+    _sm_base93 = *(moduleRoot);
+    _sm_expr131 = simse_listFiles(_sm_base93, __sm_stringTable[913]);
+    _sm_base94 = &_sm_expr131;
+    _sm_expr132 = simse_spanOf(_sm_base94);
     _sm_for11 = iter(simse_addressOf(_sm_expr132));
-    L165:;
+    L162:;
     _sm_expr2 = advance(&_sm_for11);
-    if (!(_sm_expr2)) goto L163;
+    if (!(_sm_expr2)) goto L160;
     _sm_header_2 = _sm_for11.current;
-    _sm_base94 = *(_sm_header_2);
-    _sm_expr134 = simse_native_readFile(_sm_base94);
+    _sm_base95 = *(_sm_header_2);
+    _sm_expr134 = simse_native_readFile(_sm_base95);
     simse_list_append(cppTexts, _sm_expr134);
-    goto L165;
-    L164:;
-    _sm_base95 = &cppTexts;
-    borrowed = ns12_bpBorrowParams(preludeModules, modules, _sm_base95);
+    goto L162;
+    L161:;
+    _sm_base96 = &cppTexts;
+    borrowed = ns12_bpBorrowParams(preludeModules, modules, _sm_base96);
     preludeModules = borrowed.prelude;
     modules = borrowed.modules;
     ns12_epAnalyze(preludeModules, modules);
     mergedPrelude = ns3_driverNewModule();
-    _sm_base96 = &preludeModules;
-    _sm_expr135 = simse_spanOf(_sm_base96);
+    _sm_base97 = &preludeModules;
+    _sm_expr135 = simse_spanOf(_sm_base97);
     _sm_for13 = iter(simse_addressOf(_sm_expr135));
-    L167:;
+    L164:;
     _sm_expr2 = advance(&_sm_for13);
-    if (!(_sm_expr2)) goto L168;
+    if (!(_sm_expr2)) goto L165;
     pre = _sm_for13.current;
-    _sm_base97 = &mergedPrelude;
-    _sm_base98 = ns3_AstNodeKind::Import;
-    ns3_driverAppendNamed(_sm_base97, pre, _sm_base98);
-    _sm_base99 = &mergedPrelude;
-    ns3_driverAppendDecls(_sm_base99, pre);
-    goto L167;
-    L168:;
+    _sm_base98 = &mergedPrelude;
+    _sm_base99 = ns3_AstNodeKind::Import;
+    ns3_driverAppendNamed(_sm_base98, pre, _sm_base99);
+    _sm_base100 = &mergedPrelude;
+    ns3_driverAppendDecls(_sm_base100, pre);
+    goto L164;
+    L165:;
     _sm_expr2 = ns12_bpShow();
-    if (_sm_expr2) goto L169;
-    goto L172;
-    L169:;
+    if (_sm_expr2) goto L166;
+    goto L169;
+    L166:;
     borrowLines = ns12_bpReportLines();
-    _sm_base100 = &borrowLines;
-    _sm_expr138 = simse_spanOf(_sm_base100);
+    _sm_base101 = &borrowLines;
+    _sm_expr138 = simse_spanOf(_sm_base101);
     _sm_for14 = iter(simse_addressOf(_sm_expr138));
-    L171:;
+    L168:;
     _sm_expr2 = advance(&_sm_for14);
-    if (!(_sm_expr2)) goto L172;
+    if (!(_sm_expr2)) goto L169;
     borrowLine = _sm_for14.current;
-    _sm_base101 = *borrowLine;
-    simse_eprintln(_sm_base101);
-    goto L171;
-    L172:;
+    _sm_base102 = *borrowLine;
+    simse_eprintln(_sm_base102);
+    goto L168;
+    L169:;
     _sm_expr2 = ns12_epShow();
-    if (_sm_expr2) goto L173;
-    goto L176;
-    L173:;
+    if (_sm_expr2) goto L170;
+    goto L173;
+    L170:;
     escapeLines = ns12_epReportLines();
-    _sm_base102 = &escapeLines;
-    _sm_expr141 = simse_spanOf(_sm_base102);
+    _sm_base103 = &escapeLines;
+    _sm_expr141 = simse_spanOf(_sm_base103);
     _sm_for15 = iter(simse_addressOf(_sm_expr141));
-    L175:;
+    L172:;
     _sm_expr2 = advance(&_sm_for15);
-    if (!(_sm_expr2)) goto L176;
+    if (!(_sm_expr2)) goto L173;
     escapeLine = _sm_for15.current;
-    _sm_base103 = *escapeLine;
-    simse_eprintln(_sm_base103);
-    goto L175;
-    L176:;
+    _sm_base104 = *escapeLine;
+    simse_eprintln(_sm_base104);
+    goto L172;
+    L173:;
     semaInputs = List<ns15_SemaInput>();
     s = 0;
-    L177:;
+    L174:;
     _sm_expr1 = simse_lenOf(preludeModules);
     _sm_expr2 = s < _sm_expr1;
-    if (!(_sm_expr2)) goto L178;
-    _sm_base104 = preludeNames[s];
-    _sm_base105 = preludeModules[s];
-    _sm_expr145 = ns15_SemaInput{_sm_base104, _sm_base105, true};
+    if (!(_sm_expr2)) goto L175;
+    _sm_base105 = preludeNames[s];
+    _sm_base106 = preludeModules[s];
+    _sm_expr145 = ns15_SemaInput{_sm_base105, _sm_base106, true};
     simse_list_append(semaInputs, _sm_expr145);
     s = s + 1;
-    goto L177;
-    L178:;
+    goto L174;
+    L175:;
     m = 0;
-    L179:;
+    L176:;
     _sm_expr1 = simse_lenOf(modules);
     _sm_expr2 = m < _sm_expr1;
-    if (!(_sm_expr2)) goto L180;
-    _sm_base106 = fileNames[m];
-    _sm_base107 = modules[m];
-    _sm_expr148 = ns15_SemaInput{_sm_base106, _sm_base107, false};
+    if (!(_sm_expr2)) goto L177;
+    _sm_base107 = fileNames[m];
+    _sm_base108 = modules[m];
+    _sm_expr148 = ns15_SemaInput{_sm_base107, _sm_base108, false};
     simse_list_append(semaInputs, _sm_expr148);
     m = m + 1;
-    goto L179;
-    L180:;
-    _sm_base108 = &semaInputs;
-    diagnostics = ns15_analyze(_sm_base108);
+    goto L176;
+    L177:;
+    _sm_base109 = &semaInputs;
+    diagnostics = ns15_analyze(_sm_base109);
     _sm_expr1 = simse_lenOf(diagnostics);
     _sm_expr2 = _sm_expr1 > 0;
-    if (_sm_expr2) goto L181;
-    goto L182;
-    L181:;
+    if (_sm_expr2) goto L178;
+    goto L179;
+    L178:;
     d = 0;
-    L183:;
+    L180:;
     _sm_expr1 = simse_lenOf(diagnostics);
     _sm_expr2 = d < _sm_expr1;
-    if (!(_sm_expr2)) goto L184;
-    _sm_base109 = diagnostics[d];
-    simse_eprintln(_sm_base109);
+    if (!(_sm_expr2)) goto L181;
+    _sm_base110 = diagnostics[d];
+    simse_eprintln(_sm_base110);
     d = d + 1;
-    goto L183;
-    L184:;
+    goto L180;
+    L181:;
     return 1;
-    L182:;
+    L179:;
     cgInputs = List<ns1_CgInput>();
-    if (hasPrelude) goto L185;
-    goto L186;
-    L185:;
+    if (hasPrelude) goto L182;
+    goto L183;
+    L182:;
     _sm_expr153 = ns1_CgInput{resolvedPrelude, mergedPrelude, true};
     simse_list_append(cgInputs, _sm_expr153);
-    L186:;
+    L183:;
     g = 0;
-    L187:;
+    L184:;
     _sm_expr1 = simse_lenOf(modules);
     _sm_expr2 = g < _sm_expr1;
-    if (!(_sm_expr2)) goto L188;
-    _sm_base110 = fileNames[g];
-    _sm_base111 = modules[g];
-    _sm_expr156 = ns1_CgInput{_sm_base110, _sm_base111, false};
+    if (!(_sm_expr2)) goto L185;
+    _sm_base111 = fileNames[g];
+    _sm_base112 = modules[g];
+    _sm_expr156 = ns1_CgInput{_sm_base111, _sm_base112, false};
     simse_list_append(cgInputs, _sm_expr156);
     g = g + 1;
-    goto L187;
-    L188:;
-    _sm_base112 = &cgInputs;
-    _sm_base113 = &resourceStored;
-    emitted = ns1_emitProgram(_sm_base112, _sm_base113);
+    goto L184;
+    L185:;
+    _sm_base113 = &cgInputs;
+    _sm_base114 = &resourceStored;
+    emitted = ns1_emitProgram(_sm_base113, _sm_base114);
     _sm_expr2 = simse_resHasValue(simse_addressOf(emitted));
     _sm_expr73 = !_sm_expr2;
-    if (_sm_expr73) goto L189;
-    goto L190;
-    L189:;
-    _sm_base114 = emitted.Error;
-    simse_eprintln(_sm_base114);
+    if (_sm_expr73) goto L186;
+    goto L187;
+    L186:;
+    _sm_base115 = emitted.Error;
+    simse_eprintln(_sm_base115);
     return 1;
-    L190:;
-    _sm_base115 = emitted.Value;
-    _sm_expr2 = simse_writeFile(output, _sm_base115);
+    L187:;
+    _sm_base116 = emitted.Value;
+    _sm_expr2 = simse_writeFile(output, _sm_base116);
     _sm_expr73 = !_sm_expr2;
-    if (_sm_expr73) goto L191;
-    goto L192;
-    L191:;
+    if (_sm_expr73) goto L188;
+    goto L189;
+    L188:;
     _sm_expr161.resize(20 + output.size());
     __sm_catP = _sm_expr161.data();
     std::memcpy(__sm_catP, "simse: cannot write ", 20);
@@ -29522,7 +31839,7 @@ int main(int argc, char** argv) {
     std::memcpy(__sm_catP, output.data(), output.size());
     simse_eprintln(_sm_expr161);
     return 1;
-    L192:;
+    L189:;
     return 0;
 }
 // src/compiler/GenTypes.kt
@@ -29738,7 +32055,7 @@ ns3_SourceGenTransform ns3_nativeInvokeDeclare(ns3_SourceGenContext* ctx) {
     _sm_base3 = ctx->declName;
     _sm_base2 = List<Str>{_sm_base3};
     _sm_base4 = &_sm_base2;
-    _sm_base1 = fmtStr(__sm_stringTable[47], _sm_base4);
+    _sm_base1 = fmtStr(__sm_stringTable[48], _sm_base4);
     ctx->error = _sm_base1;
     _sm_base5 = ns3_SourceTransformation::None;
     _sm_expr3 = ns3_SourceGenTransform{_sm_base5, __sm_stringTable[1115]};
@@ -50610,7 +52927,7 @@ void ns9_collectLocals(ns9_TskMachinery* self, List<ns3_AstXmlNode> body, Int de
     if (_sm_expr1) goto L1;
     goto L2;
     L1:;
-    ns9_fail(self, __sm_stringTable[50]);
+    ns9_fail(self, __sm_stringTable[51]);
     return;
     L2:;
     _sm_base1 = &body;
@@ -52662,2332 +54979,6 @@ ns9_Yielded ns9_linLowerYield(ns3_AstXmlNode* decl, ns3_AstXmlNode elementType, 
     _sm_base1 = &linearBody;
     _sm_expr3 = ns9_run(simse_addressOf(machinery), _sm_base1);
     return _sm_expr3;
-}
-// src/modules/compiler/gen.kt
-Bool ns3_isReached(ns3_SourceGenContext* self) {
-    Dictionary<Str, Bool>* _sm_base2, * _sm_base4, * _sm_expr1;
-    Str _sm_base3, _sm_base5;
-    Bool _sm_expr2;
-    _sm_expr1 = self->reachedNames;
-    _sm_expr2 = _sm_expr1 == nullptr;
-    if (_sm_expr2) goto L1;
-    goto L2;
-    L1:;
-    return true;
-    L2:;
-    _sm_base2 = self->reachedNames;
-    _sm_base3 = self->declName;
-    _sm_expr2 = simse_dict_has((*_sm_base2), _sm_base3);
-    if (_sm_expr2) goto L3;
-    goto L4;
-    L3:;
-    return true;
-    L4:;
-    _sm_base4 = self->reachedNames;
-    _sm_base5 = self->symbol;
-    _sm_expr2 = simse_dict_has((*_sm_base4), _sm_base5);
-    return _sm_expr2;
-}
-// src/modules/compiler/gen.kt
-Str ns3_parameter(ns3_SourceGenContext* self, Int index) {
-    List<Str>* _sm_base1, * _sm_base2;
-    Bool _sm_expr1;
-    Int _sm_expr2;
-    Str _sm_expr4;
-    _sm_expr1 = index < 0;
-    if (_sm_expr1) goto L1;
-    _sm_base1 = simse_addressOf(self->parameters);
-    _sm_expr2 = simse_lenOf((*_sm_base1));
-    _sm_expr1 = index >= _sm_expr2;
-    if (_sm_expr1) goto L1;
-    goto L2;
-    L1:;
-    return __sm_stringTable[1115];
-    L2:;
-    _sm_base2 = simse_addressOf(self->parameters);
-    _sm_expr4 = (*_sm_base2)[index];
-    return _sm_expr4;
-}
-// src/modules/http/api.kt
-Int ns4_httpChunk() {
-    return 16384;
-}
-// src/modules/http/api.kt
-Int ns4_httpTimeout() {
-    return 15000;
-}
-// src/modules/http/api.kt
-Res<List<Char>> ns4_httpGet(Str url) {
-    Int* _sm_base4, * _sm_base5, * _sm_base11;
-    List<Char>* _sm_base9, * _sm_base10, * _sm_base12, * _sm_base13;
-    RawPtr session, request;
-    Bool _sm_expr1;
-    Str _sm_expr2, message, error;
-    Res<List<Char>> _sm_expr3;
-    Int timeout, _sm_expr4, _sm_expr5, _sm_expr6, _sm_expr9, read, _sm_expr12, _sm_expr13;
-    List<Char> buffer, out;
-    Span<Char> _sm_expr10, _sm_expr16;
-    Char* _sm_expr11, * _sm_expr17;
-    session = __sm_native_internetOpen(__sm_stringTable[603], 0, nullptr, nullptr, 0);
-    _sm_expr1 = session == nullptr;
-    if (_sm_expr1) goto L1;
-    goto L2;
-    L1:;
-    _sm_expr2 = simse_http_errorText(__sm_stringTable[473]);
-    _sm_expr3 = simse_resErr<List<Char>>(_sm_expr2);
-    return _sm_expr3;
-    L2:;
-    timeout = ns4_httpTimeout();
-    _sm_expr4 = simse_http_connectTimeout();
-    _sm_base4 = &timeout;
-    __sm_native_internetSetOption(session, _sm_expr4, _sm_base4, 4);
-    _sm_expr5 = simse_http_receiveTimeout();
-    _sm_base5 = &timeout;
-    __sm_native_internetSetOption(session, _sm_expr5, _sm_base5, 4);
-    _sm_expr6 = simse_http_flags();
-    request = __sm_native_internetOpenUrl(session, url, nullptr, 0, _sm_expr6, nullptr);
-    _sm_expr1 = request == nullptr;
-    if (_sm_expr1) goto L3;
-    goto L4;
-    L3:;
-    message = simse_http_errorText(__sm_stringTable[388]);
-    __sm_native_internetCloseHandle(session);
-    _sm_expr3 = simse_resErr<List<Char>>(message);
-    return _sm_expr3;
-    L4:;
-    buffer = List<Char>();
-    _sm_expr9 = ns4_httpChunk();
-    _sm_base9 = &buffer;
-    simse_http_bufferInit(_sm_base9, _sm_expr9);
-    out = List<Char>();
-    error = __sm_stringTable[1115];
-    L5:;
-    read = 0;
-    _sm_base10 = &buffer;
-    _sm_expr10 = simse_spanOf(_sm_base10);
-    _sm_expr11 = atPtr(simse_addressOf(_sm_expr10), 0);
-    _sm_expr12 = ns4_httpChunk();
-    _sm_base11 = &read;
-    _sm_expr13 = __sm_native_internetReadFile(request, _sm_expr11, _sm_expr12, _sm_base11);
-    _sm_expr1 = _sm_expr13 == 0;
-    if (_sm_expr1) goto L7;
-    goto L8;
-    L7:;
-    error = simse_http_errorText(__sm_stringTable[368]);
-    goto L6;
-    L8:;
-    _sm_expr1 = read <= 0;
-    if (_sm_expr1) goto L6;
-    _sm_base12 = &buffer;
-    _sm_expr16 = simse_spanOf(_sm_base12);
-    _sm_expr17 = atPtr(simse_addressOf(_sm_expr16), 0);
-    _sm_base13 = &out;
-    simse_http_append(_sm_base13, _sm_expr17, read);
-    goto L5;
-    L6:;
-    __sm_native_internetCloseHandle(request);
-    __sm_native_internetCloseHandle(session);
-    _sm_expr13 = simse_lenOf(error);
-    _sm_expr1 = _sm_expr13 > 0;
-    if (_sm_expr1) goto L11;
-    goto L12;
-    L11:;
-    _sm_expr3 = simse_resErr<List<Char>>(error);
-    return _sm_expr3;
-    L12:;
-    _sm_expr3 = simse_resOk<List<Char>>(out);
-    return _sm_expr3;
-}
-// src/modules/http/api.kt
-Res<Str> ns4_httpGetText(Str url) {
-    Str _sm_base1, _sm_expr4;
-    List<Char>* _sm_base2, * _sm_base3;
-    Res<List<Char>> body;
-    Bool _sm_expr1, _sm_expr2;
-    Res<Str> _sm_expr3;
-    body = ns4_httpGet(url);
-    _sm_expr1 = simse_resHasValue(simse_addressOf(body));
-    _sm_expr2 = !_sm_expr1;
-    if (_sm_expr2) goto L1;
-    goto L2;
-    L1:;
-    _sm_base1 = body.Error;
-    _sm_expr3 = simse_resErr<Str>(_sm_base1);
-    return _sm_expr3;
-    L2:;
-    _sm_base3 = simse_addressOf(body.Value);
-    _sm_base2 = _sm_base3;
-    _sm_expr4 = simse_http_charsToStr(_sm_base2);
-    _sm_expr3 = simse_resOk<Str>(_sm_expr4);
-    return _sm_expr3;
-}
-// src/modules/json/generators/JsonGen.kt
-ns3_SourceGenTransform ns6_jsonGen(ns3_SourceGenContext* ctx) {
-    ns3_SourceTransformation _sm_base1, _sm_base2, _sm_base5, _sm_base10, _sm_base12, _sm_base13;
-    Dictionary<Str, Str>* _sm_base3, * _sm_base6;
-    ns3_FullCompiledState* _sm_base4, * _sm_base7;
-    Str _sm_base8, source;
-    Str* _sm_base9, * _sm_base11;
-    ns3_SourceGenPhase _sm_expr1, _sm_expr2;
-    Bool _sm_expr3;
-    ns3_SourceGenTransform _sm_expr4;
-    Int _sm_expr11;
-    Span<Char> _sm_expr14;
-    _sm_expr1 = ctx->phase;
-    _sm_expr2 = ns3_SourceGenPhase::Declare;
-    _sm_expr3 = _sm_expr1 == _sm_expr2;
-    if (_sm_expr3) goto L1;
-    goto L2;
-    L1:;
-    _sm_base1 = ns3_SourceTransformation::ChangedOutput;
-    _sm_expr4 = ns3_SourceGenTransform{_sm_base1, __sm_stringTable[1115]};
-    return _sm_expr4;
-    L2:;
-    _sm_expr1 = ctx->phase;
-    _sm_expr2 = ns3_SourceGenPhase::Reparse;
-    _sm_expr3 = _sm_expr1 != _sm_expr2;
-    if (_sm_expr3) goto L3;
-    goto L4;
-    L3:;
-    _sm_base2 = ns3_SourceTransformation::None;
-    _sm_expr4 = ns3_SourceGenTransform{_sm_base2, __sm_stringTable[1115]};
-    return _sm_expr4;
-    L4:;
-    _sm_base4 = ctx->state;
-    _sm_base3 = simse_addressOf(_sm_base4->definitions);
-    _sm_expr3 = simse_dict_has((*_sm_base3), __sm_stringTable[532]);
-    if (_sm_expr3) goto L5;
-    goto L6;
-    L5:;
-    _sm_base5 = ns3_SourceTransformation::AlreadyExisting;
-    _sm_expr4 = ns3_SourceGenTransform{_sm_base5, __sm_stringTable[1115]};
-    return _sm_expr4;
-    L6:;
-    _sm_base7 = ctx->state;
-    _sm_base6 = simse_addressOf(_sm_base7->definitions);
-    _sm_base8 = ctx->name;
-    simse_dict_insert((*_sm_base6), __sm_stringTable[532], _sm_base8);
-    source = ns6_jsonBuildSource(ctx);
-    _sm_base9 = simse_addressOf(ctx->error);
-    _sm_expr11 = simse_lenOf((*_sm_base9));
-    _sm_expr3 = _sm_expr11 > 0;
-    if (_sm_expr3) goto L7;
-    goto L8;
-    L7:;
-    _sm_base10 = ns3_SourceTransformation::None;
-    _sm_expr4 = ns3_SourceGenTransform{_sm_base10, __sm_stringTable[1115]};
-    return _sm_expr4;
-    L8:;
-    _sm_base11 = &source;
-    _sm_expr14 = simse_spanOfStr(_sm_base11);
-    _sm_expr3 = equals(simse_addressOf(_sm_expr14), __sm_stringTable[1115]);
-    if (_sm_expr3) goto L9;
-    goto L10;
-    L9:;
-    _sm_base12 = ns3_SourceTransformation::None;
-    _sm_expr4 = ns3_SourceGenTransform{_sm_base12, __sm_stringTable[1115]};
-    return _sm_expr4;
-    L10:;
-    ctx->source = source;
-    _sm_base13 = ns3_SourceTransformation::ReparseRequired;
-    _sm_expr4 = ns3_SourceGenTransform{_sm_base13, __sm_stringTable[532]};
-    return _sm_expr4;
-}
-// src/modules/json/generators/JsonGen.kt
-Bool ns6_jsonWants(ns3_AstXmlNode* module) {
-    ns3_AstNodeKind _sm_base1;
-    List<ns3_AstXmlNode>* _sm_base2;
-    ns3_AstNodeAttributeKind _sm_base3;
-    Str _sm_base4;
-    List<ns3_AstXmlNode> imports;
-    Span<ns3_AstXmlNode> _sm_expr1;
-    Span_iter_yieldable<ns3_AstXmlNode> _sm_for1;
-    Bool _sm_expr2;
-    ns3_AstXmlNode* imp;
-    Str* _sm_expr3;
-    _sm_base1 = ns3_AstNodeKind::Import;
-    imports = ns2_xmlChildren(module, _sm_base1);
-    _sm_base2 = &imports;
-    _sm_expr1 = simse_spanOf(_sm_base2);
-    _sm_for1 = iter(simse_addressOf(_sm_expr1));
-    L1:;
-    _sm_expr2 = advance(&_sm_for1);
-    if (!(_sm_expr2)) goto L2;
-    imp = _sm_for1.current;
-    _sm_base3 = ns3_AstNodeAttributeKind::Path;
-    _sm_expr3 = ns2_xmlAttr(imp, _sm_base3);
-    _sm_base4 = *(_sm_expr3);
-    _sm_expr2 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_base4))), __sm_stringTable[958]);
-    if (_sm_expr2) goto L3;
-    goto L1;
-    L3:;
-    return true;
-    L2:;
-    return false;
-}
-// src/modules/json/generators/JsonGen.kt
-Str ns6_jsonModulePackage(ns3_SourceGenContext* ctx) {
-    ns3_FullCompiledState* _sm_base1, * _sm_base3, * _sm_base6;
-    List<ns3_AstXmlNode>* _sm_base2, * _sm_base5, * _sm_base7;
-    ns3_AstXmlNode* _sm_base4, * module, * decl;
-    ns3_AstNodeAttributeKind _sm_base8, _sm_base10;
-    Str _sm_base9;
-    Int m, _sm_expr1;
-    Bool _sm_expr2;
-    List<ns3_AstXmlNode> decls;
-    Span<ns3_AstXmlNode> _sm_expr3;
-    Span_iter_yieldable<ns3_AstXmlNode> _sm_for2;
-    ns3_AstNodeKind _sm_expr5, _sm_expr6;
-    Str* _sm_expr8;
-    _sm_base1 = ctx->state;
-    m = _sm_base1->preludeCount;
-    L1:;
-    _sm_base3 = ctx->state;
-    _sm_base2 = simse_addressOf(_sm_base3->modules);
-    _sm_expr1 = simse_lenOf((*_sm_base2));
-    _sm_expr2 = m < _sm_expr1;
-    if (!(_sm_expr2)) goto L2;
-    _sm_base6 = ctx->state;
-    _sm_base5 = simse_addressOf(_sm_base6->modules);
-    _sm_base4 = simse_addressOf((*_sm_base5)[m]);
-    module = _sm_base4;
-    decls = ns2_xmlDecls(module);
-    _sm_base7 = &decls;
-    _sm_expr3 = simse_spanOf(_sm_base7);
-    _sm_for2 = iter(simse_addressOf(_sm_expr3));
-    L3:;
-    _sm_expr2 = advance(&_sm_for2);
-    if (!(_sm_expr2)) goto L4;
-    decl = _sm_for2.current;
-    _sm_expr5 = decl->name;
-    _sm_expr6 = ns3_AstNodeKind::Function;
-    _sm_expr2 = _sm_expr5 == _sm_expr6;
-    if (_sm_expr2) goto L7;
-    goto L3;
-    L7:;
-    _sm_base8 = ns3_AstNodeAttributeKind::Generator;
-    _sm_expr8 = ns2_xmlAttr(decl, _sm_base8);
-    _sm_base9 = *(_sm_expr8);
-    _sm_expr2 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_base9))), __sm_stringTable[958]);
-    if (_sm_expr2) goto L5;
-    goto L3;
-    L5:;
-    _sm_base10 = ns3_AstNodeAttributeKind::Package;
-    _sm_expr8 = ns2_xmlAttr(module, _sm_base10);
-    return *(_sm_expr8);
-    L4:;
-    m = m + 1;
-    goto L1;
-    L2:;
-    return __sm_stringTable[1115];
-}
-// src/modules/json/generators/JsonGen.kt
-ns6_JsonTypes ns6_jsonCollect(ns3_SourceGenContext* ctx) {
-    char* __sm_catP;
-    ns3_FullCompiledState* _sm_base1, * _sm_base3, * _sm_base7, * _sm_base8, * _sm_base10, * _sm_base13;
-    List<ns3_AstXmlNode>* _sm_base2, * _sm_base6, * _sm_base9, * _sm_base12, * _sm_base15;
-    ns3_AstXmlNode* _sm_base4, * _sm_base5, * _sm_base11, * module, * decl, * receiver;
-    ns3_AstNodeAttributeKind _sm_base14, _sm_base16, _sm_base21, _sm_base23, _sm_base26;
-    Str _sm_base17, _sm_base22, _sm_base24, _sm_base27, modulePackage, pkg, name;
-    ns3_AstXmlNode _sm_base20;
-    ns3_AstNodeKind _sm_base25, _sm_expr11, _sm_expr12;
-    Dictionary<Str, ns3_AstXmlNode> classes;
-    Dictionary<Str, Str> packages;
-    List<Str> order;
-    Dictionary<Str, Bool> declared;
-    Bool wanted, _sm_expr2;
-    Int m, _sm_expr1;
-    ns6_JsonTypes _sm_expr5;
-    List<ns3_AstXmlNode> decls;
-    Span<ns3_AstXmlNode> _sm_expr9;
-    Span_iter_yieldable<ns3_AstXmlNode> _sm_for3;
-    Str* _sm_expr19, * _sm_expr27;
-    ns3_AstNodeCategory _sm_expr24, _sm_expr25;
-    classes = Dictionary<Str, ns3_AstXmlNode>();
-    packages = Dictionary<Str, Str>();
-    order = List<Str>();
-    declared = Dictionary<Str, Bool>();
-    wanted = false;
-    _sm_base1 = ctx->state;
-    m = _sm_base1->preludeCount;
-    L1:;
-    _sm_base3 = ctx->state;
-    _sm_base2 = simse_addressOf(_sm_base3->modules);
-    _sm_expr1 = simse_lenOf((*_sm_base2));
-    _sm_expr2 = m < _sm_expr1;
-    if (!(_sm_expr2)) goto L2;
-    _sm_base7 = ctx->state;
-    _sm_base6 = simse_addressOf(_sm_base7->modules);
-    _sm_base5 = simse_addressOf((*_sm_base6)[m]);
-    _sm_base4 = _sm_base5;
-    _sm_expr2 = ns6_jsonWants(_sm_base4);
-    if (_sm_expr2) goto L3;
-    goto L4;
-    L3:;
-    wanted = true;
-    L4:;
-    m = m + 1;
-    goto L1;
-    L2:;
-    _sm_expr2 = !wanted;
-    if (_sm_expr2) goto L5;
-    goto L6;
-    L5:;
-    _sm_expr5 = ns6_JsonTypes{classes, packages, order, declared};
-    return _sm_expr5;
-    L6:;
-    _sm_base8 = ctx->state;
-    m = _sm_base8->preludeCount;
-    modulePackage = ns6_jsonModulePackage(ctx);
-    L7:;
-    _sm_base10 = ctx->state;
-    _sm_base9 = simse_addressOf(_sm_base10->modules);
-    _sm_expr1 = simse_lenOf((*_sm_base9));
-    _sm_expr2 = m < _sm_expr1;
-    if (!(_sm_expr2)) goto L8;
-    _sm_base13 = ctx->state;
-    _sm_base12 = simse_addressOf(_sm_base13->modules);
-    _sm_base11 = simse_addressOf((*_sm_base12)[m]);
-    module = _sm_base11;
-    _sm_base14 = ns3_AstNodeAttributeKind::Package;
-    pkg = *(ns2_xmlAttr(module, _sm_base14));
-    _sm_expr2 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(pkg))), simse_spanOfStr(simse_addressOf(modulePackage)));
-    if (_sm_expr2) goto L9;
-    goto L10;
-    L9:;
-    m = m + 1;
-    goto L7;
-    L10:;
-    decls = ns2_xmlDecls(module);
-    _sm_base15 = &decls;
-    _sm_expr9 = simse_spanOf(_sm_base15);
-    _sm_for3 = iter(simse_addressOf(_sm_expr9));
-    L11:;
-    _sm_expr2 = advance(&_sm_for3);
-    if (!(_sm_expr2)) goto L12;
-    decl = _sm_for3.current;
-    _sm_expr11 = decl->name;
-    _sm_expr12 = ns3_AstNodeKind::DataClass;
-    _sm_expr2 = _sm_expr11 == _sm_expr12;
-    if (_sm_expr2) goto L13;
-    goto L14;
-    L13:;
-    _sm_base16 = ns3_AstNodeAttributeKind::Name;
-    name = *(ns2_xmlAttr(decl, _sm_base16));
-    _sm_expr2 = simse_dict_has(classes, name);
-    if (_sm_expr2) goto L15;
-    goto L16;
-    L15:;
-    _sm_base17.resize(59 + name.size());
-    __sm_catP = _sm_base17.data();
-    std::memcpy(__sm_catP, "json: two data classes are named '", 34);
-    __sm_catP = __sm_catP + 34;
-    std::memcpy(__sm_catP, name.data(), name.size());
-    __sm_catP = __sm_catP + name.size();
-    std::memcpy(__sm_catP, "'; a serializer needs one", 25);
-    ctx->error = _sm_base17;
-    _sm_expr5 = ns6_JsonTypes{classes, packages, order, declared};
-    return _sm_expr5;
-    L16:;
-    _sm_base20 = *(decl);
-    simse_dict_insert(classes, name, _sm_base20);
-    simse_dict_insert(packages, name, pkg);
-    simse_list_append(order, name);
-    L14:;
-    _sm_expr11 = decl->name;
-    _sm_expr12 = ns3_AstNodeKind::Function;
-    _sm_expr2 = _sm_expr11 == _sm_expr12;
-    if (_sm_expr2) goto L20;
-    goto L11;
-    L20:;
-    _sm_base21 = ns3_AstNodeAttributeKind::Name;
-    _sm_expr19 = ns2_xmlAttr(decl, _sm_base21);
-    _sm_base22 = *(_sm_expr19);
-    _sm_expr2 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_base22))), __sm_stringTable[837]);
-    if (_sm_expr2) goto L19;
-    goto L11;
-    L19:;
-    _sm_base23 = ns3_AstNodeAttributeKind::HasReceiver;
-    _sm_expr19 = ns2_xmlAttr(decl, _sm_base23);
-    _sm_base24 = *(_sm_expr19);
-    _sm_expr2 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_base24))), __sm_stringTable[971]);
-    if (_sm_expr2) goto L17;
-    goto L11;
-    L17:;
-    _sm_base25 = ns3_AstNodeKind::Receiver;
-    receiver = ns2_xmlChildPtr(decl, _sm_base25);
-    _sm_expr2 = ns2_xmlIsEmpty(receiver);
-    if (_sm_expr2) goto L11;
-    _sm_expr24 = ns2_xmlKind(receiver);
-    _sm_expr25 = ns3_AstNodeCategory::TypeNamed;
-    _sm_expr2 = _sm_expr24 == _sm_expr25;
-    if (_sm_expr2) goto L21;
-    goto L11;
-    L21:;
-    _sm_base26 = ns3_AstNodeAttributeKind::Name;
-    _sm_expr27 = ns2_xmlAttr(receiver, _sm_base26);
-    _sm_base27 = *(_sm_expr27);
-    simse_dict_insert(declared, _sm_base27, true);
-    goto L11;
-    L12:;
-    m = m + 1;
-    goto L7;
-    L8:;
-    _sm_expr5 = ns6_JsonTypes{classes, packages, order, declared};
-    return _sm_expr5;
-}
-// src/modules/json/generators/JsonGen.kt
-Bool ns6_jsonIsScalar(Str* name) {
-    Span<Char> _sm_expr2;
-    Bool _sm_expr3, _sm_expr1;
-    _sm_expr2 = simse_spanOfStr(name);
-    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[992]);
-    _sm_expr1 = _sm_expr3;
-    if (_sm_expr1) goto _sm_sc1;
-    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[929]);
-    _sm_expr1 = _sm_expr3;
-    if (_sm_expr1) goto _sm_sc1;
-    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[858]);
-    _sm_expr1 = _sm_expr3;
-    if (_sm_expr1) goto _sm_sc1;
-    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[859]);
-    _sm_expr1 = _sm_expr3;
-    if (_sm_expr1) goto _sm_sc1;
-    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[860]);
-    _sm_expr1 = _sm_expr3;
-    if (_sm_expr1) goto _sm_sc1;
-    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[718]);
-    _sm_expr1 = _sm_expr3;
-    if (_sm_expr1) goto _sm_sc1;
-    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[719]);
-    _sm_expr1 = _sm_expr3;
-    if (_sm_expr1) goto _sm_sc1;
-    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[923]);
-    _sm_expr1 = _sm_expr3;
-    if (_sm_expr1) goto _sm_sc1;
-    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[995]);
-    _sm_expr1 = _sm_expr3;
-    if (_sm_expr1) goto _sm_sc1;
-    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[926]);
-    _sm_expr1 = _sm_expr3;
-    _sm_sc1:;
-    return _sm_expr1;
-}
-// src/modules/json/generators/JsonGen.kt
-Str ns6_jsonScalarBody(Str* name) {
-    char* __sm_catP;
-    Str _sm_base2, out;
-    Span<Char> _sm_expr2;
-    Bool _sm_expr3;
-    _sm_base2 = *(name);
-    out.resize(21 + _sm_base2.size());
-    __sm_catP = out.data();
-    std::memcpy(__sm_catP, "fun ", 4);
-    __sm_catP = __sm_catP + 4;
-    std::memcpy(__sm_catP, _sm_base2.data(), _sm_base2.size());
-    __sm_catP = __sm_catP + _sm_base2.size();
-    std::memcpy(__sm_catP, ".toJson(): Str {", 16);
-    __sm_catP = __sm_catP + 16;
-    *__sm_catP = (char) ('\n');
-    _sm_expr2 = simse_spanOfStr(name);
-    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[923]);
-    if (_sm_expr3) goto L1;
-    goto L2;
-    L1:;
-    simse_str_appendStr(out, __sm_stringTable[61]);
-    goto L9;
-    L2:;
-    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[995]);
-    if (_sm_expr3) goto L4;
-    goto L5;
-    L4:;
-    simse_str_appendStr(out, __sm_stringTable[214]);
-    goto L9;
-    L5:;
-    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[926]);
-    if (_sm_expr3) goto L7;
-    goto L8;
-    L7:;
-    simse_str_appendStr(out, __sm_stringTable[147]);
-    goto L9;
-    L8:;
-    simse_str_appendStr(out, __sm_stringTable[223]);
-    L9:;
-    simse_str_appendStr(out, __sm_stringTable[1019]);
-    return out;
-}
-// src/modules/json/generators/JsonGen.kt
-Str ns6_jsonClassBody(Str* name, List<ns3_AstXmlNode>* fields) {
-    char* __sm_catP;
-    Str _sm_base2, out, fieldName;
-    ns3_AstXmlNode* _sm_base4, * _sm_base5;
-    ns3_AstNodeAttributeKind _sm_base6;
-    Int i, _sm_expr4;
-    Bool _sm_expr5;
-    _sm_base2 = *(name);
-    out.resize(44 + _sm_base2.size());
-    __sm_catP = out.data();
-    std::memcpy(__sm_catP, "fun ", 4);
-    __sm_catP = __sm_catP + 4;
-    std::memcpy(__sm_catP, _sm_base2.data(), _sm_base2.size());
-    __sm_catP = __sm_catP + _sm_base2.size();
-    std::memcpy(__sm_catP, ".toJson(): Str {", 16);
-    __sm_catP = __sm_catP + 16;
-    *__sm_catP = (char) ('\n');
-    __sm_catP = __sm_catP + 1;
-    std::memcpy(__sm_catP, "    var out: Str = \"{\"", 22);
-    __sm_catP = __sm_catP + 22;
-    *__sm_catP = (char) ('\n');
-    i = 0;
-    L1:;
-    _sm_expr4 = simse_lenOf((*fields));
-    _sm_expr5 = i < _sm_expr4;
-    if (!(_sm_expr5)) goto L2;
-    _sm_base5 = simse_addressOf((*fields)[i]);
-    _sm_base4 = _sm_base5;
-    _sm_base6 = ns3_AstNodeAttributeKind::Name;
-    fieldName = *(ns2_xmlAttr(_sm_base4, _sm_base6));
-    _sm_expr5 = i > 0;
-    if (_sm_expr5) goto L3;
-    goto L4;
-    L3:;
-    simse_str_appendStr(out, __sm_stringTable[292]);
-    L4:;
-    simse_str_appendStr(out, __sm_stringTable[273]);
-    simse_str_appendStr(out, __sm_stringTable[301]);
-    simse_str_appendStr(out, fieldName);
-    simse_str_appendStr(out, __sm_stringTable[870]);
-    simse_str_appendStr(out, __sm_stringTable[132]);
-    simse_str_appendStr(out, __sm_stringTable[264]);
-    simse_str_appendStr(out, fieldName);
-    simse_str_appendStr(out, __sm_stringTable[465]);
-    i = i + 1;
-    goto L1;
-    L2:;
-    simse_str_appendStr(out, __sm_stringTable[146]);
-    return out;
-}
-// src/modules/json/generators/JsonGen.kt
-void ns6_jsonEnsure(Str* name, ns3_SourceGenContext* ctx, ns6_JsonTypes* types, Dictionary<Str, Bool>* keys, List<Str>* bodies, Dictionary<Str, Bool>* flags) {
-    char* __sm_catP;
-    Str _sm_base1, _sm_base3, _sm_base4, _sm_base6, _sm_base8, _sm_base10, _sm_base13, _sm_base15,
-        _sm_base25, _sm_base27, _sm_expr4, _sm_expr12, fieldName;
-    Dictionary<Str, Bool>* _sm_base2;
-    Dictionary<Str, ns3_AstXmlNode>* _sm_base5;
-    ns3_AstNodeKind _sm_base12, _sm_base17, _sm_base24;
-    List<ns3_AstXmlNode>* _sm_base18;
-    ns3_AstXmlNode* _sm_base19, * _sm_base20, * _sm_base22, * decl, * typeNode;
-    ns3_AstNodeAttributeKind _sm_base21, _sm_base29;
-    Str* _sm_base30, * _sm_expr19;
-    Bool _sm_expr1;
-    Span<Char> _sm_expr5;
-    Int _sm_expr10, i;
-    List<ns3_AstXmlNode> fields;
-    ns3_AstNodeCategory _sm_expr16, _sm_expr17;
-    _sm_base1 = *(name);
-    _sm_expr1 = simse_dict_has((*keys), _sm_base1);
-    if (_sm_expr1) goto L1;
-    _sm_base2 = simse_addressOf(types->declared);
-    _sm_base3 = *(name);
-    _sm_expr1 = simse_dict_has((*_sm_base2), _sm_base3);
-    if (_sm_expr1) goto L1;
-    goto L2;
-    L1:;
-    return;
-    L2:;
-    _sm_base4 = *(name);
-    simse_dict_insert((*keys), _sm_base4, true);
-    _sm_expr1 = ns6_jsonIsScalar(name);
-    if (_sm_expr1) goto L4;
-    goto L5;
-    L4:;
-    _sm_expr4 = ns6_jsonScalarBody(name);
-    simse_list_append((*bodies), _sm_expr4);
-    _sm_expr5 = simse_spanOfStr(name);
-    _sm_expr1 = equals(simse_addressOf(_sm_expr5), __sm_stringTable[995]);
-    if (_sm_expr1) goto L6;
-    _sm_expr5 = simse_spanOfStr(name);
-    _sm_expr1 = equals(simse_addressOf(_sm_expr5), __sm_stringTable[926]);
-    if (_sm_expr1) goto L6;
-    goto L7;
-    L6:;
-    simse_dict_insert((*flags), __sm_stringTable[823], true);
-    L7:;
-    return;
-    L5:;
-    _sm_base5 = simse_addressOf(types->classes);
-    _sm_base6 = *(name);
-    decl = simse_dict_getPtr((*_sm_base5), _sm_base6);
-    _sm_expr1 = decl == nullptr;
-    if (_sm_expr1) goto L9;
-    goto L10;
-    L9:;
-    _sm_base10 = *(name);
-    _sm_base8.resize(50 + _sm_base10.size());
-    __sm_catP = _sm_base8.data();
-    std::memcpy(__sm_catP, "json: '", 7);
-    __sm_catP = __sm_catP + 7;
-    std::memcpy(__sm_catP, _sm_base10.data(), _sm_base10.size());
-    __sm_catP = __sm_catP + _sm_base10.size();
-    std::memcpy(__sm_catP, "' is not a data class or a supported scalar", 43);
-    ctx->error = _sm_base8;
-    return;
-    L10:;
-    _sm_base12 = ns3_AstNodeKind::TypeParam;
-    _sm_expr10 = ns2_xmlCount(decl, _sm_base12);
-    _sm_expr1 = _sm_expr10 > 0;
-    if (_sm_expr1) goto L11;
-    goto L12;
-    L11:;
-    _sm_base15 = *(name);
-    _sm_base13.resize(52 + _sm_base15.size());
-    __sm_catP = _sm_base13.data();
-    std::memcpy(__sm_catP, "json: the generic data class '", 30);
-    __sm_catP = __sm_catP + 30;
-    std::memcpy(__sm_catP, _sm_base15.data(), _sm_base15.size());
-    __sm_catP = __sm_catP + _sm_base15.size();
-    std::memcpy(__sm_catP, "' is not supported yet", 22);
-    ctx->error = _sm_base13;
-    return;
-    L12:;
-    _sm_base17 = ns3_AstNodeKind::Field;
-    fields = ns2_xmlChildren(decl, _sm_base17);
-    _sm_base18 = &fields;
-    _sm_expr12 = ns6_jsonClassBody(name, _sm_base18);
-    simse_list_append((*bodies), _sm_expr12);
-    i = 0;
-    L13:;
-    _sm_expr10 = simse_lenOf(fields);
-    _sm_expr1 = i < _sm_expr10;
-    if (!(_sm_expr1)) goto L14;
-    _sm_base20 = simse_addressOf(fields[i]);
-    _sm_base19 = _sm_base20;
-    _sm_base21 = ns3_AstNodeAttributeKind::Name;
-    fieldName = *(ns2_xmlAttr(_sm_base19, _sm_base21));
-    _sm_base22 = _sm_base20;
-    _sm_base24 = ns3_AstNodeKind::Type;
-    typeNode = ns2_xmlChildPtr(_sm_base22, _sm_base24);
-    _sm_expr1 = ns2_xmlIsEmpty(typeNode);
-    if (_sm_expr1) goto L15;
-    _sm_expr16 = ns2_xmlKind(typeNode);
-    _sm_expr17 = ns3_AstNodeCategory::TypeNamed;
-    _sm_expr1 = _sm_expr16 != _sm_expr17;
-    if (_sm_expr1) goto L15;
-    goto L16;
-    L15:;
-    _sm_base27 = *(name);
-    _sm_base25.resize(131 + fieldName.size() + _sm_base27.size());
-    __sm_catP = _sm_base25.data();
-    std::memcpy(__sm_catP, "json: field '", 13);
-    __sm_catP = __sm_catP + 13;
-    std::memcpy(__sm_catP, fieldName.data(), fieldName.size());
-    __sm_catP = __sm_catP + fieldName.size();
-    std::memcpy(__sm_catP, "' of '", 6);
-    __sm_catP = __sm_catP + 6;
-    std::memcpy(__sm_catP, _sm_base27.data(), _sm_base27.size());
-    __sm_catP = __sm_catP + _sm_base27.size();
-    std::memcpy(__sm_catP, "' is not a data class or a scalar (a generated serializer for a generic or pointer field is not implemented yet)", 112);
-    ctx->error = _sm_base25;
-    return;
-    L16:;
-    _sm_base29 = ns3_AstNodeAttributeKind::Name;
-    _sm_expr19 = ns2_xmlAttr(typeNode, _sm_base29);
-    ns6_jsonEnsure(_sm_expr19, ctx, types, keys, bodies, flags);
-    _sm_base30 = simse_addressOf(ctx->error);
-    _sm_expr10 = simse_lenOf((*_sm_base30));
-    _sm_expr1 = _sm_expr10 > 0;
-    if (_sm_expr1) goto L18;
-    goto L19;
-    L18:;
-    return;
-    L19:;
-    i = i + 1;
-    goto L13;
-    L14:;
-}
-// src/modules/json/generators/JsonGen.kt
-Str ns6_jsonBuildSource(ns3_SourceGenContext* ctx) {
-    Str* _sm_base1, * _sm_base3, * _sm_base4, * _sm_base10, * _sm_base15, * _sm_base16, * _sm_base21,
-        * _sm_base23, * pkg;
-    List<Str>* _sm_base2, * _sm_base5, * _sm_base8, * _sm_base11, * _sm_base12;
-    ns6_JsonTypes* _sm_base6;
-    Dictionary<Str, Bool>* _sm_base7, * _sm_base9;
-    Dictionary<Str, Str>* _sm_base13;
-    Str _sm_base17, _sm_base18, _sm_base19, _sm_base22, _sm_base24, name, helper;
-    ns3_FullCompiledState* _sm_base20;
-    ns6_JsonTypes types;
-    Int _sm_expr1, i;
-    Bool _sm_expr2;
-    Dictionary<Str, Bool> keys, flags;
-    List<Str> bodies, imports;
-    Span<Char> _sm_expr13;
-    types = ns6_jsonCollect(ctx);
-    _sm_base1 = simse_addressOf(ctx->error);
-    _sm_expr1 = simse_lenOf((*_sm_base1));
-    _sm_expr2 = _sm_expr1 > 0;
-    if (_sm_expr2) goto L1;
-    goto L2;
-    L1:;
-    return __sm_stringTable[1115];
-    L2:;
-    keys = Dictionary<Str, Bool>();
-    bodies = List<Str>();
-    flags = Dictionary<Str, Bool>();
-    i = 0;
-    L3:;
-    _sm_base2 = simse_addressOf(types.order);
-    _sm_expr1 = simse_lenOf((*_sm_base2));
-    _sm_expr2 = i < _sm_expr1;
-    if (!(_sm_expr2)) goto L4;
-    _sm_base5 = simse_addressOf(types.order);
-    _sm_base4 = simse_addressOf((*_sm_base5)[i]);
-    _sm_base3 = _sm_base4;
-    _sm_base6 = &types;
-    _sm_base7 = &keys;
-    _sm_base8 = &bodies;
-    _sm_base9 = &flags;
-    ns6_jsonEnsure(_sm_base3, ctx, _sm_base6, _sm_base7, _sm_base8, _sm_base9);
-    _sm_base10 = simse_addressOf(ctx->error);
-    _sm_expr1 = simse_lenOf((*_sm_base10));
-    _sm_expr2 = _sm_expr1 > 0;
-    if (_sm_expr2) goto L5;
-    goto L6;
-    L5:;
-    return __sm_stringTable[1115];
-    L6:;
-    i = i + 1;
-    goto L3;
-    L4:;
-    _sm_expr1 = simse_lenOf(bodies);
-    _sm_expr2 = _sm_expr1 == 0;
-    if (_sm_expr2) goto L7;
-    goto L8;
-    L7:;
-    return __sm_stringTable[1115];
-    L8:;
-    imports = List<Str>();
-    i = 0;
-    L9:;
-    _sm_base11 = simse_addressOf(types.order);
-    _sm_expr1 = simse_lenOf((*_sm_base11));
-    _sm_expr2 = i < _sm_expr1;
-    if (!(_sm_expr2)) goto L10;
-    _sm_base12 = simse_addressOf(types.order);
-    name = (*_sm_base12)[i];
-    _sm_expr2 = simse_dict_has(keys, name);
-    if (_sm_expr2) goto L11;
-    goto L14;
-    L11:;
-    _sm_base13 = simse_addressOf(types.packages);
-    pkg = simse_dict_getPtr((*_sm_base13), name);
-    _sm_expr2 = pkg != nullptr;
-    if (_sm_expr2) goto L17;
-    goto L14;
-    L17:;
-    _sm_base15 = pkg;
-    _sm_expr13 = simse_spanOfStr(_sm_base15);
-    _sm_expr2 = (!equals(simse_addressOf(_sm_expr13), __sm_stringTable[1115]));
-    if (_sm_expr2) goto L16;
-    goto L14;
-    L16:;
-    _sm_base16 = pkg;
-    _sm_expr13 = simse_spanOfStr(_sm_base16);
-    _sm_expr2 = (!equals(simse_addressOf(_sm_expr13), __sm_stringTable[1013]));
-    if (_sm_expr2) goto L15;
-    goto L14;
-    L15:;
-    _sm_base17 = *pkg;
-    _sm_expr2 = simse_list_contains(imports, _sm_base17);
-    if (_sm_expr2) goto L14;
-    _sm_base18 = *pkg;
-    simse_list_append(imports, _sm_base18);
-    L14:;
-    i = i + 1;
-    goto L9;
-    L10:;
-    Str out;
-    initByValue(simse_addressOf(out));
-    i = 0;
-    L18:;
-    _sm_expr1 = simse_lenOf(imports);
-    _sm_expr2 = i < _sm_expr1;
-    if (!(_sm_expr2)) goto L19;
-    simse_str_appendStr(out, __sm_stringTable[747]);
-    _sm_base19 = imports[i];
-    simse_str_appendStr(out, _sm_base19);
-    simse_str_append(out, '\n');
-    i = i + 1;
-    goto L18;
-    L19:;
-    _sm_expr1 = simse_lenOf(imports);
-    _sm_expr2 = _sm_expr1 > 0;
-    if (_sm_expr2) goto L20;
-    goto L21;
-    L20:;
-    simse_str_append(out, '\n');
-    L21:;
-    _sm_expr2 = simse_dict_has(flags, __sm_stringTable[823]);
-    if (_sm_expr2) goto L22;
-    goto L23;
-    L22:;
-    _sm_base20 = ctx->state;
-    _sm_base22 = __sm_stringTable[488];
-    _sm_base21 = &_sm_base22;
-    helper = ns3_sourceGenResText(_sm_base20, _sm_base21);
-    _sm_base23 = &helper;
-    _sm_expr13 = simse_spanOfStr(_sm_base23);
-    _sm_expr2 = equals(simse_addressOf(_sm_expr13), __sm_stringTable[1115]);
-    if (_sm_expr2) goto L24;
-    goto L25;
-    L24:;
-    ctx->error = __sm_stringTable[58];
-    return __sm_stringTable[1115];
-    L25:;
-    simse_str_appendStr(out, helper);
-    L23:;
-    i = 0;
-    L26:;
-    _sm_expr1 = simse_lenOf(bodies);
-    _sm_expr2 = i < _sm_expr1;
-    if (!(_sm_expr2)) goto L27;
-    _sm_base24 = bodies[i];
-    simse_str_appendStr(out, _sm_base24);
-    i = i + 1;
-    goto L26;
-    L27:;
-    return out;
-}
-// src/modules/jsonnode/jsonnode.kt
-Bool ns7_isNull(ns7_JsonNode* self) {
-    ns7_SmJsonNodeTypes _sm_base1;
-    Bool _sm_expr1;
-    _sm_base1 = ns7_SmJsonNodeTypes::None;
-    _sm_expr1 = ns7_isOfType(self, _sm_base1);
-    return _sm_expr1;
-}
-// src/modules/jsonnode/jsonnode.kt
-Bool ns7_isArray(ns7_JsonNode* self) {
-    ns7_SmJsonNodeTypes _sm_base1;
-    Bool _sm_expr1;
-    _sm_base1 = ns7_SmJsonNodeTypes::Items;
-    _sm_expr1 = ns7_isOfType(self, _sm_base1);
-    return _sm_expr1;
-}
-// src/modules/jsonnode/jsonnode.kt
-Bool ns7_isObject(ns7_JsonNode* self) {
-    ns7_SmJsonNodeTypes _sm_base1;
-    Bool _sm_expr1;
-    _sm_base1 = ns7_SmJsonNodeTypes::Members;
-    _sm_expr1 = ns7_isOfType(self, _sm_base1);
-    return _sm_expr1;
-}
-// src/modules/jsonnode/jsonnode.kt
-Bool ns7_isBool(ns7_JsonNode* self) {
-    ns7_SmJsonNodeTypes _sm_base1;
-    Bool _sm_expr1;
-    _sm_base1 = ns7_SmJsonNodeTypes::Boolean;
-    _sm_expr1 = ns7_isOfType(self, _sm_base1);
-    return _sm_expr1;
-}
-// src/modules/jsonnode/jsonnode.kt
-Bool ns7_isNumber(ns7_JsonNode* self) {
-    ns7_SmJsonNodeTypes _sm_base1;
-    Bool _sm_expr1;
-    _sm_base1 = ns7_SmJsonNodeTypes::Number;
-    _sm_expr1 = ns7_isOfType(self, _sm_base1);
-    return _sm_expr1;
-}
-// src/modules/jsonnode/jsonnode.kt
-Bool ns7_isText(ns7_JsonNode* self) {
-    ns7_SmJsonNodeTypes _sm_base1;
-    Bool _sm_expr1;
-    _sm_base1 = ns7_SmJsonNodeTypes::Text;
-    _sm_expr1 = ns7_isOfType(self, _sm_base1);
-    return _sm_expr1;
-}
-// src/modules/jsonnode/jsonnode.kt
-Str ns7_text(ns7_JsonNode* self) {
-    ns7_SmJsonNodeTypes _sm_base1;
-    Bool _sm_expr1;
-    Str _sm_expr2;
-    _sm_base1 = ns7_SmJsonNodeTypes::Text;
-    _sm_expr1 = ns7_isOfType(self, _sm_base1);
-    if (_sm_expr1) goto L1;
-    goto L2;
-    L1:;
-    _sm_expr2 = self->Text;
-    return _sm_expr2;
-    L2:;
-    return __sm_stringTable[1115];
-}
-// src/modules/jsonnode/jsonnode.kt
-Float64 ns7_number(ns7_JsonNode* self) {
-    ns7_SmJsonNodeTypes _sm_base1;
-    Bool _sm_expr1;
-    Float64 _sm_expr2;
-    _sm_base1 = ns7_SmJsonNodeTypes::Number;
-    _sm_expr1 = ns7_isOfType(self, _sm_base1);
-    if (_sm_expr1) goto L1;
-    goto L2;
-    L1:;
-    _sm_expr2 = self->Number;
-    return _sm_expr2;
-    L2:;
-    return 0.0;
-}
-// src/modules/jsonnode/jsonnode.kt
-Bool ns7_boolean(ns7_JsonNode* self) {
-    ns7_SmJsonNodeTypes _sm_base1;
-    Bool _sm_expr1;
-    _sm_base1 = ns7_SmJsonNodeTypes::Boolean;
-    _sm_expr1 = ns7_isOfType(self, _sm_base1);
-    if (_sm_expr1) goto L1;
-    goto L2;
-    L1:;
-    _sm_expr1 = self->Boolean;
-    return _sm_expr1;
-    L2:;
-    return false;
-}
-// src/modules/jsonnode/jsonnode.kt
-Int ns7_size(ns7_JsonNode* self) {
-    ns7_SmJsonNodeTypes _sm_base1, _sm_base3;
-    List<Ref<ns7_JsonNode>>* _sm_base2;
-    List<Ref<ns7_JsonMember>>* _sm_base4;
-    Bool _sm_expr1;
-    Int _sm_expr2;
-    _sm_base1 = ns7_SmJsonNodeTypes::Items;
-    _sm_expr1 = ns7_isOfType(self, _sm_base1);
-    if (_sm_expr1) goto L1;
-    goto L2;
-    L1:;
-    _sm_base2 = simse_addressOf(self->Items);
-    _sm_expr2 = simse_lenOf((*_sm_base2));
-    return _sm_expr2;
-    L2:;
-    _sm_base3 = ns7_SmJsonNodeTypes::Members;
-    _sm_expr1 = ns7_isOfType(self, _sm_base3);
-    if (_sm_expr1) goto L3;
-    goto L4;
-    L3:;
-    _sm_base4 = simse_addressOf(self->Members);
-    _sm_expr2 = simse_lenOf((*_sm_base4));
-    return _sm_expr2;
-    L4:;
-    return 0;
-}
-// src/modules/jsonnode/jsonnode.kt
-ns7_JsonNode ns7_at(ns7_JsonNode* self, Int index) {
-    ns7_SmJsonNodeTypes _sm_base1;
-    List<Ref<ns7_JsonNode>>* _sm_base2, * _sm_base3;
-    Bool _sm_expr1;
-    Int _sm_expr3;
-    Ref<ns7_JsonNode> handle;
-    ns7_JsonNode* _sm_expr5;
-    _sm_base1 = ns7_SmJsonNodeTypes::Items;
-    _sm_expr1 = ns7_isOfType(self, _sm_base1);
-    if (_sm_expr1) goto L4;
-    goto L2;
-    L4:;
-    _sm_expr1 = index >= 0;
-    if (_sm_expr1) goto L3;
-    goto L2;
-    L3:;
-    _sm_base2 = simse_addressOf(self->Items);
-    _sm_expr3 = simse_lenOf((*_sm_base2));
-    _sm_expr1 = index < _sm_expr3;
-    if (_sm_expr1) goto L1;
-    goto L2;
-    L1:;
-    _sm_base3 = simse_addressOf(self->Items);
-    handle = (*_sm_base3)[index];
-    _sm_expr5 = (handle).get();
-    return *(_sm_expr5);
-    L2:;
-    ns7_JsonNode _sm_expr6;
-    ns7_initByValue(simse_addressOf(_sm_expr6));
-    return _sm_expr6;
-}
-// src/modules/jsonnode/jsonnode.kt
-ns7_JsonNode ns7_get(ns7_JsonNode* self, Str key) {
-    ns7_SmJsonNodeTypes _sm_base1;
-    List<Ref<ns7_JsonMember>>* _sm_base2, * _sm_base3;
-    Bool _sm_expr1, _sm_expr2;
-    Int i, _sm_expr4;
-    Ref<ns7_JsonMember> member;
-    Str _sm_expr6;
-    Ref<ns7_JsonNode> handle;
-    ns7_JsonNode* _sm_expr8;
-    _sm_base1 = ns7_SmJsonNodeTypes::Members;
-    _sm_expr1 = ns7_isOfType(self, _sm_base1);
-    _sm_expr2 = !_sm_expr1;
-    if (_sm_expr2) goto L1;
-    goto L2;
-    L1:;
-    {
-        ns7_JsonNode _sm_expr3;
-        ns7_initByValue(simse_addressOf(_sm_expr3));
-        return _sm_expr3;
-    }
-    L2:;
-    i = 0;
-    L3:;
-    _sm_base2 = simse_addressOf(self->Members);
-    _sm_expr4 = simse_lenOf((*_sm_base2));
-    _sm_expr1 = i < _sm_expr4;
-    if (!(_sm_expr1)) goto L4;
-    _sm_base3 = simse_addressOf(self->Members);
-    member = (*_sm_base3)[i];
-    _sm_expr6 = member->key;
-    _sm_expr1 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_expr6))), simse_spanOfStr(simse_addressOf(key)));
-    if (_sm_expr1) goto L5;
-    goto L6;
-    L5:;
-    handle = member->value;
-    _sm_expr8 = (handle).get();
-    return *(_sm_expr8);
-    L6:;
-    i = i + 1;
-    goto L3;
-    L4:;
-    ns7_JsonNode _sm_expr9;
-    ns7_initByValue(simse_addressOf(_sm_expr9));
-    return _sm_expr9;
-}
-// src/modules/jsonnode/jsonnode.kt
-Bool ns7_has(ns7_JsonNode* self, Str key) {
-    ns7_SmJsonNodeTypes _sm_base1;
-    List<Ref<ns7_JsonMember>>* _sm_base2, * _sm_base3;
-    Bool _sm_expr1, _sm_expr2;
-    Int i, _sm_expr3;
-    Ref<ns7_JsonMember> member;
-    Str _sm_expr5;
-    _sm_base1 = ns7_SmJsonNodeTypes::Members;
-    _sm_expr1 = ns7_isOfType(self, _sm_base1);
-    _sm_expr2 = !_sm_expr1;
-    if (_sm_expr2) goto L1;
-    goto L2;
-    L1:;
-    return false;
-    L2:;
-    i = 0;
-    L3:;
-    _sm_base2 = simse_addressOf(self->Members);
-    _sm_expr3 = simse_lenOf((*_sm_base2));
-    _sm_expr1 = i < _sm_expr3;
-    if (!(_sm_expr1)) goto L4;
-    _sm_base3 = simse_addressOf(self->Members);
-    member = (*_sm_base3)[i];
-    _sm_expr5 = member->key;
-    _sm_expr1 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_expr5))), simse_spanOfStr(simse_addressOf(key)));
-    if (_sm_expr1) goto L5;
-    goto L6;
-    L5:;
-    return true;
-    L6:;
-    i = i + 1;
-    goto L3;
-    L4:;
-    return false;
-}
-// src/modules/jsonnode/jsonnode.kt
-ns7_JsonNode ns7_jsonNull() {
-    ns7_JsonNode _sm_expr1;
-    ns7_initByValue(simse_addressOf(_sm_expr1));
-    return _sm_expr1;
-}
-// src/modules/jsonnode/jsonnode.kt
-ns7_JsonNode ns7_jsonBool(Bool value) {
-    ns7_JsonNode node;
-    ns7_initByValue(simse_addressOf(node));
-    ns7_setBoolean(simse_addressOf(node), value);
-    return node;
-}
-// src/modules/jsonnode/jsonnode.kt
-ns7_JsonNode ns7_jsonNumber(Float64 value) {
-    ns7_JsonNode node;
-    ns7_initByValue(simse_addressOf(node));
-    ns7_setNumber(simse_addressOf(node), value);
-    return node;
-}
-// src/modules/jsonnode/jsonnode.kt
-ns7_JsonNode ns7_jsonText(Str value) {
-    ns7_JsonNode node;
-    ns7_initByValue(simse_addressOf(node));
-    ns7_setText(simse_addressOf(node), value);
-    return node;
-}
-// src/modules/jsonnode/jsonnode.kt
-Ref<ns7_JsonMember> ns7_jsonField(Str key, ns7_JsonNode* value) {
-    ns7_JsonNode boxed;
-    Ref<ns7_JsonNode> _sm_expr1;
-    Ref<ns7_JsonMember> _sm_expr2;
-    boxed = *(value);
-    _sm_expr1 = makeRef<std::remove_cvref_t<decltype((boxed))>>(boxed);
-    _sm_expr2 = makeRef<ns7_JsonMember>(key, _sm_expr1);
-    return _sm_expr2;
-}
-// src/modules/jsonnode/jsonnode.kt
-ns7_JsonNode ns7_jsonArray(List<ns7_JsonNode> items) {
-    List<Ref<ns7_JsonNode>> handles;
-    Int i, _sm_expr1;
-    Bool _sm_expr2;
-    ns7_JsonNode boxed;
-    Ref<ns7_JsonNode> _sm_expr3;
-    handles = List<Ref<ns7_JsonNode>>();
-    i = 0;
-    L1:;
-    _sm_expr1 = simse_lenOf(items);
-    _sm_expr2 = i < _sm_expr1;
-    if (!(_sm_expr2)) goto L2;
-    boxed = items[i];
-    _sm_expr3 = makeRef<std::remove_cvref_t<decltype((boxed))>>(boxed);
-    simse_list_append(handles, _sm_expr3);
-    i = i + 1;
-    goto L1;
-    L2:;
-    ns7_JsonNode node;
-    ns7_initByValue(simse_addressOf(node));
-    ns7_setItems(simse_addressOf(node), handles);
-    return node;
-}
-// src/modules/jsonnode/jsonnode.kt
-ns7_JsonNode ns7_jsonObject(List<Ref<ns7_JsonMember>> members) {
-    ns7_JsonNode node;
-    ns7_initByValue(simse_addressOf(node));
-    ns7_setMembers(simse_addressOf(node), members);
-    return node;
-}
-// src/modules/jsonnode/jsonnode.kt
-Str ns7_jsonNumberText(Float64 value) {
-    Str printed, _sm_expr11;
-    Int _sm_expr1, end, _sm_expr4, _sm_expr8;
-    Bool _sm_expr2;
-    Char _sm_expr5;
-    printed = simse_num_toString(value);
-    _sm_expr1 = simse_str_find(printed, __sm_stringTable[1088]);
-    _sm_expr2 = _sm_expr1 < 0;
-    if (_sm_expr2) goto L1;
-    goto L2;
-    L1:;
-    return printed;
-    L2:;
-    end = simse_lenOf(printed);
-    L3:;
-    _sm_expr2 = end > 0;
-    if (_sm_expr2) goto L6;
-    goto L4;
-    L6:;
-    _sm_expr4 = end - 1;
-    _sm_expr5 = simse_str_charAt(printed, _sm_expr4);
-    _sm_expr2 = _sm_expr5 == '0';
-    if (_sm_expr2) goto L5;
-    goto L4;
-    L5:;
-    end = end - 1;
-    goto L3;
-    L4:;
-    _sm_expr2 = end > 0;
-    if (_sm_expr2) goto L9;
-    goto L8;
-    L9:;
-    _sm_expr8 = end - 1;
-    _sm_expr5 = simse_str_charAt(printed, _sm_expr8);
-    _sm_expr2 = _sm_expr5 == '.';
-    if (_sm_expr2) goto L7;
-    goto L8;
-    L7:;
-    end = end - 1;
-    L8:;
-    _sm_expr11 = substr(simse_addressOf(printed), 0, end);
-    return _sm_expr11;
-}
-// src/modules/jsonnode/jsonnode.kt
-void ns7_jsonWriteQuoted(Str* out, Str value) {
-    Int i, _sm_expr1;
-    Bool _sm_expr2;
-    Char ch;
-    simse_str_append((*out), '"');
-    i = 0;
-    L1:;
-    _sm_expr1 = simse_lenOf(value);
-    _sm_expr2 = i < _sm_expr1;
-    if (!(_sm_expr2)) goto L2;
-    ch = simse_str_charAt(value, i);
-    _sm_expr2 = ch == '"';
-    if (_sm_expr2) goto L3;
-    goto L4;
-    L3:;
-    simse_str_append((*out), '\\');
-    simse_str_append((*out), '"');
-    goto L17;
-    L4:;
-    _sm_expr2 = ch == '\\';
-    if (_sm_expr2) goto L6;
-    goto L7;
-    L6:;
-    simse_str_append((*out), '\\');
-    simse_str_append((*out), '\\');
-    goto L17;
-    L7:;
-    _sm_expr2 = ch == '\n';
-    if (_sm_expr2) goto L9;
-    goto L10;
-    L9:;
-    simse_str_append((*out), '\\');
-    simse_str_append((*out), 'n');
-    goto L17;
-    L10:;
-    _sm_expr2 = ch == '\r';
-    if (_sm_expr2) goto L12;
-    goto L13;
-    L12:;
-    simse_str_append((*out), '\\');
-    simse_str_append((*out), 'r');
-    goto L17;
-    L13:;
-    _sm_expr2 = ch == '\t';
-    if (_sm_expr2) goto L15;
-    goto L16;
-    L15:;
-    simse_str_append((*out), '\\');
-    simse_str_append((*out), 't');
-    goto L17;
-    L16:;
-    simse_str_append((*out), ch);
-    L17:;
-    i = i + 1;
-    goto L1;
-    L2:;
-    simse_str_append((*out), '"');
-}
-// src/modules/jsonnode/jsonnode.kt
-void ns7_write(ns7_JsonWriter* self, ns7_JsonNode node) {
-    Str* _sm_base1, * _sm_base2, * _sm_base3, * _sm_base5, * _sm_base6, * _sm_base7, * _sm_base9,
-        * _sm_base11, * _sm_base15, * _sm_base16, * _sm_base18, * _sm_base20, * _sm_base21, * _sm_base26;
-    Float64 _sm_base4;
-    Str _sm_base8, _sm_base22, _sm_expr8;
-    List<Ref<ns7_JsonNode>>* _sm_base10, * _sm_base12;
-    ns7_JsonNode* _sm_base13, * _sm_base24;
-    ns7_JsonNode _sm_base14, _sm_base25;
-    List<Ref<ns7_JsonMember>>* _sm_base17, * _sm_base19;
-    ns7_SmJsonNodeTypes _sm_expr1;
-    Bool _sm_expr2;
-    Int i, _sm_expr13, _sm_i_2;
-    Ref<ns7_JsonNode> handle, _sm_handle_2;
-    Ref<ns7_JsonMember> member;
-    _sm_expr1 = ns7_SmJsonNodeTypes::None;
-    _sm_expr2 = node == _sm_expr1;
-    if (_sm_expr2) goto L1;
-    goto L2;
-    L1:;
-    _sm_base1 = simse_addressOf(self->out);
-    simse_str_appendStr((*_sm_base1), __sm_stringTable[964]);
-    goto L24;
-    L2:;
-    _sm_expr1 = ns7_SmJsonNodeTypes::Boolean;
-    _sm_expr2 = node == _sm_expr1;
-    if (_sm_expr2) goto L4;
-    goto L5;
-    L4:;
-    _sm_expr2 = node.Boolean;
-    if (_sm_expr2) goto L6;
-    goto L7;
-    L6:;
-    _sm_base2 = simse_addressOf(self->out);
-    simse_str_appendStr((*_sm_base2), __sm_stringTable[971]);
-    goto L24;
-    L7:;
-    _sm_base3 = simse_addressOf(self->out);
-    simse_str_appendStr((*_sm_base3), __sm_stringTable[886]);
-    goto L24;
-    L5:;
-    _sm_expr1 = ns7_SmJsonNodeTypes::Number;
-    _sm_expr2 = node == _sm_expr1;
-    if (_sm_expr2) goto L10;
-    goto L11;
-    L10:;
-    _sm_base4 = node.Number;
-    _sm_expr8 = ns7_jsonNumberText(_sm_base4);
-    _sm_base5 = simse_addressOf(self->out);
-    simse_str_appendStr((*_sm_base5), _sm_expr8);
-    goto L24;
-    L11:;
-    _sm_expr1 = ns7_SmJsonNodeTypes::Text;
-    _sm_expr2 = node == _sm_expr1;
-    if (_sm_expr2) goto L13;
-    goto L14;
-    L13:;
-    _sm_base7 = simse_addressOf(self->out);
-    _sm_base6 = _sm_base7;
-    _sm_base8 = node.Text;
-    ns7_jsonWriteQuoted(_sm_base6, _sm_base8);
-    goto L24;
-    L14:;
-    _sm_expr1 = ns7_SmJsonNodeTypes::Items;
-    _sm_expr2 = node == _sm_expr1;
-    if (_sm_expr2) goto L16;
-    goto L17;
-    L16:;
-    _sm_base9 = simse_addressOf(self->out);
-    simse_str_append((*_sm_base9), '[');
-    i = 0;
-    L18:;
-    _sm_base10 = simse_addressOf(node.Items);
-    _sm_expr13 = simse_lenOf((*_sm_base10));
-    _sm_expr2 = i < _sm_expr13;
-    if (!(_sm_expr2)) goto L19;
-    _sm_expr2 = i > 0;
-    if (_sm_expr2) goto L20;
-    goto L21;
-    L20:;
-    _sm_base11 = simse_addressOf(self->out);
-    simse_str_append((*_sm_base11), ',');
-    L21:;
-    _sm_base12 = simse_addressOf(node.Items);
-    handle = (*_sm_base12)[i];
-    _sm_base13 = (handle).get();
-    _sm_base14 = *(_sm_base13);
-    ns7_write(self, _sm_base14);
-    i = i + 1;
-    goto L18;
-    L19:;
-    _sm_base15 = simse_addressOf(self->out);
-    simse_str_append((*_sm_base15), ']');
-    goto L24;
-    L17:;
-    _sm_expr1 = ns7_SmJsonNodeTypes::Members;
-    _sm_expr2 = node == _sm_expr1;
-    if (_sm_expr2) goto L23;
-    goto L24;
-    L23:;
-    _sm_base16 = simse_addressOf(self->out);
-    simse_str_append((*_sm_base16), '{');
-    _sm_i_2 = 0;
-    L25:;
-    _sm_base17 = simse_addressOf(node.Members);
-    _sm_expr13 = simse_lenOf((*_sm_base17));
-    _sm_expr2 = _sm_i_2 < _sm_expr13;
-    if (!(_sm_expr2)) goto L26;
-    _sm_expr2 = _sm_i_2 > 0;
-    if (_sm_expr2) goto L27;
-    goto L28;
-    L27:;
-    _sm_base18 = simse_addressOf(self->out);
-    simse_str_append((*_sm_base18), ',');
-    L28:;
-    _sm_base19 = simse_addressOf(node.Members);
-    member = (*_sm_base19)[_sm_i_2];
-    _sm_base21 = simse_addressOf(self->out);
-    _sm_base20 = _sm_base21;
-    _sm_base22 = member->key;
-    ns7_jsonWriteQuoted(_sm_base20, _sm_base22);
-    simse_str_append((*_sm_base21), ':');
-    _sm_handle_2 = member->value;
-    _sm_base24 = (_sm_handle_2).get();
-    _sm_base25 = *(_sm_base24);
-    ns7_write(self, _sm_base25);
-    _sm_i_2 = _sm_i_2 + 1;
-    goto L25;
-    L26:;
-    _sm_base26 = simse_addressOf(self->out);
-    simse_str_append((*_sm_base26), '}');
-    L24:;
-}
-// src/modules/jsonnode/jsonnode.kt
-Str ns7_toJson(ns7_JsonNode* self) {
-    ns7_JsonWriter writer;
-    Str _sm_expr2;
-    Str _sm_expr1;
-    initByValue(simse_addressOf(_sm_expr1));
-    writer = ns7_JsonWriter{_sm_expr1};
-    ns7_write(simse_addressOf(writer), (*self));
-    _sm_expr2 = writer.out;
-    return _sm_expr2;
-}
-// src/modules/jsonnode/jsonnode.kt
-Res<ns7_JsonNode> ns7_fail(ns7_JsonReader* self, Str message) {
-    char* __sm_catP;
-    Int* _sm_base1;
-    Str _sm_expr1, _sm_expr2;
-    Res<ns7_JsonNode> _sm_expr3;
-    _sm_base1 = simse_addressOf(self->at);
-    _sm_expr1 = simse_int_toString((*_sm_base1));
-    _sm_expr2.resize(15 + message.size() + _sm_expr1.size());
-    __sm_catP = _sm_expr2.data();
-    std::memcpy(__sm_catP, "json: ", 6);
-    __sm_catP = __sm_catP + 6;
-    std::memcpy(__sm_catP, message.data(), message.size());
-    __sm_catP = __sm_catP + message.size();
-    std::memcpy(__sm_catP, " at byte ", 9);
-    __sm_catP = __sm_catP + 9;
-    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
-    _sm_expr3 = simse_resErr<ns7_JsonNode>(_sm_expr2);
-    return _sm_expr3;
-}
-// src/modules/jsonnode/jsonnode.kt
-Res<Str> ns7_failText(ns7_JsonReader* self, Str message) {
-    char* __sm_catP;
-    Int* _sm_base1;
-    Str _sm_expr1, _sm_expr2;
-    Res<Str> _sm_expr3;
-    _sm_base1 = simse_addressOf(self->at);
-    _sm_expr1 = simse_int_toString((*_sm_base1));
-    _sm_expr2.resize(15 + message.size() + _sm_expr1.size());
-    __sm_catP = _sm_expr2.data();
-    std::memcpy(__sm_catP, "json: ", 6);
-    __sm_catP = __sm_catP + 6;
-    std::memcpy(__sm_catP, message.data(), message.size());
-    __sm_catP = __sm_catP + message.size();
-    std::memcpy(__sm_catP, " at byte ", 9);
-    __sm_catP = __sm_catP + 9;
-    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
-    _sm_expr3 = simse_resErr<Str>(_sm_expr2);
-    return _sm_expr3;
-}
-// src/modules/jsonnode/jsonnode.kt
-Res<Char> ns7_failChar(ns7_JsonReader* self, Str message) {
-    char* __sm_catP;
-    Int* _sm_base1;
-    Str _sm_expr1, _sm_expr2;
-    Res<Char> _sm_expr3;
-    _sm_base1 = simse_addressOf(self->at);
-    _sm_expr1 = simse_int_toString((*_sm_base1));
-    _sm_expr2.resize(15 + message.size() + _sm_expr1.size());
-    __sm_catP = _sm_expr2.data();
-    std::memcpy(__sm_catP, "json: ", 6);
-    __sm_catP = __sm_catP + 6;
-    std::memcpy(__sm_catP, message.data(), message.size());
-    __sm_catP = __sm_catP + message.size();
-    std::memcpy(__sm_catP, " at byte ", 9);
-    __sm_catP = __sm_catP + 9;
-    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
-    _sm_expr3 = simse_resErr<Char>(_sm_expr2);
-    return _sm_expr3;
-}
-// src/modules/jsonnode/jsonnode.kt
-void ns7_skipSpace(ns7_JsonReader* self) {
-    Str* _sm_base1, * _sm_base2;
-    Int _sm_base3, _sm_base4, _sm_expr1, _sm_expr2;
-    Bool _sm_expr3, _sm_expr5;
-    Char ch;
-    L1:;
-    _sm_expr1 = self->at;
-    _sm_base1 = simse_addressOf(self->text);
-    _sm_expr2 = simse_lenOf((*_sm_base1));
-    _sm_expr3 = _sm_expr1 < _sm_expr2;
-    if (!(_sm_expr3)) goto L2;
-    _sm_base2 = simse_addressOf(self->text);
-    _sm_base3 = self->at;
-    ch = simse_str_charAt((*_sm_base2), _sm_base3);
-    _sm_expr3 = isSpace(simse_addressOf(ch));
-    _sm_expr5 = !_sm_expr3;
-    if (_sm_expr5) goto L2;
-    _sm_expr1 = self->at;
-    _sm_base4 = _sm_expr1 + 1;
-    self->at = _sm_base4;
-    goto L1;
-    L2:;
-}
-// src/modules/jsonnode/jsonnode.kt
-Bool ns7_consume(ns7_JsonReader* self, Str word) {
-    Str* _sm_base1, * _sm_base2;
-    Int _sm_base3, _sm_base4, _sm_expr1, _sm_expr2, _sm_expr3, _sm_expr4;
-    Bool _sm_expr5;
-    Str _sm_expr7;
-    _sm_expr1 = self->at;
-    _sm_expr2 = simse_lenOf(word);
-    _sm_expr3 = _sm_expr1 + _sm_expr2;
-    _sm_base1 = simse_addressOf(self->text);
-    _sm_expr4 = simse_lenOf((*_sm_base1));
-    _sm_expr5 = _sm_expr3 > _sm_expr4;
-    if (_sm_expr5) goto L1;
-    goto L2;
-    L1:;
-    return false;
-    L2:;
-    _sm_base2 = simse_addressOf(self->text);
-    _sm_base3 = self->at;
-    _sm_expr7 = substr(_sm_base2, _sm_base3, _sm_expr2);
-    _sm_expr5 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_expr7))), simse_spanOfStr(simse_addressOf(word)));
-    if (_sm_expr5) goto L3;
-    goto L4;
-    L3:;
-    _sm_expr1 = self->at;
-    _sm_base4 = _sm_expr1 + _sm_expr2;
-    self->at = _sm_base4;
-    return true;
-    L4:;
-    return false;
-}
-// src/modules/jsonnode/jsonnode.kt
-Res<ns7_JsonNode> ns7_parseValue(ns7_JsonReader* self) {
-    Str* _sm_base1, * _sm_base2;
-    Int _sm_base3, _sm_expr1, _sm_expr2;
-    Str _sm_base4, text;
-    Bool _sm_expr3, _sm_expr11;
-    Res<ns7_JsonNode> _sm_expr4;
-    Char ch;
-    Res<Str> parsedText, _sm_prop1;
-    ns7_JsonNode _sm_expr13;
-    ns7_skipSpace(self);
-    _sm_expr1 = self->at;
-    _sm_base1 = simse_addressOf(self->text);
-    _sm_expr2 = simse_lenOf((*_sm_base1));
-    _sm_expr3 = _sm_expr1 >= _sm_expr2;
-    if (_sm_expr3) goto L1;
-    goto L2;
-    L1:;
-    _sm_expr4 = ns7_fail(self, __sm_stringTable[270]);
-    return _sm_expr4;
-    L2:;
-    _sm_base2 = simse_addressOf(self->text);
-    _sm_base3 = self->at;
-    ch = simse_str_charAt((*_sm_base2), _sm_base3);
-    _sm_expr3 = ch == '{';
-    if (_sm_expr3) goto L3;
-    goto L4;
-    L3:;
-    _sm_expr4 = ns7_parseObject(self);
-    return _sm_expr4;
-    L4:;
-    _sm_expr3 = ch == '[';
-    if (_sm_expr3) goto L5;
-    goto L6;
-    L5:;
-    _sm_expr4 = ns7_parseArray(self);
-    return _sm_expr4;
-    L6:;
-    _sm_expr3 = ch == '"';
-    if (_sm_expr3) goto L7;
-    goto L8;
-    L7:;
-    parsedText = ns7_parseString(self);
-    _sm_prop1 = parsedText;
-    _sm_expr3 = simse_resHasValue(simse_addressOf(_sm_prop1));
-    _sm_expr11 = !_sm_expr3;
-    if (_sm_expr11) goto L9;
-    goto L10;
-    L9:;
-    _sm_base4 = _sm_prop1.Error;
-    _sm_expr4 = simse_resErr<ns7_JsonNode>(_sm_base4);
-    return _sm_expr4;
-    L10:;
-    text = _sm_prop1.Value;
-    _sm_expr13 = ns7_jsonText(text);
-    _sm_expr4 = simse_resOk<ns7_JsonNode>(_sm_expr13);
-    return _sm_expr4;
-    L8:;
-    _sm_expr3 = ch == 't';
-    if (_sm_expr3) goto L11;
-    _sm_expr3 = ch == 'f';
-    if (_sm_expr3) goto L11;
-    _sm_expr3 = ch == 'n';
-    if (_sm_expr3) goto L11;
-    goto L12;
-    L11:;
-    _sm_expr4 = ns7_parseLiteral(self);
-    return _sm_expr4;
-    L12:;
-    _sm_expr4 = ns7_parseNumber(self);
-    return _sm_expr4;
-}
-// src/modules/jsonnode/jsonnode.kt
-Res<ns7_JsonNode> ns7_parseLiteral(ns7_JsonReader* self) {
-    Bool _sm_expr1;
-    ns7_JsonNode _sm_expr2, _sm_expr5, _sm_expr8;
-    Res<ns7_JsonNode> _sm_expr3;
-    _sm_expr1 = ns7_consume(self, __sm_stringTable[971]);
-    if (_sm_expr1) goto L1;
-    goto L2;
-    L1:;
-    _sm_expr2 = ns7_jsonBool(true);
-    _sm_expr3 = simse_resOk<ns7_JsonNode>(_sm_expr2);
-    return _sm_expr3;
-    L2:;
-    _sm_expr1 = ns7_consume(self, __sm_stringTable[886]);
-    if (_sm_expr1) goto L3;
-    goto L4;
-    L3:;
-    _sm_expr5 = ns7_jsonBool(false);
-    _sm_expr3 = simse_resOk<ns7_JsonNode>(_sm_expr5);
-    return _sm_expr3;
-    L4:;
-    _sm_expr1 = ns7_consume(self, __sm_stringTable[964]);
-    if (_sm_expr1) goto L5;
-    goto L6;
-    L5:;
-    _sm_expr8 = ns7_jsonNull();
-    _sm_expr3 = simse_resOk<ns7_JsonNode>(_sm_expr8);
-    return _sm_expr3;
-    L6:;
-    _sm_expr3 = ns7_fail(self, __sm_stringTable[372]);
-    return _sm_expr3;
-}
-// src/modules/jsonnode/jsonnode.kt
-Res<ns7_JsonNode> ns7_parseNumber(ns7_JsonReader* self) {
-    char* __sm_catP;
-    Str* _sm_base1, * _sm_base2, * _sm_base5;
-    Int _sm_base3, _sm_base4, start, _sm_expr1, _sm_expr2, _sm_expr15;
-    Bool _sm_expr3, _sm_expr17;
-    Char ch;
-    Res<ns7_JsonNode> _sm_expr13;
-    Str token, _sm_expr18;
-    Opt<Float64> value;
-    Float64 _sm_expr20;
-    ns7_JsonNode _sm_expr21;
-    start = self->at;
-    L1:;
-    _sm_expr1 = self->at;
-    _sm_base1 = simse_addressOf(self->text);
-    _sm_expr2 = simse_lenOf((*_sm_base1));
-    _sm_expr3 = _sm_expr1 < _sm_expr2;
-    if (!(_sm_expr3)) goto L2;
-    _sm_base2 = simse_addressOf(self->text);
-    _sm_base3 = self->at;
-    ch = simse_str_charAt((*_sm_base2), _sm_base3);
-    _sm_expr3 = isDigit(simse_addressOf(ch));
-    if (_sm_expr3) goto L3;
-    _sm_expr3 = ch == '-';
-    if (_sm_expr3) goto L3;
-    _sm_expr3 = ch == '+';
-    if (_sm_expr3) goto L3;
-    _sm_expr3 = ch == '.';
-    if (_sm_expr3) goto L3;
-    _sm_expr3 = ch == 'e';
-    if (_sm_expr3) goto L3;
-    _sm_expr3 = ch == 'E';
-    if (_sm_expr3) goto L3;
-    goto L2;
-    L3:;
-    _sm_expr1 = self->at;
-    _sm_base4 = _sm_expr1 + 1;
-    self->at = _sm_base4;
-    goto L1;
-    L2:;
-    _sm_expr1 = self->at;
-    _sm_expr3 = _sm_expr1 == start;
-    if (_sm_expr3) goto L11;
-    goto L12;
-    L11:;
-    _sm_expr13 = ns7_fail(self, __sm_stringTable[372]);
-    return _sm_expr13;
-    L12:;
-    _sm_expr1 = self->at;
-    _sm_expr15 = _sm_expr1 - start;
-    _sm_base5 = simse_addressOf(self->text);
-    token = substr(_sm_base5, start, _sm_expr15);
-    value = simse_str_toFloat(token);
-    _sm_expr3 = simse_optHasValue(simse_addressOf(value));
-    _sm_expr17 = !_sm_expr3;
-    if (_sm_expr17) goto L13;
-    goto L14;
-    L13:;
-    _sm_expr18.resize(13 + token.size());
-    __sm_catP = _sm_expr18.data();
-    std::memcpy(__sm_catP, "bad number '", 12);
-    __sm_catP = __sm_catP + 12;
-    std::memcpy(__sm_catP, token.data(), token.size());
-    __sm_catP = __sm_catP + token.size();
-    *__sm_catP = (char) ('\'');
-    _sm_expr13 = ns7_fail(self, _sm_expr18);
-    return _sm_expr13;
-    L14:;
-    _sm_expr20 = simse_optValue(simse_addressOf(value));
-    _sm_expr21 = ns7_jsonNumber(_sm_expr20);
-    _sm_expr13 = simse_resOk<ns7_JsonNode>(_sm_expr21);
-    return _sm_expr13;
-}
-// src/modules/jsonnode/jsonnode.kt
-Res<Str> ns7_parseString(ns7_JsonReader* self) {
-    Int _sm_base1, _sm_base4, _sm_base5, _sm_base8, _sm_base9, _sm_expr1, _sm_expr3;
-    Str* _sm_base2, * _sm_base3, * _sm_base6, * _sm_base7;
-    Str _sm_base10, out;
-    Bool _sm_expr4, _sm_expr23;
-    Char ch, esc, decoded;
-    Res<Str> _sm_expr7;
-    Res<Char> parsedHex, _sm_prop1;
-    _sm_expr1 = self->at;
-    _sm_base1 = _sm_expr1 + 1;
-    self->at = _sm_base1;
-    out = Str();
-    L1:;
-    _sm_expr1 = self->at;
-    _sm_base2 = simse_addressOf(self->text);
-    _sm_expr3 = simse_lenOf((*_sm_base2));
-    _sm_expr4 = _sm_expr1 < _sm_expr3;
-    if (!(_sm_expr4)) goto L2;
-    _sm_base3 = simse_addressOf(self->text);
-    _sm_base4 = self->at;
-    ch = simse_str_charAt((*_sm_base3), _sm_base4);
-    _sm_expr1 = self->at;
-    _sm_base5 = _sm_expr1 + 1;
-    self->at = _sm_base5;
-    _sm_expr4 = ch == '"';
-    if (_sm_expr4) goto L3;
-    goto L4;
-    L3:;
-    _sm_expr7 = simse_resOk<Str>(out);
-    return _sm_expr7;
-    L4:;
-    _sm_expr4 = ch != '\\';
-    if (_sm_expr4) goto L5;
-    goto L6;
-    L5:;
-    simse_str_append(out, ch);
-    goto L1;
-    L6:;
-    _sm_expr1 = self->at;
-    _sm_base6 = simse_addressOf(self->text);
-    _sm_expr3 = simse_lenOf((*_sm_base6));
-    _sm_expr4 = _sm_expr1 >= _sm_expr3;
-    if (_sm_expr4) goto L2;
-    _sm_base7 = simse_addressOf(self->text);
-    _sm_base8 = self->at;
-    esc = simse_str_charAt((*_sm_base7), _sm_base8);
-    _sm_expr1 = self->at;
-    _sm_base9 = _sm_expr1 + 1;
-    self->at = _sm_base9;
-    _sm_expr4 = esc == '"';
-    if (_sm_expr4) goto L9;
-    goto L10;
-    L9:;
-    simse_str_append(out, '"');
-    goto L1;
-    L10:;
-    _sm_expr4 = esc == '\\';
-    if (_sm_expr4) goto L12;
-    goto L13;
-    L12:;
-    simse_str_append(out, '\\');
-    goto L1;
-    L13:;
-    _sm_expr4 = esc == '/';
-    if (_sm_expr4) goto L15;
-    goto L16;
-    L15:;
-    simse_str_append(out, '/');
-    goto L1;
-    L16:;
-    _sm_expr4 = esc == 'n';
-    if (_sm_expr4) goto L18;
-    goto L19;
-    L18:;
-    simse_str_append(out, '\n');
-    goto L1;
-    L19:;
-    _sm_expr4 = esc == 'r';
-    if (_sm_expr4) goto L21;
-    goto L22;
-    L21:;
-    simse_str_append(out, '\r');
-    goto L1;
-    L22:;
-    _sm_expr4 = esc == 't';
-    if (_sm_expr4) goto L24;
-    goto L25;
-    L24:;
-    simse_str_append(out, '\t');
-    goto L1;
-    L25:;
-    _sm_expr4 = esc == 'b';
-    if (_sm_expr4) goto L27;
-    goto L28;
-    L27:;
-    simse_str_append(out, '\b');
-    goto L1;
-    L28:;
-    _sm_expr4 = esc == 'f';
-    if (_sm_expr4) goto L30;
-    goto L31;
-    L30:;
-    simse_str_append(out, '\f');
-    goto L1;
-    L31:;
-    _sm_expr4 = esc == 'u';
-    if (_sm_expr4) goto L33;
-    goto L34;
-    L33:;
-    parsedHex = ns7_parseUnicodeEscape(self);
-    _sm_prop1 = parsedHex;
-    _sm_expr4 = simse_resHasValue(simse_addressOf(_sm_prop1));
-    _sm_expr23 = !_sm_expr4;
-    if (_sm_expr23) goto L35;
-    goto L36;
-    L35:;
-    _sm_base10 = _sm_prop1.Error;
-    _sm_expr7 = simse_resErr<Str>(_sm_base10);
-    return _sm_expr7;
-    L36:;
-    decoded = _sm_prop1.Value;
-    simse_str_append(out, decoded);
-    goto L1;
-    L34:;
-    _sm_expr7 = ns7_failText(self, __sm_stringTable[566]);
-    return _sm_expr7;
-    L2:;
-    _sm_expr7 = ns7_failText(self, __sm_stringTable[330]);
-    return _sm_expr7;
-}
-// src/modules/jsonnode/jsonnode.kt
-Res<Char> ns7_parseUnicodeEscape(ns7_JsonReader* self) {
-    Str* _sm_base1, * _sm_base2;
-    Int _sm_base3, _sm_base4, _sm_expr1, _sm_expr2, _sm_expr3, code, i, digit;
-    Bool _sm_expr4;
-    Res<Char> _sm_expr5;
-    Char ch, _sm_expr13;
-    _sm_expr1 = self->at;
-    _sm_expr2 = _sm_expr1 + 4;
-    _sm_base1 = simse_addressOf(self->text);
-    _sm_expr3 = simse_lenOf((*_sm_base1));
-    _sm_expr4 = _sm_expr2 > _sm_expr3;
-    if (_sm_expr4) goto L1;
-    goto L2;
-    L1:;
-    _sm_expr5 = ns7_failChar(self, __sm_stringTable[336]);
-    return _sm_expr5;
-    L2:;
-    code = 0;
-    i = 0;
-    L3:;
-    _sm_expr4 = i < 4;
-    if (!(_sm_expr4)) goto L4;
-    _sm_base2 = simse_addressOf(self->text);
-    _sm_base3 = self->at;
-    ch = simse_str_charAt((*_sm_base2), _sm_base3);
-    _sm_expr1 = self->at;
-    _sm_base4 = _sm_expr1 + 1;
-    self->at = _sm_base4;
-    digit = ns7_jsonHexValue(ch);
-    _sm_expr4 = digit < 0;
-    if (_sm_expr4) goto L5;
-    goto L6;
-    L5:;
-    _sm_expr5 = ns7_failChar(self, __sm_stringTable[336]);
-    return _sm_expr5;
-    L6:;
-    _sm_expr1 = code * 16;
-    code = _sm_expr1 + digit;
-    i = i + 1;
-    goto L3;
-    L4:;
-    _sm_expr4 = code > 127;
-    if (_sm_expr4) goto L7;
-    goto L8;
-    L7:;
-    _sm_expr5 = simse_resOk<Char>('?');
-    return _sm_expr5;
-    L8:;
-    _sm_expr13 = '\0' + code;
-    _sm_expr5 = simse_resOk<Char>(_sm_expr13);
-    return _sm_expr5;
-}
-// src/modules/jsonnode/jsonnode.kt
-Res<ns7_JsonNode> ns7_parseArray(ns7_JsonReader* self) {
-    Int _sm_base1, _sm_base4, _sm_base5, _sm_base8, _sm_base9, _sm_expr1, _sm_expr2, _sm_expr3;
-    Str* _sm_base2, * _sm_base3, * _sm_base6, * _sm_base7;
-    List<Ref<ns7_JsonNode>> items;
-    Bool _sm_expr4, _sm_expr11;
-    Char _sm_expr5, ch;
-    ns7_JsonNode _sm_expr8, value, _sm_expr19;
-    Res<ns7_JsonNode> _sm_expr9, _sm_prop1;
-    Ref<ns7_JsonNode> _sm_expr12;
-    _sm_expr1 = self->at;
-    _sm_base1 = _sm_expr1 + 1;
-    self->at = _sm_base1;
-    items = List<Ref<ns7_JsonNode>>();
-    ns7_skipSpace(self);
-    _sm_expr2 = self->at;
-    _sm_base2 = simse_addressOf(self->text);
-    _sm_expr3 = simse_lenOf((*_sm_base2));
-    _sm_expr4 = _sm_expr2 < _sm_expr3;
-    if (_sm_expr4) goto L3;
-    goto L2;
-    L3:;
-    _sm_base3 = simse_addressOf(self->text);
-    _sm_base4 = self->at;
-    _sm_expr5 = simse_str_charAt((*_sm_base3), _sm_base4);
-    _sm_expr4 = _sm_expr5 == ']';
-    if (_sm_expr4) goto L1;
-    goto L2;
-    L1:;
-    _sm_expr1 = self->at;
-    _sm_base5 = _sm_expr1 + 1;
-    self->at = _sm_base5;
-    _sm_expr8 = ns7_arrayNode(self, items);
-    _sm_expr9 = simse_resOk<ns7_JsonNode>(_sm_expr8);
-    return _sm_expr9;
-    L2:;
-    _sm_expr9 = ns7_parseValue(self);
-    _sm_prop1 = _sm_expr9;
-    _sm_expr4 = simse_resHasValue(simse_addressOf(_sm_prop1));
-    _sm_expr11 = !_sm_expr4;
-    if (_sm_expr11) goto L6;
-    goto L7;
-    L6:;
-    return _sm_prop1;
-    L7:;
-    value = _sm_prop1.Value;
-    _sm_expr12 = makeRef<std::remove_cvref_t<decltype((value))>>(value);
-    simse_list_append(items, _sm_expr12);
-    ns7_skipSpace(self);
-    _sm_expr1 = self->at;
-    _sm_base6 = simse_addressOf(self->text);
-    _sm_expr2 = simse_lenOf((*_sm_base6));
-    _sm_expr4 = _sm_expr1 >= _sm_expr2;
-    if (_sm_expr4) goto L8;
-    goto L9;
-    L8:;
-    _sm_expr9 = ns7_fail(self, __sm_stringTable[341]);
-    return _sm_expr9;
-    L9:;
-    _sm_base7 = simse_addressOf(self->text);
-    _sm_base8 = self->at;
-    ch = simse_str_charAt((*_sm_base7), _sm_base8);
-    _sm_expr1 = self->at;
-    _sm_base9 = _sm_expr1 + 1;
-    self->at = _sm_base9;
-    _sm_expr4 = ch == ']';
-    if (_sm_expr4) goto L10;
-    goto L11;
-    L10:;
-    _sm_expr19 = ns7_arrayNode(self, items);
-    _sm_expr9 = simse_resOk<ns7_JsonNode>(_sm_expr19);
-    return _sm_expr9;
-    L11:;
-    _sm_expr4 = ch != ',';
-    if (_sm_expr4) goto L12;
-    goto L2;
-    L12:;
-    _sm_expr9 = ns7_fail(self, __sm_stringTable[320]);
-    return _sm_expr9;
-}
-// src/modules/jsonnode/jsonnode.kt
-ns7_JsonNode ns7_arrayNode(ns7_JsonReader* self, List<Ref<ns7_JsonNode>> items) {
-    ns7_JsonNode node;
-    ns7_initByValue(simse_addressOf(node));
-    ns7_setItems(simse_addressOf(node), items);
-    return node;
-}
-// src/modules/jsonnode/jsonnode.kt
-Res<ns7_JsonNode> ns7_parseObject(ns7_JsonReader* self) {
-    Int _sm_base1, _sm_base4, _sm_base5, _sm_base8, _sm_base12, _sm_base13, _sm_base16, _sm_base17,
-        _sm_expr1, _sm_expr2, _sm_expr3;
-    Str* _sm_base2, * _sm_base3, * _sm_base6, * _sm_base7, * _sm_base10, * _sm_base11, * _sm_base14,
-        * _sm_base15;
-    Str _sm_base9, key;
-    List<Ref<ns7_JsonMember>> members;
-    Bool _sm_expr4, _sm_expr17;
-    Char _sm_expr5, ch;
-    ns7_JsonNode _sm_expr8, value, _sm_expr36;
-    Res<ns7_JsonNode> _sm_expr9, _sm_prop2;
-    Res<Str> parsedKey, _sm_prop1;
-    Ref<ns7_JsonNode> _sm_expr28;
-    Ref<ns7_JsonMember> _sm_expr29;
-    _sm_expr1 = self->at;
-    _sm_base1 = _sm_expr1 + 1;
-    self->at = _sm_base1;
-    members = List<Ref<ns7_JsonMember>>();
-    ns7_skipSpace(self);
-    _sm_expr2 = self->at;
-    _sm_base2 = simse_addressOf(self->text);
-    _sm_expr3 = simse_lenOf((*_sm_base2));
-    _sm_expr4 = _sm_expr2 < _sm_expr3;
-    if (_sm_expr4) goto L3;
-    goto L2;
-    L3:;
-    _sm_base3 = simse_addressOf(self->text);
-    _sm_base4 = self->at;
-    _sm_expr5 = simse_str_charAt((*_sm_base3), _sm_base4);
-    _sm_expr4 = _sm_expr5 == '}';
-    if (_sm_expr4) goto L1;
-    goto L2;
-    L1:;
-    _sm_expr1 = self->at;
-    _sm_base5 = _sm_expr1 + 1;
-    self->at = _sm_base5;
-    _sm_expr8 = ns7_jsonObject(members);
-    _sm_expr9 = simse_resOk<ns7_JsonNode>(_sm_expr8);
-    return _sm_expr9;
-    L2:;
-    ns7_skipSpace(self);
-    _sm_expr1 = self->at;
-    _sm_base6 = simse_addressOf(self->text);
-    _sm_expr2 = simse_lenOf((*_sm_base6));
-    _sm_expr4 = _sm_expr1 >= _sm_expr2;
-    if (_sm_expr4) goto L6;
-    _sm_base7 = simse_addressOf(self->text);
-    _sm_base8 = self->at;
-    _sm_expr5 = simse_str_charAt((*_sm_base7), _sm_base8);
-    _sm_expr4 = _sm_expr5 != '"';
-    if (_sm_expr4) goto L6;
-    goto L7;
-    L6:;
-    _sm_expr9 = ns7_fail(self, __sm_stringTable[295]);
-    return _sm_expr9;
-    L7:;
-    parsedKey = ns7_parseString(self);
-    _sm_prop1 = parsedKey;
-    _sm_expr4 = simse_resHasValue(simse_addressOf(_sm_prop1));
-    _sm_expr17 = !_sm_expr4;
-    if (_sm_expr17) goto L9;
-    goto L10;
-    L9:;
-    _sm_base9 = _sm_prop1.Error;
-    _sm_expr9 = simse_resErr<ns7_JsonNode>(_sm_base9);
-    return _sm_expr9;
-    L10:;
-    key = _sm_prop1.Value;
-    ns7_skipSpace(self);
-    _sm_expr1 = self->at;
-    _sm_base10 = simse_addressOf(self->text);
-    _sm_expr2 = simse_lenOf((*_sm_base10));
-    _sm_expr4 = _sm_expr1 >= _sm_expr2;
-    if (_sm_expr4) goto L11;
-    _sm_base11 = simse_addressOf(self->text);
-    _sm_base12 = self->at;
-    _sm_expr5 = simse_str_charAt((*_sm_base11), _sm_base12);
-    _sm_expr4 = _sm_expr5 != ':';
-    if (_sm_expr4) goto L11;
-    goto L12;
-    L11:;
-    _sm_expr9 = ns7_fail(self, __sm_stringTable[483]);
-    return _sm_expr9;
-    L12:;
-    _sm_expr1 = self->at;
-    _sm_base13 = _sm_expr1 + 1;
-    self->at = _sm_base13;
-    _sm_expr9 = ns7_parseValue(self);
-    _sm_prop2 = _sm_expr9;
-    _sm_expr4 = simse_resHasValue(simse_addressOf(_sm_prop2));
-    _sm_expr17 = !_sm_expr4;
-    if (_sm_expr17) goto L14;
-    goto L15;
-    L14:;
-    return _sm_prop2;
-    L15:;
-    value = _sm_prop2.Value;
-    _sm_expr28 = makeRef<std::remove_cvref_t<decltype((value))>>(value);
-    _sm_expr29 = makeRef<ns7_JsonMember>(key, _sm_expr28);
-    simse_list_append(members, _sm_expr29);
-    ns7_skipSpace(self);
-    _sm_expr1 = self->at;
-    _sm_base14 = simse_addressOf(self->text);
-    _sm_expr2 = simse_lenOf((*_sm_base14));
-    _sm_expr4 = _sm_expr1 >= _sm_expr2;
-    if (_sm_expr4) goto L16;
-    goto L17;
-    L16:;
-    _sm_expr9 = ns7_fail(self, __sm_stringTable[329]);
-    return _sm_expr9;
-    L17:;
-    _sm_base15 = simse_addressOf(self->text);
-    _sm_base16 = self->at;
-    ch = simse_str_charAt((*_sm_base15), _sm_base16);
-    _sm_expr1 = self->at;
-    _sm_base17 = _sm_expr1 + 1;
-    self->at = _sm_base17;
-    _sm_expr4 = ch == '}';
-    if (_sm_expr4) goto L18;
-    goto L19;
-    L18:;
-    _sm_expr36 = ns7_jsonObject(members);
-    _sm_expr9 = simse_resOk<ns7_JsonNode>(_sm_expr36);
-    return _sm_expr9;
-    L19:;
-    _sm_expr4 = ch != ',';
-    if (_sm_expr4) goto L20;
-    goto L2;
-    L20:;
-    _sm_expr9 = ns7_fail(self, __sm_stringTable[321]);
-    return _sm_expr9;
-}
-// src/modules/jsonnode/jsonnode.kt
-Int ns7_jsonHexValue(Char ch) {
-    Bool _sm_expr1;
-    Char _sm_expr3, _sm_expr7;
-    Int _sm_expr12;
-    _sm_expr1 = ch >= '0';
-    if (_sm_expr1) goto L3;
-    goto L2;
-    L3:;
-    _sm_expr1 = ch <= '9';
-    if (_sm_expr1) goto L1;
-    goto L2;
-    L1:;
-    _sm_expr3 = ch - '0';
-    return _sm_expr3;
-    L2:;
-    _sm_expr1 = ch >= 'a';
-    if (_sm_expr1) goto L6;
-    goto L5;
-    L6:;
-    _sm_expr1 = ch <= 'f';
-    if (_sm_expr1) goto L4;
-    goto L5;
-    L4:;
-    _sm_expr3 = ch - 'a';
-    _sm_expr7 = _sm_expr3 + 10;
-    return _sm_expr7;
-    L5:;
-    _sm_expr1 = ch >= 'A';
-    if (_sm_expr1) goto L9;
-    goto L8;
-    L9:;
-    _sm_expr1 = ch <= 'F';
-    if (_sm_expr1) goto L7;
-    goto L8;
-    L7:;
-    _sm_expr3 = ch - 'A';
-    _sm_expr7 = _sm_expr3 + 10;
-    return _sm_expr7;
-    L8:;
-    _sm_expr12 = -1;
-    return _sm_expr12;
-}
-// src/modules/jsonnode/jsonnode.kt
-Res<ns7_JsonNode> ns7_parseJson(Str text) {
-    char* __sm_catP;
-    Int* _sm_base1;
-    ns7_JsonReader reader;
-    Res<ns7_JsonNode> parsed, _sm_prop1;
-    Bool _sm_expr1, _sm_expr2;
-    ns7_JsonNode node;
-    Int _sm_expr3, _sm_expr4;
-    Str _sm_expr6, _sm_expr7;
-    reader = ns7_JsonReader{text, 0};
-    parsed = ns7_parseValue(simse_addressOf(reader));
-    _sm_prop1 = parsed;
-    _sm_expr1 = simse_resHasValue(simse_addressOf(_sm_prop1));
-    _sm_expr2 = !_sm_expr1;
-    if (_sm_expr2) goto L1;
-    goto L2;
-    L1:;
-    return _sm_prop1;
-    L2:;
-    node = _sm_prop1.Value;
-    ns7_skipSpace(simse_addressOf(reader));
-    _sm_expr3 = reader.at;
-    _sm_expr4 = simse_lenOf(text);
-    _sm_expr1 = _sm_expr3 != _sm_expr4;
-    if (_sm_expr1) goto L3;
-    goto L4;
-    L3:;
-    _sm_base1 = simse_addressOf(reader.at);
-    _sm_expr6 = simse_int_toString((*_sm_base1));
-    _sm_expr7.resize(28 + _sm_expr6.size());
-    __sm_catP = _sm_expr7.data();
-    std::memcpy(__sm_catP, "json: trailing text at byte ", 28);
-    __sm_catP = __sm_catP + 28;
-    std::memcpy(__sm_catP, _sm_expr6.data(), _sm_expr6.size());
-    parsed = simse_resErr<ns7_JsonNode>(_sm_expr7);
-    return parsed;
-    L4:;
-    parsed = simse_resOk<ns7_JsonNode>(node);
-    return parsed;
-}
-// src/modules/linq/linq.kt
-template <class T>
-ns10_List_iter_yieldable<T> ns10_iter(List<T>* self) {
-    ns10_List_iter_yieldable<T> machine{};
-    machine._sm_self = self;
-    machine.branch = 0;
-    return machine;
-}
-// src/modules/linq/linq.kt
-template <class T, class U, class _SmIter>
-ns10_select_yieldable<T, U, _SmIter> ns10_select(_SmIter* self, Func<U(T*)> f) {
-    ns10_select_yieldable<T, U, _SmIter> machine{};
-    machine.f = f;
-    machine._sm_self = self;
-    machine.branch = 0;
-    return machine;
-}
-template <class T, class U, class _SmIter, class _sm_cb1>
-ns10_select_yieldable<T, U, _SmIter> ns10_select(_SmIter* self, _sm_cb1 f) {
-    return ns10_select<T, U, _SmIter>(self, Func<U(T*)>(f));
-}
-// src/modules/linq/linq.kt
-template <class T, class _SmIter>
-ns10_where_yieldable<T, _SmIter> ns10_where(_SmIter* self, Func<Bool(T*)> keep) {
-    ns10_where_yieldable<T, _SmIter> machine{};
-    machine.keep = keep;
-    machine._sm_self = self;
-    machine.branch = 0;
-    return machine;
-}
-template <class T, class _SmIter, class _sm_cb1>
-ns10_where_yieldable<T, _SmIter> ns10_where(_SmIter* self, _sm_cb1 keep) {
-    return ns10_where<T, _SmIter>(self, Func<Bool(T*)>(keep));
-}
-// src/modules/linq/linq.kt
-template <class T, class _SmIter>
-ns10_take_yieldable<T, _SmIter> ns10_take(_SmIter* self, Int count) {
-    ns10_take_yieldable<T, _SmIter> machine{};
-    machine.count = count;
-    machine._sm_self = self;
-    machine.branch = 0;
-    return machine;
-}
-// src/modules/linq/linq.kt
-template <class T, class _SmIter>
-ns10_skip_yieldable<T, _SmIter> ns10_skip(_SmIter* self, Int count) {
-    ns10_skip_yieldable<T, _SmIter> machine{};
-    machine.count = count;
-    machine._sm_self = self;
-    machine.branch = 0;
-    return machine;
-}
-// src/modules/linq/linq.kt
-template <class T, class _SmIter>
-List<T> ns10_toList(_SmIter* self) {
-    T _sm_base1;
-    T* _sm_base2;
-    List<T> out;
-    Bool _sm_expr1;
-    out = List<T>();
-    L1:;
-    _sm_expr1 = advance(self);
-    if (!(_sm_expr1)) goto L2;
-    _sm_base2 = self->current;
-    _sm_base1 = *_sm_base2;
-    simse_list_append(out, _sm_base1);
-    goto L1;
-    L2:;
-    return out;
-}
-// src/modules/linq/linq.kt
-template <class T, class _SmIter>
-void ns10_forEach(_SmIter* self, Func<void(T*)> action) {
-    T* _sm_base1;
-    Bool _sm_expr1;
-    L1:;
-    _sm_expr1 = advance(self);
-    if (!(_sm_expr1)) goto L2;
-    _sm_base1 = self->current;
-    action(_sm_base1);
-    goto L1;
-    L2:;
-}
-template <class T, class _SmIter, class _sm_cb1>
-void ns10_forEach(_SmIter* self, _sm_cb1 action) {
-    ns10_forEach<T, _SmIter>(self, Func<void(T*)>(action));
-}
-// src/modules/linq/linq.kt
-ns10_Str_splitIter_yieldable_StrView ns10_splitIter(Str* self, Span<Char> separator) {
-    ns10_Str_splitIter_yieldable_StrView machine{};
-    machine.separator = separator;
-    machine._sm_self = self;
-    machine.branch = 0;
-    return machine;
-}
-// src/modules/linq/linq.kt
-ns10_Str_splitIter_yieldable_Char ns10_splitIter(Str* self, Char separator) {
-    ns10_Str_splitIter_yieldable_Char machine{};
-    machine.separator = separator;
-    machine._sm_self = self;
-    machine.branch = 0;
-    return machine;
 }
 // src/optimizations/FoldExprs.kt
 ns11_FoldKind ns11_foldKindOf(ns3_AstXmlNode* e) {
@@ -73799,7 +73790,7 @@ Str ns12_propRewriteBody(ns3_AstXmlNode* decl, Str* fileName, List<ns3_AstXmlNod
     _sm_base13 = &found;
     _sm_expr11 = ns2_xmlColumn(_sm_base13);
     xmlColumnText3 = simse_int_toString(_sm_expr11);
-    messageText3 = __sm_stringTable[57];
+    messageText3 = __sm_stringTable[58];
     _sm_base15 = *(fileName);
     _sm_expr8.resize(5 + _sm_base15.size() + xmlLineText3.size() + xmlColumnText3.size() + messageText3.size());
     __sm_catP = _sm_expr8.data();
@@ -75131,7 +75122,7 @@ void ns15_asyncDump(List<ns3_AstXmlNode> functions, List<Str> asyncNames, List<S
     __sm_catP = __sm_catP + __sm_catC0;
     std::memcpy(__sm_catP, " declarations reach no suspension", 33);
     simse_eprintln(_sm_expr12);
-    simse_eprintln(__sm_stringTable[46]);
+    simse_eprintln(__sm_stringTable[47]);
 }
 // src/sema/Protocols.kt
 ns15_ProtocolConstraint ns15_semProtocolConstraintOf(Span<Char>* item) {
@@ -89336,83 +89327,6 @@ inline Span<Char> simse_strBoolView(Bool value) {
     return Span<Char>{texts[at], lens[at]};
 }
 
-Str simse_native_readFile(const Str& path) {
-    Str result;
-    FILE* file = fopen(path.c_str(), "rb");
-    if (file == nullptr) return result;
-    fseek(file, 0, SEEK_END);
-    const int fileSize = ftell(file);
-    fseek(file, 0, SEEK_SET);
-    result.resize(fileSize);
-    fread(result.data(), 1, fileSize, file);
-    fclose(file);
-    return result;
-}
-
-List<Str> simse_listFiles(const Str& dir, const Str& ext) {
-    List<Str> matchingFiles;
-
-    const std::string dirText = simse_toStdString(dir);
-    const std::string wantedExt = simse_toStdString(ext);
-
-    if (!std::filesystem::exists(dirText) || !std::filesystem::is_directory(dirText)) {
-        return matchingFiles;
-    }
-    for (const auto& entry: std::filesystem::recursive_directory_iterator(dirText)) {
-        if (entry.is_regular_file() && entry.path().extension() == wantedExt) {
-            matchingFiles.push_back(simse_fromStdString(entry.path().generic_string()));
-        }
-    }
-    std::sort(matchingFiles.begin(), matchingFiles.end());
-    return matchingFiles;
-}
-
-List<Str> simse_listFilesDirect(const Str& dir, const Str& ext) {
-    List<Str> files;
-    std::error_code ec;
-    if (!std::filesystem::is_directory(simse_toStdString(dir), ec)) {
-        return files;
-    }
-    for (const auto& entry: std::filesystem::directory_iterator(simse_toStdString(dir), ec)) {
-        if (entry.is_regular_file() && entry.path().extension() == simse_toStdString(ext)) {
-            files.push_back(simse_fromStdString(entry.path().generic_string()));
-        }
-    }
-    std::sort(files.begin(), files.end());
-    return files;
-}
-
-Bool simse_writeFile(const Str& path, const Str& content) {
-    FILE* out = fopen(path.c_str(), "wb");
-    if (out == nullptr) {
-        return false;
-    }
-    fwrite(content.data(), 1, content.length(), out);
-    fclose(out);
-    return true;
-}
-
-Str simse_pathCanonical(const Str& path) {
-    std::error_code ec;
-    std::filesystem::path canonical = std::filesystem::weakly_canonical(
-            std::filesystem::path(simse_toStdString(path)), ec);
-    return ec ? path : simse_fromStdString(canonical.string());
-}
-
-Bool simse_pathIsDirectory(const Str& path) {
-    std::error_code ec;
-    return std::filesystem::is_directory(simse_toStdString(path), ec);
-}
-
-Bool simse_pathExists(const Str& path) {
-    std::error_code ec;
-    return std::filesystem::exists(simse_toStdString(path), ec);
-}
-
-void simse_eprintln(const Str& text) {
-    fprintf(stderr, "%s\n", text.c_str());
-}
-
 void* __sm_native_internetOpen(const Str& agent, const Int32& accessType, Int8* proxy, Int8* proxyBypass, const Int32& flags) {
     using Fn = void* (*)(const char*, Int32, void*, void*, Int32);
     static Fn fn = (Fn) __sm_nativeResolve("wininet.dll", "InternetOpenA");
@@ -89509,6 +89423,83 @@ Str simse_http_charsToStr(const List<Char>* chars) {
     text.resize(count);
     std::memcpy(text.data(), chars->data(), (std::size_t) count);
     return text;
+}
+
+Str simse_native_readFile(const Str& path) {
+    Str result;
+    FILE* file = fopen(path.c_str(), "rb");
+    if (file == nullptr) return result;
+    fseek(file, 0, SEEK_END);
+    const int fileSize = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    result.resize(fileSize);
+    fread(result.data(), 1, fileSize, file);
+    fclose(file);
+    return result;
+}
+
+List<Str> simse_listFiles(const Str& dir, const Str& ext) {
+    List<Str> matchingFiles;
+
+    const std::string dirText = simse_toStdString(dir);
+    const std::string wantedExt = simse_toStdString(ext);
+
+    if (!std::filesystem::exists(dirText) || !std::filesystem::is_directory(dirText)) {
+        return matchingFiles;
+    }
+    for (const auto& entry: std::filesystem::recursive_directory_iterator(dirText)) {
+        if (entry.is_regular_file() && entry.path().extension() == wantedExt) {
+            matchingFiles.push_back(simse_fromStdString(entry.path().generic_string()));
+        }
+    }
+    std::sort(matchingFiles.begin(), matchingFiles.end());
+    return matchingFiles;
+}
+
+List<Str> simse_listFilesDirect(const Str& dir, const Str& ext) {
+    List<Str> files;
+    std::error_code ec;
+    if (!std::filesystem::is_directory(simse_toStdString(dir), ec)) {
+        return files;
+    }
+    for (const auto& entry: std::filesystem::directory_iterator(simse_toStdString(dir), ec)) {
+        if (entry.is_regular_file() && entry.path().extension() == simse_toStdString(ext)) {
+            files.push_back(simse_fromStdString(entry.path().generic_string()));
+        }
+    }
+    std::sort(files.begin(), files.end());
+    return files;
+}
+
+Bool simse_writeFile(const Str& path, const Str& content) {
+    FILE* out = fopen(path.c_str(), "wb");
+    if (out == nullptr) {
+        return false;
+    }
+    fwrite(content.data(), 1, content.length(), out);
+    fclose(out);
+    return true;
+}
+
+Str simse_pathCanonical(const Str& path) {
+    std::error_code ec;
+    std::filesystem::path canonical = std::filesystem::weakly_canonical(
+            std::filesystem::path(simse_toStdString(path)), ec);
+    return ec ? path : simse_fromStdString(canonical.string());
+}
+
+Bool simse_pathIsDirectory(const Str& path) {
+    std::error_code ec;
+    return std::filesystem::is_directory(simse_toStdString(path), ec);
+}
+
+Bool simse_pathExists(const Str& path) {
+    std::error_code ec;
+    return std::filesystem::exists(simse_toStdString(path), ec);
+}
+
+void simse_eprintln(const Str& text) {
+    fprintf(stderr, "%s\n", text.c_str());
 }
 
 

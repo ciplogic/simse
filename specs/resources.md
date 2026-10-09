@@ -191,7 +191,7 @@ decoder and the clock the profiler reads; a module's header include, like `strea
 section's text is **reach-gated even when the declaration that names it is a module's** - a
 prelude declaration is gated already, a program's is not. A module's C++ then costs a program
 only what it uses; `filestream` (the `FileStream` open and method bodies,
-src/modules/streams/_res.md) is the first, and
+modules/streams/_res.md) is the first, and
 it is what keeps the `streams` module from carrying the stream code into a program that never
 opens or reads a stream. `@SmGen("kt", section)` reads `<section>:source`
 and hands it to the compiler's own front end - the driver parses it, `analyze` checks it,

@@ -70,9 +70,9 @@ Every generator is **one file** under `src/compiler/`, and a `SourceGenerator` t
 | `NativeInvokeGen.kt` | `native` | a shared library, resolved at run time (`LoadLibraryA`) | no | no |
 
 Each module's generators live in a `generators/` subfolder - the `json` module's is
-`src/modules/json/generators/JsonGen.kt` - and the built-in four are one file each under
+`modules/json/generators/JsonGen.kt` - and the built-in four are one file each under
 `src/compiler/`. A module's `generators/` is **compiler-side**: `--root` scans a tree whole
-(so the compiler's own build compiles the generators in), while `--module` names a module and
+(so the compiler's own build, `--root src --root modules`, compiles the generators in), while `--module` names a module and
 scans it without its `generators/`, so a program that imports the module gets its declarations and
 never the generator sources (which are written against the `compiler` package - one
 `import compiler` names the AST and the generator interface). The `json`
@@ -84,7 +84,7 @@ registration line.
 
 A generator is a `typealias OnSourceGen = (*SourceGenContext) -> SourceGenTransform`
 (`GenTypes.kt`; the two interface types are the `compiler` module's,
-`src/modules/compiler/gen.kt`): it takes *data* and answers a transform. The context carries the generator's
+`modules/compiler/gen.kt`): it takes *data* and answers a transform. The context carries the generator's
 name, the phase, the declaration node (with its name, its arguments, its resolved symbol), the
 file it came from, and pointers to the two things a generator may touch besides the AST - the
 resources (`FullCompiledState`) and the sink (`Sections`). `SourceGenContext.isReached()` and
@@ -258,11 +258,11 @@ string/character/numeric conversions the headers held), `spanOf` (the first user
 `strcat` (the emitter's own concatenation: no *program* names it, the emitter records its
 reach, and the one declaration it hangs on is shaped so a program cannot usefully call it). A
 module owns its own resource: `fileio` (`emit: always`: the platform's filesystem/IO
-operations) is `src/modules/io/_res.md`, and `streams`' `_res.md`
-(src/modules/streams/_res.md) holds `filestreamhpp` (`emit: always`: the include of the module's
+operations) is `modules/io/_res.md`, and `streams`' `_res.md`
+(modules/streams/_res.md) holds `filestreamhpp` (`emit: always`: the include of the module's
 header) and `filestream` (`emit: reached`: the open and the method bodies, a program paying for
 them only when it opens or reads one); the `json` generator's helper is
-`src/modules/json/_res.md`. A `@SmGen("res", ...)`
+`modules/json/_res.md`. A `@SmGen("res", ...)`
 declaration emits no prototype of its own, which is what the `forward` text of its section
 is for. What stays a header is the type core (`simse.hpp`'s own includes) and, outside the RTL,
 `streams`' `filestream.hpp` (the `FileStream` struct and its method declarations, placed by the
@@ -331,9 +331,9 @@ discovery loop: emit, ask the generator for what was reached, re-emit).
 ## The `json` generator
 
 `@SmGen("json") fun T.toJson<T>(): Str` - the declaration the `json` module's `api.kt` carries -
-asks for a JSON serializer, and `src/modules/json/generators/JsonGen.kt` **builds that Simse
+asks for a JSON serializer, and `modules/json/generators/JsonGen.kt` **builds that Simse
 source in code**: it is the one generator that reads the program's own *type structure* rather
-than a resource. A program names the module (`--module src/modules/json`) and writes
+than a resource. A program names the module (`--module modules/json`) and writes
 `import json`, then `value.toJson()`; that becomes `{"x":1,"y":2}` for
 `data class Point(var x: Int, var y: Int)`.
 
@@ -358,7 +358,7 @@ than a resource. A program names the module (`--module src/modules/json`) and wr
   type.
 - **The scalars** are `Int`/`Int8..Int64` and `Float32/64` (their own `toString`), `Bool` (the JSON
   literal) and `Str`/`Char` (quoted, with the JSON escapes). The quoting helper is the
-  `json:helpers` section of `src/modules/json/_res.md` - fixed Simse text the generator reads, so it
+  `json:helpers` section of `modules/json/_res.md` - fixed Simse text the generator reads, so it
   stays readable rather than an escaped literal inside the generator.
 - **The generated module is `rtl`** (the driver's synthetic reparse module) and begins with one
   `import` per package a serialized class lives in, which is what lets it name a program-defined

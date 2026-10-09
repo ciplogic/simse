@@ -1,6 +1,6 @@
 Generated Simse
 ====
-The `json` module's fixed text, read by src/modules/json/generators/JsonGen.kt - the quoting
+The `json` module's fixed text, read by modules/json/generators/JsonGen.kt - the quoting
 helper every generated string serializer calls. It is Simse, not C++, and the driver compiles it
 with the program. A prose line here is ignored only when it holds no colon.
 

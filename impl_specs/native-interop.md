@@ -152,7 +152,7 @@ first.
 Str simse_native_readFile(const Str& path); // reads the whole file as bytes
 ```
 
-Its prototype and definition are the `fileio` section of `src/modules/io/_res.md` (the
+Its prototype and definition are the `fileio` section of `modules/io/_res.md` (the
 `io` module's own resource), in the
 section's `forward:` and `bodies:` texts. The emitter places the section in the program's own
 translation unit, so there is nothing to link.
@@ -160,8 +160,8 @@ translation unit, so there is nothing to link.
 ## Filesystem / IO natives (T23)
 
 The self-hosted driver needs a small filesystem surface. Declared in the `io` module
-(`src/modules/io/api.kt`) as `@SmGen("res", "fileio", <symbol>)`, prototyped in the
-`forward:` text of the `fileio` section of `src/modules/io/_res.md` and defined in its
+(`modules/io/api.kt`) as `@SmGen("res", "fileio", <symbol>)`, prototyped in the
+`forward:` text of the `fileio` section of `modules/io/_res.md` and defined in its
 `bodies:` text:
 
 | Simse | C++ symbol | Semantics |
@@ -174,7 +174,7 @@ The self-hosted driver needs a small filesystem surface. Declared in the `io` mo
 | `pathExists(path)` | `simse_pathExists` | |
 | `eprintln(text)` | `simse_eprintln` | one line to stderr |
 
-These are `io` module declarations (a program reaches them with `--module src/modules/io` and
+These are `io` module declarations (a program reaches them with `--module modules/io` and
 `import io`) whose prototypes and
 definitions the emitter places in the program's own translation unit. The section
 is `emit: always` because a program may also name one of these symbols with a

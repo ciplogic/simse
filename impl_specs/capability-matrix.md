@@ -5170,3 +5170,26 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   costs about a quarter of the run, so the packed ordinal pair stayed and the string-keyed
   variant was dropped. Verified: `bun tools/iterate.js --full` - **88/88** and both fixed
   points.
+
+- **The modules moved out of `src`, and `--root` became repeatable.** `src/modules/**` moved to
+  `modules/**` at the repository root - the layout `specs/simse-md.md` names. The compiler's own
+  build now names both of its trees: `--root src --root modules`. A repeated `--root` *appends*
+  (the driver's single `rootDir`/`haveRoot` pair became entries in the same parallel lists
+  `--module` already used); before, a second `--root` silently replaced the first, so the option
+  had to grow with the layout. Both roots are *trees* because a generator's source is
+  compiler-side and `--module` scans a module without its `generators/`: the compiler imports
+  the `compiler` (AST), `io` and `linq` modules and carries the `json` generator, whose
+  `modules/json/generators/JsonGen.kt` only a tree scan compiles in.
+  The fallout is mechanical but wide: `build.js` transpiles `src` + `modules` by default and
+  forwards repeatable `--root`/`--module` (the docs' `--module` commands work now); the
+  bootstrap check and the VS project's F5 name both roots; the stress `compiler-args`, the
+  examples, the benchmarks and the docs' paths point at `modules/...`; and the streams module's
+  include moved with the directory (`#include "modules/streams/filestream.hpp"` in its
+  `_res.md`, and `../../src/rtl/...` inside the header). The published bootstrap was refreshed
+  by a compiler built *before* the CLI change: the old single-`--root` compiler was driven with
+  `--module modules` plus the one generator file as an explicit input, which is the same file
+  set the new build names as a second tree - the two emissions were compared byte for byte
+  before the refresh.
+  Verified: `bun tools/iterate.js --full` - **92/92** and both fixed points; `bun
+  tools/bootstrap.js` compiles the published file and both directions reproduce it
+  (18.6 s compile, 1.7 s self-transpile).

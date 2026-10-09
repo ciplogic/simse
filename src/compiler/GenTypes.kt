@@ -3,7 +3,7 @@
 // The source generators' registry and state (impl_specs/generators.md): the table, the
 // request record, and the compilation a generator looks at. What a generator is *told* and
 // what it *answers* - `SourceGenContext`, `SourceGenTransform` - lives in the compiler module
-// (`src/modules/compiler/gen.kt`), next to the AST it manipulates.
+// (`modules/compiler/gen.kt`), next to the AST it manipulates.
 //
 // A generator is asked in *phases*: `Declare` while the program is collected (the symbol a
 // call reaches must exist before any body), `Reparse` for source the driver will compile,

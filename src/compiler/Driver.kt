@@ -4,7 +4,7 @@
 // sources): loads the RTL prelude, scans the module roots, analyzes the whole compilation
 // and amalgamates it into one C++ translation unit. Modules and packages: specs/modules.md.
 //
-// Usage: <program> <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>]
+// Usage: <program> <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>]...
 //     [--module <dir>]...
 
 package compiler
@@ -213,11 +213,11 @@ fun main(args: List<Str>): Int {
     var inputs: List<Str> = List<Str>()
     var output: Str = ""
     var preludePath: Str = ""
-    var rootDir: Str = ""
-    var haveRoot: Bool = false
+    // The command line's roots, in order; `extraTrees` is parallel to them: a `--root` is a
+    // *tree* (scanned whole, repeatable - this compiler's own build names `src` and
+    // `modules`), a `--module` is a *module* (scanned without its `generators/`, the
+    // compiler-side sources it ships).
     var extraRoots: List<Str> = List<Str>()
-    // Parallel to `extraRoots`: a `--root` is a *tree* (scanned whole), a `--module` is a
-    // *module* (scanned without its `generators/`, the compiler-side sources it ships).
     var extraTrees: List<Bool> = List<Bool>()
     var preludeExplicit: Bool = false
     var showAsync: Bool = false
@@ -251,8 +251,8 @@ fun main(args: List<Str>): Int {
                     return 2
                 }
                 i = i + 1
-                rootDir = args[i]
-                haveRoot = true
+                extraRoots.append(args[i])
+                extraTrees.append(true)
             }
 
             "--module-root", "--module" -> {
@@ -340,7 +340,7 @@ fun main(args: List<Str>): Int {
 
             "-h", "--help" -> {
                 println("simse " + simseVersion)
-                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module <dir>]... [--no-concat] [--no-borrow] [--no-escape] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showBorrow] [--showEscape] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos] [--version]")
+                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>]... [--module <dir>]... [--no-concat] [--no-borrow] [--no-escape] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showBorrow] [--showEscape] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos] [--version]")
                 return 0
             }
 
@@ -357,22 +357,18 @@ fun main(args: List<Str>): Int {
         i = i + 1
     }
 
-    if (inputs.size() == 0 && !haveRoot && extraRoots.size() == 0) {
-        rootDir = "."
-        haveRoot = true
+    if (inputs.size() == 0 && extraRoots.size() == 0) {
+        extraRoots.append(".")
+        extraTrees.append(true)
     }
     if (output == "") {
         output = "simse_out.cpp"
     }
 
     // The command line's roots, each expanded through its manifest (a root without one is
-    // scanned whole - what this compiler's own build does).
+    // scanned whole - what this compiler's own build does with `--root src --root modules`).
     var roots: List<Str> = List<Str>()
     var rootTrees: List<Bool> = List<Bool>()
-    if (haveRoot) {
-        roots.append(rootDir)
-        rootTrees.append(true)
-    }
     var e: Int = 0
     while (e < extraRoots.size()) {
         roots.append(extraRoots[e])

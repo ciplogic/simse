@@ -9,7 +9,7 @@ import streams
 // three times - with `readLine(): Opt<Str>`, into one recycled `Str` with
 // `readLineInto(*buffer)`, and in place with `readLineView(): Opt<StrView>` - and
 // the passes must agree line for line. The reader and its type are the `streams`
-// module's (`--module src/modules/streams`, beside `io` for the fixture write and
+// module's (`--module modules/streams`, beside `io` for the fixture write and
 // the diagnostics, both in `compiler-args`).
 //
 // Then a line longer than the 256 KiB readahead buffer, after a line that leaves a

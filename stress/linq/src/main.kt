@@ -2,7 +2,7 @@ package fixtures
 
 import linq
 
-// The LINQ-style pipeline (src/modules/linq/linq.kt): every operator takes and hands out
+// The LINQ-style pipeline (modules/linq/linq.kt): every operator takes and hands out
 // a `..*T` machine, so a chain copies no element and each lambda reads the element where
 // it lives. The entry is the list's own `iter()` - the same pointer walk the `for` rewrite
 // spells `spanOf(xs).iter()` - and a chain ends in a `for`, whose variable binds each

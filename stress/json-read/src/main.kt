@@ -2,7 +2,7 @@ package fixtures
 
 import jsonnode
 
-// The `jsonnode` module's *dynamic* reader and writer (`src/modules/jsonnode/jsonnode.kt`),
+// The `jsonnode` module's *dynamic* reader and writer (`modules/jsonnode/jsonnode.kt`),
 // beside the generator's typed writer pinned by `stress/json`: `parseJson` is the reader
 // (`text -> Res<JsonNode>`) and `JsonNode.toJson()` the writer (`JsonNode -> text`).
 //

@@ -289,10 +289,11 @@ on a single `WSAPoll` event loop. `Bun.serve` is a fast baseline; it is the one 
 
 ## The compiler is written in Simse
 
-The compiler *is* its Simse sources (`src/**/*.kt`): scanner, parser, semantic
+The compiler *is* its Simse sources (`src/**/*.kt` plus the reusable modules under
+`modules/`): scanner, parser, semantic
 pass, control-flow lowering, and the C++ emitter. The only hand-written C++ is the
-runtime's headers plus the C++ that lives in resource sections (`src/rtl/_res.md`:
-file I/O, the clocks, the prelude's primitives) - so a program, and the compiler
+runtime's headers plus the C++ that lives in resource sections (`src/rtl/_res.md` and the
+modules' `_res.md`: the clocks, the prelude's primitives, file I/O) - so a program, and the compiler
 itself, is one translation unit.
 
 That leaves the bootstrap question - how do you build a compiler written in its own
@@ -371,10 +372,11 @@ runs green on every build, alongside the bootstrap fixed point.
 | Path | Contents |
 | --- | --- |
 | `src/` | the compiler in Simse (`lex/`, `parser/`, `sema/`, `linear/`, `codegen/`, `compiler/` - the source generators' package too), plus `src/rtl/` (the prelude `.kt` files, the runtime headers, and the resource file `_res.md`, which holds the runtime's C++) and `src/simse_bootstrap.cpp` - the published transpiled compiler, the output proof |
+| `modules/` | the reusable modules a program (and the compiler itself) names: `json` (with its `generators/`), `jsonnode`, `compiler` (the AST and the generator interface), `io`, `streams`, `linq`, `xml`, `http` - each with its `_res.md` |
 | `specs/` | the language specification (normative): types, declarations, functions, memory model, generics, containers, modules, statics, resources |
 | `impl_specs/` | implementation plans and records: the capability matrix, the RTL ABI, generators, the user-facing roadmap |
 | `stress/` | one folder per end-to-end program: source, arguments, expected output, and where the emitted text is the point, an `expected.cpp` golden |
-| `build.js`, `build.bat`, `stress.bat` | the build and harness entry points: transpile the source tree, compile it with `cl.exe`, run the corpus |
+| `build.js`, `build.bat`, `stress.bat` | the build and harness entry points: transpile the compiler's trees (`src` + `modules`), compile them with `cl.exe`, run the corpus |
 | `simse.vcxproj`, `simse.slnx` | the Visual Studio profiling project: the published bootstrap (the runtime is generated into it), with the debugger already set to run the compiler over its own tree |
 | `tools/` | the JavaScript harness: `iterate.js` (the loop: build + corpus + bootstrap check), the stress runner (`stress.js`), the bootstrap fixed-point check (`bootstrap.js`), the Visual Studio project check (`vscheck.mjs`), `msvc.mjs` |
 | `examples/` | the runnable examples the docs use |

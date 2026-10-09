@@ -2,8 +2,8 @@ package jsonnode
 
 // The `json` module's *dynamic* reader and writer, a module of its own so a program that only
 // wants the generator's typed writer (`import json`, `value.toJson()`) does not carry the
-// parser: `--module src/modules/jsonnode` is what opts in, and the express example names it
-// beside `src/modules/json`.
+// parser: `--module modules/jsonnode` is what opts in, and the express example names it
+// beside `modules/json`.
 //
 // A request's payload is JSON whose shape the program does not know at compile time, so it
 // lands in `JsonNode` first: a tagged union (`union class`, specs/declarations.md) where one

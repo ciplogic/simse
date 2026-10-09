@@ -2,7 +2,7 @@ Generated C++
 ====
 The RTL's hand-written C++ that used to live in headers (impl_specs/generators.md) - one
 section per header it came from. The *prelude's* C++ is here; a module's own C++ lives in the
-module (src/modules/io/_res.md, for instance), since the tree's own `_res.md` files are the
+module (modules/io/_res.md, for instance), since the tree's own `_res.md` files are the
 first the generator lookup reads. Two sections carry the `emit` marker (its value is `always`),
 so the compiler emits them for every program - `strtable`, the string table's decoder, and
 `timeops`, the clocks, because the profiler's runtime is emitted by the compiler rather than
@@ -1232,7 +1232,7 @@ void worker(Pool* shared, Queue* queue) {
             queue->work.pop_front();
         }
         // The job's file, read here rather than through `fileio`: that section is the `io`
-        // module's C++ now (src/modules/io/_res.md), a layer this prelude section must not
+        // module's C++ now (modules/io/_res.md), a layer this prelude section must not
         // reach into. Empty when the file cannot be read, as `fileio`'s reader answers.
         Str text;
         {

@@ -25,7 +25,7 @@ It is also fast: on the same machine it serves about **2.5x what `Bun.serve` doe
 | `layers/router.kt` | `Handler = Request -> Response`, `Route`, `App` (`get`/`post`/`route`) |
 | `layers/http.kt` | `Request`/`Response`, `parseRequest`/`formatResponse`, and the JSON boundary (`Request.json()`, `jsonResponse`) |
 | `layers/handlers.kt` | the four route handlers - the actual transformations |
-| `src/modules/jsonnode` | the intermediate `JsonNode` union and its reader (`parseJson`) and writer (`JsonNode.toJson()`) |
+| `modules/jsonnode` | the intermediate `JsonNode` union and its reader (`parseJson`) and writer (`JsonNode.toJson()`) |
 
 A handler sees only `Request` and `Response`. It reaches into the payload with `get`/`at`/`text`/
 `number`/`boolean`, builds a new node with `jsonObject`/`jsonArray`/`jsonText`/`jsonNumber`, and
@@ -57,7 +57,7 @@ From the repository root (the compiler must be built first: `build.bat --release
 ```bat
 simse.exe --root examples/express/src ^
     --module examples/express/layers --module examples/http/sockets ^
-    --module src/modules/http --module src/modules/jsonnode ^
+    --module modules/http --module modules/jsonnode ^
     -o examples/express/out.cpp
 bun build.js --release --cpp examples/express/out.cpp --exe examples/express/express.exe
 
@@ -159,7 +159,7 @@ JavaScript runtime and its heap.
   per accepted connection, then `tasksDrain()` when the accept loop ends.
 - `layers/http.kt` - `parseRequest` is the only place a raw byte becomes a `Request`, and
   `formatResponse` the only place a `Response` becomes bytes.
-- `src/modules/jsonnode/jsonnode.kt` - `JsonNode` is a `union class` (one shape live at a time,
+- `modules/jsonnode/jsonnode.kt` - `JsonNode` is a `union class` (one shape live at a time,
   `None` is JSON `null`), `parseJson` is the reader, `JsonNode.toJson()` the writer. The
   recursive arms are `List<&JsonNode>` / `List<&JsonMember>` - a list of handles, so the type is
   complete where its own definition names it, and a default-constructed list is safe. The round

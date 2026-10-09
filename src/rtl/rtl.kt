@@ -22,7 +22,7 @@ fun Span<T>.iterValues<T>(): ..T {
 
 // The pointer form, `for (*x in c)`: the same walk handing out each element's *place*,
 // so a mutation through the loop variable reaches the element. It is the short name
-// because a pipeline (`src/modules/linq`) is pointer-typed end to end (impl_specs/for.md).
+// because a pipeline (`modules/linq`) is pointer-typed end to end (impl_specs/for.md).
 // The place comes from `atPtr`, not `* this[i]`: an index read through `operator get`
 // is a *value*, so its address would be the address of a temporary that dies when this
 // machine's `advance` returns (specs/functions.md).

@@ -145,7 +145,7 @@ names in both are gitignored). Regenerate one for a given source tree with:
 
 ```sh
 bun build.js --release --profile --exe build/digits/simse_prof.exe --out build/digits/prof_compiler.cpp
-./build/digits/simse_prof.exe --root src -o build/digits/prof_self_out.cpp
+./build/digits/simse_prof.exe --root src --root modules -o build/digits/prof_self_out.cpp
 ```
 
 ## How to read a line

@@ -6,7 +6,7 @@
 // `@SmGen("cpp")` keeps the module's hand-written `filestream.hpp` struct instead of
 // generating one (specs/attributes.md) - and the method bodies are the `filestream` section of
 // the module's `_res.md`. The file and directory *operations* are the `io` module's
-// (src/modules/io/api.kt); a program that reads lines names both modules.
+// (modules/io/api.kt); a program that reads lines names both modules.
 
 package streams
 

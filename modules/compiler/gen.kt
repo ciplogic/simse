@@ -5,7 +5,7 @@
 // nodes (`xml*`), the resources, the `Sections` sink - and must not call the compiler's own
 // code; that boundary is why it is handed only the sink and the state.
 //
-// The declarations live here, next to the AST (`src/modules/compiler/astxml.kt`), so a
+// The declarations live here, next to the AST (`modules/compiler/astxml.kt`), so a
 // module's generator source names the compiler surface with one import (`import compiler`).
 // The registry, the compilation a generator looks at and the built-in generators are the
 // same package (`src/compiler/`), so one import covers everything a generator names.

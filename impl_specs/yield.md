@@ -109,7 +109,7 @@ twice (field into the temporary, temporary into the loop variable).
 
 A yielding *extension* can take a machine as its receiver
 (`fun ..*T.select<T, U>(f: (*T) -> U): ..*U`), which is the shape a LINQ-style pipeline is
-built from (`src/modules/linq/linq.kt`). Two rules make it express:
+built from (`modules/linq/linq.kt`). Two rules make it express:
 
 - **The receiver's type parameter is listed in the function's own `<...>`**
   (`..*T.select<T, U>`): the parser reads type parameters from that list, and the receiver
@@ -194,7 +194,7 @@ a statement's condition under `Cond` (`linCondJump` re-roots it); and a `yield`'
 hoisted like a `return`'s (`ExpressionLowering.kt`'s `StmtYield` case).
 - **A machine can be a receiver** (`fun ..*T.select<T, U>(...)`): the operator's machine is a
   template over the source machine's class (`_SmIter`), and the call site spells its arguments
-  (`ilCallNode`). `src/modules/linq/linq.kt` is the library built on it (`select`, `where`,
+  (`ilCallNode`). `modules/linq/linq.kt` is the library built on it (`select`, `where`,
   `take`, `skip`, `toList` - pointer machines end to end, so a chain copies no element), with
   `stress/linq` pinning the lambdas and the chains.
 - Not supported (reported, not left to the C++ compiler):

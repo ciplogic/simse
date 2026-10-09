@@ -1,11 +1,11 @@
 Generated C++
 ====
-The `io` module's C++ - the declarations are src/modules/io/api.kt. These were sections of
+The `io` module's C++ - the declarations are modules/io/api.kt. These were sections of
 the RTL's `src/rtl/_res.md` until a module came to own its resources; the tree's own `_res.md`
 files are the first the generator lookup reads, so a program that names this module finds them
 here (specs/resources.md, impl_specs/generators.md). `fileio` is marked always, because a program
 may name one of its symbols itself. (`filestream` moved on with the type: `FileStream`, the open
-and the reads are the `streams` module's now, src/modules/streams/_res.md.)
+and the reads are the `streams` module's now, modules/streams/_res.md.)
 
 !fileio
 ====
@@ -33,7 +33,7 @@ forward:
 // program; what a program pays for it is about 4 KB of text, the same code the linker used
 // to place whether or not the program called it.
 //
-// The Simse surface is the `io` module (src/modules/io/api.kt), plus `readFile` in
+// The Simse surface is the `io` module (modules/io/api.kt), plus `readFile` in
 // src/common/common.kt (a normal module of the compiler). The prototypes used to live in
 // the deleted src/rtl/fs.hpp and in `filestream.hpp` (which itself moved to the `streams`
 // module), which is why a section carries its own declaration half in `forward`.

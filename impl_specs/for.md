@@ -209,7 +209,7 @@ per creating function, as always - so it is a named source, not a second span.
 
 A container reaches this one through the same span rewrite its value twin uses, so the
 pointer form covers every iterable shape with the one machine. The `linq` module
-(`src/modules/linq/linq.kt`) builds its operators on this machine directly: a
+(`modules/linq/linq.kt`) builds its operators on this machine directly: a
 `..*T.select<T, U>` receiver is itself a pointer machine, so a chain copies no element
 (`impl_specs/yield.md`, "A machine as a receiver").
 

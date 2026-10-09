@@ -40,9 +40,9 @@ The format is the one `_res.md` already reads (`specs/resources.md`): markdown, 
 | root `simse.md` | `module: <dir>` | a module of the project, relative to the file. The entry may repeat. A file with no `module:` entry leaves the root scanned whole - which is what a module's own manifest is |
 | module `simse.md` | `sourcegen: true` | this module ships source generators (`src/compiler`'s kind). A compiler that *carries* them (the built-in ones, today) accepts it; one that does not fails at emission, naming the generator a declaration reaches |
 
-A root with no `simse.md` behaves as before: `--root <dir>` is the single module root. The
-manifest is additive: nothing that works now stops working, and `--root` remains the way a
-compiler's own build names its tree.
+A root with no `simse.md` behaves as before: each `--root <dir>` is a module root, scanned
+whole. The manifest is additive: nothing that works now stops working, and `--root` remains
+the way a compiler's own build names its trees (`--root src --root modules` here).
 
 **A root with a manifest is scanned as exactly the modules it names** - the manifest is what
 the root means, not a hint on top of the directory walk. A root whose manifest lists no
@@ -51,9 +51,10 @@ empty a scan by accident.
 
 ## The layout
 
-Modules live in a `modules/` directory (this repository keeps it at `src/modules/`), one
-directory per module. A module's **declarations** - what a program sees - are its `.kt` files;
-its **source generators**, if it ships any, live in a `generators/` subfolder:
+Modules live in a `modules/` directory (this repository keeps it at `modules/`, beside
+`src/`), one directory per module. A module's **declarations** - what a program sees - are
+its `.kt` files; its **source generators**, if it ships any, live in a `generators/`
+subfolder:
 
     modules/
         json/
@@ -64,9 +65,10 @@ its **source generators**, if it ships any, live in a `generators/` subfolder:
         io/                     the file/directory operations (next)
 
 `--module <dir>` names a module (repeatable); duplicate directories are merged by canonical
-path, so naming one twice costs nothing. `--root <dir>` is a **tree** and is scanned whole -
-which is what the compiler's own build does (`--root src`), so `modules/**/generators/*.kt`
-is compiled *into the compiler*. A program that names the module gets the module's declarations
+path, so naming one twice costs nothing. `--root <dir>` is a **tree** and is scanned whole
+(also repeatable) - which is what the compiler's own build does (`--root src --root
+modules`), so `modules/**/generators/*.kt` is compiled *into the compiler*. A program that
+names the module gets the module's declarations
 and never its `generators/`, whose sources are written against the compiler's own packages
 (`import compiler` names the AST and the generator interface).
 Generated output is merged **in memory** by the driver's reparse pass; no directory is written,
@@ -231,5 +233,5 @@ The step list lives in `impl_specs/roadmap.md` (T31).
 The implementation notes so far: staging a tree needs **directory creation** (a native, or
 `simse_writeFile` creating parents) and running the command needs **`system()`** (a native
 returning the normalized exit code, as above); the copy itself is `listFiles` +
-`readWholeFile` + `writeFile`, which the RTL has (`src/modules/io/api.kt`, whose C++ is the
-`fileio` section of `src/modules/io/_res.md`).
+`readWholeFile` + `writeFile`, which the RTL has (`modules/io/api.kt`, whose C++ is the
+`fileio` section of `modules/io/_res.md`).

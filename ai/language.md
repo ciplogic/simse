@@ -16,9 +16,9 @@ fun main(): Int {               // the entry point; also `fun main(args: List<St
 
 A **module is a directory**, a **package is a namespace**; `import pkg` only makes `pkg`
 visible (it never adds files). `rtl` is implicit. Files are compiled with `--root <dir>`
-(whole tree) or `--module <dir>` (repeatable; duplicates merge). A `simse.md` manifest can
+(whole tree, repeatable) or `--module <dir>` (repeatable; duplicates merge). A `simse.md` manifest can
 name a project's modules instead. Compile a program with
-`./simse.exe --root my/src -o out.cpp`, then compile `out.cpp` with any C++20 compiler.
+`./simse.exe --root my/src --module modules/io -o out.cpp`, then compile `out.cpp` with any C++20 compiler.
 
 ## Values and types
 

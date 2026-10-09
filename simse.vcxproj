@@ -19,8 +19,8 @@
     functions rather than sit inside a link-time-inlined blob.
   - **Debug** is /Od with the debug runtime, for stepping.
   - **F5 and the profiler run the compiler over its own sources**: `LocalDebuggerCommandArguments`
-    below is the `root` option over `src`, and the working directory is the repository root,
-    because both the prelude's default path (`src/rtl`) and that root are relative.
+    below is the two `root` options over `src` and `modules`, and the working directory is the repository root,
+    because both the prelude's default path (`src/rtl`) and those roots are relative.
   - Output: `profile\<Configuration>\simse.exe` + `.pdb` (git-ignored).
   - `bun tools/vscheck.mjs [Debug|Release]` builds this project from the command line, with
     the same Visual Studio environment the rest of the harness uses.
@@ -84,7 +84,7 @@
          root (the prelude's default path and the root option are both relative to it). -->
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
     <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>
-    <LocalDebuggerCommandArguments>--root src</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>--root src --root modules</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
     <ClCompile>

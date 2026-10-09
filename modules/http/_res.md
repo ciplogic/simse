@@ -1,6 +1,6 @@
 Generated C++
 ====
-The `http` module's C++ - the declarations are src/modules/http/api.kt. The WinINet calls
+The `http` module's C++ - the declarations are modules/http/api.kt. The WinINet calls
 are `@SmGen("native", "wininet.dll", ...)`; what is C++ here is the constants, the buffer
 the reads land in, the two block copies at the boundary and the error text. None of it
 calls WinINet, so nothing has to be linked (`examples/http/sockets`' `_res.md` is the same

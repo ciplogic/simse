@@ -65,8 +65,8 @@ One translation unit - the amalgamated compiler - plus the RTL headers under
 `src/rtl/` that the amalgamation includes. The generated symbols it uses
 (`simse_native_readFile`, `simse_listFiles`, `simse_writeFile`,
 `simse_pathCanonical`, `simse_eprintln`, `simse_nowMillis`, ...) are not linked
-in from a second file: their C++ lives in the RTL's resource sections
-(`src/rtl/_res.md`, the `fileio` and `timeops` sections), which are emitted
+in from a second file: their C++ lives in the resource sections
+(`src/rtl/_res.md`'s `timeops`, `modules/io/_res.md`'s `fileio`), which are emitted
 into every program's translation unit, so the published bootstrap already carries
 them. The result is a working compiler. Run it from the repository root:
 `simse.exe --root my_project -o my_project.cpp` - the RTL sits at the default
@@ -88,31 +88,31 @@ loop. This is what the check prints on its own:
 ```console
 $ bun tools/bootstrap.js
 bootstrap: release build, 3 run(s) for the transpiles
-  sources    17905 lines of Simse under src
-  bootstrap  src\simse_bootstrap.cpp: 45757 lines, 1.38 MB (checked in, do not edit)
+  sources    37744 lines of Simse under src + modules
+  bootstrap  src\simse_bootstrap.cpp: 89696 lines, 2.96 MB (checked in, do not edit)
 
 1. compile the published bootstrap (cl.exe only, no build system)
-  src\simse_bootstrap.cpp -> simse_boot.exe         best 20713 ms
+  src\simse_bootstrap.cpp -> simse_boot.exe            best 18607 ms, median 18607 ms
 
-2. transpile the compiler's own source tree
-  simse_boot.exe (just built) --root src            best 1093 ms, median 1122 ms
-  working compiler (simse.exe) --root src           best 1042 ms, median 1089 ms
+2. transpile the compiler's own source trees
+  simse_boot.exe (just built) --root src --root modules best 1720 ms, median 1752 ms
+  working compiler (simse.exe) --root src --root modules best 1724 ms, median 1743 ms
 
 3. fixed point: both outputs must equal the published bootstrap
   simse_boot.exe's output == the bootstrap             yes, byte for byte
   the working compiler's output == the bootstrap       yes, byte for byte
 
-  from the published file to a working compiler: 20.71 s
-  and that compiler reproduces itself in:        1093 ms
-  full cycle (compile + self-transpile):         21.81 s
-  throughput: 16385 lines/s of Simse (41872 lines/s of C++ out)
-  the working compiler transpiles the same tree in: 1042 ms
+  from the published file to a working compiler: 18.61 s
+  and that compiler reproduces itself in:        1720 ms
+  full cycle (compile + self-transpile):         20.33 s
+  throughput: 21941 lines/s of Simse (52142 lines/s of C++ out)
+  the working compiler transpiles the same tree in: 1724 ms
 ```
 
-So: **~21 s from the published file to a compiler that reproduces it**, almost
-all of it `cl.exe` optimizing 45.7k lines of generated C++; the compiler's own
-share - transpiling its whole source tree - is **~1.1 s** (the machine's load
-moves it between 1.0 s and 3.0 s).
+So: **~20 s from the published file to a compiler that reproduces it**, almost
+all of it `cl.exe` optimizing 89.7k lines of generated C++; the compiler's own
+share - transpiling its whole source tree - is **~1.7 s** (the machine's load
+moves it up from there).
 
 ## 3. Compile and run a program
 

@@ -280,8 +280,8 @@ runtime-alignment task; the shim is not the normative layout.
    `size_t` into an `Int` (this retired the C4267 warnings). `std::string` survives **only
    at the native boundary**: `simse_toStdString`/`simse_fromStdString`,
    `std::getline(std::istream&, Str&)`, `FileStream`'s recycled line buffer
-   (`src/modules/streams/filestream.hpp`), and the `std::filesystem` use in the
-   `fileio`/`filestream` sections of `src/modules/io/_res.md`/`src/modules/streams/_res.md`.
+   (`modules/streams/filestream.hpp`), and the `std::filesystem` use in the
+   `fileio`/`filestream` sections of `modules/io/_res.md`/`modules/streams/_res.md`.
 2. **`List<T>` implementation.** Spec: `List<T>` *is* `SmallVector<4, T>`
    (`specs/containers.md`). Shim: matches - `SmallVector<T, kListInlineCapacity>` (4), the
    documented layout, and its only implementation (no `std::vector` mode).
@@ -373,8 +373,8 @@ runtime-alignment task; the shim is not the normative layout.
 
 ### Reading files line by line, and the clock
 
-`FileStream` (`src/modules/streams/filestream.hpp`, the file and type declarations
-`src/modules/streams/fs.kt`) is the line reader. The type and its operations are the `streams`
+`FileStream` (`modules/streams/filestream.hpp`, the file and type declarations
+`modules/streams/fs.kt`) is the line reader. The type and its operations are the `streams`
 module's - the header is placed by the module's `filestreamhpp` section (`emit: always`) and the
 method bodies are its `filestream` section (`emit: reached`) - and `simse.hpp` no longer includes
 it. `openFileStream(path): *FileStream` is a free native (null when
@@ -424,7 +424,7 @@ which is what lets a module carry one (`streams`' `FileStream`) exactly as the p
 `simse_nowMillis` (the `timeops` section of `src/rtl/_res.md`) is a monotonic
 millisecond clock for logging and for measuring a run.
 
-The Simse surface, with the C++ symbol each one reaches (`src/modules/streams/fs.kt`,
+The Simse surface, with the C++ symbol each one reaches (`modules/streams/fs.kt`,
 `src/rtl/rtl.kt`):
 
 | Simse | C++ symbol | Notes |

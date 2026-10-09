@@ -2,7 +2,8 @@
 
 ## The ring
 
-**One ring, and it is Simse.** A compiler behavior change is a change to `src/**/*.kt`. There
+**One ring, and it is Simse.** A compiler behavior change is a change to `src/**/*.kt` (or to
+the `modules/**` the compiler is built from). There
 is no C++ mirror to keep in step: the runtime's headers (`src/rtl/*.hpp`), the RTL's resource
 text (`src/rtl/_res.md`) and the published bootstrap are the only C++, and all of them are
 inputs to `cl.exe`, not a second implementation.
@@ -38,15 +39,16 @@ carries the new scanner and parser. If the running compiler cannot compile the t
 stage a compiler from the published file first (`./build.bat --cpp src/simse_bootstrap.cpp
 --exe simse.exe`), then build normally.
 
-A `_res.md` under `src` is part of the compiler, not of a program: the `res` generator reads it
+A `_res.md` under `src` or a module is part of the compiler's own build, not of a program: the `res` generator reads it
 *first* while the tree is being compiled, and at run time the compiler reads it from disk for
-every other program. Edit one and the next build is the one that sees it — and the amalgamation
+every other program. Edit one and the next build is the one that sees it - and the amalgamation
 changes, so refresh the bootstrap too.
 
 ## Invariants
 
 - **The bootstrap fixed point**: the compiler built from the published
-  `src/simse_bootstrap.cpp` transpiles `src` back into that same file, byte for byte. This is
+  `src/simse_bootstrap.cpp` transpiles `src` and `modules` back into that same file, byte for
+  byte. This is
   the strongest invariant in the repo.
 - **Determinism**: transpiling the same inputs twice is byte-identical.
 - **The stress corpus stays green**; a case is a folder under `stress/` with `src/`,

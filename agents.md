@@ -1,7 +1,8 @@
 # agents.md — start here
 
 Simse is a small, statically typed language (Kotlin/.NET influenced) that transpiles to a
-single amalgamated C++20 file. The compiler is written **in Simse** (`src/**/*.kt`); the only
+single amalgamated C++20 file. The compiler is written **in Simse** (`src/**/*.kt` plus the
+modules it names, `modules/**/*.kt`); the only
 hand-written C++ is the runtime (`src/rtl/*.hpp`) plus the published bootstrap
 (`src/simse_bootstrap.cpp`). Everything else a program needs is generated from `_res.md`
 resource sections.

@@ -27,7 +27,7 @@ point. The commands below are what it runs.
 ## The commands
 
 ```sh
-# build (from the repo root): src -> ./simse_out.cpp -> ./simse.exe
+# build (from the repo root): src + modules -> ./simse_out.cpp -> ./simse.exe
 ./build.bat                              # debug (/MDd)
 ./build.bat --release                    # /O2 /Ob3 /DNDEBUG + /GL (LTCG at link)
 ./build.bat --release --no-lto           # skip whole-program optimization: quicker to build
@@ -57,9 +57,9 @@ bun tools/bootstrap.js --quick [--write]  # one transpile vs the file; --write r
 
 # the compiler by hand (the compiler *is* the CLI; --prelude defaults to src/rtl, so run it
 # from the repo root)
-./simse.exe --root src -o simse_out.cpp             # the whole compiler
+./simse.exe --root src --root modules -o simse_out.cpp   # the whole compiler; --root repeats
 ./simse.exe --root stress/strings/src -o strings.cpp
-./simse.exe --root my/src --module src/modules/json -o out.cpp   # --module repeats
+./simse.exe --root my/src --module modules/json -o out.cpp   # --module repeats
 ```
 
 The two-step property is that the compiler built from the published bootstrap must reproduce
@@ -70,16 +70,16 @@ it with the source.
 ## Debug views (all print to stderr, C++ output unchanged)
 
 ```sh
-./simse.exe --root src -o a.cpp --showLinearRepresentation 2> il.txt   # the IL of every body
-./simse.exe --root examples/async/src --module src/modules/io --showAsync   # suspension coloring
-./simse.exe --root src -o a.cpp --showBorrow 2> borrow.txt             # per-candidate borrow decisions (prelude first)
-./simse.exe --root src -o a.cpp --showEscape 2> escape.txt             # per-name escape-parameter kinds (prelude + modules)
+./simse.exe --root src --root modules -o a.cpp --showLinearRepresentation 2> il.txt   # the IL of every body
+./simse.exe --root examples/async/src --module modules/io --showAsync   # suspension coloring
+./simse.exe --root src --root modules -o a.cpp --showBorrow 2> borrow.txt             # per-candidate borrow decisions (prelude first)
+./simse.exe --root src --root modules -o a.cpp --showEscape 2> escape.txt             # per-name escape-parameter kinds (prelude + modules)
 ./simse.exe --root stress/concat/src -o fused.cpp                      # the concat fusion (on)
 ./simse.exe --root stress/concat/src -o unfused.cpp --no-concat        # ... and its A/B off
-./simse.exe --root src -o unborrowed.cpp --no-borrow                    # the auto-borrow rewrite off (params and for)
-./simse.exe --root src -o noescape.cpp --no-escape                      # the escape-parameter analysis off (promotion's call rules)
+./simse.exe --root src --root modules -o unborrowed.cpp --no-borrow                    # the auto-borrow rewrite off (params and for)
+./simse.exe --root src --root modules -o noescape.cpp --no-escape                      # the escape-parameter analysis off (promotion's call rules)
 ./simse.exe --root stress/when-strings/src -o when.cpp                  # the when-over-strings lowering
-./simse.exe --root src -o prof.cpp --profile                            # RAII timers + call tree (simse_profile.txt)
+./simse.exe --root src --root modules -o prof.cpp --profile                            # RAII timers + call tree (simse_profile.txt)
 ```
 
 ## Troubleshooting
@@ -99,9 +99,11 @@ it with the source.
 
 - `src/` — the compiler, all Simse: `lex/`, `parser/`, `sema/`, `linear/`, `codegen/`,
   `compiler/` (the source generators), `optimizations/`, `profiling/`, `resources/`,
-  `common/`, plus `src/modules/` (reusable modules: `json`, `compiler`, `xml`, `io`, `linq`,
-  `http`) and `src/rtl/` (the prelude `.kt` files, the hand-written headers, and `_res.md`,
+  `common/`, and `src/rtl/` (the prelude `.kt` files, the hand-written headers, and `_res.md`,
   which holds the runtime's generated C++).
+- `modules/` — the reusable modules (`json`, `compiler`, `xml`, `io`, `linq`, `http`,
+  `jsonnode`, `streams`), one directory per module with its `_res.md`; the compiler's own
+  build scans them with `--root modules`, so their `generators/` sources are compiled in.
 - `specs/` — the normative language specification. `impl_specs/` — per-subsystem design and
   the change log (`capability-matrix.md`).
 - `stress/` — the end-to-end corpus (`stress/README.md`). `examples/` — the runnable examples.

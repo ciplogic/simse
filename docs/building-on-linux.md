@@ -26,10 +26,10 @@ g++ -std=c++20 -O2 -DNDEBUG -I. src/simse_bootstrap.cpp -o simse
 
 That `simse` is a complete compiler. Check the fixed point (the property that makes the
 checked-in file a *bootstrap* and not a snapshot): the compiler it produced must transpile
-`src` back into the same bytes.
+`src` and `modules` back into the same bytes.
 
 ```sh
-./simse --root src -o /tmp/out.cpp
+./simse --root src --root modules -o /tmp/out.cpp
 cmp src/simse_bootstrap.cpp /tmp/out.cpp && echo "fixed point holds"
 ```
 
@@ -50,8 +50,8 @@ Two places emitted C++ that would not build on a non-MSVC toolchain; both are fi
 ## What was already portable (no change needed)
 
 The runtime headers (`src/rtl/*.hpp`, plus the `streams` module's
-`src/modules/streams/filestream.hpp`) and the resource text (`src/rtl/_res.md`,
-`src/modules/io/_res.md`, `src/modules/streams/_res.md`, `src/modules/json/_res.md`) are plain
+`modules/streams/filestream.hpp`) and the resource text (`src/rtl/_res.md`,
+`modules/io/_res.md`, `modules/streams/_res.md`, `modules/json/_res.md`) are plain
 standard C++20:
 `std::chrono`, `std::filesystem`, `std::bit_width`, `std::type_identity_t`, `std::to_string`.
 The one toolchain-dependent construct — 4-byte packing — already branches in
@@ -80,6 +80,6 @@ so a design can be made for each.
 
 1. Compile the bootstrap with `g++` (above) — this is the step that proves the C++ is
    portable; it needs no `simse.exe` and no build system.
-2. Run the fixed-point check (`./simse --root src -o /tmp/out.cpp; cmp ...`).
+2. Run the fixed-point check (`./simse --root src --root modules -o /tmp/out.cpp; cmp ...`).
 3. After the tooling scripts are ported: `bun tools/stress.js`, `bun tools/bootstrap.js`, and
    the loop `bun tools/iterate.js`.

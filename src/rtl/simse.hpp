@@ -11,7 +11,7 @@
 // in the amalgamation's own sections - a program that reaches one of them carries its
 // prototype and its definition, and has nothing to link (`impl_specs/generators.md`).
 // A module owns the same way; the `streams` module's `FileStream` header is placed by
-// that module's `filestreamhpp` section, not by this umbrella (src/modules/streams/_res.md).
+// that module's `filestreamhpp` section, not by this umbrella (modules/streams/_res.md).
 
 // Order follows dependencies: types and containers have no RTL-relative
 // dependencies, and the higher-level headers build on them.
@@ -27,8 +27,8 @@
 // typealias). Its operations are prelude functions, the byte-boundary primitives live in
 // smstring.hpp and the converting constructor is the `strconv` section (src/rtl/_res.md).
 // The compiler's AST (`AstXmlNode`, `AstNodeKind`, ...) is *generated*: it is declared in
-// src/modules/compiler/astxml.kt and the emitter writes its structs and enums
+// modules/compiler/astxml.kt and the emitter writes its structs and enums
 // (specs/attributes.md's type materialization), so there is no header to include for it any
 // more. The language-level `XmlNode`/`Attribute` live in the `xml` module
-// (src/modules/xml/api.kt) and are generated the same way; nothing in the `rtl` prelude
+// (modules/xml/api.kt) and are generated the same way; nothing in the `rtl` prelude
 // declares them.

@@ -12,7 +12,7 @@
 //
 // Exit code 0 when MSBuild succeeded; the last lines of its output are printed either way.
 // The built compiler is the project's own, so it is worth one functional check by hand after a
-// change that moved the amalgamation: `profile/Release/simse.exe --root src -o out.cpp`
+// change that moved the amalgamation: `profile/Release/simse.exe --root src --root modules -o out.cpp`
 // reproduces `src/simse_bootstrap.cpp` byte for byte.
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";

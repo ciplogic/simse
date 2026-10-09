@@ -9,7 +9,7 @@ The executable breakdown of `impl_specs/plan-to-selfhost.md` and
 
 ## Current state
 
-The compiler is written in Simse (`src/**/*.kt`) and self-hosts: `src/simse_bootstrap.cpp`
+The compiler is written in Simse (`src/**/*.kt` plus the `modules/**` its build scans) and self-hosts: `src/simse_bootstrap.cpp`
 is one amalgamation of those sources, and the compiler it builds transpiles them back into that
 same file byte for byte (`bun tools/bootstrap.js`). `build.js` / `build.bat` drive the build.
 Per-component status: `impl_specs/capability-matrix.md`.
@@ -115,7 +115,7 @@ the amalgamation is compiled *against* and which needs language features that do
 (statics in an object, a ref-counted layout). (`variant2.hpp`, `optional.hpp` and
 `result.hpp` left the list when `Opt`/`Res` became prelude `union class`es,
 `src/rtl/optres.kt`; `filestream.hpp` left the RTL when the `streams` module took the
-`FileStream` type - it is src/modules/streams/filestream.hpp now, placed by that module's
+`FileStream` type - it is modules/streams/filestream.hpp now, placed by that module's
 `filestreamhpp` section.)
 
 ### T30 - The generators are their own files, in the compiler's package - **Done**
@@ -141,7 +141,7 @@ author*; they are a boundary documented as a rule (spec of record:
   `sourceGenBegin`/`sourceGenReparseSource`.
 - **The interface types are the same package** (a later move): the whole former `sourcegen`
   package merged into `compiler` - `SourceGenContext` and `SourceGenTransform` sit with the
-  AST in `src/modules/compiler/`, the rest in `src/compiler/` - so a module's
+  AST in `modules/compiler/`, the rest in `src/compiler/` - so a module's
   `generators/` names the compiler surface with one import (`import compiler`), and nothing
   imports a `sourcegen` package back.
 
@@ -181,7 +181,7 @@ Steps, in order:
    driver's own small reader (`manifestValues`/`driverExpandRoot`, `Driver.kt`) in the
    resource idiom: prose lines ignored, `key: value`, a repeated key repeating. A root with
    a manifest is scanned as exactly the modules it names; a root without one is scanned
-   whole (this compiler's own `--root src`). A module declaring `sourcegen: true` is a
+   whole (this compiler's own `--root src --root modules`). A module declaring `sourcegen: true` is a
    **hard error** naming it:
    `stress/manifest-modules` and `stress/diagnostic-manifest-sourcegen` pin both halves.
 3. **Two natives** - `system()` (normalizing the exit code, since POSIX packs `system()`'s

@@ -10,7 +10,7 @@
 //
 // Build the Simse server first (see ../README.md):
 //   simse.exe --root examples/express/src --module examples/http/sockets \
-//       --module src/modules/http --module src/modules/jsonnode -o examples/express/out.cpp
+//       --module modules/http --module modules/jsonnode -o examples/express/out.cpp
 //   bun build.js --release --cpp examples/express/out.cpp --exe examples/express/express.exe
 
 import * as path from "node:path";
