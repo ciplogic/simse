@@ -18,7 +18,7 @@ import io
 // lands this program does not compile; `--showAsync` is how the inference is checked
 // (src/sema/Async.kt):
 //
-//     ./simse.exe --root examples/async/src --module modules/io --showAsync
+//     ./bin/simse.exe --root examples/async/src --module modules/io --showAsync
 
 // The leaves: a body-less declaration is where the runtime's suspension lives (the `@SmGen`
 // form the RTL uses for everything whose body is C++). The section is not written yet - the

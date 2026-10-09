@@ -44,7 +44,15 @@ Release
 
 ### Simse build outputs ###
 /simse_out.cpp
-/simse.exe
+# The built executables live in bin/ (build.js, smt.bat): the compiler and the `smt`
+# toolset. bin/ itself is not ignored - `bin/smt-tool/` holds sources and a checked-in
+# amalgamation.
+/bin/simse.exe
+/bin/simse
+/bin/smt.exe
+/bin/smt
+/bin/*.obj
+/bin/*.pdb
 # Root-level object/pdb files from a manual cl.exe run (build.js writes into `build/`).
 /*.obj
 /*.pdb

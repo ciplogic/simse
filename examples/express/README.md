@@ -55,7 +55,7 @@ pool with a single `WSAPoll` event loop.
 From the repository root (the compiler must be built first: `build.bat --release`):
 
 ```bat
-simse.exe --root examples/express/src ^
+bin\simse.exe --root examples/express/src ^
     --module examples/express/layers --module examples/http/sockets ^
     --module modules/http --module modules/jsonnode ^
     -o examples/express/out.cpp

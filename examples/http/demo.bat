@@ -6,9 +6,9 @@ pushd "%~dp0..\..\.."
 
 set PORT=8099
 
-simse.exe --root examples/http/server/src --module examples/http/sockets -o examples/http/server/out.cpp
+bin\simse.exe --root examples/http/server/src --module examples/http/sockets -o examples/http/server/out.cpp
 if errorlevel 1 goto :fail
-simse.exe --root examples/http/client/src --module examples/http/sockets -o examples/http/client/out.cpp
+bin\simse.exe --root examples/http/client/src --module examples/http/sockets -o examples/http/client/out.cpp
 if errorlevel 1 goto :fail
 
 call bun build.js --release --cpp examples/http/server/out.cpp --exe examples/http/server/httpd.exe

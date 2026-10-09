@@ -27,10 +27,12 @@
 // Every command is a **stub**: it prints the plan it will carry out and exits 1, so nothing
 // is half-done silently. `help` and `version` answer normally (exit 0).
 //
-// The program is built like any other - `smt.bat` does exactly this:
+// The program is built like any other - `smt.bat` does exactly this, from the repository
+// root (`smt_src.cpp` beside this file is the checked-in amalgamation, what gets compiled
+// when no compiler is present):
 //
-//   bun build.js --root tools/smt/src --module modules/io --out build/smt/smt.cpp \
-//       --exe build/smt/smt.exe
+//   bun build.js --root bin/smt-tool/src --module modules/io \
+//       --out bin/smt-tool/smt_src.cpp --exe bin/smt.exe
 //
 // (`modules/io` is named for `eprintln`; everything else is the prelude.)
 

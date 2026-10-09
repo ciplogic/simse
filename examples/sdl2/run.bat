@@ -5,7 +5,7 @@ rem frames and leave instead of waiting for Escape).
 setlocal
 pushd "%~dp0..\..\.."
 
-simse.exe --root examples/sdl2/app/src --module examples/sdl2/wrapper -o examples/sdl2/app/out.cpp
+bin\simse.exe --root examples/sdl2/app/src --module examples/sdl2/wrapper -o examples/sdl2/app/out.cpp
 if errorlevel 1 goto :fail
 
 call bun build.js --release --cpp examples/sdl2/app/out.cpp --exe examples/sdl2/app/sdl2demo.exe

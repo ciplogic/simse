@@ -27,7 +27,7 @@ point. The commands below are what it runs.
 ## The commands
 
 ```sh
-# build (from the repo root): src + modules -> ./simse_out.cpp -> ./simse.exe
+# build (from the repo root): src + modules -> ./simse_out.cpp -> ./bin/simse.exe
 ./build.bat                              # debug (/MDd)
 ./build.bat --release                    # /O2 /Ob3 /DNDEBUG + /GL (LTCG at link)
 ./build.bat --release --no-lto           # skip whole-program optimization: quicker to build
@@ -48,7 +48,7 @@ bun tools/stress.js --simse ./other.exe  # test another compiler build
 # the published bootstrap: the same amalgamation, checked in so the compiler can be built
 # with a C++ compiler alone (docs/getting-started.md). Refresh it whenever emitted C++ moves
 # (the file is generated, never hand-edited):
-bun build.js --release --out src/simse_bootstrap.cpp               # also builds ./simse.exe
+bun build.js --release --out src/simse_bootstrap.cpp               # also builds ./bin/simse.exe
 bun build.js --release --no-compile --out src/simse_bootstrap.cpp  # ... without recompiling
 
 # does the fixed point hold? compile the bootstrap, transpile, compare the bytes
@@ -57,9 +57,9 @@ bun tools/bootstrap.js --quick [--write]  # one transpile vs the file; --write r
 
 # the compiler by hand (the compiler *is* the CLI; --prelude defaults to src/rtl, so run it
 # from the repo root)
-./simse.exe --root src --root modules -o simse_out.cpp   # the whole compiler; --root repeats
-./simse.exe --root stress/strings/src -o strings.cpp
-./simse.exe --root my/src --module modules/json -o out.cpp   # --module repeats
+./bin/simse.exe --root src --root modules -o simse_out.cpp   # the whole compiler; --root repeats
+./bin/simse.exe --root stress/strings/src -o strings.cpp
+./bin/simse.exe --root my/src --module modules/json -o out.cpp   # --module repeats
 ```
 
 The two-step property is that the compiler built from the published bootstrap must reproduce
@@ -70,26 +70,26 @@ it with the source.
 ## Debug views (all print to stderr, C++ output unchanged)
 
 ```sh
-./simse.exe --root src --root modules -o a.cpp --showLinearRepresentation 2> il.txt   # the IL of every body
-./simse.exe --root examples/async/src --module modules/io --showAsync   # suspension coloring
-./simse.exe --root src --root modules -o a.cpp --showBorrow 2> borrow.txt             # per-candidate borrow decisions (prelude first)
-./simse.exe --root src --root modules -o a.cpp --showEscape 2> escape.txt             # per-name escape-parameter kinds (prelude + modules)
-./simse.exe --root stress/concat/src -o fused.cpp                      # the concat fusion (on)
-./simse.exe --root stress/concat/src -o unfused.cpp --no-concat        # ... and its A/B off
-./simse.exe --root src --root modules -o unborrowed.cpp --no-borrow                    # the auto-borrow rewrite off (params and for)
-./simse.exe --root src --root modules -o noescape.cpp --no-escape                      # the escape-parameter analysis off (promotion's call rules)
-./simse.exe --root stress/when-strings/src -o when.cpp                  # the when-over-strings lowering
-./simse.exe --root src --root modules -o prof.cpp --profile                            # RAII timers + call tree (simse_profile.txt)
+./bin/simse.exe --root src --root modules -o a.cpp --showLinearRepresentation 2> il.txt   # the IL of every body
+./bin/simse.exe --root examples/async/src --module modules/io --showAsync   # suspension coloring
+./bin/simse.exe --root src --root modules -o a.cpp --showBorrow 2> borrow.txt             # per-candidate borrow decisions (prelude first)
+./bin/simse.exe --root src --root modules -o a.cpp --showEscape 2> escape.txt             # per-name escape-parameter kinds (prelude + modules)
+./bin/simse.exe --root stress/concat/src -o fused.cpp                      # the concat fusion (on)
+./bin/simse.exe --root stress/concat/src -o unfused.cpp --no-concat        # ... and its A/B off
+./bin/simse.exe --root src --root modules -o unborrowed.cpp --no-borrow                    # the auto-borrow rewrite off (params and for)
+./bin/simse.exe --root src --root modules -o noescape.cpp --no-escape                      # the escape-parameter analysis off (promotion's call rules)
+./bin/simse.exe --root stress/when-strings/src -o when.cpp                  # the when-over-strings lowering
+./bin/simse.exe --root src --root modules -o prof.cpp --profile                            # RAII timers + call tree (simse_profile.txt)
 ```
 
 ## Troubleshooting
 
-- **If `simse.exe` is running, linking it again fails with `LNK1168`** — kill it first.
+- **If `bin/simse.exe` is running, linking it again fails with `LNK1168`** — kill it first.
 - An **interrupted** build is worse than a running one: `cl` writes the executable where it is
-  asked to, so a build killed mid-link leaves a truncated `simse.exe`, and the next build fails
+  asked to, so a build killed mid-link leaves a truncated `bin/simse.exe`, and the next build fails
   with `bun: unknown error:` (or `Exec format error`) because the transpiler is not a program.
   The way back is the published bootstrap:
-  `./build.bat --release --cpp src/simse_bootstrap.cpp --exe simse.exe`.
+  `./build.bat --release --cpp src/simse_bootstrap.cpp --exe bin/simse.exe`.
 - A compiler change the *running* compiler cannot apply to its own sources is the **two-build
   rule** (`ai/contributing.md`).
 - The same bootstrap builds with GCC 12+ / Clang 15+ on Linux (`docs/building-on-linux.md`);
@@ -104,6 +104,9 @@ it with the source.
 - `modules/` — the reusable modules (`json`, `compiler`, `xml`, `io`, `linq`, `http`,
   `jsonnode`, `streams`), one directory per module with its `_res.md`; the compiler's own
   build scans them with `--root modules`, so their `generators/` sources are compiled in.
+- `bin/` — the built executables: `simse.exe` (the compiler; `simse` elsewhere) and `smt.exe`.
+  It also holds the toolset's home `bin/smt-tool/` - its `src/main.kt` and the checked-in
+  amalgamation `smt_src.cpp`, what gets compiled when no compiler is present.
 - `specs/` — the normative language specification. `impl_specs/` — per-subsystem design and
   the change log (`capability-matrix.md`).
 - `stress/` — the end-to-end corpus (`stress/README.md`). `examples/` — the runnable examples.
@@ -116,9 +119,9 @@ it with the source.
   recursion folded out), `_profile_ab.mjs` (round-robin A/B of profiled
   builds by their reports' `main():` line), `_pe_sections.mjs` (`impl_specs/rtl-abi.md`),
   `array_layout_probe.cpp`, `smallvector_stress.cpp`, `statics_probe.cpp`
-  (`impl_specs/statics.md`) and `memrun.cpp` (`benchmarks/onebrc/benchmark.md`). Beside the
-  harness, `tools/smt/` is the **toolset as a Simse program** (`src/main.kt`: the project CLI
-  `init`/`build`/`run`/`install`, dispatched but not implemented), built and run by `smt.bat`.
+  (`impl_specs/statics.md`) and `memrun.cpp` (`benchmarks/onebrc/benchmark.md`). The `smt`
+  toolset is not part of this harness: it is a Simse program under `bin/smt-tool/`, built and
+  run by `smt.bat`.
 - `docs/` — the published documentation (tour, how-it-works, state-of-the-field).
 
 ## Profiling

@@ -26,8 +26,8 @@ From the repository root (the compiler must be built first: `build.bat --release
 
 ```bat
 :: 1. transpile the server (and the client), each with the sockets module
-simse.exe --root examples/http/server/src --module examples/http/sockets -o examples/http/server/out.cpp
-simse.exe --root examples/http/client/src --module examples/http/sockets -o examples/http/client/out.cpp
+bin\simse.exe --root examples/http/server/src --module examples/http/sockets -o examples/http/server/out.cpp
+bin\simse.exe --root examples/http/client/src --module examples/http/sockets -o examples/http/client/out.cpp
 
 :: 2. compile the two amalgamations
 bun build.js --release --cpp examples/http/server/out.cpp --exe examples/http/server/httpd.exe

@@ -40,7 +40,7 @@ thing being measured.
 From the repository root (the compiler must be built first: `build.bat --release`):
 
 ```bat
-simse.exe --root examples/http/async-server/src --module examples/http/sockets -o examples/http/async-server/out.cpp
+bin\simse.exe --root examples/http/async-server/src --module examples/http/sockets -o examples/http/async-server/out.cpp
 bun build.js --release --cpp examples/http/async-server/out.cpp --exe examples/http/async-server/httpd_async.exe
 
 :: foreground; the limit makes it leave on its own once this client has been served
