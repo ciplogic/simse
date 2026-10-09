@@ -377,9 +377,9 @@ runs green on every build, alongside the bootstrap fixed point.
 | `impl_specs/` | implementation plans and records: the capability matrix, the RTL ABI, generators, the user-facing roadmap |
 | `stress/` | one folder per end-to-end program: source, arguments, expected output, and where the emitted text is the point, an `expected.cpp` golden |
 | `build.js`, `build.bat`, `stress.bat` | the build and harness entry points: transpile the compiler's trees (`src` + `modules`), compile them with `cl.exe`, run the corpus |
-| `smt.bat` | the launcher for the `smt` toolset (`tools/smt.js`): `smt build`, `smt run`, ... |
+| `smt.bat` | the launcher for the `smt` toolset (`tools/smt/src`, a Simse program): `smt build`, `smt run`, ... |
 | `simse.vcxproj`, `simse.slnx` | the Visual Studio profiling project: the published bootstrap (the runtime is generated into it), with the debugger already set to run the compiler over its own tree |
-| `tools/` | the JavaScript harness: `iterate.js` (the loop: build + corpus + bootstrap check), the stress runner (`stress.js`), the bootstrap fixed-point check (`bootstrap.js`), the Visual Studio project check (`vscheck.mjs`), the `smt` toolset (`smt.js`: `init`/`build`/`run`/`install`), `msvc.mjs` |
+| `tools/` | the JavaScript harness: `iterate.js` (the loop: build + corpus + bootstrap check), the stress runner (`stress.js`), the bootstrap fixed-point check (`bootstrap.js`), the Visual Studio project check (`vscheck.mjs`), `msvc.mjs`; plus `smt/`, the toolset as a Simse program (`init`/`build`/`run`/`install`) |
 | `examples/` | the runnable examples the docs use |
 | `docs/` | this documentation |
 | `ai/` | orientation for a working session: `language.md` (using Simse), `building.md`, `status.md` (implemented/deferred), `contributing.md` (protocol, invariants, gotchas); `agents.md` is the router |

@@ -108,8 +108,7 @@ it with the source.
   the change log (`capability-matrix.md`).
 - `stress/` — the end-to-end corpus (`stress/README.md`). `examples/` — the runnable examples.
 - `tools/` — the JavaScript harness: `iterate.js` (the loop), `stress.js` (the corpus),
-  `bootstrap.js` (the fixed point), `vscheck.mjs` (the VS project check), `smt.js` (the `smt`
-  toolset: `init`/`build`/`run`/`install`, dispatched but not implemented) and `msvc.mjs` (the
+  `bootstrap.js` (the fixed point), `vscheck.mjs` (the VS project check) and `msvc.mjs` (the
   MSVC toolchain they share, also used by `build.js`). A few **evidence probes** a design doc
   cites sit beside them and are run by hand, never by the loop: `_bench_ab.mjs` (interleaved
   A/B timing), `_strtable_runs.mjs`, `_check_tree.mjs` (verifies a `--profile` report: the two
@@ -117,7 +116,9 @@ it with the source.
   recursion folded out), `_profile_ab.mjs` (round-robin A/B of profiled
   builds by their reports' `main():` line), `_pe_sections.mjs` (`impl_specs/rtl-abi.md`),
   `array_layout_probe.cpp`, `smallvector_stress.cpp`, `statics_probe.cpp`
-  (`impl_specs/statics.md`) and `memrun.cpp` (`benchmarks/onebrc/benchmark.md`).
+  (`impl_specs/statics.md`) and `memrun.cpp` (`benchmarks/onebrc/benchmark.md`). Beside the
+  harness, `tools/smt/` is the **toolset as a Simse program** (`src/main.kt`: the project CLI
+  `init`/`build`/`run`/`install`, dispatched but not implemented), built and run by `smt.bat`.
 - `docs/` — the published documentation (tour, how-it-works, state-of-the-field).
 
 ## Profiling
