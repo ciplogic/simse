@@ -98,8 +98,12 @@ struct ns7_JsonNode;
 struct ns7_JsonMember;
 struct ns7_JsonWriter;
 struct ns7_JsonReader;
-struct ns18_Attribute;
-struct ns18_XmlNode;
+struct ns18_UInt8;
+struct ns18_UInt16;
+struct ns18_UInt32;
+struct ns18_UInt64;
+struct ns19_Attribute;
+struct ns19_XmlNode;
 struct ns1_CgCallableArg;
 struct ns1_CgProtocolImpl;
 struct ns1_StringTable;
@@ -740,19 +744,43 @@ struct ns7_JsonReader {
     Int at;
 };
 SIMSE_PACK_POP
+// modules/unsafe/api.kt
+SIMSE_PACK_PUSH
+struct ns18_UInt8 {
+    Int bits;
+};
+SIMSE_PACK_POP
+// modules/unsafe/api.kt
+SIMSE_PACK_PUSH
+struct ns18_UInt16 {
+    Int bits;
+};
+SIMSE_PACK_POP
+// modules/unsafe/api.kt
+SIMSE_PACK_PUSH
+struct ns18_UInt32 {
+    Int bits;
+};
+SIMSE_PACK_POP
+// modules/unsafe/api.kt
+SIMSE_PACK_PUSH
+struct ns18_UInt64 {
+    Int64 bits;
+};
+SIMSE_PACK_POP
 // modules/xml/api.kt
 SIMSE_PACK_PUSH
-struct ns18_Attribute {
+struct ns19_Attribute {
     Str name;
     Str value;
 };
 SIMSE_PACK_POP
 // modules/xml/api.kt
 SIMSE_PACK_PUSH
-struct ns18_XmlNode {
+struct ns19_XmlNode {
     Str name;
-    List<ns18_Attribute> attributes;
-    Array<ns18_XmlNode> Children;
+    List<ns19_Attribute> attributes;
+    Array<ns19_XmlNode> Children;
 };
 SIMSE_PACK_POP
 // src/codegen/CgEmitFn.kt
@@ -2668,6 +2696,53 @@ Bool advance(ns10_Str_splitIter_yieldable_Char* self) {
 }
 
 ns10_Str_splitIter_yieldable_Char ns10_splitIter(Str* self, Char separator);
+Int ns18_value(ns18_UInt8* self);
+ns18_UInt8 ns18_plus(ns18_UInt8* self, ns18_UInt8 other);
+Int ns18_compareTo(ns18_UInt8* self, ns18_UInt8* other);
+Bool ns18_equals(ns18_UInt8* self, ns18_UInt8* other);
+ns18_UInt8 ns18_andWith(ns18_UInt8* self, ns18_UInt8* other);
+ns18_UInt8 ns18_orWith(ns18_UInt8* self, ns18_UInt8* other);
+ns18_UInt8 ns18_xorWith(ns18_UInt8* self, ns18_UInt8* other);
+ns18_UInt8 ns18_shl(ns18_UInt8* self, Int count);
+ns18_UInt8 ns18_shr(ns18_UInt8* self, Int count);
+Int ns18_toInt(ns18_UInt8* self);
+Int64 ns18_toInt64(ns18_UInt8* self);
+Str ns18_toString(ns18_UInt8* self);
+Int ns18_value(ns18_UInt16* self);
+ns18_UInt16 ns18_plus(ns18_UInt16* self, ns18_UInt16 other);
+Int ns18_compareTo(ns18_UInt16* self, ns18_UInt16* other);
+Bool ns18_equals(ns18_UInt16* self, ns18_UInt16* other);
+ns18_UInt16 ns18_andWith(ns18_UInt16* self, ns18_UInt16* other);
+ns18_UInt16 ns18_orWith(ns18_UInt16* self, ns18_UInt16* other);
+ns18_UInt16 ns18_xorWith(ns18_UInt16* self, ns18_UInt16* other);
+ns18_UInt16 ns18_shl(ns18_UInt16* self, Int count);
+ns18_UInt16 ns18_shr(ns18_UInt16* self, Int count);
+Int ns18_toInt(ns18_UInt16* self);
+Int64 ns18_toInt64(ns18_UInt16* self);
+Str ns18_toString(ns18_UInt16* self);
+Int64 ns18_value(ns18_UInt32* self);
+ns18_UInt32 ns18_plus(ns18_UInt32* self, ns18_UInt32 other);
+Int ns18_compareTo(ns18_UInt32* self, ns18_UInt32* other);
+Bool ns18_equals(ns18_UInt32* self, ns18_UInt32* other);
+ns18_UInt32 ns18_andWith(ns18_UInt32* self, ns18_UInt32* other);
+ns18_UInt32 ns18_orWith(ns18_UInt32* self, ns18_UInt32* other);
+ns18_UInt32 ns18_xorWith(ns18_UInt32* self, ns18_UInt32* other);
+ns18_UInt32 ns18_shl(ns18_UInt32* self, Int count);
+ns18_UInt32 ns18_shr(ns18_UInt32* self, Int count);
+Int ns18_toInt(ns18_UInt32* self);
+Int64 ns18_toInt64(ns18_UInt32* self);
+Str ns18_toString(ns18_UInt32* self);
+Int64 ns18_value(ns18_UInt64* self);
+ns18_UInt64 ns18_plus(ns18_UInt64* self, ns18_UInt64 other);
+Int ns18_compareTo(ns18_UInt64* self, ns18_UInt64* other);
+Bool ns18_equals(ns18_UInt64* self, ns18_UInt64* other);
+ns18_UInt64 ns18_andWith(ns18_UInt64* self, ns18_UInt64* other);
+ns18_UInt64 ns18_orWith(ns18_UInt64* self, ns18_UInt64* other);
+ns18_UInt64 ns18_xorWith(ns18_UInt64* self, ns18_UInt64* other);
+ns18_UInt64 ns18_shl(ns18_UInt64* self, Int count);
+ns18_UInt64 ns18_shr(ns18_UInt64* self, Int count);
+Int64 ns18_toInt64(ns18_UInt64* self);
+Str ns18_toString(ns18_UInt64* self);
 Str ns1_exprInner(ns1_Emitter* self, ns3_AstXmlNode* e, ns3_AstXmlNode* expected);
 Str ns1_call(ns1_Emitter* self, ns3_AstXmlNode* e);
 List<Str> ns1_cgMethodStrArgs(ns1_Emitter* self, ns1_CgFn* fn, List<ns3_AstXmlNode>* argNodes, List<Str>* args);
@@ -7340,6 +7415,541 @@ ns10_Str_splitIter_yieldable_Char ns10_splitIter(Str* self, Char separator) {
     machine._sm_self = self;
     machine.branch = 0;
     return machine;
+}
+// modules/unsafe/api.kt
+Int ns18_value(ns18_UInt8* self) {
+    Int _sm_expr1, _sm_expr2;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = _sm_expr1 & 255;
+    return _sm_expr2;
+}
+// modules/unsafe/api.kt
+ns18_UInt8 ns18_plus(ns18_UInt8* self, ns18_UInt8 other) {
+    Int _sm_expr1, _sm_expr2, _sm_expr3, _sm_expr4;
+    ns18_UInt8 _sm_expr5;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = other.bits;
+    _sm_expr3 = _sm_expr1 + _sm_expr2;
+    _sm_expr4 = _sm_expr3 & 255;
+    _sm_expr5 = ns18_UInt8{_sm_expr4};
+    return _sm_expr5;
+}
+// modules/unsafe/api.kt
+Int ns18_compareTo(ns18_UInt8* self, ns18_UInt8* other) {
+    Int _sm_expr1, _sm_expr2;
+    Bool _sm_expr3;
+    _sm_expr1 = ns18_value(self);
+    _sm_expr2 = ns18_value(other);
+    _sm_expr3 = _sm_expr1 < _sm_expr2;
+    if (_sm_expr3) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr1 = -1;
+    return _sm_expr1;
+    L2:;
+    _sm_expr1 = ns18_value(self);
+    _sm_expr2 = ns18_value(other);
+    _sm_expr3 = _sm_expr1 > _sm_expr2;
+    if (_sm_expr3) goto L3;
+    goto L4;
+    L3:;
+    return 1;
+    L4:;
+    return 0;
+}
+// modules/unsafe/api.kt
+Bool ns18_equals(ns18_UInt8* self, ns18_UInt8* other) {
+    Int _sm_expr1, _sm_expr2;
+    Bool _sm_expr3;
+    _sm_expr1 = ns18_value(self);
+    _sm_expr2 = ns18_value(other);
+    _sm_expr3 = _sm_expr1 == _sm_expr2;
+    return _sm_expr3;
+}
+// modules/unsafe/api.kt
+ns18_UInt8 ns18_andWith(ns18_UInt8* self, ns18_UInt8* other) {
+    Int _sm_expr1, _sm_expr2, _sm_expr3;
+    ns18_UInt8 _sm_expr4;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = other->bits;
+    _sm_expr3 = _sm_expr1 & _sm_expr2;
+    _sm_expr4 = ns18_UInt8{_sm_expr3};
+    return _sm_expr4;
+}
+// modules/unsafe/api.kt
+ns18_UInt8 ns18_orWith(ns18_UInt8* self, ns18_UInt8* other) {
+    Int _sm_expr1, _sm_expr2, _sm_expr3;
+    ns18_UInt8 _sm_expr4;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = other->bits;
+    _sm_expr3 = _sm_expr1 | _sm_expr2;
+    _sm_expr4 = ns18_UInt8{_sm_expr3};
+    return _sm_expr4;
+}
+// modules/unsafe/api.kt
+ns18_UInt8 ns18_xorWith(ns18_UInt8* self, ns18_UInt8* other) {
+    Int _sm_expr1, _sm_expr2, _sm_expr3;
+    ns18_UInt8 _sm_expr4;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = other->bits;
+    _sm_expr3 = _sm_expr1 ^ _sm_expr2;
+    _sm_expr4 = ns18_UInt8{_sm_expr3};
+    return _sm_expr4;
+}
+// modules/unsafe/api.kt
+ns18_UInt8 ns18_shl(ns18_UInt8* self, Int count) {
+    Bool _sm_expr1;
+    ns18_UInt8 _sm_expr2;
+    Int _sm_expr3, _sm_expr4, _sm_expr5;
+    _sm_expr1 = count >= 8;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = ns18_UInt8{0};
+    return _sm_expr2;
+    L2:;
+    _sm_expr3 = ns18_value(self);
+    _sm_expr4 = _sm_expr3 << count;
+    _sm_expr5 = _sm_expr4 & 255;
+    _sm_expr2 = ns18_UInt8{_sm_expr5};
+    return _sm_expr2;
+}
+// modules/unsafe/api.kt
+ns18_UInt8 ns18_shr(ns18_UInt8* self, Int count) {
+    Bool _sm_expr1;
+    ns18_UInt8 _sm_expr2;
+    Int _sm_expr3, _sm_expr4;
+    _sm_expr1 = count >= 8;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = ns18_UInt8{0};
+    return _sm_expr2;
+    L2:;
+    _sm_expr3 = ns18_value(self);
+    _sm_expr4 = _sm_expr3 >> count;
+    _sm_expr2 = ns18_UInt8{_sm_expr4};
+    return _sm_expr2;
+}
+// modules/unsafe/api.kt
+Int ns18_toInt(ns18_UInt8* self) {
+    Int _sm_expr1;
+    _sm_expr1 = ns18_value(self);
+    return _sm_expr1;
+}
+// modules/unsafe/api.kt
+Int64 ns18_toInt64(ns18_UInt8* self) {
+    Int _sm_expr1;
+    _sm_expr1 = ns18_value(self);
+    return _sm_expr1;
+}
+// modules/unsafe/api.kt
+Str ns18_toString(ns18_UInt8* self) {
+    Int _sm_expr1;
+    Str _sm_expr2;
+    _sm_expr1 = ns18_value(self);
+    _sm_expr2 = simse_int_toString(_sm_expr1);
+    return _sm_expr2;
+}
+// modules/unsafe/api.kt
+Int ns18_value(ns18_UInt16* self) {
+    Int _sm_expr1, _sm_expr2;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = _sm_expr1 & 65535;
+    return _sm_expr2;
+}
+// modules/unsafe/api.kt
+ns18_UInt16 ns18_plus(ns18_UInt16* self, ns18_UInt16 other) {
+    Int _sm_expr1, _sm_expr2, _sm_expr3, _sm_expr4;
+    ns18_UInt16 _sm_expr5;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = other.bits;
+    _sm_expr3 = _sm_expr1 + _sm_expr2;
+    _sm_expr4 = _sm_expr3 & 65535;
+    _sm_expr5 = ns18_UInt16{_sm_expr4};
+    return _sm_expr5;
+}
+// modules/unsafe/api.kt
+Int ns18_compareTo(ns18_UInt16* self, ns18_UInt16* other) {
+    Int _sm_expr1, _sm_expr2;
+    Bool _sm_expr3;
+    _sm_expr1 = ns18_value(self);
+    _sm_expr2 = ns18_value(other);
+    _sm_expr3 = _sm_expr1 < _sm_expr2;
+    if (_sm_expr3) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr1 = -1;
+    return _sm_expr1;
+    L2:;
+    _sm_expr1 = ns18_value(self);
+    _sm_expr2 = ns18_value(other);
+    _sm_expr3 = _sm_expr1 > _sm_expr2;
+    if (_sm_expr3) goto L3;
+    goto L4;
+    L3:;
+    return 1;
+    L4:;
+    return 0;
+}
+// modules/unsafe/api.kt
+Bool ns18_equals(ns18_UInt16* self, ns18_UInt16* other) {
+    Int _sm_expr1, _sm_expr2;
+    Bool _sm_expr3;
+    _sm_expr1 = ns18_value(self);
+    _sm_expr2 = ns18_value(other);
+    _sm_expr3 = _sm_expr1 == _sm_expr2;
+    return _sm_expr3;
+}
+// modules/unsafe/api.kt
+ns18_UInt16 ns18_andWith(ns18_UInt16* self, ns18_UInt16* other) {
+    Int _sm_expr1, _sm_expr2, _sm_expr3;
+    ns18_UInt16 _sm_expr4;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = other->bits;
+    _sm_expr3 = _sm_expr1 & _sm_expr2;
+    _sm_expr4 = ns18_UInt16{_sm_expr3};
+    return _sm_expr4;
+}
+// modules/unsafe/api.kt
+ns18_UInt16 ns18_orWith(ns18_UInt16* self, ns18_UInt16* other) {
+    Int _sm_expr1, _sm_expr2, _sm_expr3;
+    ns18_UInt16 _sm_expr4;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = other->bits;
+    _sm_expr3 = _sm_expr1 | _sm_expr2;
+    _sm_expr4 = ns18_UInt16{_sm_expr3};
+    return _sm_expr4;
+}
+// modules/unsafe/api.kt
+ns18_UInt16 ns18_xorWith(ns18_UInt16* self, ns18_UInt16* other) {
+    Int _sm_expr1, _sm_expr2, _sm_expr3;
+    ns18_UInt16 _sm_expr4;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = other->bits;
+    _sm_expr3 = _sm_expr1 ^ _sm_expr2;
+    _sm_expr4 = ns18_UInt16{_sm_expr3};
+    return _sm_expr4;
+}
+// modules/unsafe/api.kt
+ns18_UInt16 ns18_shl(ns18_UInt16* self, Int count) {
+    Bool _sm_expr1;
+    ns18_UInt16 _sm_expr2;
+    Int _sm_expr3, _sm_expr4, _sm_expr5;
+    _sm_expr1 = count >= 16;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = ns18_UInt16{0};
+    return _sm_expr2;
+    L2:;
+    _sm_expr3 = ns18_value(self);
+    _sm_expr4 = _sm_expr3 << count;
+    _sm_expr5 = _sm_expr4 & 65535;
+    _sm_expr2 = ns18_UInt16{_sm_expr5};
+    return _sm_expr2;
+}
+// modules/unsafe/api.kt
+ns18_UInt16 ns18_shr(ns18_UInt16* self, Int count) {
+    Bool _sm_expr1;
+    ns18_UInt16 _sm_expr2;
+    Int _sm_expr3, _sm_expr4;
+    _sm_expr1 = count >= 16;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = ns18_UInt16{0};
+    return _sm_expr2;
+    L2:;
+    _sm_expr3 = ns18_value(self);
+    _sm_expr4 = _sm_expr3 >> count;
+    _sm_expr2 = ns18_UInt16{_sm_expr4};
+    return _sm_expr2;
+}
+// modules/unsafe/api.kt
+Int ns18_toInt(ns18_UInt16* self) {
+    Int _sm_expr1;
+    _sm_expr1 = ns18_value(self);
+    return _sm_expr1;
+}
+// modules/unsafe/api.kt
+Int64 ns18_toInt64(ns18_UInt16* self) {
+    Int _sm_expr1;
+    _sm_expr1 = ns18_value(self);
+    return _sm_expr1;
+}
+// modules/unsafe/api.kt
+Str ns18_toString(ns18_UInt16* self) {
+    Int _sm_expr1;
+    Str _sm_expr2;
+    _sm_expr1 = ns18_value(self);
+    _sm_expr2 = simse_int_toString(_sm_expr1);
+    return _sm_expr2;
+}
+// modules/unsafe/api.kt
+Int64 ns18_value(ns18_UInt32* self) {
+    Int64 wide, _sm_expr1;
+    wide = self->bits;
+    _sm_expr1 = wide & 4294967295;
+    return _sm_expr1;
+}
+// modules/unsafe/api.kt
+ns18_UInt32 ns18_plus(ns18_UInt32* self, ns18_UInt32 other) {
+    Int64 _sm_expr1, _sm_expr2;
+    Int sum;
+    ns18_UInt32 _sm_expr3;
+    _sm_expr1 = ns18_value(self);
+    _sm_expr2 = ns18_value(simse_addressOf(other));
+    sum = _sm_expr1 + _sm_expr2;
+    _sm_expr3 = ns18_UInt32{sum};
+    return _sm_expr3;
+}
+// modules/unsafe/api.kt
+Int ns18_compareTo(ns18_UInt32* self, ns18_UInt32* other) {
+    Int64 _sm_expr1, _sm_expr2;
+    Bool _sm_expr3;
+    Int _sm_expr4;
+    _sm_expr1 = ns18_value(self);
+    _sm_expr2 = ns18_value(other);
+    _sm_expr3 = _sm_expr1 < _sm_expr2;
+    if (_sm_expr3) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr4 = -1;
+    return _sm_expr4;
+    L2:;
+    _sm_expr1 = ns18_value(self);
+    _sm_expr2 = ns18_value(other);
+    _sm_expr3 = _sm_expr1 > _sm_expr2;
+    if (_sm_expr3) goto L3;
+    goto L4;
+    L3:;
+    return 1;
+    L4:;
+    return 0;
+}
+// modules/unsafe/api.kt
+Bool ns18_equals(ns18_UInt32* self, ns18_UInt32* other) {
+    Int64 _sm_expr1, _sm_expr2;
+    Bool _sm_expr3;
+    _sm_expr1 = ns18_value(self);
+    _sm_expr2 = ns18_value(other);
+    _sm_expr3 = _sm_expr1 == _sm_expr2;
+    return _sm_expr3;
+}
+// modules/unsafe/api.kt
+ns18_UInt32 ns18_andWith(ns18_UInt32* self, ns18_UInt32* other) {
+    Int _sm_expr1, _sm_expr2, _sm_expr3;
+    ns18_UInt32 _sm_expr4;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = other->bits;
+    _sm_expr3 = _sm_expr1 & _sm_expr2;
+    _sm_expr4 = ns18_UInt32{_sm_expr3};
+    return _sm_expr4;
+}
+// modules/unsafe/api.kt
+ns18_UInt32 ns18_orWith(ns18_UInt32* self, ns18_UInt32* other) {
+    Int _sm_expr1, _sm_expr2, _sm_expr3;
+    ns18_UInt32 _sm_expr4;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = other->bits;
+    _sm_expr3 = _sm_expr1 | _sm_expr2;
+    _sm_expr4 = ns18_UInt32{_sm_expr3};
+    return _sm_expr4;
+}
+// modules/unsafe/api.kt
+ns18_UInt32 ns18_xorWith(ns18_UInt32* self, ns18_UInt32* other) {
+    Int _sm_expr1, _sm_expr2, _sm_expr3;
+    ns18_UInt32 _sm_expr4;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = other->bits;
+    _sm_expr3 = _sm_expr1 ^ _sm_expr2;
+    _sm_expr4 = ns18_UInt32{_sm_expr3};
+    return _sm_expr4;
+}
+// modules/unsafe/api.kt
+ns18_UInt32 ns18_shl(ns18_UInt32* self, Int count) {
+    Bool _sm_expr1;
+    ns18_UInt32 _sm_expr2;
+    Int64 _sm_expr3, _sm_expr4;
+    Int shifted;
+    _sm_expr1 = count >= 32;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = ns18_UInt32{0};
+    return _sm_expr2;
+    L2:;
+    _sm_expr3 = ns18_value(self);
+    _sm_expr4 = _sm_expr3 << count;
+    shifted = _sm_expr4 & 4294967295;
+    _sm_expr2 = ns18_UInt32{shifted};
+    return _sm_expr2;
+}
+// modules/unsafe/api.kt
+ns18_UInt32 ns18_shr(ns18_UInt32* self, Int count) {
+    Bool _sm_expr1;
+    ns18_UInt32 _sm_expr2;
+    Int64 _sm_expr3;
+    Int shifted;
+    _sm_expr1 = count >= 32;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = ns18_UInt32{0};
+    return _sm_expr2;
+    L2:;
+    _sm_expr3 = ns18_value(self);
+    shifted = _sm_expr3 >> count;
+    _sm_expr2 = ns18_UInt32{shifted};
+    return _sm_expr2;
+}
+// modules/unsafe/api.kt
+Int ns18_toInt(ns18_UInt32* self) {
+    Int64 _sm_expr1;
+    _sm_expr1 = ns18_value(self);
+    return _sm_expr1;
+}
+// modules/unsafe/api.kt
+Int64 ns18_toInt64(ns18_UInt32* self) {
+    Int64 _sm_expr1;
+    _sm_expr1 = ns18_value(self);
+    return _sm_expr1;
+}
+// modules/unsafe/api.kt
+Str ns18_toString(ns18_UInt32* self) {
+    Int64 _sm_expr1;
+    Str _sm_expr2;
+    _sm_expr1 = ns18_value(self);
+    _sm_expr2 = simse_num_toString(_sm_expr1);
+    return _sm_expr2;
+}
+// modules/unsafe/api.kt
+Int64 ns18_value(ns18_UInt64* self) {
+    Int64 _sm_expr1;
+    _sm_expr1 = self->bits;
+    return _sm_expr1;
+}
+// modules/unsafe/api.kt
+ns18_UInt64 ns18_plus(ns18_UInt64* self, ns18_UInt64 other) {
+    Int64 _sm_expr1, _sm_expr2, _sm_expr3;
+    ns18_UInt64 _sm_expr4;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = other.bits;
+    _sm_expr3 = _sm_expr1 + _sm_expr2;
+    _sm_expr4 = ns18_UInt64{_sm_expr3};
+    return _sm_expr4;
+}
+// modules/unsafe/api.kt
+Int ns18_compareTo(ns18_UInt64* self, ns18_UInt64* other) {
+    Int64 _sm_expr1, _sm_expr2;
+    Bool _sm_expr3;
+    Int _sm_expr4;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = other->bits;
+    _sm_expr3 = _sm_expr1 < _sm_expr2;
+    if (_sm_expr3) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr4 = -1;
+    return _sm_expr4;
+    L2:;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = other->bits;
+    _sm_expr3 = _sm_expr1 > _sm_expr2;
+    if (_sm_expr3) goto L3;
+    goto L4;
+    L3:;
+    return 1;
+    L4:;
+    return 0;
+}
+// modules/unsafe/api.kt
+Bool ns18_equals(ns18_UInt64* self, ns18_UInt64* other) {
+    Int64 _sm_expr1, _sm_expr2;
+    Bool _sm_expr3;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = other->bits;
+    _sm_expr3 = _sm_expr1 == _sm_expr2;
+    return _sm_expr3;
+}
+// modules/unsafe/api.kt
+ns18_UInt64 ns18_andWith(ns18_UInt64* self, ns18_UInt64* other) {
+    Int64 _sm_expr1, _sm_expr2, _sm_expr3;
+    ns18_UInt64 _sm_expr4;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = other->bits;
+    _sm_expr3 = _sm_expr1 & _sm_expr2;
+    _sm_expr4 = ns18_UInt64{_sm_expr3};
+    return _sm_expr4;
+}
+// modules/unsafe/api.kt
+ns18_UInt64 ns18_orWith(ns18_UInt64* self, ns18_UInt64* other) {
+    Int64 _sm_expr1, _sm_expr2, _sm_expr3;
+    ns18_UInt64 _sm_expr4;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = other->bits;
+    _sm_expr3 = _sm_expr1 | _sm_expr2;
+    _sm_expr4 = ns18_UInt64{_sm_expr3};
+    return _sm_expr4;
+}
+// modules/unsafe/api.kt
+ns18_UInt64 ns18_xorWith(ns18_UInt64* self, ns18_UInt64* other) {
+    Int64 _sm_expr1, _sm_expr2, _sm_expr3;
+    ns18_UInt64 _sm_expr4;
+    _sm_expr1 = self->bits;
+    _sm_expr2 = other->bits;
+    _sm_expr3 = _sm_expr1 ^ _sm_expr2;
+    _sm_expr4 = ns18_UInt64{_sm_expr3};
+    return _sm_expr4;
+}
+// modules/unsafe/api.kt
+ns18_UInt64 ns18_shl(ns18_UInt64* self, Int count) {
+    Bool _sm_expr1;
+    ns18_UInt64 _sm_expr2;
+    Int64 _sm_expr3, _sm_expr4;
+    _sm_expr1 = count >= 64;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = ns18_UInt64{0};
+    return _sm_expr2;
+    L2:;
+    _sm_expr3 = self->bits;
+    _sm_expr4 = _sm_expr3 << count;
+    _sm_expr2 = ns18_UInt64{_sm_expr4};
+    return _sm_expr2;
+}
+// modules/unsafe/api.kt
+ns18_UInt64 ns18_shr(ns18_UInt64* self, Int count) {
+    Bool _sm_expr1;
+    ns18_UInt64 _sm_expr2;
+    Int64 _sm_expr3, _sm_expr4;
+    _sm_expr1 = count >= 64;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = ns18_UInt64{0};
+    return _sm_expr2;
+    L2:;
+    _sm_expr3 = self->bits;
+    _sm_expr4 = _sm_expr3 >> count;
+    _sm_expr2 = ns18_UInt64{_sm_expr4};
+    return _sm_expr2;
+}
+// modules/unsafe/api.kt
+Int64 ns18_toInt64(ns18_UInt64* self) {
+    Int64 _sm_expr1;
+    _sm_expr1 = self->bits;
+    return _sm_expr1;
+}
+// modules/unsafe/api.kt
+Str ns18_toString(ns18_UInt64* self) {
+    Int64* _sm_base1;
+    Str _sm_expr1;
+    _sm_base1 = simse_addressOf(self->bits);
+    _sm_expr1 = simse_num_toString((*_sm_base1));
+    return _sm_expr1;
 }
 // src/codegen/CgCall.kt
 Str ns1_exprInner(ns1_Emitter* self, ns3_AstXmlNode* e, ns3_AstXmlNode* expected) {
