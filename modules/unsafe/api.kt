@@ -157,8 +157,11 @@ data class UInt32(var bits: Int) {
     }
 
     operator fun plus(other: UInt32): UInt32 {
-        val sum: Int = this.value() + other.value()
-        return UInt32(sum)
+        // A signed 32-bit `+` could overflow; the halves add in 32-bit lanes and the high
+        // half shifts back, so the wrap is computed rather than relied on.
+        val low: Int = (this.bits & 65535) + (other.bits & 65535)
+        val high: Int = (this.bits >> 16) + (other.bits >> 16) + (low >> 16)
+        return UInt32((high << 16) | (low & 65535))
     }
 
     operator fun compareTo(other: UInt32): Int {
@@ -191,21 +194,25 @@ data class UInt32(var bits: Int) {
         if (count >= 32) {
             return UInt32(0)
         }
-        val shifted: Int = (this.value() << count) & 4294967295
-        return UInt32(shifted)
+        // C++20's left shift is the modulo one, so the wrap is defined.
+        return UInt32(this.bits << count)
     }
 
     fun shr(count: Int): UInt32 {
         if (count >= 32) {
             return UInt32(0)
         }
-        val shifted: Int = this.value() >> count
-        return UInt32(shifted)
+        if (count == 0) {
+            return UInt32(this.bits)
+        }
+        // The stored bits shift arithmetically; the mask takes off what the sign bit
+        // carried in (2^(32-count) - 1), so the read is the logical shift.
+        return UInt32((this.bits >> count) & (2147483647 >> (count - 1)))
     }
 
     // The low 32 bits as a plain `Int` (negative when the top bit is set).
     fun toInt(): Int {
-        return this.value()
+        return this.bits
     }
 
     // The unsigned value as an `Int64` - always non-negative.

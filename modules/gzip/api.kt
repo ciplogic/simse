@@ -328,7 +328,7 @@ fun gzDeflateFixed(bytes: List<Int>, level: Int, writer: *GzBitWriter): Unit {
 // (Unix). The XFL byte is advisory and left 0 for every level.
 fun gzHeader(writer: *GzBitWriter): Unit {
     writer.out.append(31)
-    writer.out.append(139)
+    writer.out.append(-117) // 0x8b
     writer.out.append(8)
     writer.out.append(0)
     writer.out.append(0)

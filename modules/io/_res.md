@@ -42,6 +42,7 @@ Str simse_native_readFile(const Str& path);
 List<Str> simse_listFiles(const Str& dir, const Str& ext);
 List<Str> simse_listFilesDirect(const Str& dir, const Str& ext);
 Bool simse_writeFile(const Str& path, const Str& content);
+Bool simse_createDirectories(const Str& path);
 Str simse_pathCanonical(const Str& path);
 Bool simse_pathIsDirectory(const Str& path);
 Bool simse_pathExists(const Str& path);
@@ -111,6 +112,13 @@ Bool simse_writeFile(const Str& path, const Str& content) {
     fwrite(content.data(), 1, content.length(), out);
     fclose(out);
     return true;
+}
+
+// Creates `path` and every missing parent; true when it exists afterwards.
+Bool simse_createDirectories(const Str& path) {
+    std::error_code ec;
+    std::filesystem::create_directories(simse_toStdString(path), ec);
+    return !ec;
 }
 
 Str simse_pathCanonical(const Str& path) {

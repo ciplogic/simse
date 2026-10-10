@@ -1,0 +1,15 @@
+unzip 4
+hello hello hello hello hello
+hello-ok true
+nested-ok true
+stored-ok true
+empty-ok true
+sub-is-dir true
+truncated false zip: no end-of-central-directory record (not a zip archive?)
+crc false zip: the CRC32 of hello.txt does not match the record
+method false zip: the entry hello.txt uses compression method 12; only stored (0) and deflate (8) are read
+evil false zip: the entry name is not safe to write: ../evil.txt
+evil-absent true
+backslash true 2
+back-one first file
+back-two nested content line

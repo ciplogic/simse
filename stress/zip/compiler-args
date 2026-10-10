@@ -1,0 +1,1 @@
+--module modules/zip --module modules/gzip --module modules/unsafe --module modules/io

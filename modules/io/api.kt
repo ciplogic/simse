@@ -21,6 +21,11 @@ fun listFilesDirect(dir: Str, ext: Str): List<Str>
 @SmGen("res", "fileio", "simse_writeFile")
 fun writeFile(path: Str, content: Str): Bool
 
+// Creates `path` and every missing parent directory; `false` when it could not (a file of
+// that name, a permission, ...).
+@SmGen("res", "fileio", "simse_createDirectories")
+fun createDirectories(path: Str): Bool
+
 // The canonical spelling of `path` (the same absolute path for two names of one file).
 @SmGen("res", "fileio", "simse_pathCanonical")
 fun pathCanonical(path: Str): Str
