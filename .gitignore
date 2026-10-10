@@ -82,6 +82,7 @@ _simse/
 ### docs/getting-started.md ###
 /examples/**/*.cpp
 /examples/**/*.exe
+/examples/**/*.obj
 /examples/**/*.pdb
 /examples/**/*.ilk
 ### The SDL2 example copies the DLL it binds at run time (examples/sdl2/run.bat) ###

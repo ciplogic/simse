@@ -102,8 +102,8 @@ it with the source.
   `common/`, and `src/rtl/` (the prelude `.kt` files, the hand-written headers, and `_res.md`,
   which holds the runtime's generated C++).
 - `modules/` — the reusable modules (`json`, `compiler`, `xml`, `io`, `linq`, `http`,
-  `jsonnode`, `streams`), one directory per module with its `_res.md`; the compiler's own
-  build scans them with `--root modules`, so their `generators/` sources are compiled in.
+  `jsonnode`, `streams`, `process`), one directory per module with its `_res.md`; the compiler's
+  own build scans them with `--root modules`, so their `generators/` sources are compiled in.
 - `bin/` — the `smt` toolset: `bin/smt.exe` (built) and its home `bin/smt-tool/` (`src/main.kt`
   plus the checked-in amalgamation `smt_src.cpp`). The compiler builds at the repository root
   (`simse.exe`), not here.
@@ -121,7 +121,8 @@ it with the source.
   `array_layout_probe.cpp`, `smallvector_stress.cpp`, `statics_probe.cpp`
   (`impl_specs/statics.md`) and `memrun.cpp` (`benchmarks/onebrc/benchmark.md`). The `smt`
   toolset is not part of this harness: it is a Simse program under `bin/smt-tool/`, built and
-  run by `smt.bat`.
+  run by `smt.bat`, and its `build`/`run` commands drive the native toolchain themselves
+  (`simse.exe` + `cl`, through the `process` module) with no script runtime.
 - `docs/` — the published documentation (tour, how-it-works, state-of-the-field).
 
 ## Profiling

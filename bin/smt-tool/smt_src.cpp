@@ -20,7 +20,7 @@ struct Opt;
 template <class T>
 struct Res;
 struct ResourceEntry;
-struct ns2_SmtOptions;
+struct ns3_SmtOptions;
 // src/rtl
 SIMSE_PACK_PUSH
 template <class T>
@@ -308,8 +308,9 @@ struct ResourceEntry {
 SIMSE_PACK_POP
 // bin/smt-tool/src/main.kt
 SIMSE_PACK_PUSH
-struct ns2_SmtOptions {
+struct ns3_SmtOptions {
     Str root;
+    List<Str> modules;
     Bool release;
     Bool quiet;
     Str command;
@@ -323,13 +324,13 @@ SIMSE_PACK_POP
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 73;
+static const Int __sm_stringCount = 95;
 static const char __sm_stringPool[] =
-    "    - transpile it with the compiler CLI (--root <root> [--module <dir>]... -o <out>.cpp, ai/building.md)" "    - stage external modules beside the project (specs/modules.md: external modules are deferred)" "    - compile the one translation unit with cl.exe, the environment tools/msvc.mjs materializes" "    - read the module list from <root>/simse.md, else scan <root> whole (specs/simse-md.md)" "Generated C++:may name one of its symbols itself. (`filestream` moved on with the type" "    - write <dir>/simse.md - the manifest a project root carries (specs/simse-md.md)" "  --root <dir>   the project root (default: .) - the directory a simse.md sits in" "  --release      optimize the build (what build.js --release means); build, run" "Every command is a stub: it prints the plan it will carry out and exits 1, so" "  build                  transpile and compile the project            (stub)" "  init [<dir>]           scaffold a project: simse.md + src/main.kt   (stub)" "  run [-- <args>...]     build the project, then run its program      (stub)" "  install [<module>...]  resolve the project's modules               (stub)" "nothing is half-done silently. help and version answer normally (exit 0)." "    - run the produced executable, forwarding -- <args>... to main(args)" "    - write <dir>/src/main.kt - a main(args) that prints hello" "resolve the project's modules (external modules are deferred)" "  help [<command>]       the command list, or one command's" "smt - the Simse toolset: a project CLI in the shape of npm." "  -h, --help     this text; with a command, that command's" "    - report the smt build / smt run commands to try next" "  --quiet        one summary line per step; build, run" "transpile and compile the project into an executable" "    - resolve the module list from <root>/simse.md" "scaffold a Simse project (simse.md + src/main.kt)" "  version                the toolset's version" "  smt <command> [options] [-- <args>...]" "build the project, then run its program" "  --version      the toolset's version" "the command list, or one command's" "    - run smt build first (above)" "not implemented yet; it will:" ": not implemented yet - " "missing value for --root" "`FileStream`, the open" "smt: unknown command '" "install [<module>...]" "the toolset's version" "' (try 'smt help')" "run [-- <args>...]" "  arguments:    " "  flags:        " "  project root: " "help [<command>]" "unknown option '" "init [<dir>]" "  it will:" "--release " "--release" "--version" "Commands:" "--quiet " "Options:" "--quiet" "install" "version" "--help" "--root" "0.1.0" "build" "smt: " "help" "init" "none" "smt " " - " "run" "--" "-h" " " "-" "." "" 
+    "    - stage external modules beside the project (specs/modules.md: external modules are deferred)" "    - cl /nologo /std:c++20 /EHsc /I. /Fo:<root>/out.obj /Fe:<root>/out.exe <root>/out.cpp" "Generated C++:may name one of its symbols itself. (`filestream` moved on with the type" "    - write <dir>/simse.md - the manifest a project root carries (specs/simse-md.md)" "build and run call the compiler and the C++ compiler directly (no script runtime);" "  --module <dir>   a module the project uses; passed to the compiler (repeatable)" "  init [<dir>]           scaffold a project: simse.md + src/main.kt      (stub)" "  install [<module>...]  resolve the project's modules                   (stub)" "Generated C++:the C runtime's `system` (`_popen` where the output is captured)" "Generated C++:POSIX packs it in a wait status). The section is `emit" "    - simse.exe --root <root> [--module <dir>]... -o <root>/out.cpp" "they expect to run from the repository root, with cl on the path." "  run [-- <args>...]     build the project, then run its program" "  build                  transpile the project, then compile it" "    - write <dir>/src/main.kt - a main(args) that prints hello" "resolve the project's modules (external modules are deferred)" "  -h, --help       this text; with a command, that command's" "    - <root>/out.exe, forwarding -- <args>... to main(args)" "  help [<command>]       the command list, or one command's" "smt - the Simse toolset: a project CLI in the shape of npm." "  --release        optimize the C++ compile (/O2 /DNDEBUG)" "    - report the smt build / smt run commands to try next" "    - resolve the module list from <root>/simse.md" "scaffold a Simse project (simse.md + src/main.kt)" "  --root <dir>     the project root (default: .)" "  version                the toolset's version" "cl /nologo /std:c++20 /EHsc /bigobj /MD /I. " "  --version        the toolset's version" "  smt <command> [options] [-- <args>...]" "build the project, then run its program" "reached`, so a program that never runs" "transpile the project, then compile it" "  --quiet          one line per step" "the command list, or one command's" "smt: transpiling failed (exit " "not implemented yet; it will:" "smt: compiling failed (exit " "the shell, one wait, and the" "missing value for --module" ": not implemented yet - " "missing value for --root" "`FileStream`, the open" "smt: unknown command '" "install [<module>...]" "the toolset's version" "    - build (above)" "' (try 'smt help')" "run [-- <args>...]" "simse.exe --root " "  arguments:    " "  flags:        " "  project root: " "help [<command>]" "unknown option '" "/O2 /DNDEBUG " "init [<dir>]" "smt: built " "  it will:" " --module " "--release " "--release" "--version" "Commands:" "--module" "--quiet " "/out.cpp" "/out.exe" "/out.obj" "Options:" "it runs:" "--quiet" "install" "version" "--help" "--root" " /Fe:" "0.1.0" "build" "smt: " " -o " "/Fo:" "help" "init" "none" "smt " " - " "run" "--" "-h" "\"" " " ")" "-" "." "" 
 ;
-static const Int16 __sm_stringStarts[] = {73,8,0,-105,8,2,4,5,2,3,1,2,2,1,1,1,2,0,7,1,2,1,10,1,2,0,1,2,1,1,3,1,2,2,3,1,3,6,1,2,1,12,4,1,4,5,0,2,0,1,0,3,0,2,1,4,0,4,4,2,0,1,1,2,0,3,1,0,1,1,2,0,3,1,0,1,1,2,0,1,1,1,3,0,5,1,0,1,0,1,1,2,0};
-static const Int16 __sm_stringLens[] = {73,7,-105,8,2,4,5,2,3,1,2,2,1,1,1,2,0,7,1,2,1,10,1,2,0,1,2,1,1,3,1,2,2,3,1,3,6,1,2,1,12,4,1,4,5,0,2,0,1,0,3,0,2,1,4,0,4,4,2,0,1,1,2,0,3,1,0,1,1,2,0,3,1,0,1,1,2,0,1,1,1,3,0,5,1,0,1,0,1,1,2,0,1,1};
-static_assert(sizeof(__sm_stringPool) - 1 == 2465, "the string pool and its length index disagree");
+static const Int16 __sm_stringStarts[] = {95,4,0,-97,7,4,1,2,2,7,1,2,0,1,10,1,2,3,6,1,2,0,2,1,1,7,2,2,1,2,2,2,4,0,1,2,1,1,0,1,2,2,1,4,1,2,1,1,0,1,2,2,8,0,2,0,1,0,2,1,0,2,2,1,4,0,1,3,2,3,1,2,0,1,1,1,2,0,1,1,1,6,0,1,1,1,2,0,3,1,0,1,1,3,0,1,1,1,5,0,5,1,0,1,0,1,1,4,0};
+static const Int16 __sm_stringLens[] = {95,3,-97,7,4,1,2,2,7,1,2,0,1,10,1,2,3,6,1,2,0,2,1,1,7,2,2,1,2,2,2,4,0,1,2,1,1,0,1,2,2,1,4,1,2,1,1,0,1,2,2,8,0,2,0,1,0,2,1,0,2,2,1,4,0,1,3,2,3,1,2,0,1,1,1,2,0,1,1,1,6,0,1,1,1,2,0,3,1,0,1,1,3,0,1,1,1,5,0,5,1,0,1,0,1,1,4,0,1,1};
+static_assert(sizeof(__sm_stringPool) - 1 == 2728, "the string pool and its length index disagree");
 static Span<Char> __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
@@ -345,8 +346,8 @@ static struct __SmStringTableInitType {
 // The resources the compiler read from `_res.md` files (specs/resources.md):
 // string-table indices, key then value; the generated initialization pass builds
 // them into the program's `Resources` table (`resourcesInstall`, src/rtl/resources.kt).
-static Int __sm_resourceIndex[] = {4,34};
-static const Int __sm_resourceCount = 1;
+static Int __sm_resourceIndex[] = {2,41,8,37,9,30};
+static const Int __sm_resourceCount = 3;
 
 Span<Char> simse_spanOfStr(Str* text);
 Span<Char> simse_spanOfStr(Span<Char> view);
@@ -477,6 +478,16 @@ Bool simse_pathExists(const Str& path);
 void simse_eprintln(const Str& text);
 
 #include <cstdio>
+#include <cstdlib>
+#include <string>
+#if !defined(_WIN32)
+#include <sys/wait.h>
+#endif
+
+Int simse_process_run(const Str& command);
+Str simse_process_capture(const Str& command, Int* exitCode);
+
+#include <cstdio>
 
 inline void simse_write(const Str& value, FILE* out) {
     std::fwrite(value.data(), 1, (std::size_t) value.size(), out);
@@ -540,7 +551,7 @@ inline void simse_println(const T& value, FILE* out) {
 // src/rtl
 List<ResourceEntry> resourceStore{};
 // bin/smt-tool/src/main.kt
-Str ns2_smtVersion{};
+Str ns3_smtVersion{};
 
 template <class T>
 Int size(Span<T>* self);
@@ -552,6 +563,8 @@ template <class T>
 void set(Span<T>* self, Int index, T value);
 Char charAt(Span<Char>* self, Int index);
 Bool startsWith(Span<Char>* self, Str* text);
+Str substr(Span<Char>* self, Int from, Int count);
+Str toString(Span<Char>* self);
 Int compareTo(Span<Char>* self, Span<Char> other);
 Bool equals(Span<Char>* self, Span<Char> other);
 Str plus(Span<Char>* self, Span<Char> other);
@@ -575,20 +588,28 @@ template <class T>
 Res<T> simse_resErr(Str message);
 void resourcesInstall(Span<Char>* table, Int tableCount, Int* index, Int count);
 void initByValue(Str* self);
+Str substr(Str* self, Int start, Int len);
 Bool startsWith(Str* self, Str* prefix);
-Bool ns2_smtKnown(Str* name);
-Str ns2_smtCommandUsage(Str* name);
-Str ns2_smtCommandSummary(Str* name);
-void ns2_smtCommandPlan(Str name);
-void ns2_smtUsage();
-Int ns2_smtCommandHelp(Str name);
-ns2_SmtOptions ns2_smtParse(List<Str> argv);
-Int ns2_smtNotImplemented(Str name, ns2_SmtOptions opts);
+Bool ns3_smtKnown(Str* name);
+Bool ns3_smtStub(Str* name);
+Str ns3_smtCommandUsage(Str* name);
+Str ns3_smtCommandSummary(Str* name);
+void ns3_smtCommandPlan(Str name);
+void ns3_smtUsage();
+Int ns3_smtCommandHelp(Str name);
+ns3_SmtOptions ns3_smtParse(List<Str> argv);
+Str ns3_smtQuote(Str* text);
+Str ns3_smtTranspile(ns3_SmtOptions* opts, Str* outCpp);
+Str ns3_smtCompile(ns3_SmtOptions* opts, Str* outCpp, Str* obj, Str* exe);
+Str ns3_smtCommandPath(Str text);
+Int ns3_smtBuild(ns3_SmtOptions opts);
+Int ns3_smtRun(ns3_SmtOptions opts);
+Int ns3_smtNotImplemented(Str name, ns3_SmtOptions opts);
 
 // File-level static storage (specs/statics.md): initialized before main's body.
 void simse_initStatics() {
     resourcesInstall(__sm_stringTable, __sm_stringCount, __sm_resourceIndex, __sm_resourceCount);
-    ns2_smtVersion = __sm_stringTable[58];
+    ns3_smtVersion = __sm_stringTable[76];
 }
 
 template <class T>
@@ -638,6 +659,50 @@ Bool startsWith(Span<Char>* self, Str* text) {
     compareResult = simse_mem_compare(self->ptr, 0, _sm_expr2, 0, count);
     _sm_expr1 = compareResult == 0;
     return _sm_expr1;
+}
+Str substr(Span<Char>* self, Int from, Int count) {
+    Int len, begin, take;
+    Bool _sm_expr1;
+    len = size(self);
+    begin = from;
+    _sm_expr1 = begin < 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    begin = 0;
+    L2:;
+    _sm_expr1 = begin > len;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    begin = len;
+    L4:;
+    take = len - begin;
+    _sm_expr1 = count >= 0;
+    if (_sm_expr1) goto L7;
+    goto L6;
+    L7:;
+    _sm_expr1 = count < take;
+    if (_sm_expr1) goto L5;
+    goto L6;
+    L5:;
+    take = count;
+    L6:;
+    Str out;
+    _sm_expr1 = take > 0;
+    if (_sm_expr1) goto L8;
+    goto L9;
+    L8:;
+    simse_str_setBytes(out, self->ptr, begin, take);
+    L9:;
+    return out;
+}
+Str toString(Span<Char>* self) {
+    Int _sm_expr1;
+    Str _sm_expr2;
+    _sm_expr1 = size(self);
+    _sm_expr2 = substr(self, 0, _sm_expr1);
+    return _sm_expr2;
 }
 Int compareTo(Span<Char>* self, Span<Char> other) {
     Bool _sm_expr3, _sm_expr4, _sm_expr7;
@@ -806,6 +871,48 @@ void resourcesInstall(Span<Char>* table, Int tableCount, Int* index, Int count) 
 }
 void initByValue(Str* self) {
 }
+Str substr(Str* self, Int start, Int len) {
+    Str* _sm_base1;
+    Int begin, _sm_expr2, count;
+    Bool _sm_expr1;
+    Char* _sm_expr8;
+    begin = start;
+    _sm_expr1 = begin < 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    begin = 0;
+    L2:;
+    _sm_expr2 = simse_lenOf((*self));
+    _sm_expr1 = begin > _sm_expr2;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    begin = simse_lenOf((*self));
+    L4:;
+    _sm_expr2 = simse_lenOf((*self));
+    count = _sm_expr2 - begin;
+    _sm_expr1 = len >= 0;
+    if (_sm_expr1) goto L7;
+    goto L6;
+    L7:;
+    _sm_expr1 = len < count;
+    if (_sm_expr1) goto L5;
+    goto L6;
+    L5:;
+    count = len;
+    L6:;
+    Str out;
+    _sm_expr1 = count > 0;
+    if (_sm_expr1) goto L8;
+    goto L9;
+    L8:;
+    _sm_base1 = self;
+    _sm_expr8 = simse_str_data(_sm_base1);
+    simse_str_setBytes(out, _sm_expr8, begin, count);
+    L9:;
+    return out;
+}
 Bool startsWith(Str* self, Str* prefix) {
     Int count, _sm_expr1, i;
     Bool _sm_expr2;
@@ -836,183 +943,197 @@ Bool startsWith(Str* self, Str* prefix) {
     return true;
 }
 // bin/smt-tool/src/main.kt
-Bool ns2_smtKnown(Str* name) {
+Bool ns3_smtKnown(Str* name) {
     Span<Char> _sm_expr2;
     Bool _sm_expr3, _sm_expr1;
     _sm_expr2 = simse_spanOfStr(name);
-    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[62]);
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[82]);
     _sm_expr1 = _sm_expr3;
     if (_sm_expr1) goto _sm_sc1;
-    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[59]);
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[77]);
     _sm_expr1 = _sm_expr3;
     if (_sm_expr1) goto _sm_sc1;
-    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[66]);
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[86]);
     _sm_expr1 = _sm_expr3;
     if (_sm_expr1) goto _sm_sc1;
-    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[54]);
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[71]);
     _sm_expr1 = _sm_expr3;
     if (_sm_expr1) goto _sm_sc1;
-    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[61]);
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[81]);
     _sm_expr1 = _sm_expr3;
     if (_sm_expr1) goto _sm_sc1;
-    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[55]);
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[72]);
     _sm_expr1 = _sm_expr3;
     _sm_sc1:;
     return _sm_expr1;
 }
 // bin/smt-tool/src/main.kt
-Str ns2_smtCommandUsage(Str* name) {
+Bool ns3_smtStub(Str* name) {
+    Span<Char> _sm_expr2;
+    Bool _sm_expr3, _sm_expr1;
+    _sm_expr2 = simse_spanOfStr(name);
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[82]);
+    _sm_expr1 = _sm_expr3;
+    if (_sm_expr1) goto _sm_sc1;
+    _sm_expr3 = equals(simse_addressOf(_sm_expr2), __sm_stringTable[71]);
+    _sm_expr1 = _sm_expr3;
+    _sm_sc1:;
+    return _sm_expr1;
+}
+// bin/smt-tool/src/main.kt
+Str ns3_smtCommandUsage(Str* name) {
     Span<Char> _sm_expr1;
     Bool _sm_expr2;
     _sm_expr1 = simse_spanOfStr(name);
-    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[62]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[82]);
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    return __sm_stringTable[45];
+    return __sm_stringTable[55];
     L2:;
-    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[66]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[86]);
     if (_sm_expr2) goto L3;
     goto L4;
     L3:;
-    return __sm_stringTable[39];
+    return __sm_stringTable[47];
     L4:;
-    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[54]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[71]);
     if (_sm_expr2) goto L5;
     goto L6;
     L5:;
-    return __sm_stringTable[36];
+    return __sm_stringTable[43];
     L6:;
-    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[61]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[81]);
     if (_sm_expr2) goto L7;
     goto L8;
     L7:;
-    return __sm_stringTable[43];
+    return __sm_stringTable[52];
     L8:;
     return *(name);
 }
 // bin/smt-tool/src/main.kt
-Str ns2_smtCommandSummary(Str* name) {
+Str ns3_smtCommandSummary(Str* name) {
     Span<Char> _sm_expr1;
     Bool _sm_expr2;
     _sm_expr1 = simse_spanOfStr(name);
-    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[62]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[82]);
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    return __sm_stringTable[24];
+    return __sm_stringTable[23];
     L2:;
-    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[59]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[77]);
     if (_sm_expr2) goto L3;
     goto L4;
     L3:;
-    return __sm_stringTable[22];
+    return __sm_stringTable[31];
     L4:;
-    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[66]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[86]);
     if (_sm_expr2) goto L5;
     goto L6;
     L5:;
-    return __sm_stringTable[27];
+    return __sm_stringTable[29];
     L6:;
-    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[54]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[71]);
     if (_sm_expr2) goto L7;
     goto L8;
     L7:;
-    return __sm_stringTable[16];
+    return __sm_stringTable[15];
     L8:;
-    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[61]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[81]);
     if (_sm_expr2) goto L9;
     goto L10;
     L9:;
-    return __sm_stringTable[29];
+    return __sm_stringTable[33];
     L10:;
-    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[55]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[72]);
     if (_sm_expr2) goto L11;
     goto L12;
     L11:;
-    return __sm_stringTable[37];
+    return __sm_stringTable[44];
     L12:;
     return *(name);
 }
 // bin/smt-tool/src/main.kt
-void ns2_smtCommandPlan(Str name) {
+void ns3_smtCommandPlan(Str name) {
     Str* _sm_base1, * _sm_base2, * _sm_base3, * _sm_base4;
     Span<Char> _sm_expr1;
     Bool _sm_expr2;
     _sm_base1 = &name;
     _sm_expr1 = simse_spanOfStr(_sm_base1);
-    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[62]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[82]);
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    simse_println((__sm_stringTable[5]), stdout);
-    simse_println((__sm_stringTable[15]), stdout);
-    simse_println((__sm_stringTable[20]), stdout);
+    simse_println((__sm_stringTable[3]), stdout);
+    simse_println((__sm_stringTable[14]), stdout);
+    simse_println((__sm_stringTable[21]), stdout);
     goto L11;
     L2:;
     _sm_base2 = &name;
     _sm_expr1 = simse_spanOfStr(_sm_base2);
-    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[59]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[71]);
     if (_sm_expr2) goto L4;
     goto L5;
     L4:;
-    simse_println((__sm_stringTable[3]), stdout);
+    simse_println((__sm_stringTable[22]), stdout);
     simse_println((__sm_stringTable[0]), stdout);
-    simse_println((__sm_stringTable[2]), stdout);
     goto L11;
     L5:;
     _sm_base3 = &name;
     _sm_expr1 = simse_spanOfStr(_sm_base3);
-    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[66]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[77]);
     if (_sm_expr2) goto L7;
     goto L8;
     L7:;
-    simse_println((__sm_stringTable[30]), stdout);
-    simse_println((__sm_stringTable[14]), stdout);
+    simse_println((__sm_stringTable[10]), stdout);
+    simse_println((__sm_stringTable[1]), stdout);
     goto L11;
     L8:;
     _sm_base4 = &name;
     _sm_expr1 = simse_spanOfStr(_sm_base4);
-    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[54]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[86]);
     if (_sm_expr2) goto L10;
     goto L11;
     L10:;
-    simse_println((__sm_stringTable[23]), stdout);
-    simse_println((__sm_stringTable[1]), stdout);
+    simse_println((__sm_stringTable[45]), stdout);
+    simse_println((__sm_stringTable[17]), stdout);
     L11:;
 }
 // bin/smt-tool/src/main.kt
-void ns2_smtUsage() {
-    simse_println((__sm_stringTable[18]), stdout);
-    simse_println((__sm_stringTable[72]), stdout);
-    simse_println((__sm_stringTable[26]), stdout);
-    simse_println((__sm_stringTable[72]), stdout);
-    simse_println((__sm_stringTable[50]), stdout);
-    simse_println((__sm_stringTable[10]), stdout);
-    simse_println((__sm_stringTable[9]), stdout);
-    simse_println((__sm_stringTable[11]), stdout);
-    simse_println((__sm_stringTable[12]), stdout);
-    simse_println((__sm_stringTable[17]), stdout);
-    simse_println((__sm_stringTable[25]), stdout);
-    simse_println((__sm_stringTable[72]), stdout);
-    simse_println((__sm_stringTable[52]), stdout);
-    simse_println((__sm_stringTable[6]), stdout);
-    simse_println((__sm_stringTable[7]), stdout);
-    simse_println((__sm_stringTable[21]), stdout);
+void ns3_smtUsage() {
     simse_println((__sm_stringTable[19]), stdout);
+    simse_println((__sm_stringTable[94]), stdout);
     simse_println((__sm_stringTable[28]), stdout);
-    simse_println((__sm_stringTable[72]), stdout);
-    simse_println((__sm_stringTable[8]), stdout);
+    simse_println((__sm_stringTable[94]), stdout);
+    simse_println((__sm_stringTable[62]), stdout);
+    simse_println((__sm_stringTable[6]), stdout);
     simse_println((__sm_stringTable[13]), stdout);
+    simse_println((__sm_stringTable[12]), stdout);
+    simse_println((__sm_stringTable[7]), stdout);
+    simse_println((__sm_stringTable[18]), stdout);
+    simse_println((__sm_stringTable[25]), stdout);
+    simse_println((__sm_stringTable[94]), stdout);
+    simse_println((__sm_stringTable[68]), stdout);
+    simse_println((__sm_stringTable[24]), stdout);
+    simse_println((__sm_stringTable[5]), stdout);
+    simse_println((__sm_stringTable[20]), stdout);
+    simse_println((__sm_stringTable[32]), stdout);
+    simse_println((__sm_stringTable[16]), stdout);
+    simse_println((__sm_stringTable[27]), stdout);
+    simse_println((__sm_stringTable[94]), stdout);
+    simse_println((__sm_stringTable[4]), stdout);
+    simse_println((__sm_stringTable[11]), stdout);
 }
 // bin/smt-tool/src/main.kt
-Int ns2_smtCommandHelp(Str name) {
+Int ns3_smtCommandHelp(Str name) {
     char* __sm_catP;
-    Str* _sm_base1, * _sm_base2, * _sm_base3;
+    Str* _sm_base1, * _sm_base2, * _sm_base3, * _sm_base4, * _sm_base5, * _sm_base6;
     Bool _sm_expr1, _sm_expr2;
     Str _sm_expr3, _sm_expr4, _sm_expr7, _sm_expr8, _sm_expr9;
+    Span<Char> _sm_expr11;
     _sm_base1 = &name;
-    _sm_expr1 = ns2_smtKnown(_sm_base1);
+    _sm_expr1 = ns3_smtKnown(_sm_base1);
     _sm_expr2 = !_sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
@@ -1031,7 +1152,7 @@ Int ns2_smtCommandHelp(Str name) {
     return 1;
     L2:;
     _sm_base2 = &name;
-    _sm_expr3 = ns2_smtCommandUsage(_sm_base2);
+    _sm_expr3 = ns3_smtCommandUsage(_sm_base2);
     _sm_expr7.resize(7 + _sm_expr3.size());
     __sm_catP = _sm_expr7.data();
     std::memcpy(__sm_catP, "smt ", 4);
@@ -1040,37 +1161,59 @@ Int ns2_smtCommandHelp(Str name) {
     __sm_catP = __sm_catP + _sm_expr3.size();
     std::memcpy(__sm_catP, " - ", 3);
     _sm_base3 = &name;
-    _sm_expr8 = ns2_smtCommandSummary(_sm_base3);
+    _sm_expr8 = ns3_smtCommandSummary(_sm_base3);
     _sm_expr9.resize(_sm_expr7.size() + _sm_expr8.size());
     __sm_catP = _sm_expr9.data();
     std::memcpy(__sm_catP, _sm_expr7.data(), _sm_expr7.size());
     __sm_catP = __sm_catP + _sm_expr7.size();
     std::memcpy(__sm_catP, _sm_expr8.data(), _sm_expr8.size());
     simse_println((_sm_expr9), stdout);
-    simse_println((__sm_stringTable[72]), stdout);
-    simse_println((__sm_stringTable[31]), stdout);
-    ns2_smtCommandPlan(name);
+    _sm_base4 = &name;
+    _sm_expr1 = ns3_smtStub(_sm_base4);
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    simse_println((__sm_stringTable[94]), stdout);
+    simse_println((__sm_stringTable[35]), stdout);
+    ns3_smtCommandPlan(name);
+    goto L7;
+    L4:;
+    _sm_base5 = &name;
+    _sm_expr11 = simse_spanOfStr(_sm_base5);
+    _sm_expr1 = equals(simse_addressOf(_sm_expr11), __sm_stringTable[77]);
+    if (_sm_expr1) goto L6;
+    _sm_base6 = &name;
+    _sm_expr11 = simse_spanOfStr(_sm_base6);
+    _sm_expr1 = equals(simse_addressOf(_sm_expr11), __sm_stringTable[86]);
+    if (_sm_expr1) goto L6;
+    goto L7;
+    L6:;
+    simse_println((__sm_stringTable[94]), stdout);
+    simse_println((__sm_stringTable[69]), stdout);
+    ns3_smtCommandPlan(name);
+    L7:;
     return 0;
 }
 // bin/smt-tool/src/main.kt
-ns2_SmtOptions ns2_smtParse(List<Str> argv) {
+ns3_SmtOptions ns3_smtParse(List<Str> argv) {
     char* __sm_catP;
-    Str* _sm_base1, * _sm_base3, * _sm_base4, * _sm_base5, * _sm_base6, * _sm_base7, * _sm_base8,
-        * _sm_base9, * _sm_base11;
-    Str _sm_base2, _sm_base10, root, command, error, arg;
+    Str* _sm_base1, * _sm_base3, * _sm_base4, * _sm_base6, * _sm_base7, * _sm_base8, * _sm_base9,
+        * _sm_base10, * _sm_base11, * _sm_base13;
+    Str _sm_base2, _sm_base5, _sm_base12, root, command, error, arg;
+    List<Str> modules, rest;
     Bool release, quiet, help, version, _sm_expr2;
-    List<Str> rest;
     Int i, _sm_expr1, j, _sm_expr10;
     Span<Char> _sm_expr3;
-    ns2_SmtOptions _sm_expr27;
-    root = __sm_stringTable[71];
+    ns3_SmtOptions _sm_expr33;
+    root = __sm_stringTable[93];
+    modules = List<Str>();
     release = false;
     quiet = false;
-    command = __sm_stringTable[72];
+    command = __sm_stringTable[94];
     rest = List<Str>();
     help = false;
     version = false;
-    error = __sm_stringTable[72];
+    error = __sm_stringTable[94];
     i = 0;
     L1:;
     _sm_expr1 = simse_lenOf(argv);
@@ -1079,7 +1222,7 @@ ns2_SmtOptions ns2_smtParse(List<Str> argv) {
     arg = argv[i];
     _sm_base1 = &arg;
     _sm_expr3 = simse_spanOfStr(_sm_base1);
-    _sm_expr2 = equals(simse_addressOf(_sm_expr3), __sm_stringTable[67]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr3), __sm_stringTable[87]);
     if (_sm_expr2) goto L3;
     goto L4;
     L3:;
@@ -1098,7 +1241,7 @@ ns2_SmtOptions ns2_smtParse(List<Str> argv) {
     L4:;
     _sm_base3 = &arg;
     _sm_expr3 = simse_spanOfStr(_sm_base3);
-    _sm_expr2 = equals(simse_addressOf(_sm_expr3), __sm_stringTable[57]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr3), __sm_stringTable[74]);
     if (_sm_expr2) goto L8;
     goto L9;
     L8:;
@@ -1108,7 +1251,7 @@ ns2_SmtOptions ns2_smtParse(List<Str> argv) {
     if (_sm_expr2) goto L10;
     goto L11;
     L10:;
-    error = __sm_stringTable[33];
+    error = __sm_stringTable[40];
     i = simse_lenOf(argv);
     goto L1;
     L11:;
@@ -1119,54 +1262,76 @@ ns2_SmtOptions ns2_smtParse(List<Str> argv) {
     L9:;
     _sm_base4 = &arg;
     _sm_expr3 = simse_spanOfStr(_sm_base4);
-    _sm_expr2 = equals(simse_addressOf(_sm_expr3), __sm_stringTable[48]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr3), __sm_stringTable[63]);
     if (_sm_expr2) goto L14;
     goto L15;
     L14:;
-    release = true;
-    i = i + 1;
+    _sm_expr1 = i + 1;
+    _sm_expr10 = simse_lenOf(argv);
+    _sm_expr2 = _sm_expr1 >= _sm_expr10;
+    if (_sm_expr2) goto L16;
+    goto L17;
+    L16:;
+    error = __sm_stringTable[38];
+    i = simse_lenOf(argv);
+    goto L1;
+    L17:;
+    _sm_expr1 = i + 1;
+    _sm_base5 = argv[_sm_expr1];
+    simse_list_append(modules, _sm_base5);
+    i = i + 2;
     goto L1;
     L15:;
-    _sm_base5 = &arg;
-    _sm_expr3 = simse_spanOfStr(_sm_base5);
-    _sm_expr2 = equals(simse_addressOf(_sm_expr3), __sm_stringTable[53]);
-    if (_sm_expr2) goto L17;
-    goto L18;
-    L17:;
-    quiet = true;
-    i = i + 1;
-    goto L1;
-    L18:;
     _sm_base6 = &arg;
     _sm_expr3 = simse_spanOfStr(_sm_base6);
-    _sm_expr2 = equals(simse_addressOf(_sm_expr3), __sm_stringTable[49]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr3), __sm_stringTable[60]);
     if (_sm_expr2) goto L20;
     goto L21;
     L20:;
-    version = true;
+    release = true;
     i = i + 1;
     goto L1;
     L21:;
     _sm_base7 = &arg;
     _sm_expr3 = simse_spanOfStr(_sm_base7);
-    _sm_expr2 = equals(simse_addressOf(_sm_expr3), __sm_stringTable[68]);
-    if (_sm_expr2) goto L23;
-    _sm_base8 = &arg;
-    _sm_expr3 = simse_spanOfStr(_sm_base8);
-    _sm_expr2 = equals(simse_addressOf(_sm_expr3), __sm_stringTable[56]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr3), __sm_stringTable[70]);
     if (_sm_expr2) goto L23;
     goto L24;
     L23:;
-    help = true;
+    quiet = true;
     i = i + 1;
     goto L1;
     L24:;
-    _sm_base10 = __sm_stringTable[70];
-    _sm_base9 = &_sm_base10;
-    _sm_expr2 = startsWith(simse_addressOf(arg), _sm_base9);
-    if (_sm_expr2) goto L27;
-    goto L28;
+    _sm_base8 = &arg;
+    _sm_expr3 = simse_spanOfStr(_sm_base8);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr3), __sm_stringTable[61]);
+    if (_sm_expr2) goto L26;
+    goto L27;
+    L26:;
+    version = true;
+    i = i + 1;
+    goto L1;
     L27:;
+    _sm_base9 = &arg;
+    _sm_expr3 = simse_spanOfStr(_sm_base9);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr3), __sm_stringTable[88]);
+    if (_sm_expr2) goto L29;
+    _sm_base10 = &arg;
+    _sm_expr3 = simse_spanOfStr(_sm_base10);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr3), __sm_stringTable[73]);
+    if (_sm_expr2) goto L29;
+    goto L30;
+    L29:;
+    help = true;
+    i = i + 1;
+    goto L1;
+    L30:;
+    _sm_base12 = __sm_stringTable[92];
+    _sm_base11 = &_sm_base12;
+    _sm_expr2 = startsWith(simse_addressOf(arg), _sm_base11);
+    if (_sm_expr2) goto L33;
+    goto L34;
+    L33:;
     error.resize(34 + arg.size());
     __sm_catP = error.data();
     std::memcpy(__sm_catP, "unknown option '", 16);
@@ -1176,26 +1341,305 @@ ns2_SmtOptions ns2_smtParse(List<Str> argv) {
     std::memcpy(__sm_catP, "' (try 'smt help')", 18);
     i = simse_lenOf(argv);
     goto L1;
-    L28:;
-    _sm_base11 = &command;
-    _sm_expr3 = simse_spanOfStr(_sm_base11);
-    _sm_expr2 = equals(simse_addressOf(_sm_expr3), __sm_stringTable[72]);
-    if (_sm_expr2) goto L30;
-    goto L31;
-    L30:;
+    L34:;
+    _sm_base13 = &command;
+    _sm_expr3 = simse_spanOfStr(_sm_base13);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr3), __sm_stringTable[94]);
+    if (_sm_expr2) goto L36;
+    goto L37;
+    L36:;
     command = arg;
-    goto L32;
-    L31:;
+    goto L38;
+    L37:;
     simse_list_append(rest, arg);
-    L32:;
+    L38:;
     i = i + 1;
     goto L1;
     L2:;
-    _sm_expr27 = ns2_SmtOptions{root, release, quiet, command, rest, help, version, error};
-    return _sm_expr27;
+    _sm_expr33 = ns3_SmtOptions{root, modules, release, quiet, command, rest, help, version, error};
+    return _sm_expr33;
 }
 // bin/smt-tool/src/main.kt
-Int ns2_smtNotImplemented(Str name, ns2_SmtOptions opts) {
+Str ns3_smtQuote(Str* text) {
+    char* __sm_catP;
+    Str _sm_base1, _sm_expr2;
+    _sm_base1 = *(text);
+    _sm_expr2.resize(2 + _sm_base1.size());
+    __sm_catP = _sm_expr2.data();
+    *__sm_catP = (char) ('\"');
+    __sm_catP = __sm_catP + 1;
+    std::memcpy(__sm_catP, _sm_base1.data(), _sm_base1.size());
+    __sm_catP = __sm_catP + _sm_base1.size();
+    *__sm_catP = (char) ('\"');
+    return _sm_expr2;
+}
+// bin/smt-tool/src/main.kt
+Str ns3_smtTranspile(ns3_SmtOptions* opts, Str* outCpp) {
+    char* __sm_catP;
+    Str* _sm_base1, * _sm_base2, * _sm_base4, * _sm_base5;
+    List<Str>* _sm_base3, * _sm_base6;
+    Str _sm_expr1, command, _sm_expr5, _sm_expr8;
+    Int i, _sm_expr2;
+    Bool _sm_expr3;
+    _sm_base2 = simse_addressOf(opts->root);
+    _sm_base1 = _sm_base2;
+    _sm_expr1 = ns3_smtQuote(_sm_base1);
+    command.resize(17 + _sm_expr1.size());
+    __sm_catP = command.data();
+    std::memcpy(__sm_catP, "simse.exe --root ", 17);
+    __sm_catP = __sm_catP + 17;
+    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
+    i = 0;
+    L1:;
+    _sm_base3 = simse_addressOf(opts->modules);
+    _sm_expr2 = simse_lenOf((*_sm_base3));
+    _sm_expr3 = i < _sm_expr2;
+    if (!(_sm_expr3)) goto L2;
+    _sm_expr1.resize(10 + command.size());
+    __sm_catP = _sm_expr1.data();
+    std::memcpy(__sm_catP, command.data(), command.size());
+    __sm_catP = __sm_catP + command.size();
+    std::memcpy(__sm_catP, " --module ", 10);
+    _sm_base6 = simse_addressOf(opts->modules);
+    _sm_base5 = simse_addressOf((*_sm_base6)[i]);
+    _sm_base4 = _sm_base5;
+    _sm_expr5 = ns3_smtQuote(_sm_base4);
+    command.resize(_sm_expr1.size() + _sm_expr5.size());
+    __sm_catP = command.data();
+    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
+    __sm_catP = __sm_catP + _sm_expr1.size();
+    std::memcpy(__sm_catP, _sm_expr5.data(), _sm_expr5.size());
+    i = i + 1;
+    goto L1;
+    L2:;
+    _sm_expr1.resize(4 + command.size());
+    __sm_catP = _sm_expr1.data();
+    std::memcpy(__sm_catP, command.data(), command.size());
+    __sm_catP = __sm_catP + command.size();
+    std::memcpy(__sm_catP, " -o ", 4);
+    _sm_expr5 = ns3_smtQuote(outCpp);
+    _sm_expr8.resize(_sm_expr1.size() + _sm_expr5.size());
+    __sm_catP = _sm_expr8.data();
+    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
+    __sm_catP = __sm_catP + _sm_expr1.size();
+    std::memcpy(__sm_catP, _sm_expr5.data(), _sm_expr5.size());
+    return _sm_expr8;
+}
+// bin/smt-tool/src/main.kt
+Str ns3_smtCompile(ns3_SmtOptions* opts, Str* outCpp, Str* obj, Str* exe) {
+    char* __sm_catP;
+    Int __sm_catAt;
+    Str command, _sm_expr2, _sm_expr3, _sm_expr5, _sm_expr6, _sm_expr8, _sm_expr9, _sm_expr10;
+    Bool _sm_expr1;
+    command = __sm_stringTable[26];
+    _sm_expr1 = opts->release;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    __sm_catAt = command.size();
+    command.resize(__sm_catAt + 13);
+    __sm_catP = command.data() + __sm_catAt;
+    std::memcpy(__sm_catP, "/O2 /DNDEBUG ", 13);
+    L2:;
+    _sm_expr2.resize(4 + command.size());
+    __sm_catP = _sm_expr2.data();
+    std::memcpy(__sm_catP, command.data(), command.size());
+    __sm_catP = __sm_catP + command.size();
+    std::memcpy(__sm_catP, "/Fo:", 4);
+    _sm_expr3 = ns3_smtQuote(obj);
+    _sm_expr5.resize(5 + _sm_expr2.size() + _sm_expr3.size());
+    __sm_catP = _sm_expr5.data();
+    std::memcpy(__sm_catP, _sm_expr2.data(), _sm_expr2.size());
+    __sm_catP = __sm_catP + _sm_expr2.size();
+    std::memcpy(__sm_catP, _sm_expr3.data(), _sm_expr3.size());
+    __sm_catP = __sm_catP + _sm_expr3.size();
+    std::memcpy(__sm_catP, " /Fe:", 5);
+    _sm_expr6 = ns3_smtQuote(exe);
+    _sm_expr8.resize(1 + _sm_expr5.size() + _sm_expr6.size());
+    __sm_catP = _sm_expr8.data();
+    std::memcpy(__sm_catP, _sm_expr5.data(), _sm_expr5.size());
+    __sm_catP = __sm_catP + _sm_expr5.size();
+    std::memcpy(__sm_catP, _sm_expr6.data(), _sm_expr6.size());
+    __sm_catP = __sm_catP + _sm_expr6.size();
+    *__sm_catP = (char) (' ');
+    _sm_expr9 = ns3_smtQuote(outCpp);
+    _sm_expr10.resize(_sm_expr8.size() + _sm_expr9.size());
+    __sm_catP = _sm_expr10.data();
+    std::memcpy(__sm_catP, _sm_expr8.data(), _sm_expr8.size());
+    __sm_catP = __sm_catP + _sm_expr8.size();
+    std::memcpy(__sm_catP, _sm_expr9.data(), _sm_expr9.size());
+    return _sm_expr10;
+}
+// bin/smt-tool/src/main.kt
+Str ns3_smtCommandPath(Str text) {
+    Str out;
+    Int i, _sm_expr1;
+    Bool _sm_expr2;
+    Char ch;
+    out = Str();
+    i = 0;
+    L1:;
+    _sm_expr1 = simse_lenOf(text);
+    _sm_expr2 = i < _sm_expr1;
+    if (!(_sm_expr2)) goto L2;
+    ch = simse_str_charAt(text, i);
+    _sm_expr2 = ch == '/';
+    if (_sm_expr2) goto L3;
+    goto L4;
+    L3:;
+    simse_str_append(out, '\\');
+    goto L5;
+    L4:;
+    simse_str_append(out, ch);
+    L5:;
+    i = i + 1;
+    goto L1;
+    L2:;
+    return out;
+}
+// bin/smt-tool/src/main.kt
+Int ns3_smtBuild(ns3_SmtOptions opts) {
+    char* __sm_catP;
+    ns3_SmtOptions* _sm_base1, * _sm_base4;
+    Str* _sm_base2, * _sm_base5, * _sm_base6, * _sm_base7;
+    Int* _sm_base3;
+    Str _sm_expr1, outCpp, _sm_expr2, obj, _sm_expr3, exe, _sm_expr4, diagnostics, _sm_expr8, _sm_expr9,
+        _sm_expr13, _sm_expr16;
+    Int code, compiled;
+    Bool _sm_expr5, _sm_expr15;
+    _sm_expr1 = opts.root;
+    outCpp.resize(8 + _sm_expr1.size());
+    __sm_catP = outCpp.data();
+    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
+    __sm_catP = __sm_catP + _sm_expr1.size();
+    std::memcpy(__sm_catP, "/out.cpp", 8);
+    _sm_expr2 = opts.root;
+    obj.resize(8 + _sm_expr2.size());
+    __sm_catP = obj.data();
+    std::memcpy(__sm_catP, _sm_expr2.data(), _sm_expr2.size());
+    __sm_catP = __sm_catP + _sm_expr2.size();
+    std::memcpy(__sm_catP, "/out.obj", 8);
+    _sm_expr3 = opts.root;
+    exe.resize(8 + _sm_expr3.size());
+    __sm_catP = exe.data();
+    std::memcpy(__sm_catP, _sm_expr3.data(), _sm_expr3.size());
+    __sm_catP = __sm_catP + _sm_expr3.size();
+    std::memcpy(__sm_catP, "/out.exe", 8);
+    code = 0;
+    _sm_base1 = &opts;
+    _sm_base2 = &outCpp;
+    _sm_expr4 = ns3_smtTranspile(_sm_base1, _sm_base2);
+    _sm_base3 = &code;
+    diagnostics = simse_process_capture(_sm_expr4, _sm_base3);
+    _sm_expr5 = code != 0;
+    if (_sm_expr5) goto L1;
+    goto L2;
+    L1:;
+    simse_print((diagnostics), stdout);
+    _sm_expr1 = simse_int_toString(code);
+    _sm_expr2.resize(30 + _sm_expr1.size());
+    __sm_catP = _sm_expr2.data();
+    std::memcpy(__sm_catP, "smt: transpiling failed (exit ", 30);
+    __sm_catP = __sm_catP + 30;
+    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
+    _sm_expr8.resize(1 + _sm_expr2.size());
+    __sm_catP = _sm_expr8.data();
+    std::memcpy(__sm_catP, _sm_expr2.data(), _sm_expr2.size());
+    __sm_catP = __sm_catP + _sm_expr2.size();
+    *__sm_catP = (char) (')');
+    simse_eprintln(_sm_expr8);
+    return code;
+    L2:;
+    _sm_base4 = &opts;
+    _sm_base5 = &outCpp;
+    _sm_base6 = &obj;
+    _sm_base7 = &exe;
+    _sm_expr9 = ns3_smtCompile(_sm_base4, _sm_base5, _sm_base6, _sm_base7);
+    compiled = simse_process_run(_sm_expr9);
+    _sm_expr5 = compiled != 0;
+    if (_sm_expr5) goto L3;
+    goto L4;
+    L3:;
+    _sm_expr1 = simse_int_toString(compiled);
+    _sm_expr2.resize(28 + _sm_expr1.size());
+    __sm_catP = _sm_expr2.data();
+    std::memcpy(__sm_catP, "smt: compiling failed (exit ", 28);
+    __sm_catP = __sm_catP + 28;
+    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
+    _sm_expr13.resize(1 + _sm_expr2.size());
+    __sm_catP = _sm_expr13.data();
+    std::memcpy(__sm_catP, _sm_expr2.data(), _sm_expr2.size());
+    __sm_catP = __sm_catP + _sm_expr2.size();
+    *__sm_catP = (char) (')');
+    simse_eprintln(_sm_expr13);
+    return compiled;
+    L4:;
+    _sm_expr5 = opts.quiet;
+    _sm_expr15 = !_sm_expr5;
+    if (_sm_expr15) goto L5;
+    goto L6;
+    L5:;
+    _sm_expr16.resize(11 + exe.size());
+    __sm_catP = _sm_expr16.data();
+    std::memcpy(__sm_catP, "smt: built ", 11);
+    __sm_catP = __sm_catP + 11;
+    std::memcpy(__sm_catP, exe.data(), exe.size());
+    simse_println((_sm_expr16), stdout);
+    L6:;
+    return 0;
+}
+// bin/smt-tool/src/main.kt
+Int ns3_smtRun(ns3_SmtOptions opts) {
+    char* __sm_catP;
+    Str* _sm_base1, * _sm_base3, * _sm_base4;
+    List<Str>* _sm_base2, * _sm_base5;
+    Int built, i, _sm_expr5;
+    Bool _sm_expr1;
+    Str _sm_expr2, _sm_expr3, _sm_expr4, command, _sm_expr8;
+    built = ns3_smtBuild(opts);
+    _sm_expr1 = built != 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    return built;
+    L2:;
+    _sm_expr2 = opts.root;
+    _sm_expr3.resize(8 + _sm_expr2.size());
+    __sm_catP = _sm_expr3.data();
+    std::memcpy(__sm_catP, _sm_expr2.data(), _sm_expr2.size());
+    __sm_catP = __sm_catP + _sm_expr2.size();
+    std::memcpy(__sm_catP, "/out.exe", 8);
+    _sm_expr4 = ns3_smtCommandPath(_sm_expr3);
+    _sm_base1 = &_sm_expr4;
+    command = ns3_smtQuote(_sm_base1);
+    i = 0;
+    L3:;
+    _sm_base2 = simse_addressOf(opts.rest);
+    _sm_expr5 = simse_lenOf((*_sm_base2));
+    _sm_expr1 = i < _sm_expr5;
+    if (!(_sm_expr1)) goto L4;
+    _sm_expr2.resize(1 + command.size());
+    __sm_catP = _sm_expr2.data();
+    std::memcpy(__sm_catP, command.data(), command.size());
+    __sm_catP = __sm_catP + command.size();
+    *__sm_catP = (char) (' ');
+    _sm_base5 = simse_addressOf(opts.rest);
+    _sm_base4 = simse_addressOf((*_sm_base5)[i]);
+    _sm_base3 = _sm_base4;
+    _sm_expr8 = ns3_smtQuote(_sm_base3);
+    command.resize(_sm_expr2.size() + _sm_expr8.size());
+    __sm_catP = command.data();
+    std::memcpy(__sm_catP, _sm_expr2.data(), _sm_expr2.size());
+    __sm_catP = __sm_catP + _sm_expr2.size();
+    std::memcpy(__sm_catP, _sm_expr8.data(), _sm_expr8.size());
+    i = i + 1;
+    goto L3;
+    L4:;
+    _sm_expr5 = simse_process_run(command);
+    return _sm_expr5;
+}
+// bin/smt-tool/src/main.kt
+Int ns3_smtNotImplemented(Str name, ns3_SmtOptions opts) {
     char* __sm_catP;
     Int __sm_catAt;
     Str* _sm_base1, * _sm_base2;
@@ -1216,7 +1660,7 @@ Int ns2_smtNotImplemented(Str name, ns2_SmtOptions opts) {
     __sm_catP = __sm_catP + _sm_expr1.size();
     std::memcpy(__sm_catP, ": not implemented yet - ", 24);
     _sm_base1 = &name;
-    _sm_expr3 = ns2_smtCommandSummary(_sm_base1);
+    _sm_expr3 = ns3_smtCommandSummary(_sm_base1);
     _sm_expr5.resize(1 + _sm_expr2.size() + _sm_expr3.size());
     __sm_catP = _sm_expr5.data();
     std::memcpy(__sm_catP, _sm_expr2.data(), _sm_expr2.size());
@@ -1232,7 +1676,7 @@ Int ns2_smtNotImplemented(Str name, ns2_SmtOptions opts) {
     __sm_catP = __sm_catP + 16;
     std::memcpy(__sm_catP, _sm_expr6.data(), _sm_expr6.size());
     simse_println((_sm_expr7), stdout);
-    flags = __sm_stringTable[72];
+    flags = __sm_stringTable[94];
     _sm_expr8 = opts.release;
     if (_sm_expr8) goto L1;
     goto L2;
@@ -1253,11 +1697,11 @@ Int ns2_smtNotImplemented(Str name, ns2_SmtOptions opts) {
     L4:;
     _sm_base2 = &flags;
     _sm_expr10 = simse_spanOfStr(_sm_base2);
-    _sm_expr8 = equals(simse_addressOf(_sm_expr10), __sm_stringTable[72]);
+    _sm_expr8 = equals(simse_addressOf(_sm_expr10), __sm_stringTable[94]);
     if (_sm_expr8) goto L5;
     goto L6;
     L5:;
-    flags = __sm_stringTable[63];
+    flags = __sm_stringTable[83];
     L6:;
     _sm_expr12.resize(16 + flags.size());
     __sm_catP = _sm_expr12.data();
@@ -1271,7 +1715,7 @@ Int ns2_smtNotImplemented(Str name, ns2_SmtOptions opts) {
     if (_sm_expr8) goto L7;
     goto L8;
     L7:;
-    joined = __sm_stringTable[72];
+    joined = __sm_stringTable[94];
     i = 0;
     L9:;
     _sm_base4 = simse_addressOf(opts.rest);
@@ -1303,8 +1747,8 @@ Int ns2_smtNotImplemented(Str name, ns2_SmtOptions opts) {
     std::memcpy(__sm_catP, joined.data(), joined.size());
     simse_println((_sm_expr19), stdout);
     L8:;
-    simse_println((__sm_stringTable[46]), stdout);
-    ns2_smtCommandPlan(name);
+    simse_println((__sm_stringTable[57]), stdout);
+    ns3_smtCommandPlan(name);
     return 1;
 }
 // bin/smt-tool/src/main.kt
@@ -1318,18 +1762,19 @@ int main(int argc, char** argv) {
     }
     char* __sm_catP;
     Str* _sm_base1, * _sm_base2, * _sm_base3, * _sm_base4, * _sm_base5, * _sm_base6, * _sm_base7,
-        * _sm_base8, * _sm_base9, * _sm_base10, * _sm_base14, * _sm_base15;
+        * _sm_base8, * _sm_base9, * _sm_base10, * _sm_base14, * _sm_base15, * _sm_base17, * _sm_base18,
+        * _sm_base19, * _sm_base20;
     List<Str>* _sm_base11, * _sm_base13;
-    Str _sm_base12, _sm_base16, _sm_base17, _sm_expr3, _sm_expr4, _sm_expr8, _sm_expr22;
-    ns2_SmtOptions opts;
+    Str _sm_base12, _sm_base16, _sm_base21, _sm_expr3, _sm_expr4, _sm_expr8, _sm_expr22;
+    ns3_SmtOptions opts;
     Span<Char> _sm_expr1;
     Bool _sm_expr2, _sm_expr19;
     Int _sm_expr15;
-    opts = ns2_smtParse(args);
+    opts = ns3_smtParse(args);
     _sm_base2 = simse_addressOf(opts.error);
     _sm_base1 = _sm_base2;
     _sm_expr1 = simse_spanOfStr(_sm_base1);
-    _sm_expr2 = (!equals(simse_addressOf(_sm_expr1), __sm_stringTable[72]));
+    _sm_expr2 = (!equals(simse_addressOf(_sm_expr1), __sm_stringTable[94]));
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
@@ -1347,7 +1792,7 @@ int main(int argc, char** argv) {
     _sm_base4 = simse_addressOf(opts.command);
     _sm_base3 = _sm_base4;
     _sm_expr1 = simse_spanOfStr(_sm_base3);
-    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[55]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[72]);
     if (_sm_expr2) goto L3;
     goto L4;
     L3:;
@@ -1362,19 +1807,19 @@ int main(int argc, char** argv) {
     _sm_base6 = simse_addressOf(opts.command);
     _sm_base5 = _sm_base6;
     _sm_expr1 = simse_spanOfStr(_sm_base5);
-    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[72]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[94]);
     if (_sm_expr2) goto L6;
     _sm_base8 = simse_addressOf(opts.command);
     _sm_base7 = _sm_base8;
     _sm_expr1 = simse_spanOfStr(_sm_base7);
-    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[61]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[81]);
     if (_sm_expr2) goto L6;
     goto L7;
     L6:;
     _sm_base10 = simse_addressOf(opts.command);
     _sm_base9 = _sm_base10;
     _sm_expr1 = simse_spanOfStr(_sm_base9);
-    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[61]);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[81]);
     if (_sm_expr2) goto L11;
     goto L10;
     L11:;
@@ -1386,20 +1831,20 @@ int main(int argc, char** argv) {
     L9:;
     _sm_base13 = simse_addressOf(opts.rest);
     _sm_base12 = (*_sm_base13)[0];
-    _sm_expr15 = ns2_smtCommandHelp(_sm_base12);
+    _sm_expr15 = ns3_smtCommandHelp(_sm_base12);
     return _sm_expr15;
     L10:;
-    ns2_smtUsage();
+    ns3_smtUsage();
     return 0;
     L7:;
     _sm_base15 = simse_addressOf(opts.command);
     _sm_base14 = _sm_base15;
-    _sm_expr2 = ns2_smtKnown(_sm_base14);
+    _sm_expr2 = ns3_smtKnown(_sm_base14);
     _sm_expr19 = !_sm_expr2;
     if (_sm_expr19) goto L12;
     goto L13;
     L12:;
-    ns2_smtUsage();
+    ns3_smtUsage();
     _sm_expr3 = opts.command;
     _sm_expr22.resize(40 + _sm_expr3.size());
     __sm_catP = _sm_expr22.data();
@@ -1416,11 +1861,31 @@ int main(int argc, char** argv) {
     goto L15;
     L14:;
     _sm_base16 = opts.command;
-    _sm_expr15 = ns2_smtCommandHelp(_sm_base16);
+    _sm_expr15 = ns3_smtCommandHelp(_sm_base16);
     return _sm_expr15;
     L15:;
-    _sm_base17 = opts.command;
-    _sm_expr15 = ns2_smtNotImplemented(_sm_base17, opts);
+    _sm_base18 = simse_addressOf(opts.command);
+    _sm_base17 = _sm_base18;
+    _sm_expr1 = simse_spanOfStr(_sm_base17);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[77]);
+    if (_sm_expr2) goto L16;
+    goto L17;
+    L16:;
+    _sm_expr15 = ns3_smtBuild(opts);
+    return _sm_expr15;
+    L17:;
+    _sm_base20 = simse_addressOf(opts.command);
+    _sm_base19 = _sm_base20;
+    _sm_expr1 = simse_spanOfStr(_sm_base19);
+    _sm_expr2 = equals(simse_addressOf(_sm_expr1), __sm_stringTable[86]);
+    if (_sm_expr2) goto L18;
+    goto L19;
+    L18:;
+    _sm_expr15 = ns3_smtRun(opts);
+    return _sm_expr15;
+    L19:;
+    _sm_base21 = opts.command;
+    _sm_expr15 = ns3_smtNotImplemented(_sm_base21, opts);
     return _sm_expr15;
 }
 
@@ -1844,6 +2309,49 @@ Bool simse_pathExists(const Str& path) {
 
 void simse_eprintln(const Str& text) {
     fprintf(stderr, "%s\n", text.c_str());
+}
+
+static Int simse_process_normalize(int status) {
+#if defined(_WIN32)
+    return (Int) status;
+#else
+    if (status == -1) return -1;
+    if (WIFEXITED(status)) return (Int) WEXITSTATUS(status);
+    if (WIFSIGNALED(status)) return (Int) (128 + WTERMSIG(status));
+    return (Int) status;
+#endif
+}
+
+Int simse_process_run(const Str& command) {
+    const std::string cmd = simse_toStdString(command);
+    return simse_process_normalize(std::system(cmd.c_str()));
+}
+
+Str simse_process_capture(const Str& command, Int* exitCode) {
+    std::string cmd = simse_toStdString(command);
+    cmd += " 2>&1";
+#if defined(_WIN32)
+    FILE* pipe = _popen(cmd.c_str(), "r");
+#else
+    FILE* pipe = popen(cmd.c_str(), "r");
+#endif
+    Str text;
+    if (pipe == nullptr) {
+        if (exitCode != nullptr) *exitCode = -1;
+        return text;
+    }
+    char buffer[4096];
+    std::size_t got = 0;
+    while ((got = std::fread(buffer, 1, sizeof(buffer), pipe)) > 0) {
+        text.append(buffer, (Int) got);
+    }
+#if defined(_WIN32)
+    const int status = _pclose(pipe);
+#else
+    const int status = pclose(pipe);
+#endif
+    if (exitCode != nullptr) *exitCode = simse_process_normalize(status);
+    return text;
 }
 
 template <class T>

@@ -372,13 +372,13 @@ runs green on every build, alongside the bootstrap fixed point.
 | Path | Contents |
 | --- | --- |
 | `src/` | the compiler in Simse (`lex/`, `parser/`, `sema/`, `linear/`, `codegen/`, `compiler/` - the source generators' package too), plus `src/rtl/` (the prelude `.kt` files, the runtime headers, and the resource file `_res.md`, which holds the runtime's C++) and `src/simse_bootstrap.cpp` - the published transpiled compiler, the output proof |
-| `modules/` | the reusable modules a program (and the compiler itself) names: `json` (with its `generators/`), `jsonnode`, `compiler` (the AST and the generator interface), `io`, `streams`, `linq`, `xml`, `http` - each with its `_res.md` |
+| `modules/` | the reusable modules a program (and the compiler itself) names: `json` (with its `generators/`), `jsonnode`, `compiler` (the AST and the generator interface), `io`, `streams`, `process` (run a command, capture its output), `linq`, `xml`, `http` - each with its `_res.md` |
 | `bin/` | the `smt` toolset: its built `smt.exe` and its home `bin/smt-tool/` (`src/main.kt` plus the checked-in amalgamation `smt_src.cpp`); the compiler itself builds at the repository root (`simse.exe`) |
 | `specs/` | the language specification (normative): types, declarations, functions, memory model, generics, containers, modules, statics, resources |
 | `impl_specs/` | implementation plans and records: the capability matrix, the RTL ABI, generators, the user-facing roadmap |
 | `stress/` | one folder per end-to-end program: source, arguments, expected output, and where the emitted text is the point, an `expected.cpp` golden |
 | `build.js`, `build.bat`, `stress.bat` | the build and harness entry points: transpile the compiler's trees (`src` + `modules`), compile them with `cl.exe`, run the corpus |
-| `smt.bat` | the launcher for the `smt` toolset (`bin/smt-tool/`, a Simse program): `smt build`, `smt run`, ... |
+| `smt.bat` | the launcher for the `smt` toolset (`bin/smt-tool/`, a Simse program): it sets up the Visual Studio environment, builds `bin/smt.exe` if missing, and runs it - `smt build`, `smt run`, ... need no script runtime |
 | `simse.vcxproj`, `simse.slnx` | the Visual Studio profiling project: the published bootstrap (the runtime is generated into it), with the debugger already set to run the compiler over its own tree |
 | `tools/` | the JavaScript harness: `iterate.js` (the loop: build + corpus + bootstrap check), the stress runner (`stress.js`), the bootstrap fixed-point check (`bootstrap.js`), the Visual Studio project check (`vscheck.mjs`), `msvc.mjs` |
 | `examples/` | the runnable examples the docs use |
