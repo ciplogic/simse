@@ -1,0 +1,17 @@
+hello 27 1f8b080000000000000acb48cdc9c957c02001e3513d8d17000000
+run 1000 28
+fox 900 72
+all 256 290
+noise 5000 5288
+big 105800 1717
+empty 0 20
+level0 false gzip: the compression level must be 1 (fastest) to 9 (best)
+level10 false
+level1 900 72
+level9 900 72
+magic 31 139
+run-isize 1000
+run-crc 2587417091
+fox-isize 900
+fox-crc 3389369886
+empty-isize 0
