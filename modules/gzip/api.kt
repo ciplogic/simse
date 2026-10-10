@@ -2,18 +2,20 @@ package gzip
 
 import unsafe
 
-// The `gzip` module: Gzip (RFC 1952) encoding of a byte string - the `List<Int8> ->
-// Res<List<Int8>>` counterpart of C#'s `GZipStream`, minus the stream: one call packs the
-// whole input and hands the bytes back.
+// The `gzip` module: Gzip (RFC 1952) encoding and decoding of a byte string - the
+// `List<Int8> -> Res<List<Int8>>` counterpart of C#'s `GZipStream`, minus the stream: one
+// call packs or unpacks the whole input.
 //
-// The comparison level is zlib's (1 = fastest, 9 = best; 6 is the default), and it picks
-// how hard the matcher looks for a back-reference: the deflate data itself is always a
-// single fixed-Huffman block (RFC 1951 3.2.6), so every level emits a stream any gzip
-// reader decompresses - a deeper search only buys a smaller one. The CRC32 and the ISIZE
-// of the trailer are the RFC 1952 ones.
+// `compress` and `compressLevel` write one fixed-Huffman deflate block (RFC 1951 3.2.6)
+// into a complete member: header, block, CRC32 and ISIZE. The level is zlib's (1 =
+// fastest, 9 = best; 6 is the default) and picks how hard the matcher looks for a
+// back-reference, so every level emits a stream any gzip reader decompresses - a deeper
+// search only buys a smaller one. `decompress` reads the whole deflate format back -
+// stored, fixed and dynamic blocks - so it unpacks what other encoders write too, and
+// answers `err` when the stream is malformed or its CRC32/ISIZE do not check out.
 //
 // The types are the `unsafe` module's unsigned reads, and this module names it, so a
-// program building the encoder passes both roots: `--module modules/gzip --module
+// program building either side passes both roots: `--module modules/gzip --module
 // modules/unsafe`, and `import gzip`.
 
 // ---- the bit sink ----
@@ -387,6 +389,430 @@ fun gzCrcTable(): List<UInt32> {
     return table
 }
 
+// ---- the inflater ----
+
+// The bit source: `bitPos` counts bits into `data`'s bytes, least-significant bit first -
+// the order `GzBitWriter` fills them in. A read past the end raises `error` and answers
+// zeros, so a truncated stream decodes to something and the caller reports it.
+data class GzBitReader(var bytes: List<Int>, var bitPos: Int, var error: Bool) {
+    fun readBits(count: Int): Int {
+        var value: Int = 0
+        var i: Int = 0
+        while (i < count) {
+            val at: Int = this.bitPos + i
+            val byteAt: Int = at >> 3
+            if (byteAt >= this.bytes.size()) {
+                this.error = true
+                return value
+            }
+            val bit: Int = (this.bytes[byteAt] >> (at & 7)) & 1
+            value = value | (bit << i)
+            i = i + 1
+        }
+        this.bitPos = this.bitPos + count
+        return value
+    }
+
+    fun readBit(): Int {
+        return this.readBits(1)
+    }
+
+    // One whole byte; only called at a byte boundary (a stored block, after `align`).
+    fun readByte(): Int {
+        if (this.bitPos % 8 != 0) {
+            this.error = true
+            return 0
+        }
+        val byteAt: Int = this.bitPos >> 3
+        if (byteAt >= this.bytes.size()) {
+            this.error = true
+            return 0
+        }
+        this.bitPos = this.bitPos + 8
+        return this.bytes[byteAt]
+    }
+
+    fun align(): Unit {
+        val drop: Int = this.bitPos % 8
+        if (drop != 0) {
+            this.bitPos = this.bitPos + 8 - drop
+        }
+    }
+}
+
+// A canonical Huffman decoding table (puff.c's shape): `counts[len]` is how many codes are
+// `len` bits long, and `symbols` lists the symbols in (length, symbol) order, so a walk
+// from length 1 up can decide a code by its rank within its length.
+data class GzHuffman(var counts: List<Int>, var symbols: List<Int>)
+
+// The `counts` of a code-length array, and how many codes the lengths leave unassigned:
+// 0 is a complete code, negative an over-subscribed one.
+data class GzHuffmanCount(var left: Int, var counts: List<Int>)
+
+fun gzCountCodes(lengths: List<Int>): GzHuffmanCount {
+    var counts: List<Int> = List<Int>()
+    var i: Int = 0
+    while (i < 16) {
+        counts.append(0)
+        i = i + 1
+    }
+    i = 0
+    while (i < lengths.size()) {
+        counts[lengths[i]] = counts[lengths[i]] + 1
+        i = i + 1
+    }
+    var left: Int = 1
+    var len: Int = 1
+    while (len < 16) {
+        left = (left << 1) - counts[len]
+        if (left < 0) {
+            return GzHuffmanCount(-1, counts)
+        }
+        len = len + 1
+    }
+    return GzHuffmanCount(left, counts)
+}
+
+fun gzHuffmanFromLengths(lengths: List<Int>): GzHuffman {
+    val counted: GzHuffmanCount = gzCountCodes(lengths)
+    var total: Int = 0
+    var len: Int = 1
+    while (len < 16) {
+        total = total + counted.counts[len]
+        len = len + 1
+    }
+    var offsets: List<Int> = List<Int>()
+    len = 0
+    while (len < 16) {
+        offsets.append(0)
+        len = len + 1
+    }
+    len = 1
+    while (len < 15) {
+        offsets[len + 1] = offsets[len] + counted.counts[len]
+        len = len + 1
+    }
+    var symbols: List<Int> = List<Int>()
+    var i: Int = 0
+    while (i < total) {
+        symbols.append(0)
+        i = i + 1
+    }
+    var symbol: Int = 0
+    while (symbol < lengths.size()) {
+        val width: Int = lengths[symbol]
+        if (width != 0) {
+            symbols[offsets[width]] = symbol
+            offsets[width] = offsets[width] + 1
+        }
+        symbol = symbol + 1
+    }
+    return GzHuffman(counted.counts, symbols)
+}
+
+// The symbol the next code names, or -1 when the bits are no code at all (truncated, or
+// a code the table does not hold).
+fun gzDecode(reader: *GzBitReader, table: GzHuffman): Int {
+    var code: Int = 0
+    var first: Int = 0
+    var index: Int = 0
+    var len: Int = 1
+    while (len < 16) {
+        code = code | reader.readBit()
+        val count: Int = table.counts[len]
+        if (code - count < first) {
+            val at: Int = index + code - first
+            if (at < 0 || at >= table.symbols.size()) {
+                return -1
+            }
+            return table.symbols[at]
+        }
+        index = index + count
+        first = (first + count) << 1
+        code = code << 1
+        len = len + 1
+    }
+    return -1
+}
+
+// The fixed literal/length code as a decoding table: the lengths `gzLitBits` answers.
+fun gzFixedLitHuffman(): GzHuffman {
+    var lengths: List<Int> = List<Int>()
+    var symbol: Int = 0
+    while (symbol < 288) {
+        lengths.append(gzLitBits(symbol))
+        symbol = symbol + 1
+    }
+    return gzHuffmanFromLengths(lengths)
+}
+
+// The fixed distance code: 30 five-bit codes (30 and 31 are not in the code).
+fun gzFixedDistHuffman(): GzHuffman {
+    var lengths: List<Int> = List<Int>()
+    var symbol: Int = 0
+    while (symbol < 30) {
+        lengths.append(5)
+        symbol = symbol + 1
+    }
+    return gzHuffmanFromLengths(lengths)
+}
+
+// RFC 1951 3.2.7's permutation: the symbol of the `index`th code-length code.
+fun gzCodeOrder(index: Int): Int {
+    if (index == 0) {
+        return 16
+    }
+    if (index == 1) {
+        return 17
+    }
+    if (index == 2) {
+        return 18
+    }
+    if (index == 3) {
+        return 0
+    }
+    if (index == 4) {
+        return 8
+    }
+    if (index == 5) {
+        return 7
+    }
+    if (index == 6) {
+        return 9
+    }
+    if (index == 7) {
+        return 6
+    }
+    if (index == 8) {
+        return 10
+    }
+    if (index == 9) {
+        return 5
+    }
+    if (index == 10) {
+        return 11
+    }
+    if (index == 11) {
+        return 4
+    }
+    if (index == 12) {
+        return 12
+    }
+    if (index == 13) {
+        return 3
+    }
+    if (index == 14) {
+        return 13
+    }
+    if (index == 15) {
+        return 2
+    }
+    if (index == 16) {
+        return 14
+    }
+    if (index == 17) {
+        return 1
+    }
+    return 15
+}
+
+// One block's symbols up to its end-of-block marker. Literals append, and a length/distance
+// pair copies (`length` may pass the distance: the copy overlaps itself, which is exactly
+// a run).
+fun gzInflateBlock(reader: *GzBitReader, out: *List<Int>, lit: GzHuffman, dist: GzHuffman): Str {
+    while (true) {
+        val symbol: Int = gzDecode(reader, lit)
+        if (reader.error) {
+            return "gzip: truncated deflate data"
+        }
+        if (symbol < 0) {
+            return "gzip: invalid deflate literal/length code"
+        }
+        if (symbol < 256) {
+            out.append(symbol)
+            continue
+        }
+        if (symbol == 256) {
+            return ""
+        }
+        if (symbol > 285) {
+            return "gzip: invalid deflate length code"
+        }
+        val length: Int = gzLengthBase(symbol) + reader.readBits(gzLengthExtra(symbol))
+        val distanceSymbol: Int = gzDecode(reader, dist)
+        if (reader.error) {
+            return "gzip: truncated deflate data"
+        }
+        if (distanceSymbol < 0 || distanceSymbol > 29) {
+            return "gzip: invalid deflate distance code"
+        }
+        val distance: Int = gzDistanceBase(distanceSymbol) + reader.readBits(gzDistanceExtra(distanceSymbol))
+        if (reader.error) {
+            return "gzip: truncated deflate data"
+        }
+        if (distance > out.size()) {
+            return "gzip: the deflate distance goes past the start of the output"
+        }
+        var copied: Int = 0
+        while (copied < length) {
+            val byte: Int = out[out.size() - distance]
+            out.append(byte)
+            copied = copied + 1
+        }
+    }
+}
+
+// A stored block (BTYPE 00): LEN bytes copied as they stand, after the byte alignment.
+fun gzInflateStored(reader: *GzBitReader, out: *List<Int>): Str {
+    reader.align()
+    val len: Int = reader.readByte() | (reader.readByte() << 8)
+    val complement: Int = reader.readByte() | (reader.readByte() << 8)
+    if (reader.error) {
+        return "gzip: truncated deflate data"
+    }
+    if (len != (complement ^ 65535)) {
+        return "gzip: invalid stored block length"
+    }
+    var i: Int = 0
+    while (i < len) {
+        val byte: Int = reader.readByte()
+        if (reader.error) {
+            return "gzip: truncated deflate data"
+        }
+        out.append(byte)
+        i = i + 1
+    }
+    return ""
+}
+
+// A dynamic block (BTYPE 10): the code-length code, the literal/length and distance codes
+// it spells out (RLE included), then the block itself.
+fun gzInflateDynamic(reader: *GzBitReader, out: *List<Int>): Str {
+    val literalCount: Int = reader.readBits(5) + 257
+    val distanceCount: Int = reader.readBits(5) + 1
+    val codeCount: Int = reader.readBits(4) + 4
+    if (reader.error) {
+        return "gzip: truncated deflate data"
+    }
+    if (literalCount > 286 || distanceCount > 30) {
+        return "gzip: invalid deflate code counts"
+    }
+    var codeLengths: List<Int> = List<Int>()
+    var i: Int = 0
+    while (i < 19) {
+        codeLengths.append(0)
+        i = i + 1
+    }
+    i = 0
+    while (i < codeCount) {
+        codeLengths[gzCodeOrder(i)] = reader.readBits(3)
+        i = i + 1
+    }
+    if (reader.error) {
+        return "gzip: truncated deflate data"
+    }
+    if (gzCountCodes(codeLengths).left != 0) {
+        return "gzip: invalid deflate code-length code"
+    }
+    val codeTable: GzHuffman = gzHuffmanFromLengths(codeLengths)
+
+    // The literal/length lengths first, then the distance ones; 16 repeats the previous
+    // length, 17 and 18 a run of zeros.
+    val total: Int = literalCount + distanceCount
+    var lengths: List<Int> = List<Int>()
+    while (lengths.size() < total) {
+        val symbol: Int = gzDecode(reader, codeTable)
+        if (reader.error) {
+            return "gzip: truncated deflate data"
+        }
+        if (symbol < 0) {
+            return "gzip: invalid deflate code lengths"
+        }
+        if (symbol < 16) {
+            lengths.append(symbol)
+            continue
+        }
+        var repeat: Int = 0
+        var value: Int = 0
+        if (symbol == 16) {
+            if (lengths.size() == 0) {
+                return "gzip: invalid deflate code lengths"
+            }
+            repeat = reader.readBits(2) + 3
+            value = lengths[lengths.size() - 1]
+        } else if (symbol == 17) {
+            repeat = reader.readBits(3) + 3
+        } else {
+            repeat = reader.readBits(7) + 11
+        }
+        if (reader.error) {
+            return "gzip: truncated deflate data"
+        }
+        if (lengths.size() + repeat > total) {
+            return "gzip: invalid deflate code lengths"
+        }
+        i = 0
+        while (i < repeat) {
+            lengths.append(value)
+            i = i + 1
+        }
+    }
+
+    var litLengths: List<Int> = List<Int>()
+    i = 0
+    while (i < literalCount) {
+        litLengths.append(lengths[i])
+        i = i + 1
+    }
+    var distLengths: List<Int> = List<Int>()
+    i = 0
+    while (i < distanceCount) {
+        distLengths.append(lengths[literalCount + i])
+        i = i + 1
+    }
+    if (gzCountCodes(litLengths).left != 0) {
+        return "gzip: invalid deflate literal/length code"
+    }
+    // A distance code may be incomplete when it is the single one-code case; over-subscribed
+    // is never valid.
+    val distCounted: GzHuffmanCount = gzCountCodes(distLengths)
+    if (distCounted.left < 0) {
+        return "gzip: invalid deflate distance code"
+    }
+    if (distCounted.left > 0 && distanceCount != distCounted.counts[0] + distCounted.counts[1]) {
+        return "gzip: invalid deflate distance code"
+    }
+    return gzInflateBlock(reader, out, gzHuffmanFromLengths(litLengths), gzHuffmanFromLengths(distLengths))
+}
+
+// The whole deflate stream, block by block, until a block says it is the last.
+fun gzInflate(reader: *GzBitReader): Res<List<Int>> {
+    var out: List<Int> = List<Int>()
+    while (true) {
+        val isLast: Bool = reader.readBit() == 1
+        val type: Int = reader.readBits(2)
+        if (reader.error) {
+            return Res<List<Int>>.err("gzip: truncated deflate data")
+        }
+        var reason: Str = ""
+        if (type == 0) {
+            reason = gzInflateStored(reader, out)
+        } else if (type == 1) {
+            reason = gzInflateBlock(reader, out, gzFixedLitHuffman(), gzFixedDistHuffman())
+        } else if (type == 2) {
+            reason = gzInflateDynamic(reader, out)
+        } else {
+            return Res<List<Int>>.err("gzip: invalid deflate block type")
+        }
+        if (reason != "") {
+            return Res<List<Int>>.err(reason)
+        }
+        if (isLast) {
+            return Res<List<Int>>.ok(out)
+        }
+    }
+}
+
 // ---- the API ----
 
 // Packs `input` into a gzip stream at the default level (6 - zlib's `Z_DEFAULT_COMPRESSION`,
@@ -408,4 +834,102 @@ fun compressLevel(input: List<Int8>, level: Int): Res<List<Int8>> {
     gzDeflateFixed(bytes, level, writer)
     gzTrailer(bytes, writer)
     return Res<List<Int8>>.ok(writer.out)
+}
+
+// Unpacks one gzip member: the header (extra fields, name, comment and header CRC are
+// skipped), the deflate stream (stored, fixed or dynamic blocks), and the trailer, whose
+// CRC32 and ISIZE must match what came out. `err` names what was wrong: a stream that is
+// not gzip, a truncated or malformed deflate stream, or a mismatched trailer.
+fun decompress(input: List<Int8>): Res<List<Int8>> {
+    val bytes: List<Int> = gzBytes(input)
+    if (bytes.size() < 18) {
+        return Res<List<Int8>>.err("gzip: the stream is too short to be a gzip member")
+    }
+    if (bytes[0] != 31 || bytes[1] != 139) {
+        return Res<List<Int8>>.err("gzip: not a gzip stream (the magic is 1f 8b)")
+    }
+    if (bytes[2] != 8) {
+        return Res<List<Int8>>.err("gzip: unsupported compression method (only deflate, 8)")
+    }
+    val flags: Int = bytes[3]
+    if (flags & 224 != 0) {
+        return Res<List<Int8>>.err("gzip: the reserved header flags are set")
+    }
+    var at: Int = 10
+    if (flags & 4 != 0) {
+        if (at + 2 > bytes.size()) {
+            return Res<List<Int8>>.err("gzip: the header ends inside an extra field")
+        }
+        at = at + 2 + (bytes[at] | (bytes[at + 1] << 8))
+    }
+    if (flags & 8 != 0) {
+        at = gzSkipZero(bytes, at)
+        if (at < 0) {
+            return Res<List<Int8>>.err("gzip: the header ends inside the file name")
+        }
+        at = at + 1
+    }
+    if (flags & 16 != 0) {
+        at = gzSkipZero(bytes, at)
+        if (at < 0) {
+            return Res<List<Int8>>.err("gzip: the header ends inside the comment")
+        }
+        at = at + 1
+    }
+    if (flags & 2 != 0) {
+        at = at + 2
+    }
+    if (at > bytes.size()) {
+        return Res<List<Int8>>.err("gzip: the header is truncated")
+    }
+
+    var reader: GzBitReader = GzBitReader(bytes, at * 8, false)
+    val inflated: Res<List<Int>> = gzInflate(reader)
+    if (!inflated.isOk()) {
+        return Res<List<Int8>>.err(inflated.error)
+    }
+    val plain: List<Int> = inflated.value
+
+    // The trailer starts at the byte after the deflate stream's last byte (its end-of-block
+    // marker may leave the bit stream mid-byte, so the position is rounded up).
+    val trailerAt: Int = (reader.bitPos + 7) / 8
+    if (trailerAt + 8 > bytes.size()) {
+        return Res<List<Int8>>.err("gzip: the trailer is truncated")
+    }
+    if (gzLeUInt32(bytes, trailerAt) != gzCrc32(plain)) {
+        return Res<List<Int8>>.err("gzip: the CRC32 does not match the trailer")
+    }
+    if (gzLeUInt32(bytes, trailerAt + 4).value() != plain.size()) {
+        return Res<List<Int8>>.err("gzip: the ISIZE does not match the output")
+    }
+
+    var out: List<Int8> = List<Int8>()
+    var i: Int = 0
+    while (i < plain.size()) {
+        out.append(plain[i])
+        i = i + 1
+    }
+    return Res<List<Int8>>.ok(out)
+}
+
+// The index of the first zero byte from `at` (a header string's terminator), or -1 when it
+// is missing.
+fun gzSkipZero(bytes: List<Int>, at: Int): Int {
+    var i: Int = at
+    while (i < bytes.size() && bytes[i] != 0) {
+        i = i + 1
+    }
+    if (i >= bytes.size()) {
+        return -1
+    }
+    return i
+}
+
+// The little-endian 32 bits at `at`, read unsigned so the top bit cannot sign-extend.
+fun gzLeUInt32(bytes: List<Int>, at: Int): UInt32 {
+    val b0: UInt32 = UInt32(bytes[at])
+    val b1: UInt32 = UInt32(bytes[at + 1])
+    val b2: UInt32 = UInt32(bytes[at + 2])
+    val b3: UInt32 = UInt32(bytes[at + 3])
+    return b0.orWith(b1.shl(8)).orWith(b2.shl(16)).orWith(b3.shl(24))
 }

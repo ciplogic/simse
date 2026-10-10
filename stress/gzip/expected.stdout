@@ -15,3 +15,17 @@ run-crc 2587417091
 fox-isize 900
 fox-crc 3389369886
 empty-isize 0
+hello round-trip ok
+run round-trip ok
+fox round-trip ok
+all round-trip ok
+noise round-trip ok
+big round-trip ok
+empty round-trip ok
+sampleA ok 180
+sampleB ok 256
+sampleC ok 9
+sampleE ok 512
+bad-magic false gzip: not a gzip stream (the magic is 1f 8b)
+no-trailer false gzip: the trailer is truncated
+bad-crc false gzip: the CRC32 does not match the trailer
