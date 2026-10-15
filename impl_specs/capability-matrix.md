@@ -5193,3 +5193,36 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Verified: `bun tools/iterate.js --full` - **92/92** and both fixed points; `bun
   tools/bootstrap.js` compiles the published file and both directions reproduce it
   (18.6 s compile, 1.7 s self-transpile).
+
+- **`data class` inheritance: `: Base`, field appending with static dispatch.** A class header
+  may name one base (`data class Point3D(val z: Int) : Point2D`, before or after the field
+  list); the derived object *is* the base's fields in the base's order, then the class's own, and
+  every reader of a field list reads that one flattened list: the generated struct
+  (`emitDataClass`), the type dependencies (`emitTypeByName`), a managed union arm's
+  classification (`unionArmManaged`), a construction's argument order (`checkCallArity`, and the
+  extractor's `paramNodes`, which now use `semAllFields`), and a value copy. `sema/Inherit.kt` is
+  the single reader of the relation - `semaBaseName`/`semaBaseDecl`/`semDerivesFrom(Name)`/
+  `semAllFields`/`semFindField`/`semClassTypeName` - so the checker, the type rules, the linear
+  extractor and the emitter cannot disagree. Field lookup walks the chain (`semaFieldType`,
+  `SemInfer.infer`, `Emitter.inferType`), method resolution matches a base receiver pattern
+  (`Emitter.unifyType`, the extractor's `callTarget`), and a base's method on a derived receiver
+  is the address reinterpreted (`receiverArg`). A derived value standing where a base is expected
+  converts at the destination (`cgSubtypeText`/`cgSliceText`, reached from `expr` and the
+  `ExprRef` branch, and from `convertArgument` for the positions only the extractor can see - a
+  method argument): a value position copies the prefix (`Base{d.x, d.y}`), a `*Base` is the same
+  address `reinterpret_cast`, and a `&Base` is `makeRef<Base>(...)` around a *snapshot* of the
+  prefix - a box's C++ type is its own, so a derived object cannot be shared under a base handle
+  without the vtables the language refuses; `&Derived` -> `*Base` is the box's pointer, cast.
+  Declaration rules are diagnostics: the base must be a visible, non-generic plain `data class`
+  without `unInit`, the chain must be acyclic and wholly in scope, and field names - or a
+  method at the same arity - may not repeat down it (overriding is not part of the form). The
+  auto-borrow analysis walks the chain too (`bpDeepClasses` via `bpClassDeep`), so a derived
+  class whose base carries a managed field is passed by pointer like the base is. Cost: a
+  program with no base pays one
+  `typeBases.size()` test per converted position; a program with one already called
+  `semAllFields`, and the new table is filled in `collect` beside `typePackages`. A program
+  without inheritance emits the same C++ as before (the corpus goldens held byte for byte).
+  Verified: `bun tools/iterate.js --full` - **99/99** and both fixed points; the new cases are
+  `stress/inheritance` (value copy, pointer view and mutation through it, base method on a
+  derived receiver, snapshot handle, value independence) and the three declaration diagnostics
+  (`diagnostic-inherit-base`, `-cycle`, `-field`).

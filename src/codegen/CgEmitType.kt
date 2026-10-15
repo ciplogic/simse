@@ -234,7 +234,7 @@ fun Emitter.emitTypeByName(
     }
     if (decl.name == AstNodeKind.DataClass) {
         this.setActiveTypeParams(xmlTypeParamNames(decl))
-        for (*field in xmlChildren(decl, AstNodeKind.Field)) {
+        for (*field in semAllFields(*this.types, decl)) {
             this.emitTypeDeps(xmlChildPtr(field, AstNodeKind.Type), files, prel, emitted, defined)
             if (this.failed) {
                 return
@@ -337,7 +337,9 @@ fun Emitter.emitDataClass(decl: *AstXmlNode): Unit {
         return
     }
     this.setActiveTypeParams(xmlTypeParamNames(decl))
-    val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
+    // The field list is the *flattened* one: an inherited field is the derived struct's own
+    // field, first (semAllFields) - one layout, one constructor argument order.
+    val fields: List<AstXmlNode> = semAllFields(*this.types, decl)
     for (*field in fields) {
         if (xmlIsEmpty(xmlChildPtr(field, AstNodeKind.Type))) {
             val xmlAttrText: Str = xmlAttr(field, AstNodeAttributeKind.Name)
@@ -815,7 +817,7 @@ fun Emitter.unionArmManaged(typeNode: *AstXmlNode): Bool {
             continue
         }
         if (decl.name == AstNodeKind.DataClass && !this.typeIsRaw(decl)) {
-            for (*field in xmlChildren(decl, AstNodeKind.Field)) {
+            for (*field in semAllFields(*this.types, *decl)) {
                 if (this.unionArmManaged(xmlChildPtr(field, AstNodeKind.Type))) {
                     return true
                 }
@@ -1008,6 +1010,15 @@ fun Emitter.collectNames(node: *AstXmlNode, names: *Dictionary<Str, Bool>): Unit
     // program; a literal the *lowering* invents keeps its own spelling.
     if (xmlKind(node) == AstNodeCategory.ExprStrLit) {
         this.literals.add(xmlAttr(node, AstNodeAttributeKind.Text))
+    }
+    // A derived class names its base in an *attribute*, not a type node, so the name would
+    // not otherwise reach `referencedTypes`: a prelude base is emitted only when it is there
+    // (`computeEmittedTypes`), and a value conversion needs the struct complete.
+    if (node.name == AstNodeKind.DataClass) {
+        val baseName: Str = semaBaseName(node)
+        if (baseName != "") {
+            this.referencedTypes.insert(baseName, true)
+        }
     }
     if (xmlKind(node) == AstNodeCategory.ExprCall) {
         val callee: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Callee)

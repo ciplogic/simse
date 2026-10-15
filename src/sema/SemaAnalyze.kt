@@ -30,6 +30,7 @@ fun Analyzer.analyzeDecl(decl: *AstXmlNode): Unit {
         }
 
         AstNodeCategory.DataClass -> {
+            this.checkInheritance(decl)
             if (xmlAttr(decl, AstNodeAttributeKind.IsUnionClass) == "true") {
                 this.checkUnionDecl(decl)
             }

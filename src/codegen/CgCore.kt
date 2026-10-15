@@ -315,6 +315,10 @@ fun Emitter.collect(): Unit {
             this.enumNames.insert(declName, true)
         }
         if (decl.name == AstNodeKind.DataClass) {
+            val baseName: Str = semaBaseName(decl)
+            if (baseName != "") {
+                this.typeBases.insert(declName, baseName)
+            }
             if (this.typeIsRaw(decl)) {
                 continue
             }

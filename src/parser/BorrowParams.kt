@@ -497,6 +497,17 @@ var bpStaticNames: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
 var bpKnownTypes: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
 
 fun bpDeepClasses(modules: *List<AstXmlNode>): Dictionary<Str, Bool> {
+    // The declarations by name, so a class's chain of bases can be walked: inheritance is
+    // field appending, and a field a base carries makes the derived class deep too
+    // (specs/declarations.md, "Inheritance").
+    var declsByName: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+    for (*module in modules) {
+        for (*decl in xmlDecls(module)) {
+            if (decl.name == AstNodeKind.DataClass) {
+                declsByName.insert(xmlAttr(decl, AstNodeAttributeKind.Name), *decl)
+            }
+        }
+    }
     var deep: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var changed: Bool = true
     while (changed) {
@@ -510,19 +521,7 @@ fun bpDeepClasses(modules: *List<AstXmlNode>): Dictionary<Str, Bool> {
                 if (deep.has(name)) {
                     continue
                 }
-                var hit: Bool = false
-                for (*field in xmlChildren(decl, AstNodeKind.Field)) {
-                    val fieldType: *AstXmlNode = xmlChildPtr(field, AstNodeKind.Type)
-                    if (xmlKind(fieldType) != AstNodeCategory.TypeNamed) {
-                        continue
-                    }
-                    val fieldName: Str = xmlAttr(fieldType, AstNodeAttributeKind.Name)
-                    if (fieldName == "Str" || deep.has(fieldName)) {
-                        hit = true
-                        break
-                    }
-                }
-                if (hit) {
+                if (bpClassDeep(*decl, *declsByName, *deep)) {
                     deep.insert(name, true)
                     changed = true
                 }
@@ -530,6 +529,38 @@ fun bpDeepClasses(modules: *List<AstXmlNode>): Dictionary<Str, Bool> {
         }
     }
     return deep
+}
+
+// Whether any field on the class's chain - its own or a base's - is `Str` or a deep class.
+// A base is looked up by name; a link the tables do not hold ends the walk.
+fun bpClassDeep(
+    decl: *AstXmlNode, declsByName: *Dictionary<Str, AstXmlNode>, deep: *Dictionary<Str, Bool>
+): Bool {
+    var current: *AstXmlNode = decl
+    var guard: Int = 0
+    while (current != null && guard < 64) {
+        guard = guard + 1
+        for (*field in xmlChildren(*current, AstNodeKind.Field)) {
+            val fieldType: *AstXmlNode = xmlChildPtr(field, AstNodeKind.Type)
+            if (xmlKind(fieldType) != AstNodeCategory.TypeNamed) {
+                continue
+            }
+            val fieldName: Str = xmlAttr(fieldType, AstNodeAttributeKind.Name)
+            if (fieldName == "Str" || deep.has(fieldName)) {
+                return true
+            }
+        }
+        val baseName: Str = xmlAttr(*current, AstNodeAttributeKind.Base)
+        if (baseName == "") {
+            break
+        }
+        val base: *AstXmlNode = declsByName.getPtr(baseName)
+        if (base == null) {
+            break
+        }
+        current = base
+    }
+    return false
 }
 
 // Whether a `for` variable of this element type is worth the pointer form: the copy is deep

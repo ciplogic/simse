@@ -13,7 +13,9 @@ Language: values and locals (`val`/`var`, inferred or declared), file-level stat
 functions, lambdas (block bodies, by-value capture), reified generics with call inference,
 protocols (`protocol` signatures and `when T: P` constraints, checked at instantiation;
 static dispatch, no vtables — `impl_specs/protocols.md`),
-data classes with methods, `operator` functions (`get`/`set` indexers, `compareTo`/
+data classes with methods, data-class inheritance (`: Base` appends the base's fields ahead
+of the class's own, and a derived value converts to its base by value, by raw pointer or into
+a snapshot `&Base` - `specs/declarations.md`), `operator` functions (`get`/`set` indexers, `compareTo`/
 `equals`/`plus`), `union class` (a discriminated union: the implicit `Sm<Name>Types` tag
 enum, generated `getTypeOf`/`isOfType`/`get<Field>`/`set<Field>`/`setNone`,
 `U()`/`U(value)` construction), enums, `typealias`,
@@ -38,7 +40,8 @@ before committing).
 - **Reference captures, explicit capture lists, `unsafe`/raw-pointer escape rules.**
 - **Attributes on types/fields/parameters/statements, stacked attributes, per-instantiation
   generators** (`impl_specs/generators.md`'s "Deferred": `@Json`, enum-to-string, ...).
-- **Interfaces/virtual dispatch, method overriding, default parameter values, `when` pattern
+- **Interfaces/virtual dispatch, method overriding (a base method cannot be replaced; the
+  declaration is a diagnostic), default parameter values, `when` pattern
   labels (`is T`, `in 1..5`), multiple packages per file, external-module manifests.**
 - **Feature work the user roadmap orders**: closed unions with exhaustive `when`, `Set`,
   byte buffers, JSON codegen, sockets/HTTP polish, Linux/macOS, user FFI.

@@ -149,7 +149,7 @@ fun Analyzer.checkCallArity(call: *AstXmlNode): Unit {
                 this.checkUnionConstruction(call, name, decl, argCount)
                 return
             }
-            val fieldCount: Int = xmlCount(decl, AstNodeKind.Field)
+            val fieldCount: Int = semAllFields(*this.types, decl).size()
             if (fieldCount != argCount) {
                 this.diag(
                     xmlLine(call), xmlColumn(call), `data class '@name' expects @fieldCount field(s) but got @argCount`
@@ -427,6 +427,8 @@ fun Analyzer.exprType(expr: *AstXmlNode): AstXmlNode {
 }
 
 // The declared type of the field `member` on a base of type `base`, when both are known.
+// The field may be inherited: the walk follows the base chain, so a derived value reads a
+// base's field like its own.
 fun Analyzer.semaFieldType(base: AstXmlNode, member: Str): AstXmlNode {
     val outer: AstXmlNode = this.semaReceiverOuter(base)
     val kind: AstNodeCategory = xmlKind(outer)
@@ -437,12 +439,7 @@ fun Analyzer.semaFieldType(base: AstXmlNode, member: Str): AstXmlNode {
     if (decl == null || decl.name != AstNodeKind.DataClass) {
         return xmlEmptyNode()
     }
-    for (*field in xmlChildren(decl, AstNodeKind.Field)) {
-        if (xmlAttr(field, AstNodeAttributeKind.Name) == member) {
-            return xmlChild(field, AstNodeKind.Type)
-        }
-    }
-    return xmlEmptyNode()
+    return xmlChild(semFindField(*this.types, *decl, member), AstNodeKind.Type)
 }
 
 // The element a machine hands out: the `Inner` of its `..T`, as a value type.

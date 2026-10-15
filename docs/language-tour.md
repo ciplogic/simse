@@ -351,6 +351,44 @@ fun main(): Int {
 }
 ```
 
+A class may **derive** from one other data class - `data class Point3D(val z: Int) : Point2D` -
+and inheritance is *field appending*: `Point3D` is the fields of `Point2D` in their order (`x`,
+`y`), then its own (`z`). Construction takes every field, the base's first; an inherited field
+reads like an own one; a base's method resolves on a derived receiver (`p3.movedBy(1, 1)`). A
+derived value stands where its base is expected, and the conversion is the destination's:
+
+- a **value** `Point2D` copies the prefix into a temporary (`Point2D{p3.x, p3.y}`);
+- a **`*Point2D`** is the same address, no copy - the layouts start alike, so a write through
+the pointer lands in the derived object's prefix;
+- a **`&Point2D`** is a boxed *snapshot* of the prefix: a box cannot share a derived object,
+so the two handles are separate values (no vtables, no implicit `&Point3D` -> `&Point2D`).
+
+The base must be a plain, visible, non-generic data class without `unInit`; the chain is acyclic
+and field names - or a method at the same arity - may not repeat down it
+(`specs/declarations.md`, "Inheritance").
+
+```kt
+data class Point3D(val z: Int) : Point2D
+
+fun sumByReference(p: *Point2D): Int {    // no copy: the address is reinterpreted
+    return p.x + p.y
+}
+
+fun sumByValue(p: Point2D): Int {         // the prefix is copied into a temporary
+    return p.x + p.y
+}
+
+fun main(): Int {
+    val p3: Point3D = Point3D(1, 2, 3)    // x, y, then z
+    println(p3.x + p3.z)                  // 4: an inherited field and an own one
+    println(sumByReference(*p3))          // 3
+    println(sumByValue(p3))               // 3: a Point2D temporary
+    val moved: Point2D = p3.movedBy(1, 1)
+    println(moved.x)                      // 2: Point2D's method, on a Point3D receiver
+    return 0
+}
+```
+
 Enums are integer-valued; members may carry explicit values, and `toInt()` /
 `fromInt()` convert between the enum and its `Int` representation - `fromInt` is the
 direct cast back, so it asks for no `Opt` and checks nothing. There is no automatic

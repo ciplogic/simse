@@ -70,10 +70,68 @@ Declared outside any class, function or object, the same keywords declare
 
 For the initial implementation, constructors must receive one argument for
 each declared field, in declaration order. Default field values, named
-arguments, inheritance, and generated methods beyond construction/copying are
-not part of this baseline. Methods may be declared in the class body, but they
+arguments, and generated methods beyond construction/copying are
+not part of this baseline. A class may *derive* from one other class -
+inheritance is field appending, and the section below is the whole rule.
+Methods may be declared in the class body, but they
 are compiled as static receiver functions; see `functions.md` - `unInit` below
 is the one exception, because it is a destructor and not a callable.
+
+### Inheritance: `: Base`
+
+Status: implemented (the flattened layout, the value copy, the raw-pointer view, the boxed
+snapshot and the declaration checks; `stress/inheritance`,
+`stress/diagnostic-inherit-base`, `stress/diagnostic-inherit-cycle`,
+`stress/diagnostic-inherit-field`).
+
+A `data class` may name one **base** in its header - after the name or after the field list,
+and one spelling of the clause only:
+
+```kt
+data class Point2D(val x: Int, val y: Int)
+data class Point3D(val z: Int) : Point2D
+```
+
+Inheritance is **field appending**: the derived object *is* the base's fields, in the base's
+order, followed by the class's own. `Point3D`'s fields are `x, y, z`; its layout *starts with*
+`Point2D`'s; and everything that reads a field list - the constructor's argument order, the
+generated struct, a value copy - reads that one flattened list:
+
+- `Point3D(1, 2, 3)` - one argument per field, the base's first, as construction always is.
+  The derived class declares only its own fields.
+- An inherited field is reached like an own one (`p3.x`), declared type included.
+- A base's method resolves on a derived receiver (`p3.movedBy(1, 2)`): the receiver is passed
+  as the base's address, no copy.
+- A field name may not repeat across the chain (`D(val x: Int) : B` where `B` declares `x` is
+  a diagnostic), and neither may a method name at the same arity: the layout is one flat field
+  list, and two bodies under one signature would be one call with no rule to choose.
+
+**A derived value stands where its base is expected.** The conversion is materialized at the
+destination that names the base - a call argument, a parameter, a binding, an assignment, a
+return, a construction's field:
+
+- a **value** `Base` copies the prefix off the derived value (`Base{ d.f1, d.f2 }`) - the
+destructuring temporary, no aliasing;
+- a **`*Base`** is the *same address* reinterpreted (`reinterpret_cast<Base*>`): the derived
+layout starts with the base's, so the view needs no copy, and a write through it lands in the
+derived object's prefix. This is the by-reference form, and it is also how a base method's
+receiver is passed;
+- a **`&Base`** is a *boxed copy of the prefix* (`makeRef<Base>(Base{...})`). A box's C++ type
+is its own, so a derived object cannot be shared under a `&Base`; the handle is a snapshot -
+writes through it are not visible in the derived value, exactly as boxing a value already is
+(`memory-model.md`). There is no implicit `&Derived` -> `&Base` sharing, and no vtables:
+dispatch stays static.
+
+The base must be a plain `data class` - visible where the derived class is declared, without
+type parameters, and without an `unInit` (which makes a class handle-only). A `native`,
+`ref` or `union` class can be neither a base nor a derived class, the chain must be acyclic,
+and the whole chain must be in scope at the declaration. Each rule is a diagnostic at the
+declaration (`sema/Inherit.kt` owns the relation for every stage).
+
+Not part of the form: method overriding (an inherited method is inherited as it stands),
+constructors with base arguments, a generic base, multiple bases, and a subtype conversion in
+a container's element position (`xs.append(p3)` on a `List<Point2D>` - bind it first,
+`val p2: Point2D = p3`).
 
 ### Destructors: `unInit`
 

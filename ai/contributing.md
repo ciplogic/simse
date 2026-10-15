@@ -76,6 +76,12 @@ changes, so refresh the bootstrap too.
   `for (*x in xs)`.
 - **Build a fixed shape with `fmtStr`, a run of appends with `reserve`** (`out.reserve(len)`
   then `appendStrPtr`, never `out = out + part` in a loop).
+- **A class's field list is `semAllFields`, never `xmlChildren(decl, Field)`.** Inheritance
+  is field appending (`data class Point3D(val z: Int) : Point2D`), and `sema/Inherit.kt` is
+  the one reader of the `Base` relation: every stage that needs a class's fields, its base,
+  or whether one type derives from another goes through it, so the layout, a construction's
+  argument order and a value conversion cannot disagree (`specs/declarations.md`,
+  "Inheritance").
 - Every `.kt` file starts with a mandatory `package`; update `import` lines when adding files.
 - **User-visible changes update the docs**: `README.md`, `docs/state-of-the-field.md`,
   `docs/language-tour.md`, and `ai/language.md`/`ai/status.md` carry claims a reader checks.

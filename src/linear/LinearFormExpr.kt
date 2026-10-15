@@ -225,10 +225,19 @@ fun IlExtractor.callTarget(callee: *AstXmlNode, receiver: *AstXmlNode, argCount:
         for (index in candidates) {
             val fact: *SemFnFact = *this.fn.facts.functions[index]
             val pattern: AstXmlNode = this.receiverPattern(fact)
-            if (!xmlIsEmpty(recv) && !xmlIsEmpty(pattern)
-                && !semUnifyType(pattern, recv, fact.templateParams)
-            ) {
-                continue // another type's method of the same name
+            if (!xmlIsEmpty(recv) && !xmlIsEmpty(pattern)) {
+                var matches: Bool = semUnifyType(pattern, recv, fact.templateParams)
+                if (!matches) {
+                    // A method declared on a base resolves on a derived receiver
+                    // (specs/declarations.md, "Inheritance").
+                    val patternName: Str = semClassTypeName(*this.fn.facts.types, pattern)
+                    val recvName: Str = semClassTypeName(*this.fn.facts.types, recv)
+                    matches = patternName != "" && recvName != ""
+                            && semDerivesFromName(*this.fn.facts.types, recvName, patternName)
+                }
+                if (!matches) {
+                    continue // another type's method of the same name
+                }
             }
             matching.append(index)
         }
@@ -461,30 +470,49 @@ fun IlExtractor.convertArgument(callee: *AstXmlNode, param: *AstXmlNode, arg: *A
     val havePointer: Bool = xmlKind(actual) == AstNodeCategory.TypePointer
     val haveShared: Bool = !havePointer && ilIsHandleType(actual)
     val haveValue: Bool = !havePointer && !haveShared
-    if ((wantPointer && havePointer) || (wantShared && haveShared)) {
+    val wanted: AstXmlNode = semPointeeOf(param)
+    if (xmlIsEmpty(wanted)) {
         return this.operandOf(arg)
+    }
+    // Whether the argument is a *derived* type standing where its base is expected
+    // (specs/declarations.md, "Inheritance"): the value form copies the prefix, the pointer
+    // form is the same address, and an exact match is not a conversion.
+    var derived: Bool = false
+    if (!semUnifyType(wanted, given, xmlTypeParamNames(callee))) {
+        val givenName: Str = semClassTypeName(*this.fn.facts.types, given)
+        val wantedName: Str = semClassTypeName(*this.fn.facts.types, wanted)
+        derived = givenName != "" && wantedName != ""
+                && semDerivesFromName(*this.fn.facts.types, givenName, wantedName)
+    }
+    if (!derived && ((wantPointer && havePointer) || (wantShared && haveShared))) {
+        return this.operandOf(arg) // the same shape already
     }
     // A parameter that is one of the callee's own bare type parameters
     // (`List<T>.append(value: T)`): the *receiver* binds it, so the two types cannot be compared
     // here - a bare parameter is a value, so a handle argument is read through to its own type.
-    if (semIsBareTypeParam(callee, param)) {
+    if (!derived && semIsBareTypeParam(callee, param)) {
         if (haveValue) {
             return this.operandOf(arg)
         }
         return this.readThrough(given, this.operandOf(arg))
     }
-    val wanted: AstXmlNode = semPointeeOf(param)
-    if (xmlIsEmpty(wanted)) {
-        return this.operandOf(arg)
-    }
     // The pointee comparison follows the callee's own type parameters: `spanOf(xs)` with
     // `items: *List<T>` must see `List<T>` and `List<Int>` as the same shape, which a textual
     // comparison cannot (the non-generic `spanOfStr` matched by accident). Without this the
     // address is never taken and the argument is passed by value.
-    if (!semUnifyType(wanted, given, xmlTypeParamNames(callee))) {
+    if (!derived && !semUnifyType(wanted, given, xmlTypeParamNames(callee))) {
         return this.operandOf(arg) // not the same type
     }
     if (wantPointer) {
+        if (derived && havePointer) {
+            // `*Derived` where a `*Base` is wanted: the same address, cast. The `Deref`
+            // spelling reads a pointer's pointee, so the slot takes the pointer as it is
+            // (`cgSubtypeText` spells the `reinterpret_cast`).
+            val ptrHandle: AstXmlNode = param
+            val ptrSlot: Int = this.freshSlot(ilTypeText(ptrHandle), ptrHandle)
+            this.emit(IlOpKind.SetVar, ilOps2(ptrSlot, this.operandOf(arg)))
+            return ptrSlot
+        }
         // The address, spelled as an explicit `*` spells it (`into`'s `Deref` arm is the
         // definition): a member/index chain *is* its own address (`&a.f`, never the address of a
         // copy), a static name is its `GetStaticAddr`, a name is `&x`.
@@ -494,16 +522,26 @@ fun IlExtractor.convertArgument(callee: *AstXmlNode, param: *AstXmlNode, arg: *A
         return bound
     }
     if (wantShared) {
-        if (!haveValue) {
+        if (!haveValue && !derived) {
             return this.operandOf(arg) // `&T` from a pointer: the checker reports it
+        }
+        var source: Int = this.operandOf(arg)
+        if (!haveValue) {
+            // A `*Derived`/`&Derived` source is read into a value first: the box holds a
+            // copy of the prefix, never the source's storage.
+            source = this.readThrough(given, source)
         }
         val box: AstXmlNode = param
         val held: Int = this.freshSlot(ilTypeText(box), box)
-        this.emit(IlOpKind.Box, ilOps2(held, this.operandOf(arg))) // `&x` boxes a copy
+        // `&x` boxes a copy; a derived `x` boxes the *prefix* - the box's type is its own,
+        // so a `&Base` handle is a snapshot slice (`cgSubtypeText`).
+        this.emit(IlOpKind.Box, ilOps2(held, source))
         return held
     }
-    if (haveValue) {
+    if (haveValue && !derived) {
         return this.operandOf(arg)
     }
+    // The value form: a derived value is copied into the parameter's own type - the base's
+    // fields, off the derived value (`cgSubtypeText`).
     return this.readThrough(wanted, this.operandOf(arg))
 }

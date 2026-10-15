@@ -231,6 +231,26 @@ fun Emitter.exprInner(e: *AstXmlNode, expected: *AstXmlNode): Str {
                     return `makeList<@typeArgsStringText>()`
                 }
             }
+            // `&Derived` where a `&Base` is wanted: the box holds a *copy of the prefix*.
+            // A box's type is its own, so the derived object cannot be shared under it; the
+            // handle is a snapshot (`cgSubtypeText` docs the table).
+            if (!xmlIsEmpty(expected) && this.typeBases.size() > 0
+                && xmlKind(expected) == AstNodeCategory.TypeReference
+            ) {
+                val expectedPointee: AstXmlNode = xmlChild(expected, AstNodeKind.Inner)
+                val expectedName: Str = semClassTypeName(*this.types, expectedPointee)
+                val operandType: AstXmlNode = this.inferType(operandNode)
+                val haveName: Str = semClassTypeName(*this.types, operandType)
+                if (expectedName != "" && haveName != ""
+                    && semDerivesFromName(*this.types, haveName, expectedName)
+                ) {
+                    val slice: Str = this.cgSliceText(operandNode, expectedPointee, expectedName)
+                    if (slice != "") {
+                        val boxedType: Str = this.type(expectedPointee)
+                        return `makeRef<@boxedType>(@slice)`
+                    }
+                }
+            }
             val operand: Str = this.expr(operandNode, 0, xmlEmptyNode())
             return `makeRef<std::remove_cvref_t<decltype((@operand))>>(@operand)`
         }

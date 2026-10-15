@@ -476,44 +476,52 @@ fun semIsStrType(typeNode: AstXmlNode): Bool {
 
 // A member of a data class no `SemFnFact` stands for: a *prelude* class's methods
 // (`Emitter.collect` skips prelude declarations, so `Span<Char>.at`'s `T` is not in
-// the facts). The receiver's own type arguments bind the class's type parameters.
+// the facts). The receiver's own type arguments bind the class's type parameters. The walk
+// follows the base chain, so a method a class inherits answers like its own; a base takes
+// no type parameters, so nothing binds at those steps.
 fun SemInfer.classMemberReturn(recv: *AstXmlNode, calleeName: *Str): AstXmlNode {
     val kind: AstNodeCategory = xmlKind(recv)
     if (kind != AstNodeCategory.TypeNamed && kind != AstNodeCategory.TypeGeneric) {
         return xmlEmptyNode()
     }
     val typeName: Str = xmlAttr(recv, AstNodeAttributeKind.Name)
-    val classDecl: *AstXmlNode = this.facts.types.getPtr(typeName)
+    var classDecl: *AstXmlNode = this.facts.types.getPtr(typeName)
     if (classDecl == null) {
         return xmlEmptyNode()
     }
     if (classDecl.name != AstNodeKind.DataClass) {
         return xmlEmptyNode()
     }
-    val classParams: List<Str> = xmlTypeParamNames(classDecl)
-    val typeArgs: List<AstXmlNode> = xmlChildren(recv, AstNodeKind.TypeArg)
-    if (classParams.size() != typeArgs.size()) {
-        return xmlEmptyNode()
-    }
-    var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
-    var i: Int = 0
-    while (i < classParams.size()) {
-        bindings.insert(classParams[i], typeArgs[i])
-        i = i + 1
-    }
-    val methods: List<AstXmlNode> = xmlChildren(classDecl, AstNodeKind.Function)
-    for (*method in methods) {
-        if (xmlAttr(method, AstNodeAttributeKind.Name) != calleeName) {
-            continue
+    var classParams: List<Str> = xmlTypeParamNames(*classDecl)
+    var typeArgs: List<AstXmlNode> = xmlChildren(recv, AstNodeKind.TypeArg)
+    var guard: Int = 0
+    while (classDecl != null && guard < 64) {
+        guard = guard + 1
+        if (classParams.size() == typeArgs.size()) {
+            var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+            var i: Int = 0
+            while (i < classParams.size()) {
+                bindings.insert(classParams[i], typeArgs[i])
+                i = i + 1
+            }
+            val methods: List<AstXmlNode> = xmlChildren(*classDecl, AstNodeKind.Function)
+            for (*method in methods) {
+                if (xmlAttr(method, AstNodeAttributeKind.Name) != calleeName) {
+                    continue
+                }
+                val ret: *AstXmlNode = xmlChildPtr(method, AstNodeKind.ReturnType)
+                if (xmlIsEmpty(ret)) {
+                    continue
+                }
+                val result: AstXmlNode = semSubstitute(ret, bindings, classParams)
+                if (!xmlIsEmpty(result)) {
+                    return result
+                }
+            }
         }
-        val ret: *AstXmlNode = xmlChildPtr(method, AstNodeKind.ReturnType)
-        if (xmlIsEmpty(ret)) {
-            continue
-        }
-        val result: AstXmlNode = semSubstitute(ret, bindings, classParams)
-        if (!xmlIsEmpty(result)) {
-            return result
-        }
+        classDecl = semaBaseDecl(*this.facts.types, *classDecl)
+        classParams = List<Str>()
+        typeArgs = List<AstXmlNode>()
     }
     return xmlEmptyNode()
 }
@@ -680,11 +688,9 @@ fun SemInfer.infer(e: *AstXmlNode): AstXmlNode {
                     }
                 }
                 if (decl != null && decl.name == AstNodeKind.DataClass) {
-                    val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
-                    for (*field in fields) {
-                        if (xmlAttr(field, AstNodeAttributeKind.Name) == memberText) {
-                            return this.instantiate(decl, base, xmlChild(field, AstNodeKind.Type))
-                        }
+                    val field: AstXmlNode = semFindField(*this.facts.types, *decl, memberText)
+                    if (!xmlIsEmpty(field)) {
+                        return this.instantiate(decl, base, xmlChild(field, AstNodeKind.Type))
                     }
                 }
             }

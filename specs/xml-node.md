@@ -5,8 +5,9 @@ debugging.
 
 `XmlNode` is a small recursive tree node built from the value types in this spec set,
 used both to represent parse trees and to render/debug hierarchies. The language subset
-has no inheritance or dynamic dispatch, so one node type is composed from existing
-declared types; its tag and attributes carry what would otherwise live in a subtype.
+has no dynamic dispatch (inheritance appends fields; it adds no virtual methods), so one
+node type is composed from existing declared types; its tag and attributes carry what
+would otherwise live in a subtype.
 
 The type is not a built-in: `XmlNode` and `Attribute` live in the `xml` module
 (`modules/xml/api.kt`), so a program writes `import xml` and names the module on the

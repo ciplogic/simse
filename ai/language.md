@@ -30,6 +30,19 @@ mutable, inline byte string (`s[i]`, `s.size()`, `s.substr(...)`, ...). Containe
 locals infer from the initializer, or write the type. `null` is for handles only.
 
 Data classes carry fields and methods; enums have explicit values and `toInt()`/`fromInt`.
+A `data class` may **derive** from one other plain data class (`specs/declarations.md`,
+"Inheritance"): the header's `: Base` appends the base's fields *ahead* of the class's own,
+so `Point3D(val z: Int) : Point2D` has fields `x, y, z`, is constructed `Point3D(1, 2, 3)`,
+reads `p3.x` like its own, and resolves `p3.movedBy(...)` on a `Point2D` method. A derived
+value stands where its base is expected: a value position copies the prefix
+(`Base{ d.x, d.y }`), a `*Base` parameter is the same address reinterpreted (no copy, writes
+land in the derived object), and a `&Base` is a *snapshot box* of the prefix (a box cannot
+share a derived object - no vtables, no implicit `&Derived` -> `&Base` sharing). The base
+must be a visible, non-generic plain data class without `unInit`; the chain is acyclic, field
+names - or a method at the same arity - may not repeat down it, and `native`/`ref`/`union`
+classes cannot derive.
+Containers are the gap: `xs.append(p3)` on a `List<Point2D>` needs the base value bound first
+(`val p2: Point2D = p3`).
 A `union class U(var A: T, var B: U)` is a discriminated union: one field is live at a time
 under an implicit `SmUTypes` tag enum. `U()` is `None`, `U(v)` picks the arm by `v`'s type,
 and `getTypeOf()`, `isOfType(t)`, `getA(): *T` and `setA(v)` are generated. A getter is a raw

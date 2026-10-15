@@ -345,7 +345,12 @@ data class Emitter(
 
 // The dispatch signatures already written this pass, so two implementations that emit one
 // shape write it once (a C++ redefinition otherwise).
-    var emittedProtocols: Dictionary<Str, Bool>
+    var emittedProtocols: Dictionary<Str, Bool>,
+
+// `data class Derived(...) : Base`: every derived class's base by name (collected in
+// `collect`). The relation is read through `sema.Inherit.kt`, which flattens it into the
+// field list and decides the value/pointer conversions a subtype needs.
+    var typeBases: Dictionary<Str, Str>
 ) {
 }
 
@@ -399,7 +404,8 @@ fun newEmitter(inputs: *List<CgInput>, resourceStored: *List<Str>): Emitter {
         Dictionary<Str, AstXmlNode>(),
         Dictionary<Str, Str>(),
         Dictionary<Str, List<Str>>(),
-        Dictionary<Str, Bool>()
+        Dictionary<Str, Bool>(),
+        Dictionary<Str, Str>()
     )
 }
 

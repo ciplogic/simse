@@ -504,6 +504,21 @@ fun Parser.parseStaticVar(): AstXmlNode {
     return node
 }
 
+// The `: Base` clause of a class header: the base's *name*, or "" when the class declares
+// none. The colon itself is optional, so one function serves both header positions. A base
+// with type arguments is not part of the form: it is refused here, at the type argument,
+// rather than left to fail later as an unknown name.
+fun Parser.parseBaseName(): Str {
+    if (!this.expectText(":")) {
+        return ""
+    }
+    if (this.checkText("<")) {
+        this.fail("a base class takes no type arguments")
+        return ""
+    }
+    return this.expectName()
+}
+
 fun Parser.parseDataClass(): AstXmlNode {
     val pos: SourcePos = this.peek(0).pos
     this.advance()
@@ -517,6 +532,18 @@ fun Parser.parseDataClass(): AstXmlNode {
     var typeParams: List<Str> = List<Str>()
     if (this.checkText("<")) {
         typeParams = this.parseTypeParams()
+        if (this.failed) {
+            return this.emptyNode()
+        }
+    }
+
+    // `data class Derived(...) : Base` (specs/declarations.md, "Inheritance"): the base may
+    // be named before the field list (Kotlin's position) or after it, so `Derived(val z: Z) :
+    // Base` reads the base at the end of the header. One spelling only; naming it twice is
+    // reported rather than silently taking the later one.
+    var baseName: Str = ""
+    if (this.checkText(":")) {
+        baseName = this.parseBaseName()
         if (this.failed) {
             return this.emptyNode()
         }
@@ -565,6 +592,18 @@ fun Parser.parseDataClass(): AstXmlNode {
         }
     }
 
+    this.skipNewlines()
+    if (this.checkText(":")) {
+        if (baseName != "") {
+            this.fail("the base class is already named")
+            return this.emptyNode()
+        }
+        baseName = this.parseBaseName()
+        if (this.failed) {
+            return this.emptyNode()
+        }
+    }
+
     var methods: List<AstXmlNode> = List<AstXmlNode>()
     // The body brace may stand on its own line: a newline there is not a declaration boundary.
     this.skipNewlines()
@@ -594,6 +633,9 @@ fun Parser.parseDataClass(): AstXmlNode {
 
     var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
     attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+    if (baseName != "") {
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Base, baseName))
+    }
     var node: AstXmlNode = AstXmlNode(AstNodeKind.DataClass, AstNodeCategory.DataClass, attrs, Array<AstXmlNode>())
     this.appendTypeParams(node, typeParams)
     xmlAddChildren(node, fields)

@@ -133,15 +133,20 @@ fun Emitter.machineCallArgsFromReceiver(fn: *CgFn, recvType: AstXmlNode, out: *L
 // The receiver argument for a lowered Simse call: a value receiver is a raw pointer, so
 // the argument is the receiver's address (`simse_addressOf`, src/rtl/types.hpp); a
 // counted reference is unwrapped with `.get()`, and a bare `this` is already that pointer.
+// A receiver of a *derived* type handed to a base's method is passed as its base pointer:
+// the layout starts with the base's, so it is the same address, reinterpreted.
 fun Emitter.receiverArg(pattern: *AstXmlNode, recv: *AstXmlNode): Str {
     if (this.isHandleType(pattern)) {
-        return this.expr(recv, 12, xmlEmptyNode())
+        // The expected type spells the conversion: a `&Base` pattern takes a snapshot box
+        // of a derived receiver (`cgSubtypeText`); the exact handle is emitted as it was.
+        return this.expr(recv, 12, pattern)
     }
     if (this.selfKind == NameKind.Value && xmlKind(recv) == AstNodeCategory.ExprName
         && xmlAttr(recv, AstNodeAttributeKind.Name) == "this"
     ) {
         return this.selfPointer()
     }
+    var text: Str = ""
     val recvType: AstXmlNode = this.inferType(recv)
     if (!xmlIsEmpty(recvType)) {
         val kind: AstNodeCategory = xmlKind(recvType)
@@ -149,14 +154,28 @@ fun Emitter.receiverArg(pattern: *AstXmlNode, recv: *AstXmlNode): Str {
             || (kind == AstNodeCategory.TypeGeneric && xmlAttr(recvType, AstNodeAttributeKind.Name) == "PList")
         ) {
             val exprText: Str = this.expr(recv, 12, xmlEmptyNode())
-            return `(@exprText).get()`
-        }
-        if (kind == AstNodeCategory.TypePointer) {
-            return this.expr(recv, 12, xmlEmptyNode())
+            text = `(@exprText).get()`
+        } else if (kind == AstNodeCategory.TypePointer) {
+            text = this.expr(recv, 12, xmlEmptyNode())
         }
     }
-    val exprText2: Str = this.expr(recv, 12, xmlEmptyNode())
-    return `simse_addressOf(@exprText2)`
+    if (text == "") {
+        val exprText2: Str = this.expr(recv, 12, xmlEmptyNode())
+        text = `simse_addressOf(@exprText2)`
+    }
+    if (this.typeBases.size() == 0) {
+        return text // no program here declares a base, so no receiver can be derived
+    }
+    val patternName: Str = semClassTypeName(*this.types, pattern)
+    val recvName: Str = semClassTypeName(*this.types, recvType)
+    if (patternName != "" && recvName != ""
+        && semDerivesFromName(*this.types, recvName, patternName)
+    ) {
+        val patternType: Str = this.type(pattern)
+        val wantType: Str = `@patternType*`
+        return `reinterpret_cast<@wantType>(@text)`
+    }
+    return text
 }
 
 // The emitted receiver as the raw pointer it already is: `self`, or C++'s `this` inside a

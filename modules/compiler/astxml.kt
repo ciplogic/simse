@@ -131,7 +131,13 @@ enum class AstNodeAttributeKind {
     // `fun f<T>(...) when T: Printable, Countable`: the type parameter's protocol
     // requirements, one `<param>:<protocol>` item per entry, joined by a comma (the parser
     // writes it; `sema.Protocols` reads it back). Appended last for the same reason.
-    Protocols
+    Protocols,
+
+    // `data class Derived(...) : Base` (specs/declarations.md, "Inheritance"): the *name* of
+    // the base class - one plain identifier, as every type name is spelled - so the field
+    // list, the layout and the constructor are the base's fields followed by the class's
+    // own. `sema.Inherit.kt` owns the relation; the emitter flattens it into the struct.
+    Base
 }
 
 // What a node is - the schema's `kind` - as against its role (`AstNodeKind`, where it

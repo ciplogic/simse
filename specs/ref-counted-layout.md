@@ -20,7 +20,8 @@ ref-counted allocation:
 value is stable for the produced compilation output but is not a source-level enum,
 user-defined identifier, or ABI value; IDs must not be assumed stable across separate
 compilations. It is stored but unused: it does not enable inheritance, virtual dispatch,
-dynamic casts, or any other polymorphic operation.
+dynamic casts, or any other polymorphic operation. (Inheritance appends fields and converts a
+value at its destination; it is resolvable statically and reads no `typeId`.)
 
 The header applies to every ref-counted allocation, including:
 

@@ -68,12 +68,14 @@ enum class Color {
 }
 ```
 
-`data class` gets you a constructor, field access and a copy-on-assign value;
-`enum class` gets you `toInt()` and `fromInt()` for free. There are no base classes and
-no `interface`: code is reused by *composition* and by *extension*, dispatch is resolved at
-compile time, and a **protocol** (`protocol fun Printable<T> T.toString(): Str`, with
-`when T: Printable` on a generic function) is the structural interface - checked at every
-call, resolved to the concrete declaration, never a vtable.
+`data class` gets you a constructor, field access and a copy-on-assign value, and a class may
+*derive* from one base data class - the base's fields come first, in order, and a derived value
+stands where the base is expected (by value as a prefix copy, by `*Base` as the same address,
+no copy, by `&Base` as a snapshot box). `enum class` gets you `toInt()` and `fromInt()` for
+free. There is no `interface`: dispatch is resolved at compile time - a **protocol**
+(`protocol fun Printable<T> T.toString(): Str`, with `when T: Printable` on a generic function)
+is the structural interface - checked at every call, resolved to the concrete declaration,
+never a vtable.
 
 **Functions are the unit of behavior, and extensions are how you add to a type.**
 
@@ -341,7 +343,9 @@ The language is **self-hosted**: the compiler is its own Simse sources, and it r
 the published bootstrap byte for byte. What the surface holds today:
 
 - **Types and data** - `data class`, `enum class`, `union class` (a discriminated union),
-  `typealias`, and value semantics throughout.
+  **inheritance** (`data class Point3D(val z: Int) : Point2D` appends the base's fields ahead
+  of the class's own, and a derived value converts to its base by value, by `*Base` address or
+  into a snapshot `&Base`), `typealias`, and value semantics throughout.
 - **Generics** - reified, with call inference, and **protocols**: `protocol fun
   Printable<T> T.toString(): Str` plus `when T: Printable` on a generic function, checked at
   every call and resolved to the concrete declaration, never a vtable
@@ -364,7 +368,7 @@ best of a few runs while idle):
 | compiling the published `src/simse_bootstrap.cpp` with `cl.exe` | ~16 s release (`/O2 /Ob3` with LTO) |
 | **from the published file to a compiler that reproduces it** | **~17 s**, then under a second per self-transpile |
 
-The whole corpus - **92 end-to-end programs**, one folder each with its expected output -
+The whole corpus - **99 end-to-end programs**, one folder each with its expected output -
 runs green on every build, alongside the bootstrap fixed point.
 
 ## Repository layout

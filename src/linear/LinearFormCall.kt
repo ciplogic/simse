@@ -173,7 +173,10 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
         val decl: AstXmlNode = this.dataClassDecl(calleeName)
         if (!xmlIsEmpty(decl)) {
             paramOwner = decl
-            paramNodes = xmlChildren(decl, AstNodeKind.Field)
+            // A derived class's construction takes every *flattened* field, base first: the
+            // object is the base's fields and then the class's own
+            // (specs/declarations.md, "Inheritance").
+            paramNodes = semAllFields(*this.fn.facts.types, decl)
         }
     }
     // A `union class` construction has no aggregate spelling and no plain-call form: it is

@@ -22,6 +22,13 @@ fun Emitter.expr(e: *AstXmlNode, minPrec: Int, expected: *AstXmlNode): Str {
         val exprText: Str = this.expr(e, 0, xmlEmptyNode())
         return `*(@exprText)`
     }
+    // A derived value where its base is expected converts here, the same way: the
+    // destination's type is what says the conversion exists (`specs/declarations.md`,
+    // "Inheritance").
+    val subtypeText: Str = this.cgSubtypeText(e, expected)
+    if (subtypeText != "") {
+        return subtypeText
+    }
     val p: Int = cgPrecedence(e)
     var s: Str = ""
     if (p < minPrec) {
@@ -54,6 +61,133 @@ fun Emitter.cgNeedsReadThrough(e: *AstXmlNode, expected: *AstXmlNode): Bool {
         return false
     }
     return ilTypeText(pointee) == ilTypeText(expected)
+}
+
+// The conversion a subtype needs, as C++ text: "" when `e` is not a derived value standing
+// where its base is expected. Three forms, and all of them come from the one layout rule
+// (specs/declarations.md, "Inheritance"):
+//
+//   - a *value* `Base` is a copy of the prefix - `Base{ x.f1, x.f2 }`, the base's fields in
+//     layout order, read off the derived value (through a `*`/`&` first when the source is
+//     one). This is the "temporary" a call or binding materializes.
+//   - a `*Base` is the *same address*, reinterpreted: the derived layout starts with the
+//     base's, so the view needs no copy. A `*Derived` is that address; a value is its
+//     address (`simse_addressOf`).
+//   - a `&Base` is a box of a *copy* of the prefix: a box's type is its own, so a derived
+//     object cannot be shared under it - the handle is a snapshot (`makeRef<Base>(...)`).
+//
+// The lookup only runs for a program that declares a base at all (`typeBases`), so a
+// program without inheritance pays one size test per converted position.
+fun Emitter.cgSubtypeText(e: *AstXmlNode, expected: *AstXmlNode): Str {
+    if (this.typeBases.size() == 0 || xmlIsEmpty(expected)) {
+        return ""
+    }
+    val expectedKind: AstNodeCategory = xmlKind(expected)
+    var wantPointer: Bool = false
+    var wantShared: Bool = false
+    var expectedPointee: AstXmlNode = expected
+    if (expectedKind == AstNodeCategory.TypePointer) {
+        wantPointer = true
+        expectedPointee = xmlChild(expected, AstNodeKind.Inner)
+    } else if (expectedKind == AstNodeCategory.TypeReference) {
+        wantShared = true
+        expectedPointee = xmlChild(expected, AstNodeKind.Inner)
+    } else if (expectedKind != AstNodeCategory.TypeNamed && expectedKind != AstNodeCategory.TypeGeneric) {
+        return ""
+    }
+    val expectedName: Str = semClassTypeName(*this.types, expectedPointee)
+    if (expectedName == "") {
+        return ""
+    }
+    val have: AstXmlNode = this.inferType(e)
+    if (xmlIsEmpty(have)) {
+        return ""
+    }
+    // `&x` in a value position: the box holds a copy of `x`, so the prefix is read off the
+    // operand itself (no box is built). A `&Base` or `*Base` expectation is not this form:
+    // the former is the `ExprRef` branch's (it owns the `makeRef` spelling), the latter has
+    // no derived-object address to take.
+    var valueSource: *AstXmlNode = e
+    var valueType: AstXmlNode = have
+    if (xmlKind(e) == AstNodeCategory.ExprRef) {
+        if (wantShared || wantPointer) {
+            return ""
+        }
+        val operand: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Operand)
+        valueSource = operand
+        valueType = this.inferType(operand)
+    }
+    val haveName: Str = semClassTypeName(*this.types, valueType)
+    if (haveName == "" || !semDerivesFromName(*this.types, haveName, expectedName)) {
+        return ""
+    }
+    if (wantPointer) {
+        // The address, reinterpreted. A `*e` node prints one (`&x` for a value, `(h).get()`
+        // for a handle) - except when its operand is already a raw pointer, where it prints
+        // a load and the address is the pointer itself. A pointer source *is* the address,
+        // a handle's is the pointer inside it (the table's `&T` -> `*T` row), and a plain
+        // value has its taken.
+        val inner: Str = this.expr(e, 0, xmlEmptyNode())
+        val wantType: Str = this.type(expected)
+        if (xmlKind(e) == AstNodeCategory.ExprDeref) {
+            val operand: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Operand)
+            if (xmlKind(this.inferType(operand)) == AstNodeCategory.TypePointer) {
+                return `reinterpret_cast<@wantType>(simse_addressOf(@inner))`
+            }
+            return `reinterpret_cast<@wantType>(@inner)`
+        }
+        val haveKind: AstNodeCategory = xmlKind(have)
+        if (haveKind == AstNodeCategory.TypePointer) {
+            return `reinterpret_cast<@wantType>(@inner)`
+        }
+        if (haveKind == AstNodeCategory.TypeReference
+            || (haveKind == AstNodeCategory.TypeGeneric && xmlAttr(have, AstNodeAttributeKind.Name) == "PList")
+        ) {
+            return `reinterpret_cast<@wantType>((@inner).get())`
+        }
+        return `reinterpret_cast<@wantType>(simse_addressOf(@inner))`
+    }
+    // The value form: one read per field the base declares, off the value source.
+    val slice: Str = this.cgSliceText(valueSource, expectedPointee, expectedName)
+    if (slice == "") {
+        return ""
+    }
+    if (wantShared) {
+        val sliceType: Str = this.type(expectedPointee)
+        return `makeRef<@sliceType>(@slice)`
+    }
+    return slice
+}
+
+// The copy of a base's prefix, as the C++ aggregate `Base{ f1, f2, ... }`: one member read
+// off `source` per field the base declares, in layout order - the same order the flattened
+// struct holds them in. The member goes through the source's own type: `->` for a pointer
+// or a handle (both have one), `.` for a value. A `copy` node is the exception: its text is
+// a value while its inferred type is still the handle's, so its members are spelled off the
+// text. "" when the base is not a declaration here.
+fun Emitter.cgSliceText(source: *AstXmlNode, expectedPointee: *AstXmlNode, expectedName: *Str): Str {
+    val expectedDecl: *AstXmlNode = this.types.getPtr(*expectedName)
+    if (expectedDecl == null) {
+        return ""
+    }
+    val copied: Bool = xmlKind(source) == AstNodeCategory.ExprCopy
+    var copiedText: Str = ""
+    if (copied) {
+        copiedText = this.expr(source, 0, xmlEmptyNode())
+    }
+    var parts: List<Str> = List<Str>()
+    for (*field in semAllFields(*this.types, *expectedDecl)) {
+        val fieldName: Str = xmlAttr(field, AstNodeAttributeKind.Name)
+        if (copied) {
+            parts.append(`(@copiedText).@fieldName`)
+        } else {
+            val member: AstXmlNode = this.ilMemberNode(source, fieldName)
+            parts.append(this.expr(member, 0, xmlEmptyNode()))
+        }
+    }
+    val fieldsText: Str = cgJoin(parts, ", ")
+    val sliceType: Str = this.type(expectedPointee)
+    return `@sliceType{@fieldsText}`
 }
 
 fun Emitter.operandKind(e: *AstXmlNode): NameKind {
@@ -153,9 +287,19 @@ fun Emitter.unifyType(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *Li
             if (xmlIsTypeParam(xmlAttr(pattern, AstNodeAttributeKind.Name), typeParams)) {
                 return true
             }
-            return ak == AstNodeCategory.TypeNamed && xmlAttr(actualPtr, AstNodeAttributeKind.Name) == xmlAttr(
+            if (ak == AstNodeCategory.TypeNamed && xmlAttr(actualPtr, AstNodeAttributeKind.Name) == xmlAttr(
                 pattern,
                 AstNodeAttributeKind.Name
+            )) {
+                return true
+            }
+            // A derived class satisfies a base's pattern: a method declared on the base
+            // resolves on a derived receiver, which is how `p3.movedBy(...)` reaches
+            // `Point2D`'s method.
+            return ak == AstNodeCategory.TypeNamed && semDerivesFromName(
+                *this.types,
+                xmlAttr(actualPtr, AstNodeAttributeKind.Name),
+                xmlAttr(pattern, AstNodeAttributeKind.Name)
             )
         }
 
@@ -418,14 +562,12 @@ fun Emitter.inferType(e: *AstXmlNode): AstXmlNode {
             if (baseKind == AstNodeCategory.TypeNamed || baseKind == AstNodeCategory.TypeGeneric) {
                 val baseName: Str = xmlAttr(base, AstNodeAttributeKind.Name)
                 val decl: *AstXmlNode = this.types.getPtr(baseName)
-                if (decl != null) {
-                    if (decl.name == AstNodeKind.DataClass) {
-                        val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
-                        for (*field in fields) {
-                            if (xmlAttr(field, AstNodeAttributeKind.Name) == memberText) {
-                                return xmlChild(field, AstNodeKind.Type)
-                            }
-                        }
+                if (decl != null && decl.name == AstNodeKind.DataClass) {
+                    // A field may be inherited from a base: the chain decides which class
+                    // declares it (`semAllFields` puts the base's fields first).
+                    val field: AstXmlNode = semFindField(*this.types, *decl, memberText)
+                    if (!xmlIsEmpty(field)) {
+                        return xmlChild(field, AstNodeKind.Type)
                     }
                 }
             }
