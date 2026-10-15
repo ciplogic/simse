@@ -1,0 +1,63 @@
+bound=true
+dup=false empty=false missing=false
+nodes=33 listeners=6 board=6 cells=25
+--- hit tests
+hit(30,30)=label#3
+hit(223,82)=cell#24
+hit(30,110)=declining#5
+hit(260,170)=root#0
+hit(300,200)=root#0
+bubble(label)=beginner#2
+bubble(cell)=board#6
+bubble(ghost)=root#0
+--- click on the label inside the button
+move(30,30) -> consumed action=-1 node=none hit=label#3 payload=0
+hover=beginner#2
+down(30,30) button=1 mask=1 -> consumed action=3 node=beginner#2 hit=label#3 payload=0
+    candidate action=3 node=beginner#2 hit=label#3 payload=0
+pressed=beginner#2
+up(30,30) button=1 mask=0 -> consumed action=3 node=beginner#2 hit=label#3 payload=0
+    candidate action=3 node=beginner#2 hit=label#3 payload=0
+pressed after up=none
+--- capture: press on the button, release far away
+down(30,30) button=1 mask=1 -> consumed action=3 node=beginner#2 hit=label#3 payload=0
+    candidate action=3 node=beginner#2 hit=label#3 payload=0
+move(300,200) -> consumed action=3 node=beginner#2 hit=root#0 payload=0
+    candidate action=3 node=beginner#2 hit=root#0 payload=0
+up(300,200) button=1 mask=0 -> consumed action=3 node=beginner#2 hit=root#0 payload=0
+    candidate action=3 node=beginner#2 hit=root#0 payload=0
+--- a cell click (one listener for 25 cells)
+down(223,82) -> consumed action=1 node=board#6 hit=cell#24 payload=0
+leaf payload=17
+up(223,82) button=1 mask=0 -> consumed action=1 node=board#6 hit=cell#24 payload=0
+    candidate action=1 node=board#6 hit=cell#24 payload=0
+--- the declining button: the panel behind it consumes
+down(30,110) button=1 mask=1 -> consumed action=2 node=panel#1 hit=declining#5 payload=0
+    candidate action=5 node=declining#5 hit=declining#5 payload=0
+    candidate action=2 node=panel#1 hit=declining#5 payload=0
+up(30,110) button=1 mask=0 -> consumed action=2 node=panel#1 hit=declining#5 payload=0
+    candidate action=5 node=declining#5 hit=declining#5 payload=0
+    candidate action=2 node=panel#1 hit=declining#5 payload=0
+--- disabled button: the walk steps over it
+move(30,70) -> consumed action=-1 node=none hit=expert#4 payload=0
+hover=panel#1
+down(30,70) button=1 mask=1 -> consumed action=2 node=panel#1 hit=expert#4 payload=0
+    candidate action=2 node=panel#1 hit=expert#4 payload=0
+up(30,70) button=1 mask=0 -> consumed action=2 node=panel#1 hit=expert#4 payload=0
+    candidate action=2 node=panel#1 hit=expert#4 payload=0
+--- background click: the root sees it and declines
+down(300,200) button=1 mask=1 -> consumed action=-1 node=none hit=root#0 payload=0
+    candidate action=4 node=root#0 hit=root#0 payload=0
+up(300,200) button=1 mask=0 -> consumed action=-1 node=none hit=root#0 payload=0
+    candidate action=4 node=root#0 hit=root#0 payload=0
+--- buttons and non-mouse kinds
+down(223,82) button=3 mask=4 -> consumed action=1 node=board#6 hit=cell#24 payload=0
+    candidate action=1 node=board#6 hit=cell#24 payload=0
+up(223,82) button=3 mask=0 -> consumed action=1 node=board#6 hit=cell#24 payload=0
+    candidate action=1 node=board#6 hit=cell#24 payload=0
+down(223,82) button=1 mask=5 -> consumed action=1 node=board#6 hit=cell#24 payload=0
+    candidate action=1 node=board#6 hit=cell#24 payload=0
+up(223,82) button=1 mask=4 -> consumed action=1 node=board#6 hit=cell#24 payload=0
+    candidate action=1 node=board#6 hit=cell#24 payload=0
+wheel -> action=-1 node=none hit=none payload=0
+tick -> action=-1 node=none hit=none payload=0
