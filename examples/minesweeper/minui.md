@@ -20,8 +20,10 @@ every pixel                    Skia            (AA shapes, text from system font
 
 The buffer *is* the API between the two: Skia writes bytes, SDL uploads them. Measured at
 560×300: Skia draw 0.095 ms, upload 0.041 ms, clear+copy+present 0.054 ms — **0.19 ms/frame**,
-against a 16.7 ms budget. The same canvas can later target a GPU surface (Skia's
-backend-render-target entry points over an SDL/GL context) without changing anything above it.
+against a 16.7 ms budget. A full frame through the present path alone (upload + clear + copy +
+present, no Skia) is 0.16 / 0.30 / 0.37 ms at the game's three window sizes (§11). The same canvas
+can later target a GPU surface (Skia's backend-render-target entry points over an SDL/GL context)
+without changing anything above it.
 
 Two traps pinned by the probes, both load-bearing for the wrapper:
 
@@ -29,6 +31,9 @@ Two traps pinned by the probes, both load-bearing for the wrapper:
   the bytes are B,G,R,A in memory, which is what Skia's `BGRA_8888` writes and a Win32 DIB holds.
   The similarly-named `...BGRA8888` swaps every channel.
 - `SDL_MAIN_HANDLED` must be defined: this project links nothing (no `SDL2main.lib`).
+
+And one that decided which renderer `uiOpen` asks for: the accelerated (direct3d) renderer on this
+machine trades red and blue for *some* window sizes — a full account with the probes is in §11.
 
 ## 2. What the language decides for us
 
@@ -115,6 +120,8 @@ fun addNode(f: *Frame, parent: Int, kind: NodeKind, x: Int, y: Int, width: Int, 
 fun addGrid(f: *Frame, parent: Int, name: Str, x: Int, y: Int, cell: Int, cols: Int, rows: Int): Int
 fun setName(f: *Frame, node: Int, name: Str): Bool      // false on a duplicate or an empty name
 fun setText / setPayload / setPalette / setSprite / setVisible / setEnabled
+fun nodeNamed(f: *Frame, name: Str): Int                // -1 when no node has that name
+fun setTextNamed(f: *Frame, name: Str, text: Str): Bool // the live readouts: counter, clock, status
 fun frameOn(f: *Frame, name: Str, action: Int, payload: Int): Bool   // the listener binding
 ```
 
@@ -342,7 +349,7 @@ examples/minesweeper/minui/
   ui.kt        the typed surface the app calls (landed): window, canvas, text, sprites, input
   _res.md      the C++ glue (landed): the SDL_Event union readers, the two buffers, the BMP writer,
                `argb`, and the synthetic mouse event the scripted modes push through SDL
-app/src/       `main.kt` - minui v0.5, shot 2b: the tree driving the drawing (see the README)
+app/src/       `main.kt` - the game itself, shot 3 + 4 (see the README)
 ```
 
 The typed surface is integer-coordinate (the UI is pixel art) and has no object lifetime to
@@ -353,7 +360,8 @@ fun uiOpen(title: Str, width: Int, height: Int, resizable: Bool, vsync: Bool): U
 fun uiClose(ui: *Ui): Unit
 fun uiIsOpen(ui: *Ui): Bool
 fun uiFailed(): Str                              // SDL_GetError(), for the app's own message
-fun uiPresent(ui: *Ui): Unit                     // upload + copy + present (0.19 ms at 560x300)
+fun uiResize(ui: *Ui, width: Int, height: Int): Bool   // new window/texture/buffer/surface size
+fun uiPresent(ui: *Ui): Unit                     // upload + copy + present (0.16-0.37 ms, see §11)
 fun uiPollEvent(ui: *Ui): Bool                   // one event into `ui.event`, false when none left
 fun uiPushMouse(kind: UiEventKind, x: Int, y: Int, button: Button): Bool   // scripted input
 fun uiButtons(ui: *Ui): Int                      // the mask held right now (chording)
@@ -462,8 +470,17 @@ Probes in `build/` (git-ignored, not part of the deliverable), run on Windows ar
 - `sk_canvas_draw_image_rect` takes **six** arguments (sampling options before the paint).
 - `sk_imageinfo_t` is `{ colorspace, width, height, colorType, alphaType }` — colorspace first —
   with `BGRA_8888 = 6` and `PREMUL = 2`.
-- SDL2 + Skia end to end: window, `direct3d` renderer (accelerated, render targets), streaming
-  texture upload, present, and read-back for screenshots: **0.19 ms/frame at 560×300**.
+- SDL2 + Skia end to end: window, streaming texture upload, present, and read-back for
+  screenshots: **0.16 / 0.30 / 0.37 ms per frame** at 294x382 / 504x592 / 744x496 through SDL's
+  **software** renderer (upload + clear + copy + present; `build/colorprobe5.cpp`).
+- **The accelerated (direct3d) renderer trades red and blue for *some* window sizes** - in the
+  window itself, not only in a read-back. Identical code, a fresh window per size: 504x592 and
+  500x500 come back as `33 22 11` where `11 22 33` went in, while 512x512, 800x600, 294x382 and
+  1024x768 come back faithful (`build/colorprobe2.cpp`). Declaring the texture
+  `SDL_PIXELFORMAT_ABGR8888` moves the bug rather than fixing it (504x592 becomes right, 512x512
+  wrong - `build/colorprobe4.cpp`), so it is the backend, not the format we hand it. The software
+  renderer is exact at every size tested (`build/colorprobe3.cpp`); Skia having already drawn
+  every pixel, all it is asked to do is blit - which is why `uiOpen` asks for it.
 - `SDL_PIXELFORMAT_ARGB8888` is the memory layout Skia writes; `SDL_MAIN_HANDLED` is required.
 - The arena's mutation shape compiles and runs: `node.children[i].state = pressed` through a
   `*Node`, and copy-out/copy-back through a `*List<T>`.
@@ -513,9 +530,21 @@ Probes in `build/` (git-ignored, not part of the deliverable), run on Windows ar
      (78,116,172), `--press` measures pressed (44,68,104), `--click 162,344` prints `action cell
      26` and the cell measures revealed (30,38,52) with the status line reading `cell 26`, and
      `--rclick 162,344` prints `action cell flag 26` with the flag's own gold at the cell's centre.
-3. **The rules**: `examples/minesweeper/game` + `stress/minesweeper` (headless, deterministic).
-4. **The game**: the three screens, the board, assets (generated PNG atlas), `run.bat`, README.
-5. **XML**: the loader + the menu screen loaded from XML (the rest stays code-built until it
-   earns its place).
+3. **The rules - LANDED** (`examples/minesweeper/game/api.kt`, verified by `stress/minesweeper`):
+   a UI-free module - deterministic (Schrage PRNG), first click always safe (a 3x3 kept clear),
+   flood reveal, flag/unflag, chord only when the number is satisfied, win/lose transitions. The
+   case pins each: the PRNG's first value, the three layouts' sizes, the reveal count after a
+   first click, re-reveal a no-op, flags on every mine on a win, clicks after a loss dead.
+4. **The game - LANDED** (`examples/minesweeper/app/src/main.kt`): one screen - named counter,
+   clock, status line, a NEW GAME button, three difficulty buttons (the current one disabled) and
+   the board as one grid of `Custom` cells. Left opens, right flags, middle chords; R restarts,
+   1/2/3 switch difficulty; a difficulty switch rebuilds the tree and resizes the window. The
+   frame is drawn when something changed (an event, or the clock's second), so an idle window
+   costs no CPU. Verified end to end: a 72-click `--script` wins the seeded board (counter `000`,
+   every mine flagged, `you won in 0s`), a click on a mine reddens it and X's a wrong flag, a
+   chord after one flag opens the rest, and every measured colour survives the resize.
+5. **Screens and XML**: the stack of section 5 is designed but not used by the app yet - the game
+   is a single screen. The loader plus a menu screen on top of it, and a generated PNG atlas if
+   the drawn glyphs need replacing, are the next shot.
 
 Each shot is independently verifiable, and shots 2 and 3 are independent of each other.

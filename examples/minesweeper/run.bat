@@ -1,11 +1,12 @@
 @echo off
-rem Build and run the Minesweeper example: transpile the app with the `minui` module, compile the
-rem amalgamation, put the two DLLs it binds beside the executable, and run. Arguments pass through
-rem (--frames N, --screenshot out.bmp, --sheet tiles.png, --click x,y, --press x,y).
+rem Build and run the Minesweeper example: transpile the app with the `minui` and `game` modules,
+rem compile the amalgamation, put the two DLLs it binds beside the executable, and run. Arguments
+rem pass through (--frames N, --screenshot out.bmp, --seed N, --difficulty 0|1|2,
+rem --script "x,y:L; x,y:R; x,y:M").
 setlocal
 pushd "%~dp0..\.."
 
-simse.exe --root examples/minesweeper/app/src --module examples/minesweeper/minui -o examples/minesweeper/app/out.cpp
+simse.exe --root examples/minesweeper/app/src --module examples/minesweeper/minui --module examples/minesweeper/game -o examples/minesweeper/app/out.cpp
 if errorlevel 1 goto :fail
 
 call bun build.js --release --cpp examples/minesweeper/app/out.cpp --exe examples/minesweeper/app/minesweeperdemo.exe

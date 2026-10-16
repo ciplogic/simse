@@ -1,150 +1,198 @@
 package minesweeperapp
 
 import minui
+import minesweeper
 
-// minui v0.5 - shot 2b of `../minui.md`: the tree draws itself.
+// Minesweeper, played on the tree.
 //
-// The app is a *client* of minui now instead of a bag of drawing calls. It builds a frame (names,
-// listeners, geometry), routes the platform events through `uiEvent` and paints through
-// `paintFrame`. What a screenshot proves is therefore the dispatch and not the drawing: the status
-// line can only say "cell 27" if a click travelled hit test -> bubble -> the grid's listener ->
-// the action, and the cell's `payload` reached the handler.
+// The rules are the `minesweeper` module's (no UI import, tested headless by `stress/minesweeper`);
+// the window, the tree and the painter are minui's. This file is the glue and the look: a counter,
+// a timer, a restart button, three difficulty buttons, the board, and a status line that says what
+// happened.
 //
-//   minesweeperdemo.exe                        run until Escape (or the window's close button)
-//   minesweeperdemo.exe --frames 3             draw three frames and leave (a smoke test)
+//   minesweeperdemo.exe                        play (Beginner, seeded, until Escape)
+//   minesweeperdemo.exe --difficulty 1         start on Intermediate (2 is Expert)
+//   minesweeperdemo.exe --seed 7                a different board
+//   minesweeperdemo.exe --frames 3             three frames and leave (a smoke test)
 //   minesweeperdemo.exe --screenshot out.bmp   write what the renderer presented
-//   minesweeperdemo.exe --sheet tiles.png      decode an atlas (16px cells) for the cells
-//   minesweeperdemo.exe --click 210,115        a scripted click through SDL's own queue
-//   minesweeperdemo.exe --press 210,115        ... with the button still held
+//   minesweeperdemo.exe --script "4,4:L; 0,0:L"  clicks through SDL's own queue, in order
+//                                              (:L left, :R right, :M middle/chord)
+//
+// Playing: left click opens, right click flags, middle (or both buttons held) chords, R restarts,
+// 1/2/3 switch difficulty, Escape leaves.
 
 // The action codes this screen answers. minui only ever sees the `Int`s.
 enum class Act {
     None = 0,
-    NewGame = 1,
-    Difficulty = 2,
-    Cell = 3,
+    Cell = 1,
+    Restart = 2,
+    Difficulty = 3,
     Quit = 4,
     Background = 5
 }
 
-// The app's own state: what the handlers mutate. (The frame and the theme are minui's; the rules
-// module replaces `revealed`/`flags` with a real board in shot 3.)
-data class Demo(
-    var status: Str,
-    var clicks: Int,
-    var difficulty: Int,
-    var revealed: List<Int>,
-    var flags: List<Int>,
-    var quit: Bool
-)
+// One difficulty's geometry: the cell size and the window it needs. There is no layout engine in
+// minui v1, so a new difficulty is new geometry - a rebuilt tree and a resized window.
+data class BoardLayout(var cell: Int, var width: Int, var height: Int)
 
-fun difficultyName(level: Int): Str {
-    if (level == 0) {
-        return "BEGINNER"
+fun layoutFor(difficulty: Difficulty): BoardLayout {
+    val board: Layout = layoutOf(difficulty)
+    var cell: Int = 30
+    if (difficulty == Difficulty.Expert) {
+        cell = 24
     }
-    if (level == 1) {
-        return "INTERMEDIATE"
-    }
-    return "EXPERT"
-}
-
-// One theme value: the palette is one thing to keep in step, and a second theme is a second value
-// rather than a second code path.
-fun demoTheme(): UiTheme {
-    return UiTheme(
-        uiRgb(24, 32, 48), uiRgb(32, 44, 64), uiRgb(58, 74, 100),
-        uiRgb(58, 90, 138), uiRgb(78, 116, 172), uiRgb(44, 68, 104), uiRgb(48, 56, 70),
-        uiRgb(232, 240, 248), uiRgb(214, 224, 236), uiRgb(143, 211, 244), uiRgb(110, 126, 148)
+    val margin: Int = 12
+    val header: Int = 52
+    val footer: Int = 60
+    return BoardLayout(
+        cell, board.width * cell + margin * 2,
+        header + board.height * cell + footer
     )
 }
 
-// A value's place in a small list. (The demo's stand-in for a board; shot 3 gives it rules.)
-fun listHas(items: *List<Int>, value: Int): Bool {
-    var i: Int = 0
-    while (i < items.size()) {
-        if (items[i] == value) {
-            return true
-        }
-        i = i + 1
-    }
-    return false
+// The app's whole state. The frame lives here because a difficulty change rebuilds it: the arena is
+// data and a new difficulty is new data (names survive it; indices do not, which is why the
+// handlers look their nodes up by name).
+data class Game(
+    var frame: Frame,
+    var board: Board,
+    var difficulty: Difficulty,
+    var seed: Int,
+    var startedAt: Int,
+    var elapsed: Int,
+    var status: Str,
+    var quit: Bool,
+    var boardNode: Int
+)
+
+fun freshGame(difficulty: Difficulty, seed: Int): Game {
+    return Game(
+        newFrame(1, 1), newGame(difficulty, seed), difficulty, seed, 0, 0,
+        "left click opens, right click flags, middle chords", false, 0 - 1
+    )
 }
 
-fun listToggle(items: *List<Int>, value: Int): Unit {
-    var found: Int = 0 - 1
-    var i: Int = 0
-    while (i < items.size()) {
-        if (items[i] == value) {
-            found = i
-        }
-        i = i + 1
-    }
-    if (found >= 0) {
-        items.removeAt(found)
-        return
-    }
-    items.append(value)
+// The theme: one value, so the palette is one thing to keep in step.
+fun gameTheme(): UiTheme {
+    return UiTheme(
+        uiRgb(24, 32, 48), uiRgb(30, 38, 52), uiRgb(58, 74, 100),
+        uiRgb(58, 90, 138), uiRgb(78, 116, 172), uiRgb(44, 68, 104), uiRgb(48, 56, 70),
+        uiRgb(240, 244, 250), uiRgb(214, 224, 236), uiRgb(143, 211, 244), uiRgb(120, 136, 158)
+    )
 }
 
-// The screen: a title, three named buttons, an 8x8 board of custom cells, and a status line. Every
-// control that answers a click is *named* here and bound by name in `bindDemo` - nothing looks a
-// node up by index once this function returns.
-fun buildDemo(width: Int, height: Int): Frame {
-    var f: Frame = newFrame(width, height)
+// The classic eight number colours, brightened for the dark revealed cell.
+fun numberColor(count: Int): Int {
+    if (count == 1) {
+        return uiRgb(110, 160, 255)
+    }
+    if (count == 2) {
+        return uiRgb(110, 220, 140)
+    }
+    if (count == 3) {
+        return uiRgb(255, 120, 120)
+    }
+    if (count == 4) {
+        return uiRgb(160, 150, 255)
+    }
+    if (count == 5) {
+        return uiRgb(255, 150, 150)
+    }
+    if (count == 6) {
+        return uiRgb(110, 220, 220)
+    }
+    if (count == 7) {
+        return uiRgb(235, 235, 235)
+    }
+    return uiRgb(170, 180, 200)
+}
+
+// The board's tree: mostly a rectangle of named buttons, and the cells (one `Custom` node each,
+// `payload` = the cell index, one listener on the grid for all of them).
+fun buildGame(g: *Game, ui: *Ui): Bool {
+    val size: BoardLayout = layoutFor(g.difficulty)
+    val board: Layout = layoutOf(g.difficulty)
+    val boardWidth: Int = board.width * size.cell
+    val margin: Int = 12
+    val footer: Int = 52 + board.height * size.cell
+
+    if (!uiResize(ui, size.width, size.height)) {
+        return false
+    }
+    var f: Frame = newFrame(size.width, size.height)
     var fp: *Frame = *f
 
-    val title: Int = addNode(fp, fp.root, NodeKind.Label, 0, 12, width, 34)
-    setText(fp, title, "MINESWEEPER")
-    setPalette(fp, title, PaletteEmphasized)
-    setAlign(fp, title, Align.Center)
+    val counter: Int = addNode(fp, fp.root, NodeKind.Label, margin, 10, 90, 32)
+    setName(fp, counter, "counter")
+    setText(fp, counter, "000")
+    setPalette(fp, counter, PaletteEmphasized)
 
-    val subtitle: Int = addNode(fp, fp.root, NodeKind.Label, 0, 46, width, 22)
-    setText(fp, subtitle, "minui draws this tree")
-    setPalette(fp, subtitle, PaletteAccent)
-    setAlign(fp, subtitle, Align.Center)
+    val timer: Int = addNode(fp, fp.root, NodeKind.Label, size.width - margin - 90, 10, 90, 32)
+    setName(fp, timer, "timer")
+    setText(fp, timer, "0")
+    setPalette(fp, timer, PaletteEmphasized)
+    setAlign(fp, timer, Align.Right)
 
-    val panel: Int = addNode(fp, fp.root, NodeKind.Panel, 24, 76, width - 48, 160)
-    setPalette(fp, panel, PaletteEmphasized)
+    val restart: Int = addNode(fp, fp.root, NodeKind.Button, (size.width - 168) / 2, 8, 168, 36)
+    setName(fp, restart, "restart")
+    setText(fp, restart, "NEW GAME  (R)")
 
-    val newGame: Int = addNode(fp, panel, NodeKind.Button, 44, 96, width - 88, 38)
-    setName(fp, newGame, "new")
-    setText(fp, newGame, "NEW GAME")
+    // The board: one named grid, its cells anonymous with `payload` = row-major index.
+    addGrid(fp, fp.root, "board", margin, 52, size.cell, board.width, board.height)
 
-    val difficulty: Int = addNode(fp, panel, NodeKind.Button, 44, 142, width - 88, 38)
-    setName(fp, difficulty, "difficulty")
-    setText(fp, difficulty, "DIFFICULTY: BEGINNER")
+    // Three difficulty buttons, the current one disabled (it is the one in play).
+    // `g.difficulty.toInt()` would address a member of a pointer (the trap `minui.md` records), so
+    // the level is read into a local first.
+    val currentDifficulty: Difficulty = g.difficulty
+    val currentLevel: Int = currentDifficulty.toInt()
+    val buttonWidth: Int = (boardWidth - 16) / 3
+    var level: Int = 0
+    while (level < 3) {
+        val name: Str = "diff" + level.toString()
+        val button: Int = addNode(
+            fp, fp.root, NodeKind.Button,
+            margin + level * (buttonWidth + 8), footer + 8, buttonWidth, 30
+        )
+        setName(fp, button, name)
+        var label: Str = "BEGINNER"
+        if (level == 1) {
+            label = "MEDIUM"
+        }
+        if (level == 2) {
+            label = "EXPERT"
+        }
+        setText(fp, button, label)
+        setEnabled(fp, button, level != currentLevel)
+        level = level + 1
+    }
 
-    val quit: Int = addNode(fp, panel, NodeKind.Button, 44, 188, width - 88, 38)
-    setName(fp, quit, "quit")
-    setText(fp, quit, "QUIT")
-
-    // The board: 8x8 cells of 32, centred. One named node with one listener; each cell is an
-    // anonymous `Custom` node whose `payload` is its own index (row-major).
-    val boardSize: Int = 256
-    addGrid(fp, fp.root, "board", (width - boardSize) / 2, 248, 32, 8, 8)
-
-    val status: Int = addNode(fp, fp.root, NodeKind.Label, 24, height - 32, width - 48, 22)
+    val status: Int = addNode(fp, fp.root, NodeKind.Label, margin, footer + 42, boardWidth, 18)
     setName(fp, status, "status")
-    setText(fp, status, "click a button, or a cell")
-    setAlign(fp, status, Align.Center)
-    setPalette(fp, status, PaletteAccent)
-    return f
+    setText(fp, status, g.status)
+    setPalette(fp, status, PaletteDim)
+
+    g.frame = f
+    g.boardNode = nodeNamed(*g.frame, "board")
+    return bindGame(*g.frame)
 }
 
-// The bindings: name -> action, resolved once. The Bool each call answers is the check that the
-// name is in the tree - a typo shows up here, at startup, and not as a button that does nothing.
-fun bindDemo(fp: *Frame): Bool {
+// The bindings: name -> action, resolved once per build. The Bool each call answers is the check
+// that the name is in the tree (a typo shows up here, not as a dead button).
+fun bindGame(fp: *Frame): Bool {
     var bound: Bool = true
-    if (!frameOn(fp, "new", Act.NewGame.toInt(), 0)) {
-        bound = false
-    }
-    if (!frameOn(fp, "difficulty", Act.Difficulty.toInt(), 0)) {
-        bound = false
-    }
-    if (!frameOn(fp, "quit", Act.Quit.toInt(), 0)) {
-        bound = false
-    }
     if (!frameOn(fp, "board", Act.Cell.toInt(), 0)) {
+        bound = false
+    }
+    if (!frameOn(fp, "restart", Act.Restart.toInt(), 0)) {
+        bound = false
+    }
+    if (!frameOn(fp, "diff0", Act.Difficulty.toInt(), 0)) {
+        bound = false
+    }
+    if (!frameOn(fp, "diff1", Act.Difficulty.toInt(), 1)) {
+        bound = false
+    }
+    if (!frameOn(fp, "diff2", Act.Difficulty.toInt(), 2)) {
         bound = false
     }
     if (!frameOn(fp, "root", Act.Background.toInt(), 0)) {
@@ -153,54 +201,158 @@ fun bindDemo(fp: *Frame): Bool {
     return bound
 }
 
-// One cell of the board: the painter's `custom` hook. The arena carries the cell's geometry and
-// identity; the look comes from the demo's state and from the pointer's place. `hover`/`pressed`
-// are the *grid* (the node the click reaches), so a cell's own feedback is the pointer's cell -
-// which is exactly the split `minui.md` describes.
-fun paintCell(f: *Frame, demo: *Demo, board: Int, ui: *Ui, node: Int, sheetLoaded: Bool): Unit {
-    if (node == board) {
+// One cell: the painter's `custom` hook. The arena carries the cell's geometry and identity; the
+// rules say what is under it; the pointer's place and the frame's `pressed` say how it looks.
+fun paintCell(g: *Game, ui: *Ui, node: Int): Unit {
+    if (node == g.boardNode) {
         return // the grid itself draws nothing; its cells do
     }
+    val f: *Frame = *g.frame
     val rect: Rect = f.nodes[node].rect
     val index: Int = f.nodes[node].payload
-    val revealed: Bool = listHas(*demo.revealed, index)
-    val flagged: Bool = listHas(*demo.flags, index)
+    val cell: Cell = g.board.cells[index]
     val inside: Bool = ui.mouseX >= rect.x && ui.mouseX < rect.x + rect.width
             && ui.mouseY >= rect.y && ui.mouseY < rect.y + rect.height
-    if (!revealed && sheetLoaded) {
-        uiSprite(ui, 0, smRect(rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2))
+    val open: Bool = cell.state == CellState.Revealed || cell.state == CellState.Exploded
+    if (!open && cell.state != CellState.Flagged && cell.state != CellState.WrongFlag) {
+        // covered: the face the pointer reacts to
+        var face: Int = uiRgb(58, 90, 138)
+        if (inside && f.pressed == g.boardNode) {
+            face = uiRgb(44, 68, 104)
+        } else if (inside) {
+            face = uiRgb(78, 116, 172)
+        }
+        uiRoundFill(ui, smRect(rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2), 4, face)
         return
     }
-    var face: Int = uiRgb(58, 90, 138)
-    if (revealed) {
-        face = uiRgb(30, 38, 52)
-    } else if (inside && f.pressed == board) {
-        face = uiRgb(44, 68, 104)
-    } else if (inside) {
-        face = uiRgb(78, 116, 172)
+    // open (or flagged): the flatter revealed face
+    var face: Int = uiRgb(30, 38, 52)
+    if (cell.state == CellState.Exploded) {
+        face = uiRgb(150, 50, 50)
     }
-    val inner: Rect = smRect(rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2)
-    uiRoundFill(ui, inner, 4, face)
-    if (flagged) {
-        uiPie(ui, smRect(rect.x + 9, rect.y + 7, 14, 16), 0 - 60, 300, uiRgb(232, 193, 90))
+    uiRoundFill(ui, smRect(rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2), 4, face)
+    if (cell.state == CellState.Flagged) {
+        // a flag: a pole and a cloth - the player's mark, kept on a loss and on a win
+        uiLine(ui, rect.x + 14, rect.y + 8, rect.x + 14, rect.y + 22, uiRgb(200, 208, 220))
+        uiPie(ui, smRect(rect.x + 13, rect.y + 6, 14, 12), 0 - 90, 180, uiRgb(226, 80, 80))
         return
     }
-    if (revealed) {
-        uiPie(
-            ui, smRect(rect.x + 11, rect.y + 11, 10, 10), 0 - 90, 90 + (index % 5) * 60,
-            uiRgb(143, 211, 244)
+    if (cell.state == CellState.Revealed && cell.mine) {
+        // a mine: a body with four spikes
+        val center: Int = rect.x + rect.width / 2
+        val middle: Int = rect.y + rect.height / 2
+        uiLine(ui, center - 9, middle, center + 9, middle, uiRgb(20, 24, 32))
+        uiLine(ui, center, middle - 9, center, middle + 9, uiRgb(20, 24, 32))
+        uiCircle(ui, center, middle, 7, uiRgb(20, 24, 32))
+        uiCircle(ui, center - 2, middle - 2, 2, uiRgb(200, 208, 220))
+        return
+    }
+    if (cell.state == CellState.WrongFlag) {
+        uiLine(
+            ui, rect.x + 6, rect.y + 6, rect.x + rect.width - 6, rect.y + rect.height - 6,
+            uiRgb(226, 80, 80)
         )
+        uiLine(
+            ui, rect.x + rect.width - 6, rect.y + 6, rect.x + 6, rect.y + rect.height - 6,
+            uiRgb(226, 80, 80)
+        )
+        return
     }
+    if (cell.state == CellState.Revealed && cell.neighbors > 0) {
+        uiTextBox(ui, rect, (cell.neighbors).toString(), numberColor(cell.neighbors), true)
+    }
+}
+
+// A new board on the same difficulty, and the tree rebuilt after it.
+fun restartGame(g: *Game, ui: *Ui, seed: Int): Unit {
+    g.seed = seed
+    g.board = newGame(g.difficulty, seed)
+    g.startedAt = 0
+    g.elapsed = 0
+    g.status = "left click opens, right click flags, middle chords"
+    buildGame(g, ui)
+}
+
+// A different difficulty: a new board, a new window size, a rebuilt tree.
+fun switchDifficulty(g: *Game, ui: *Ui, level: Int): Unit {
+    var difficulty: Difficulty = Difficulty.Beginner
+    if (level == 1) {
+        difficulty = Difficulty.Intermediate
+    }
+    if (level == 2) {
+        difficulty = Difficulty.Expert
+    }
+    g.difficulty = difficulty
+    g.board = newGame(difficulty, g.seed)
+    g.startedAt = 0
+    g.elapsed = 0
+    g.status = difficultyName(difficulty) + ": left click opens, right click flags"
+    buildGame(g, ui)
+}
+
+// Three digits, so the counter does not jump as the width changes.
+fun counterText(value: Int): Str {
+    if (value < 0) {
+        return "-" + (0 - value).toString()
+    }
+    if (value < 10) {
+        return "00" + value.toString()
+    }
+    if (value < 100) {
+        return "0" + value.toString()
+    }
+    return value.toString()
+}
+
+// The scripted clicks: "x,y:L; x,y:R; x,y:M" - left, right, middle (chord). Each one is pushed
+// through SDL's own queue, so a script drives the real path: poll, translate, tree, rules.
+fun runScript(script: Str): Int {
+    var pushed: Int = 0
+    if (script.size() == 0) {
+        return 0
+    }
+    val entries: List<Str> = script.split(";")
+    var i: Int = 0
+    while (i < entries.size()) {
+        val entry: Str = entries[i].trim()
+        val parts: List<Str> = entry.split(",")
+        if (parts.size() == 2) {
+            val pointX: Opt<Int> = parts[0].toInt()
+            val yAndFlag: Str = parts[1]
+            var yText: Str = yAndFlag
+            var button: Button = Button.Left
+            val colon: Int = yAndFlag.find(":")
+            if (colon > 0) {
+                yText = yAndFlag.substr(0, colon)
+                val flag: Str = yAndFlag.substr(colon + 1, 1)
+                if (flag == "R") {
+                    button = Button.Right
+                }
+                if (flag == "M") {
+                    button = Button.Middle
+                }
+            }
+            val pointY: Opt<Int> = yText.toInt()
+            if (pointX.hasValue() && pointY.hasValue()) {
+                val x: Int = pointX.value()
+                val y: Int = pointY.value()
+                uiPushMouse(UiEventKind.MouseMove, x, y, Button.None)
+                uiPushMouse(UiEventKind.MouseDown, x, y, button)
+                uiPushMouse(UiEventKind.MouseUp, x, y, button)
+                pushed = pushed + 1
+            }
+        }
+        i = i + 1
+    }
+    return pushed
 }
 
 fun main(args: List<Str>): Int {
     var maxFrames: Int = 0 - 1
     var screenshotPath: Str = ""
-    var sheetPath: Str = ""
-    var clickX: Int = 0 - 1
-    var clickY: Int = 0 - 1
-    var holdClick: Bool = false
-    var clickButton: Button = Button.Left
+    var script: Str = ""
+    var seed: Int = 12345
+    var level: Int = 0
     var index: Int = 0
     while (index < args.size()) {
         if (args[index] == "--frames" && index + 1 < args.size()) {
@@ -212,164 +364,194 @@ fun main(args: List<Str>): Int {
         } else if (args[index] == "--screenshot" && index + 1 < args.size()) {
             screenshotPath = args[index + 1]
             index = index + 1
-        } else if (args[index] == "--sheet" && index + 1 < args.size()) {
-            sheetPath = args[index + 1]
+        } else if (args[index] == "--script" && index + 1 < args.size()) {
+            script = args[index + 1]
             index = index + 1
-        } else if ((args[index] == "--click" || args[index] == "--press" || args[index] == "--rclick")
-            && index + 1 < args.size()
-        ) {
-            holdClick = args[index] == "--press"
-            if (args[index] == "--rclick") {
-                clickButton = Button.Right
+        } else if (args[index] == "--seed" && index + 1 < args.size()) {
+            val parsed: Opt<Int> = args[index + 1].toInt()
+            if (parsed.hasValue()) {
+                seed = parsed.value()
             }
-            val parts: List<Str> = args[index + 1].split(",")
-            if (parts.size() == 2) {
-                val pointX: Opt<Int> = parts[0].toInt()
-                val pointY: Opt<Int> = parts[1].toInt()
-                if (pointX.hasValue() && pointY.hasValue()) {
-                    clickX = pointX.value()
-                    clickY = pointY.value()
-                }
+            index = index + 1
+        } else if (args[index] == "--difficulty" && index + 1 < args.size()) {
+            val parsed: Opt<Int> = args[index + 1].toInt()
+            if (parsed.hasValue() && parsed.value() >= 0 && parsed.value() <= 2) {
+                level = parsed.value()
             }
             index = index + 1
         }
         index = index + 1
     }
 
-    var ui: Ui = uiOpen("minui v0.5 - the tree draws itself", 420, 540, false, true)
+    var ui: Ui = uiOpen("Minesweeper - minui (SDL2 + Skia)", 400, 400, false, true)
     if (!uiIsOpen(*ui)) {
         println("window open failed: " + uiFailed())
         return 1
     }
     var uiPtr: *Ui = *ui
-    val fontLoaded: Bool = uiLoadFont(*ui, "Segoe UI", 16, 30)
-    var sheetLoaded: Bool = false
-    if (sheetPath.size() > 0) {
-        sheetLoaded = uiLoadSheet(*ui, sheetPath, 16)
+    if (!uiLoadFont(*ui, "Segoe UI", 15, 20)) {
+        println("font load failed")
+        uiClose(*ui)
+        return 1
     }
-
-    var frame: Frame = buildDemo(420, 540)
-    var framePtr: *Frame = *frame
-    var theme: UiTheme = demoTheme()
-    var demo: Demo = Demo("click a button, or a cell", 0, 0, List<Int>(0, 0), List<Int>(0, 0), false)
-    var demoPtr: *Demo = *demo
-    val bound: Bool = bindDemo(framePtr)
-    // The two nodes the handlers write to, found by name - the same way a listener finds its node.
-    var statusNode: Int = 0 - 1
-    var difficultyNode: Int = 0 - 1
-    var boardNode: Int = 0 - 1
-    val statusFound: *Int = framePtr.names.getPtr("status")
-    if (statusFound != null) {
-        statusNode = * statusFound
+    var game: Game = freshGame(Difficulty.Beginner, seed)
+    var gamePtr: *Game = *game
+    if (level != 0) {
+        game.difficulty = Difficulty.Intermediate
+        if (level == 2) {
+            game.difficulty = Difficulty.Expert
+        }
+        game.board = newGame(game.difficulty, seed)
+        game.status = difficultyName(game.difficulty) + ": left click opens, right click flags"
     }
-    val difficultyFound: *Int = framePtr.names.getPtr("difficulty")
-    if (difficultyFound != null) {
-        difficultyNode = * difficultyFound
-    }
-    val boardFound: *Int = framePtr.names.getPtr("board")
-    if (boardFound != null) {
-        boardNode = * boardFound
-    }
+    var theme: UiTheme = gameTheme()
+    val built: Bool = buildGame(gamePtr, uiPtr)
+    val startedDifficulty: Difficulty = game.difficulty
+    val startedLevel: Int = startedDifficulty.toInt()
     println(
-        "minui v0.5: font=" + fontLoaded.toString() + " sheet=" + sheetLoaded.toString()
-                + " bound=" + bound.toString() + " nodes=" + framePtr.nodes.size().toString()
+        "minesweeper: difficulty=" + startedLevel.toString()
+                + " seed=" + seed.toString() + " built=" + built.toString()
+                + " nodes=" + gamePtr.frame.nodes.size().toString()
+                + " size=" + gamePtr.frame.nodes[0].rect.width.toString()
+                + "x" + gamePtr.frame.nodes[0].rect.height.toString()
     )
 
-    // The screen's answer: the action code says *what*, `h.hit`'s payload says *which*, and the
-    // event says which button - the walk hands it in for exactly this reason. Answering true
-    // consumes the event; false would let the walk continue to the parent.
+    // The screen's answer. The action says *what*, the event says which button, the leaf's payload
+    // says which cell - and the rules module does the rest.
     val answer: (Hit, *UiEvent) -> Bool = (h: Hit, e: *UiEvent) -> {
-        val app: *Demo = demoPtr
-        if (h.action == Act.NewGame.toInt()) {
+        val g: *Game = gamePtr
+        if (h.action == Act.Cell.toInt()) {
             if (e.kind == UiEventKind.MouseDown) {
-                app.revealed.clear()
-                app.flags.clear()
-                app.clicks = app.clicks + 1
-                app.status = "new game (" + app.clicks.toString() + ")"
-                setText(framePtr, statusNode, app.status)
-                println("  action new_game count=" + app.clicks.toString())
+                val cellIndex: Int = g.frame.nodes[h.hit].payload
+                val x: Int = cellIndex % g.board.width
+                val y: Int = cellIndex / g.board.width
+                if (e.buttons == MaskLeft + MaskRight || e.button == Button.Middle) {
+                    chord(*g.board, x, y)
+                    g.status = "chord " + x.toString() + "," + y.toString()
+                } else if (e.button == Button.Right) {
+                    toggleFlag(*g.board, x, y)
+                    g.status = "flag " + x.toString() + "," + y.toString()
+                } else {
+                    reveal(*g.board, x, y)
+                    if (g.startedAt == 0) {
+                        g.startedAt = uiTicks()
+                    }
+                    g.status = "open " + x.toString() + "," + y.toString()
+                }
+                if (g.board.status == GameStatus.Lost) {
+                    g.status = "boom - press NEW GAME (or R)"
+                }
+                if (g.board.status == GameStatus.Won) {
+                    g.status = "you won in " + g.elapsed.toString() + "s"
+                }
+                setTextNamed(*g.frame, "status", g.status)
+                println("  action " + h.action.toString() + " " + g.status)
+            }
+            return true
+        }
+        if (h.action == Act.Restart.toInt()) {
+            if (e.kind == UiEventKind.MouseDown) {
+                restartGame(g, uiPtr, g.seed)
+                println("  action restart")
             }
             return true
         }
         if (h.action == Act.Difficulty.toInt()) {
             if (e.kind == UiEventKind.MouseDown) {
-                app.difficulty = (app.difficulty + 1) % 3
-                setText(framePtr, difficultyNode, "DIFFICULTY: " + difficultyName(app.difficulty))
-                println("  action difficulty level=" + app.difficulty.toString())
+                switchDifficulty(g, uiPtr, h.payload)
+                println("  action difficulty " + h.payload.toString())
             }
             return true
         }
         if (h.action == Act.Quit.toInt()) {
             if (e.kind == UiEventKind.MouseDown) {
-                app.quit = true
-                println("  action quit")
-            }
-            return true
-        }
-        if (h.action == Act.Cell.toInt()) {
-            if (e.kind == UiEventKind.MouseDown) {
-                val cell: Int = framePtr.nodes[h.hit].payload
-                if (e.button == Button.Right) {
-                    listToggle(*app.flags, cell)
-                    app.status = "flag " + cell.toString()
-                } else if (e.buttons == MaskLeft + MaskRight) {
-                    app.status = "chord " + cell.toString()
-                } else {
-                    listToggle(*app.revealed, cell)
-                    app.status = "cell " + cell.toString()
-                }
-                setText(framePtr, statusNode, app.status)
-                println("  action cell " + app.status)
+                g.quit = true
             }
             return true
         }
         if (h.action == Act.Background.toInt()) {
-            println("  action background (nobody else wanted it)")
             return true
         }
         return false
     }
     val custom: (Int) -> Unit = (node: Int) -> {
-        paintCell(framePtr, demoPtr, boardNode, uiPtr, node, sheetLoaded)
+        paintCell(gamePtr, uiPtr, node)
     }
 
-    // The scripted pointer, if any: through SDL's own queue, so what it exercises is the real path
-    // (poll -> translate -> tree), not a shortcut into the handlers.
-    if (clickX >= 0) {
-        uiPushMouse(UiEventKind.MouseMove, clickX, clickY, Button.None)
-        uiPushMouse(UiEventKind.MouseDown, clickX, clickY, clickButton)
-        if (!holdClick) {
-            uiPushMouse(UiEventKind.MouseUp, clickX, clickY, clickButton)
-        }
+    val pushed: Int = runScript(script)
+    if (pushed > 0) {
+        println("scripted clicks: " + pushed.toString())
     }
 
     var frames: Int = 0
     var running: Bool = true
+    var dirty: Bool = true
+    var shownSeconds: Int = 0 - 1
     while (running) {
+        var hadEvent: Bool = false
         while (uiPollEvent(*uiPtr)) {
+            hadEvent = true
             val e: UiEvent = ui.event
             if (e.kind == UiEventKind.Close) {
                 running = false
-            } else if (e.kind == UiEventKind.KeyDown && e.key == SDLK_ESCAPE) {
-                running = false
+            } else if (e.kind == UiEventKind.KeyDown) {
+                if (e.key == SDLK_ESCAPE) {
+                    running = false
+                } else if (e.key == SDLK_r) {
+                    restartGame(gamePtr, uiPtr, gamePtr.seed)
+                    println("  key restart")
+                } else if (e.key == SDLK_1) {
+                    switchDifficulty(gamePtr, uiPtr, 0)
+                } else if (e.key == SDLK_2) {
+                    switchDifficulty(gamePtr, uiPtr, 1)
+                } else if (e.key == SDLK_3) {
+                    switchDifficulty(gamePtr, uiPtr, 2)
+                }
             } else {
-                uiEvent(framePtr, *e, answer)
+                uiEvent(*gamePtr.frame, *e, answer)
             }
         }
-        if (demoPtr.quit) {
+        if (hadEvent) {
+            dirty = true
+        }
+        if (gamePtr.quit) {
             running = false
         }
-        uiClear(*uiPtr, theme.background)
-        paintFrame(framePtr, *theme, uiPtr, custom)
-        uiPresent(*uiPtr)
-        frames = frames + 1
-        if (maxFrames >= 0 && frames >= maxFrames) {
-            running = false
+        // The clock runs only while the game does: a win or a loss freezes the reading.
+        if (gamePtr.startedAt > 0 && gamePtr.board.status == GameStatus.Playing) {
+            gamePtr.elapsed = (uiTicks() - gamePtr.startedAt) / 1000
+        }
+        if (gamePtr.elapsed != shownSeconds) {
+            shownSeconds = gamePtr.elapsed
+            dirty = true
+        }
+        // A frame is drawn when something changed: an event (a click, the pointer moving over a
+        // cell) or the clock moving a second on. `--frames` draws every frame instead, so a
+        // screenshot is the state after exactly N frames.
+        if (maxFrames >= 0) {
+            dirty = true
+        }
+        if (dirty) {
+            setTextNamed(*gamePtr.frame, "counter", counterText(minesRemaining(*gamePtr.board)))
+            setTextNamed(*gamePtr.frame, "timer", gamePtr.elapsed.toString())
+            uiClear(*uiPtr, theme.background)
+            paintFrame(*gamePtr.frame, *theme, uiPtr, custom)
+            uiPresent(*uiPtr)
+            frames = frames + 1
+            dirty = false
+            if (maxFrames >= 0 && frames >= maxFrames) {
+                running = false
+            }
+        } else {
+            uiDelay(4)
         }
     }
     println("frames drawn: " + frames.toString())
     if (screenshotPath.size() > 0) {
-        println("screenshot " + screenshotPath + ": " + uiScreenshot(*uiPtr, screenshotPath).toString())
+        println(
+            "screenshot " + screenshotPath + ": "
+                    + uiScreenshot(*uiPtr, screenshotPath).toString()
+        )
     }
     uiClose(*uiPtr)
     return 0

@@ -193,6 +193,25 @@ fun addGrid(f: *Frame, parent: Int, name: Str, x: Int, y: Int, cell: Int, cols: 
     return grid
 }
 
+// The node a name resolved to, or -1. A handler uses this when the tree may have been rebuilt under
+// it (a new difficulty, a new screen): names survive a rebuild, indices do not.
+fun nodeNamed(f: *Frame, name: Str): Int {
+    val found: *Int = f.names.getPtr(name)
+    if (found == null) {
+        return 0 - 1
+    }
+    return * found
+}
+
+// Write a named node's text, if the name is in the tree. Quiet on a missing name (a bug the
+// binding's `frameOn` already reported at setup) so a rebuild cannot crash a frame.
+fun setTextNamed(f: *Frame, name: Str, text: Str): Unit {
+    val node: Int = nodeNamed(f, name)
+    if (node >= 0) {
+        setText(f, node, text)
+    }
+}
+
 // Name a node. A duplicate - or the empty name, which means "anonymous" - is refused, so the
 // name -> index map never disagrees with the tree.
 fun setName(f: *Frame, node: Int, name: Str): Bool {

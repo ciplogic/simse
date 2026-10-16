@@ -87,6 +87,9 @@ fun SDL_GetMouseState(x: *Int, y: *Int): Int
 @SmGen("native", "SDL2.dll", "SDL_GetTicks")
 fun SDL_GetTicks(): Int
 
+@SmGen("native", "SDL2.dll", "SDL_SetWindowSize")
+fun SDL_SetWindowSize(window: RawPtr, width: Int, height: Int): Unit
+
 // Puts an event back on SDL's queue: how the scripted-input modes feed a click through the *real*
 // path instead of calling the app's handler directly.
 @SmGen("native", "SDL2.dll", "SDL_PushEvent")
@@ -307,6 +310,7 @@ fun winArgb(alpha: Int, red: Int, green: Int, blue: Int): Int
 val SDL_INIT_VIDEO: Int = 32
 val SDL_WINDOWPOS_CENTERED: Int = 805240832
 val SDL_WINDOW_RESIZABLE: Int = 32
+val SDL_RENDERER_SOFTWARE: Int = 1
 val SDL_RENDERER_PRESENTVSYNC: Int = 4
 val SDL_TEXTUREACCESS_STREAMING: Int = 1
 

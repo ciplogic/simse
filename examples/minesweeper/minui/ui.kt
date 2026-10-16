@@ -75,9 +75,17 @@ fun uiOpen(title: Str, width: Int, height: Int, resizable: Bool, vsync: Bool): U
         SDL_Quit()
         return ui
     }
-    var rendererFlags: Int = 0
+    // SDL's software blitter, not the accelerated renderer: with the direct3d renderer on this
+    // machine some window sizes come back with red and blue traded - in the window itself, not just
+    // in a readback (504x592 swapped, 512x512 not, and no other difference between the two runs;
+    // the probes that show it are `build/colorprobe*.cpp`, git-ignored). The software path is
+    // pixel-exact at every tested size, and all it is asked to do is blit: Skia has drawn every
+    // pixel already. `vsync` is still passed on (the blitter ignores it; a caller that redraws only
+    // when something changed - the app below - needs no pacing, and a caller that wants the display
+    // to pace it needs the accelerated renderer).
+    var rendererFlags: Int = SDL_RENDERER_SOFTWARE
     if (vsync) {
-        rendererFlags = SDL_RENDERER_PRESENTVSYNC
+        rendererFlags = rendererFlags + SDL_RENDERER_PRESENTVSYNC
     }
     ui.renderer = SDL_CreateRenderer(ui.window, 0 - 1, rendererFlags)
     if (ui.renderer == null) {
@@ -152,7 +160,8 @@ fun uiClose(ui: *Ui): Unit {
     SDL_Quit()
 }
 
-// The bytes as a streaming texture, then to the screen. 0.19 ms at 560x300, measured.
+// The bytes as a streaming texture, then to the screen through SDL's software blitter: 0.16 ms at
+// 294x382, 0.37 ms at 744x496 (upload + clear + copy + present, a full-window blit, measured).
 fun uiPresent(ui: *Ui): Unit {
     if (!uiIsOpen(ui)) {
         return
@@ -161,6 +170,40 @@ fun uiPresent(ui: *Ui): Unit {
     SDL_RenderClear(ui.renderer)
     SDL_RenderCopy(ui.renderer, ui.texture, null, null)
     SDL_RenderPresent(ui.renderer)
+}
+
+// A new canvas size: the window, the texture, the buffer and the Skia surface over it. The buffer
+// is C++'s and may have moved, so the surface is rebuilt on the new address (which is why this
+// exists rather than a caller poking `ui.width`). The frame's own geometry is the caller's: a
+// bigger board is a rebuilt tree, not a stretched one.
+fun uiResize(ui: *Ui, width: Int, height: Int): Bool {
+    if (!uiIsOpen(ui) || width <= 0 || height <= 0) {
+        return false
+    }
+    SDL_SetWindowSize(ui.window, width, height)
+    if (ui.texture != null) {
+        SDL_DestroyTexture(ui.texture)
+    }
+    ui.texture = SDL_CreateTexture(
+        ui.renderer, SDL_PIXELFORMAT_ARGB8888,
+        SDL_TEXTUREACCESS_STREAMING, width, height
+    )
+    ui.width = width
+    ui.height = height
+    ui.pixels = winPixels(width, height)
+    if (ui.surface != null) {
+        sk_surface_unref(ui.surface)
+    }
+    var info: SkImageInfo = SkImageInfo(
+        null, width, height, SK_COLORTYPE_BGRA_8888,
+        SK_ALPHATYPE_PREMUL
+    )
+    ui.surface = sk_surface_new_raster_direct(*info, ui.pixels, width * 4, null, null, null)
+    if (ui.surface == null) {
+        return false
+    }
+    ui.canvas = sk_surface_get_canvas(ui.surface)
+    return ui.texture != null
 }
 
 // What the renderer actually holds, as a 32-bit BMP: the verification path. The frame is
