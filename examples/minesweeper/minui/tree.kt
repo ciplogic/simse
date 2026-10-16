@@ -86,9 +86,9 @@ fun mouseUp(x: Int, y: Int, button: Button, buttons: Int): UiEvent {
 // One node. POD-ish on purpose: the walk reads these by pointer and never copies one.
 // `name` is the author's handle (`x:Name`, HTML's `id`), `""` when anonymous; `listener` is the
 // *resolved* registration (-1 = none); `payload` is the app's own index into what the node shows
-// (a cell, a difficulty, a slot) and the framework never reads it; `palette`/`sprite` are the
-// drawing slots, which the headless half carries but does not interpret. (`data` is a keyword
-// here, so the field is `payload` - `setPayload` is the setter.)
+// (a cell, a difficulty, a slot) and the framework never reads it; `palette` is the paint
+// variant (which of a kind's looks, see `paint.kt`); `align` places a `Label`'s text
+// (`Align`). (`data` is a keyword here, so the field is `payload` - `setPayload` is the setter.)
 data class Node(
     var kind: NodeKind,
     var name: Str,
@@ -99,6 +99,7 @@ data class Node(
     var payload: Int,
     var text: Str,
     var palette: Int,
+    var align: Int,
     var sprite: Int,
     var visible: Bool,
     var enabled: Bool
@@ -112,6 +113,13 @@ data class Listener(var node: Int, var action: Int, var payload: Int)
 // node the event is *about* - a grid shares one listener, so the leaf is what says which cell.
 // `action == -1` is "nobody consumed it".
 data class Hit(var action: Int, var node: Int, var hit: Int, var payload: Int)
+
+// Text placement for a `Label` (and the painter's centring of a `Button`'s label).
+enum class Align {
+    Left = 0,
+    Center = 1,
+    Right = 2
+}
 
 // A screen's whole UI. `names` is built as the tree is built (a duplicate is refused by `setName`),
 // `hover`/`pressed` are the framework's own interaction state, kept by arena index. `hover` is the
@@ -132,7 +140,7 @@ data class Frame(
 fun newFrame(width: Int, height: Int): Frame {
     val root: Node = Node(
         NodeKind.Root, "root", Rect(0, 0, width, height), 0 - 1,
-        List<Int>(0, 0), 0 - 1, 0, "", 0, 0, true, true
+        List<Int>(0, 0), 0 - 1, 0, "", 0, 0, 0, true, true
     )
     var nodes: List<Node> = List<Node>(0, root)
     nodes.append(root)
@@ -146,7 +154,7 @@ fun newFrame(width: Int, height: Int): Frame {
 fun addNode(f: *Frame, parent: Int, kind: NodeKind, x: Int, y: Int, width: Int, height: Int): Int {
     val node: Node = Node(
         kind, "", Rect(x, y, width, height), parent, List<Int>(0, 0),
-        0 - 1, 0, "", 0, 0, true, true
+        0 - 1, 0, "", 0, 0, 0, true, true
     )
     val index: Int = f.nodes.size()
     f.nodes.append(node)
@@ -199,6 +207,11 @@ fun setPayload(f: *Frame, node: Int, payload: Int): Unit {
 
 fun setPalette(f: *Frame, node: Int, palette: Int): Unit {
     f.nodes[node].palette = palette
+}
+
+// Which of the kind's looks a node takes (see `paint.kt`), and where a label's text sits.
+fun setAlign(f: *Frame, node: Int, align: Align): Unit {
+    f.nodes[node].align = align.toInt()
 }
 
 fun setSprite(f: *Frame, node: Int, sprite: Int): Unit {
@@ -272,14 +285,18 @@ fun uiBubbleTarget(f: *Frame, leaf: Int): Int {
 // The leaf -> root walk: each enabled listener on the way is asked in turn, and the first one that
 // answers true consumes the event. `from` is where the walk starts (the leaf, or the captured node
 // on a release), `reported` is the leaf the event is about. The answer *is* the screen - minui
-// holds no callback of its own and needs no vtable to reach one.
-fun uiWalk(f: *Frame, e: *UiEvent, from: Int, reported: Int, answer: (Hit) -> Bool): Hit {
+// holds no callback of its own and needs no vtable to reach one - and it is handed the event too,
+// because which button was pressed (and whether this is the down or the up) is the app's business.
+fun uiWalk(
+    f: *Frame, e: *UiEvent, from: Int, reported: Int,
+    answer: (Hit, *UiEvent) -> Bool
+): Hit {
     var node: Int = from
     while (node >= 0) {
         val listener: Int = f.nodes[node].listener
         if (listener >= 0 && f.nodes[node].enabled) {
             val h: Hit = Hit(f.listeners[listener].action, node, reported, f.listeners[listener].payload)
-            if (answer(h)) {
+            if (answer(h, e)) {
                 return h
             }
         }
@@ -301,7 +318,7 @@ fun uiWalk(f: *Frame, e: *UiEvent, from: Int, reported: Int, answer: (Hit) -> Bo
 //
 // Other kinds (keys, wheel, close, tick) do not hit-test; a caller sends those straight to the
 // layer, and `Tick` is what drives a redraw when nothing else happens.
-fun uiEvent(f: *Frame, e: *UiEvent, answer: (Hit) -> Bool): Hit {
+fun uiEvent(f: *Frame, e: *UiEvent, answer: (Hit, *UiEvent) -> Bool): Hit {
     if (e.kind == UiEventKind.MouseMove) {
         val leaf: Int = uiHitTest(f, e.x, e.y)
         f.hover = uiBubbleTarget(f, leaf)

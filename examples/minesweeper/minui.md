@@ -55,8 +55,8 @@ data class Rect(var x: Int, var y: Int, var width: Int, var height: Int)
 // inert), so the click path never compares strings. `payload` is the app's own index into what the
 // node shows (a cell number, a difficulty, a slot) - the framework never reads it. (`data` is a
 // keyword in Simse - `data class` - so the field is `payload`, `setPayload` its setter.)
-// `palette` is a slot into the screen's colour list; `sprite` is an atlas cell of the loaded
-// sheet. Two different things, two fields.
+// `palette` is the paint variant (which of a kind's looks, `paint.kt`); `align` places a label's
+// text; `sprite` is an atlas cell of the loaded sheet.
 data class Node(
     var kind: NodeKind,
     var name: Str,            // "" when anonymous
@@ -66,11 +66,14 @@ data class Node(
     var listener: Int,        // index into Frame.listeners, -1 = none
     var payload: Int,         // the app's payload
     var text: Str,            // labels and counters
-    var palette: Int,         // slot into the screen's palette
+    var palette: Int,         // which of the kind's looks
+    var align: Int,           // Align: Left / Center / Right
     var sprite: Int,          // atlas cell of the loaded sheet
     var visible: Bool,
     var enabled: Bool
 )
+
+enum class Align { Left = 0, Center = 1, Right = 2 }
 
 // What a name resolved to, once: the node, the action code the screen wants called for it, and
 // the payload the registration carried (a difficulty, a column, 0).
@@ -155,11 +158,13 @@ is a real error and `frameOn` reports it at setup, where it is cheap to see.
 // click. Key events do not hit-test: they go to the top layer (and to `keyFocus` once keyboard
 // navigation exists).
 fun uiHitTest(f: *Frame, x: Int, y: Int): Int                        // arena index, -1 when nothing
-fun uiEvent(f: *Frame, e: *UiEvent, answer: (Hit) -> Bool): Hit      // the tree's whole path
+fun uiEvent(f: *Frame, e: *UiEvent, answer: (Hit, *UiEvent) -> Bool): Hit   // the tree's whole path
 ```
 
 The framework stops at the listener: the *screen* reads the action code and answers. That split is
-the whole point of the model - minui never needs to know what a button does.
+the whole point of the model - minui never needs to know what a button does. The walk hands the
+*event* along with the hit, because which button was pressed - and whether this is the down or the
+up - is the app's business and not something the hit can carry.
 
 The screen answers it:
 
@@ -252,34 +257,42 @@ Rules, in one place so they are testable:
 - Screens are values; a screen that owns a `Board` owns it by value and mutates it by pointer.
   Nothing in the stack is shared between two layers except through `&`.
 
-## 6. Painting: the visitor
+## 6. Painting: the visitor - LANDED (`paint.kt`)
 
-Retained mode, one full-frame redraw per input (0.19 ms measured — no damage tracking in v1):
+Retained mode, one full-frame redraw per input (0.19 ms measured - no damage tracking in v1):
 
 ```kt
-// The painter visits the arena in draw order (parents before children, siblings in `children`
-// order), and for each node either draws it itself (the built-in kinds) or hands it to the
-// screen's custom painter. State is passed in, never stored in the node: hover and press come
-// from the frame, game state from the screen.
-fun paintFrame(f: *Frame, s: *Screen, ui: *Ui): Unit {
-    // walk: recursion over `children` by index, so the painter never copies a node
-    // for each node:
-    //   Panel  -> fill / round-rect from the node's palette slot
-    //   Label  -> text, centered or left, measured with uiTextWidth
-    //   Button -> chrome for normal / hover / pressed, then its label child
-    //   Sprite -> one atlas cell of the loaded sheet
-    //   Custom -> screenPaintNode(s, f, node, ui)
-}
+// The painter visits the arena in draw order: a parent before its children, children in
+// `children` order, so a later sibling is on top - the same order the hit test reverses, and the
+// same order the XML expands in. Nothing is stored on a node: hover and press come from the frame,
+// which is what makes a button's chrome a function of *this* frame rather than of last frame's
+// leftovers.
+fun paintFrame(f: *Frame, theme: *UiTheme, ui: *Ui, custom: (Int) -> Unit): Unit
+fun paintNode(f: *Frame, theme: *UiTheme, ui: *Ui, node: Int, custom: (Int) -> Unit): Unit
+fun paintSelf(f: *Frame, theme: *UiTheme, ui: *Ui, node: Int, custom: (Int) -> Unit): Unit
 ```
 
-Two hooks keep the framework small and the app free:
+The look of the built-in kinds, in one place:
 
-- `screenPaintNode(s, f, node, ui)` — the app's own painting for `NodeKind.Custom` (the mine
-  grid, a minimap, an animated portrait). This is "controls with custom painting": the control's
-  geometry, name and listener live in the arena, its look lives in the app.
-- **Palette**: colors are `Int` (ARGB) taken from a per-screen palette (`List<Int>`, indexed by a
-  node's `palette` slot) so a theme is one list. `argb(a, r, g, b)` is a tiny C++ helper in
-  `_res.md`, because packing 255<<24 in Simse arithmetic is a needless signed-overflow question.
+- **Panel**: a rounded fill in `theme.panel`; `palette = PaletteEmphasized` draws its edge too.
+- **Label**: body text by default; `palette` picks title-bold (`Emphasized`), `Accent` or `Dim`,
+  and `align` places it (`Center` goes through `uiTextBox`, which measures it).
+- **Button**: the three fills from the theme, picked by the frame's own state -
+  `f.pressed == node`, else `f.hover == node`, else idle, and `theme.buttonDisabled` when the
+  node is disabled (it is hit, but `uiEvent` steps over it, so nothing hovers it). Its own `text`
+  is centred; a button does not need a label child.
+- **Sprite**: one atlas cell of the loaded sheet at the node's rect.
+- **Custom**: handed to `custom(node)` - the app's own painting.
+
+The two hooks that keep the framework small and the app free:
+
+- `custom(node)` - the app's painting for `NodeKind.Custom` (the mine grid, a minimap, an animated
+  portrait). This is "controls with custom painting": the control's geometry, name and listener
+  live in the arena, its look lives in the app. The callback is the screen's own closure, so no
+  vtable is needed to reach it, and it gets the node's index - `f.nodes[node]` is the geometry and
+  `payload`.
+- **`UiTheme`** - one value holding every colour the built-ins use. `argb(a, r, g, b)` (the `win*`
+  glue) packs them, because `255 << 24` in Simse arithmetic is a needless signed-overflow question.
 
 ## 7. XML: a loader, not the model
 
@@ -323,12 +336,13 @@ Two files of declarations (SDL2, Skia), one of glue, one of types:
 ```
 examples/minesweeper/minui/
   tree.kt      the headless core (landed, shot 2a): arena, names, listeners, hit-test, walk, events
+  paint.kt     the painter (landed, shot 2b): UiTheme, the palette values, the visitor
   api.kt       the raw @SmGen declarations (landed): SDL2, Skia's C API, the `win*` glue helpers,
                every constant the two libraries need (in decimal, printed from their own headers)
   ui.kt        the typed surface the app calls (landed): window, canvas, text, sprites, input
   _res.md      the C++ glue (landed): the SDL_Event union readers, the two buffers, the BMP writer,
                `argb`, and the synthetic mouse event the scripted modes push through SDL
-app/src/       `main.kt` - minui v0, shot 1's platform proof (see the example's README)
+app/src/       `main.kt` - minui v0.5, shot 2b: the tree driving the drawing (see the README)
 ```
 
 The typed surface is integer-coordinate (the UI is pixel art) and has no object lifetime to
@@ -481,8 +495,13 @@ Probes in `build/` (git-ignored, not part of the deliverable), run on Windows ar
      contract: it pins each claim in §4 line by line (leaf-first bubbling, the disabled step-over,
      one listener for 25 cells with the leaf naming the cell, capture across a drag, a declining
      listener, an unclaimed click, and the button mask that makes a chord a chord).
-   - **2b, painted**: the same tree drawn through minui, with hover/press feedback and three fake
-     buttons. Verified by `--script` clicks and screenshots.
+   - **2b, painted - LANDED** (`paint.kt`, `app/src/main.kt`): the same tree drawn through minui,
+     the three fake buttons with names and listeners, an 8x8 board of custom cells, a status line
+     the handlers rewrite. Verified by scripted runs whose output *and* pixels say the same thing:
+     `--click 210,115` prints `action new_game count=1` and the button measures hovered
+     (78,116,172), `--press` measures pressed (44,68,104), `--click 162,344` prints `action cell
+     26` and the cell measures revealed (30,38,52) with the status line reading `cell 26`, and
+     `--rclick 162,344` prints `action cell flag 26` with the flag's own gold at the cell's centre.
 3. **The rules**: `examples/minesweeper/game` + `stress/minesweeper` (headless, deterministic).
 4. **The game**: the three screens, the board, assets (generated PNG atlas), `run.bat`, README.
 5. **XML**: the loader + the menu screen loaded from XML (the rest stays code-built until it

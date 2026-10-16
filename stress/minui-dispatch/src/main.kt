@@ -65,7 +65,7 @@ fun eventText(e: UiEvent): Str {
 }
 
 // Feed one event, printing the chain the walk visited and what consumed it.
-fun feed(f: *Frame, e: *UiEvent, trace: *List<Str>, answer: (Hit) -> Bool): Unit {
+fun feed(f: *Frame, e: *UiEvent, trace: *List<Str>, answer: (Hit, *UiEvent) -> Bool): Unit {
     trace.clear()
     val h: Hit = uiEvent(f, e, answer)
     println(eventText(*e) + " -> consumed " + hitText(f, h))
@@ -125,7 +125,7 @@ fun main(): Int {
     // root and the declining button, so their parents get their turn.
     var trace: List<Str> = List<Str>(0, "")
     var tracePtr: *List<Str> = *trace
-    val answer: (Hit) -> Bool = (h: Hit) -> {
+    val answer: (Hit, *UiEvent) -> Bool = (h: Hit, e: *UiEvent) -> {
         tracePtr.append("    candidate " + hitText(fp, h))
         return h.action != Act.Root.toInt() && h.action != Act.Declines.toInt()
     }
