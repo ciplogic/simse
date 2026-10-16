@@ -322,30 +322,45 @@ Two files of declarations (SDL2, Skia), one of glue, one of types:
 
 ```
 examples/minesweeper/minui/
-  tree.kt      the headless core (LANDED): arena, names, listeners, hit-test, walk, events
-  api.kt       the raw @SmGen declarations: SDL2 (window/renderer/texture/events) and sk_* (canvas)
-  ui.kt        the window/canvas surface the app actually calls
-  _res.md      C++ glue: the SDL_Event union reader, the event queue, argb, the screenshot BMP
+  tree.kt      the headless core (landed, shot 2a): arena, names, listeners, hit-test, walk, events
+  api.kt       the raw @SmGen declarations (landed): SDL2, Skia's C API, the `win*` glue helpers,
+               every constant the two libraries need (in decimal, printed from their own headers)
+  ui.kt        the typed surface the app calls (landed): window, canvas, text, sprites, input
+  _res.md      the C++ glue (landed): the SDL_Event union readers, the two buffers, the BMP writer,
+               `argb`, and the synthetic mouse event the scripted modes push through SDL
+app/src/       `main.kt` - minui v0, shot 1's platform proof (see the example's README)
 ```
 
 The typed surface is integer-coordinate (the UI is pixel art) and has no object lifetime to
-manage by hand beyond `uiOpen`/`uiClose`:
+manage by hand beyond `uiOpen`/`uiClose`. This is the landed surface (`ui.kt`):
 
 ```kt
-fun uiOpen(title: Str, width: Int, height: Int, resizable: Bool): Ui     // window + renderer + texture + surface
+fun uiOpen(title: Str, width: Int, height: Int, resizable: Bool, vsync: Bool): Ui
 fun uiClose(ui: *Ui): Unit
-fun uiBegin(ui: *Ui): Unit                       // clear to the background colour
-fun uiPresent(ui: *Ui): Unit                     // upload + copy + present (the probed pipeline)
+fun uiIsOpen(ui: *Ui): Bool
+fun uiFailed(): Str                              // SDL_GetError(), for the app's own message
+fun uiPresent(ui: *Ui): Unit                     // upload + copy + present (0.19 ms at 560x300)
 fun uiPollEvent(ui: *Ui): Bool                   // one event into `ui.event`, false when none left
+fun uiPushMouse(kind: UiEventKind, x: Int, y: Int, button: Button): Bool   // scripted input
+fun uiButtons(ui: *Ui): Int                      // the mask held right now (chording)
+fun uiColor(alpha: Int, red: Int, green: Int, blue: Int): Int
+fun uiRgb(red: Int, green: Int, blue: Int): Int
 fun uiClear(ui: *Ui, color: Int): Unit
-fun uiRect(ui: *Ui, r: Rect, color: Int): Unit
-fun uiRound(ui: *Ui, r: Rect, radius: Int, color: Int): Unit
+fun uiFill(ui: *Ui, x: Int, y: Int, width: Int, height: Int, color: Int): Unit
+fun uiRoundFill(ui: *Ui, x: Int, y: Int, width: Int, height: Int, radius: Int, color: Int): Unit
+fun uiOutline(ui: *Ui, x: Int, y: Int, width: Int, height: Int, color: Int): Unit   // 1px, stroke
 fun uiLine(ui: *Ui, x0: Int, y0: Int, x1: Int, y1: Int, color: Int): Unit
-fun uiSprite(ui: *Ui, sprite: Int, r: Rect): Unit        // one atlas cell of the loaded sheet
-fun uiText(ui: *Ui, x: Int, y: Int, text: Str, size: Int, color: Int): Unit
-fun uiTextWidth(ui: *Ui, text: Str, size: Int): Int      // Skia measures; layout uses it
+fun uiCircle(ui: *Ui, centerX: Int, centerY: Int, radius: Int, color: Int): Unit
+fun uiPie(ui: *Ui, x: Int, y: Int, width: Int, height: Int, startDegrees: Int, sweepDegrees: Int, color: Int): Unit
+fun uiLoadFont(ui: *Ui, family: Str, size: Int, boldSize: Int): Bool   // system fonts, no .ttf
+fun uiText(ui: *Ui, x: Int, baselineY: Int, text: Str, color: Int, bold: Bool): Unit
+fun uiTextBox(ui: *Ui, x: Int, y: Int, width: Int, height: Int, text: Str, color: Int, bold: Bool): Unit
+fun uiTextWidth(ui: *Ui, text: Str, bold: Bool): Int      // Skia measures; centred text uses it
+fun uiLoadSheet(ui: *Ui, path: Str, cell: Int): Bool      // a PNG atlas, square cells, row-major
+fun uiSprite(ui: *Ui, index: Int, x: Int, y: Int, size: Int): Unit   // nearest sampling
 fun uiScreenshot(ui: *Ui, path: Str): Bool               // the verification path
 fun uiTicks(): Int                                       // SDL's clock, for the game timer
+fun uiDelay(milliseconds: Int): Unit
 ```
 
 `ui.event` is a `UiEvent` field on `Ui`, filled by `uiPollEvent` — no allocation, no `Opt`
@@ -431,6 +446,21 @@ Probes in `build/` (git-ignored, not part of the deliverable), run on Windows ar
 - `SDL_PIXELFORMAT_ARGB8888` is the memory layout Skia writes; `SDL_MAIN_HANDLED` is required.
 - The arena's mutation shape compiles and runs: `node.children[i].state = pressed` through a
   `*Node`, and copy-out/copy-back through a `*List<T>`.
+- **A class *construction* is braced initialization** in the emitted C++ (`SkRect{x, y, ...}`), so a
+  runtime `Int` in a `Float32` field is a narrowing *error* - while a literal (`1.0`) is fine, and a
+  call argument or a field write converts freely. Coordinates cross through one widening helper
+  (`skFloat` in `ui.kt`).
+- **A `native` declaration may take a pointer to a class** (`*SkRect`, `*SkImageInfo`): the thunk
+  spells it `void*` and the argument crosses as the address, which is what a mirrored
+  `native class` is for. The generator refused it before (`stress/native-struct-pointer` is the
+  case, and `GetSystemTime` filling a `SYSTEMTIME` in place is the proof) - without it no Skia call
+  that takes a struct could be declared at all.
+- **SDL's constants are data**: `SDL_PIXELFORMAT_ARGB8888` is 372645892 and
+  `SDL_TEXTUREACCESS_STREAMING` is 1 (both printed from the kit's headers by
+  `build/sdlconst.cpp`; a guessed value had been wrong in each direction).
+- **Scripted input can go through SDL's own queue**: the glue builds the bytes SDL would have
+  written and the app hands them to `SDL_PushEvent`, so a screenshot proves the whole input path -
+  the button fills measure 58,90,138 idle, 78,116,172 hovered and 44,68,104 pressed.
 - **A member call on a value reached through a pointer needs a local first**: `e.kind.toInt()`
   where `e` is a parameter emits `static_cast<Int>(simse_addressOf(e->kind))` - the field's
   *address* - which cl.exe refuses. The compiler's own sources carry the same workaround with the
@@ -439,8 +469,11 @@ Probes in `build/` (git-ignored, not part of the deliverable), run on Windows ar
 
 ## 12. Shots
 
-1. **minui v0**: SDL window + Skia canvas + the event pump + `uiPresent`/`uiScreenshot`, in
-   Simse; the probe's frame drawn from Simse. Verified by a screenshot.
+1. **minui v0 - LANDED** (`examples/minesweeper/minui/{api,ui}.kt`, `_res.md`,
+   `app/src/main.kt`): the SDL window, the Skia canvas over a byte buffer, `uiPresent`,
+   `uiScreenshot`, the event pump, system-font text, PNG sprites and the scripted-input push, all
+   from Simse. Verified by screenshots whose pixels are then measured (idle/hovered/pressed fills),
+   and by `--frames` smoke runs with VSync on. The example's README has the commands.
 2. **The tree, in two halves**:
    - **2a, headless — LANDED** (`examples/minesweeper/minui/tree.kt`, verified by
      `stress/minui-dispatch`): the arena, names, `frameOn` listeners, hit-test, bubbling,

@@ -68,6 +68,11 @@ simse_profile.csv
 ### (specs/simse-md.md) - written beside a project's root, never inside it ###
 _simse/
 
+### Third-party dev kits: headers and DLLs a wrapper binds by name at run time, unpacked
+### beside the repo (the SDL2 release zip -> Lib/3rdparty/SDL2-arm64/). Large and
+### machine-specific: they are fetched, not committed ###
+/Lib/
+
 ### Visual Studio: the profiling project's output (simse.vcxproj/simse.slnx) and the
 ### per-user state the IDE writes beside it ###
 /profile/
@@ -87,6 +92,11 @@ _simse/
 /examples/**/*.ilk
 ### The SDL2 example copies the DLL it binds at run time (examples/sdl2/run.bat) ###
 /examples/sdl2/app/SDL2.dll
+### The Minesweeper example copies the two DLLs it binds at run time (examples/minesweeper/run.bat):
+### `SDL2.dll` from the kit under Lib/, `libSkiaSharp.dll` from the SkiaSharp NuGet package.
+### (Its `out.cpp` and `.exe` are already covered by `/examples/**/*.cpp` and `*.exe` above.) ###
+/examples/minesweeper/app/SDL2.dll
+/examples/minesweeper/app/libSkiaSharp.dll
 ### The HTTP example's server log (examples/http) ###
 /examples/http/**/*.log
 
