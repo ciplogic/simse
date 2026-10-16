@@ -1,0 +1,53 @@
+rng first: 207482415
+rng range ok: true
+layout: 9x9 mines=10 cells=81
+status playing: true seeded: false
+after first click: status=0 revealed=63 seeded=true
+--- board after (4,4)
+.........
+.....1121
+.111.2###
+.2#2.2###
+13#2.2###
+#311.1###
+#2...1121
+#2.......
+#1.......
+
+re-reveal is a no-op: true counter=10
+after flag: counter=9 state=2
+reveal on a flag does nothing: true
+after unflag: counter=10
+chord at: 1,8
+chord without flags does nothing: true
+chord with the mine flagged opens the rest: true
+a mine is at: 0,8
+after the mine: status=2
+--- board after the loss
+.........
+.....1121
+.111.2*#*
+.2*2.2*##
+13*2.2###
+*311.1*#*
+*2...1121
+22.......
+X1.......
+
+clicks after the loss do nothing: true
+--- win script
+0,0:L; 1,0:L; 2,0:L; 3,0:L; 4,0:L; 5,0:L; 6,0:L; 7,0:L; 8,0:L; 0,1:L; 1,1:L; 2,1:L; 3,1:L; 4,1:L; 5,1:L; 6,1:L; 7,1:L; 8,1:L; 0,2:L; 1,2:L; 2,2:L; 3,2:L; 4,2:L; 5,2:L; 7,2:L; 0,3:L; 1,3:L; 3,3:L; 4,3:L; 5,3:L; 7,3:L; 8,3:L; 0,4:L; 1,4:L; 3,4:L; 4,4:L; 5,4:L; 6,4:L; 7,4:L; 8,4:L; 1,5:L; 2,5:L; 3,5:L; 4,5:L; 5,5:L; 7,5:L; 1,6:L; 2,6:L; 3,6:L; 4,6:L; 5,6:L; 6,6:L; 7,6:L; 8,6:L; 0,7:L; 1,7:L; 2,7:L; 3,7:L; 4,7:L; 5,7:L; 6,7:L; 7,7:L; 8,7:L; 1,8:L; 2,8:L; 3,8:L; 4,8:L; 5,8:L; 6,8:L; 7,8:L; 8,8:L
+after opening every safe cell: status=1 counter=0 flags=10
+--- board after the win
+.........
+.....1121
+.111.2F3F
+.2F2.2F31
+13F2.2231
+F311.1F2F
+F2...1121
+22.......
+F1.......
+
+expert: 30x16 mines=99 revealed=53
+intermediate: 16x16 revealed=59
