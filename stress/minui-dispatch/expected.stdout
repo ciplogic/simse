@@ -61,3 +61,10 @@ up(223,82) button=1 mask=4 -> consumed action=1 node=board#6 hit=cell#24 payload
     candidate action=1 node=board#6 hit=cell#24 payload=0
 wheel -> action=-1 node=none hit=none payload=0
 tick -> action=-1 node=none hit=none payload=0
+--- setRect and moveNode
+root: root#0=0,0,200,120
+setRect on a node: title#2=0,0,10,10
+after move(40,10): dialog#1=50,30,100,60 title#2=46,18,88,16
+hit at the new place: title#2
+hit at the old place: root#0
+a second move adds: dialog#1=55,35,100,60

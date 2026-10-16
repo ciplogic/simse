@@ -64,6 +64,12 @@ fun eventText(e: UiEvent): Str {
     return "event(" + kind.toInt().toString() + ")"
 }
 
+fun rectText(f: *Frame, node: Int): Str {
+    val r: Rect = f.nodes[node].rect
+    return nameOf(f, node) + "=" + r.x.toString() + "," + r.y.toString()
+    +"," + r.width.toString() + "," + r.height.toString()
+}
+
 // Feed one event, printing the chain the walk visited and what consumed it.
 fun feed(f: *Frame, e: *UiEvent, trace: *List<Str>, answer: (Hit, *UiEvent) -> Bool): Unit {
     trace.clear()
@@ -193,5 +199,29 @@ fun main(): Int {
     feed(fp, *mouseUp(223, 82, Button.Left, 4), tracePtr, answer)
     println("wheel -> " + hitText(fp, uiEvent(fp, *UiEvent(UiEventKind.Wheel, 0, 0, Button.None, 0, 0, 1), answer)))
     println("tick -> " + hitText(fp, uiEvent(fp, *UiEvent(UiEventKind.Tick, 0, 0, Button.None, 0, 0, 0), answer)))
+
+    // ---- setRect and moveNode: the transforms a dialog needs ----------------
+    // A modal result panel is loaded from XML at a size the window does not have: the app writes
+    // the frame's own rect (the window), stretches the scrim to it, and moves the dialog subtree to
+    // the middle. `setRect` writes a whole rect; `moveNode` shifts a subtree, because the rects are
+    // absolute and a child does not follow its parent by itself.
+    println("--- setRect and moveNode")
+    var dialogFrame: Frame = newFrame(200, 120)
+    var dp: *Frame = *dialogFrame
+    val dialog: Int = addNode(dp, dp.root, NodeKind.Panel, 10, 20, 100, 60)
+    setName(dp, dialog, "dialog")
+    val title: Int = addNode(dp, dialog, NodeKind.Label, 6, 8, 88, 16)
+    setName(dp, title, "title")
+    setRect(dp, dp.root, smRect(0, 0, 200, 120))
+    println("root: " + rectText(dp, dp.root))
+    setRect(dp, title, smRect(0, 0, 10, 10))
+    println("setRect on a node: " + rectText(dp, title))
+    setRect(dp, title, smRect(6, 8, 88, 16))
+    moveNode(dp, dialog, 40, 10)
+    println("after move(40,10): " + rectText(dp, dialog) + " " + rectText(dp, title))
+    println("hit at the new place: " + nameOf(dp, uiHitTest(dp, 60, 25)))
+    println("hit at the old place: " + nameOf(dp, uiHitTest(dp, 20, 40)))
+    moveNode(dp, dialog, 5, 5)
+    println("a second move adds: " + rectText(dp, dialog))
     return 0
 }

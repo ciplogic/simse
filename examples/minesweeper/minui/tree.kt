@@ -273,6 +273,28 @@ fun setEnabled(f: *Frame, node: Int, enabled: Bool): Unit {
     f.nodes[node].enabled = enabled
 }
 
+// Write a whole rect. The two things v1 needs it for are both "the whole screen": a frame's own
+// size, which `stackResizeTop` reads from the root, and a modal overlay's scrim, which has to
+// cover a window the XML cannot know the size of.
+fun setRect(f: *Frame, node: Int, rect: Rect): Unit {
+    f.nodes[node].rect = rect
+}
+
+// Shift a node and everything under it by (dx, dy). This is the one geometry transform v1 has, and
+// it is what a dialog needs to sit in the middle of a window (the whole subtree moves, because the
+// rects are absolute). Moving is one-way and two calls add up; a caller that wants a clean offset
+// loads a fresh screen for each push, which is what the example's result panel does.
+fun moveNode(f: *Frame, node: Int, dx: Int, dy: Int): Unit {
+    f.nodes[node].rect.x = f.nodes[node].rect.x + dx
+    f.nodes[node].rect.y = f.nodes[node].rect.y + dy
+    val kids: List<Int> = f.nodes[node].children
+    var i: Int = 0
+    while (i < kids.size()) {
+        moveNode(f, kids[i], dx, dy)
+        i = i + 1
+    }
+}
+
 // Bind behaviour to a name, once, when the screen is built: XAML's code-behind without
 // reflection. The name is resolved here, so the click path compares indices; a listener on a name
 // that is not in the tree answers false, which is a bug in the caller's binding (the caller can

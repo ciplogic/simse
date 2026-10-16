@@ -13,7 +13,8 @@ The example is two things at once:
 ```
 minui.md          the design: the tree, names/listeners/bubbling, screens, XML, the shots
 minui/            the module (`import minui`):
-  tree.kt           the headless core: arena, names, listeners, hit-test, the leaf-to-root walk
+  tree.kt           the headless core: arena, names, listeners, hit-test, the walk, the two
+                    geometry transforms (`setRect`, `moveNode`)
   paint.kt          the painter: the theme, the palette values, the visitor
   screens.kt        the layer stack: push/pop, the paint base, the window follows the top screen
   xmlread.kt        the XML text reader (the `xml` module has the tree types, not a reader)
@@ -42,6 +43,8 @@ run.bat --frames 3 --script "180,136:L"      :: ... after a click on the menu's 
 run.bat --difficulty 0 --script "147,187:L"  :: ... or straight to the board and a click on 4,4
 run.bat --difficulty 0 --script "147,187:L; r:K"        :: open a cell, then press R (a fresh board)
 run.bat --difficulty 0 --script "esc:K"      :: press Escape: back to the menu
+run.bat --difficulty 0 --script "147,187:L; 207,127:L"  :: open a cell, then a mine: the result panel
+run.bat --difficulty 0 --script "147,187:L; 207,127:L; 85,232:L"   :: ... then PLAY AGAIN
 ```
 
 `run.bat` does the four steps by hand: transpile with the three `--module` flags, compile the
@@ -90,6 +93,12 @@ pixel-exact at every size and all it has to do is blit.
   by `paintCell`. Left opens, right flags, middle (or both buttons) chords - a chord opens the
   covered neighbours of a satisfied number. A loss turns wrongly flagged cells into an X; a win
   flags every mine and the counter reads 000.
+- **A finished board raises a modal.** Win or lose, a result panel (also XML, 260x180) is pushed
+  *over* the board with `opaque = false`: the board is painted below it and dimmed by a scrim the
+  app fills, every click goes to the panel (the board is untouchable while it is up), PLAY AGAIN or
+  R plays the same board again, and MENU (or Escape) backs out. Its dialog is centred in a window
+  whose size the XML cannot know: the app stretches the scrim with `setRect` and moves the dialog
+  subtree with `moveNode`.
 - **A frame is drawn when something changed** - an event, or the clock moving a second on. An idle
   window burns no CPU (measured: 0.000 s over 3 idle seconds), which is the whole point of a
   retained tree.

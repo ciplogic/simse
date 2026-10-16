@@ -54,11 +54,13 @@ fun layoutFor(difficulty: Difficulty): BoardLayout {
     )
 }
 
-// The app's whole state. The game screen's frame lives here *boxed* (`&Frame`): a difficulty change
-// replaces the box with a fresh arena, and the stack holds the same box - a push shares a screen
-// rather than copying it, which is the point of a layer holding a reference.
+// The app's whole state. Both of the app's own screens live here *boxed* (`&Frame`): a difficulty
+// change replaces the board's box with a fresh arena, and each push of the result panel gets its
+// own (its dialog is centred for the window it is about to cover). The stack holds the same boxes -
+// a push shares a screen rather than copying it, which is the point of a layer holding a reference.
 data class Game(
     var frame: &Frame,
+    var result: &Frame,
     var board: Board,
     var difficulty: Difficulty,
     var seed: Int,
@@ -71,8 +73,9 @@ data class Game(
 
 fun freshGame(difficulty: Difficulty, seed: Int): Game {
     var placeholder: Frame = newFrame(1, 1)
+    var resultPlaceholder: Frame = newFrame(1, 1)
     return Game(
-        & placeholder, newGame(difficulty, seed), difficulty, seed, 0, 0,
+        & placeholder, & resultPlaceholder, newGame(difficulty, seed), difficulty, seed, 0, 0,
     "left opens, right flags, middle chords", false, 0-1
     )
 }
@@ -101,6 +104,23 @@ val menuXml: Str = `
 <button name="medium" rect="80,160,200,32">MEDIUM</button>
 <button name="expert" rect="80,200,200,32">EXPERT</button>
 <button name="quit" rect="80,264,200,32">QUIT</button>
+</screen>
+`
+
+// The result panel, in XML: a *modal* layer over the board. It is written at one nominal size
+// (260x180 - narrower than the smallest window, so it fits every difficulty) with everything
+// inside the dialog panel, because the app stretches the scrim to the real window and moves the
+// dialog subtree to the middle - the two things the XML cannot know. The scrim is a `custom` node:
+// dimming what is below is painting, and painting the app's own is `custom`'s job.
+val resultXml: Str = `
+<screen name="result" width="260" height="180">
+<custom name="scrim" rect="0,0,260,180"/>
+<panel name="dialog" rect="0,0,260,180" palette="plain">
+<label name="headline" rect="12,16,236,26" palette="emphasized" align="center">BOOM</label>
+<label name="detail" rect="12,50,236,18" palette="dim" align="center">the board had 10 mines</label>
+<button name="again" rect="12,116,112,30">PLAY AGAIN</button>
+<button name="to_menu" rect="136,116,112,30">MENU</button>
+</panel>
 </screen>
 `
 
@@ -304,6 +324,59 @@ fun showGame(g: *Game, stack: *ScreenStack, ui: *Ui, difficulty: Difficulty): Un
             }
     val box: &Frame = g.frame
     stackPush(stack, box, "game", true)
+    stackResizeTop(stack, ui)
+}
+
+// The result panel's bindings: play the same board again, or back to the menu. A click on the
+// scrim (or anything else on the panel) is consumed as background: a modal that dismissed itself
+// on a stray click would not be modal.
+fun bindResult(fp: *Frame): Bool {
+    var bound: Bool = true
+    if (!frameOn(fp, "again", Act.Restart.toInt(), 0)) {
+        bound = false
+    }
+    if (!frameOn(fp, "to_menu", Act.Back.toInt(), 0)) {
+        bound = false
+    }
+    if (!frameOn(fp, "result", Act.Background.toInt(), 0)) {
+        bound = false
+    }
+    return bound
+}
+
+// Push the result panel over the board: a *modal* layer, and the stack needs no flag for that -
+// input only ever reaches the top layer, so any top layer is modal. What keeps the board visible
+// (and dimmed) is `opaque = false`: the painter starts at the last opaque layer, so the game screen
+// below is painted first and the scrim is painted over it.
+//
+// The panel is loaded fresh for each push: its nominal 260x180 geometry is written in XML, and the
+// window it has to fit (`stackResizeTop`'s size, the game frame's root rect) is only known here.
+// The scrim is stretched to that window and the dialog subtree is moved to its middle - the same
+// `setRect`/`moveNode` pair the tree case pins.
+fun showResult(g: *Game, stack: *ScreenStack, ui: *Ui, headline: Str, detail: Str): Unit {
+    val loaded: Res<Frame> = loadScreen(resultXml)
+    if (!loaded.isOk()) {
+        println("result screen: " + loaded.error())
+        return
+    }
+    val gameBox: &Frame = g.frame
+    val gameFrame: *Frame = *gameBox
+    val window: Rect = gameFrame.nodes[gameFrame.root].rect
+    var frame: Frame = loaded.value()
+    var fp: *Frame = *frame
+    setRect(fp, fp.root, window)
+    setRect(fp, nodeNamed(fp, "scrim"), window)
+    val dialog: Int = nodeNamed(fp, "dialog")
+    val box: Rect = fp.nodes[dialog].rect
+    moveNode(fp, dialog, (window.width - box.width) / 2, (window.height - box.height) / 2)
+    setTextNamed(fp, "headline", headline)
+    setTextNamed(fp, "detail", detail)
+    if (!bindResult(fp)) {
+        println("result screen: one of the bound names is not in the tree")
+    }
+    g.result = & frame
+    val resultBox: &Frame = g.result
+    stackPush(stack, resultBox, "result", false)
     stackResizeTop(stack, ui)
 }
 
@@ -523,6 +596,25 @@ fun main(args: List<Str>): Int {
                 }
                 setTextNamed(fp, "status", g.status)
                 println("  action " + h.action.toString() + " " + g.status)
+                // A finished board gets its result panel - the modal layer - unless one is already
+                // up: the panel is the top screen then, and a further click on a dead board has
+                // nothing to add (and would push a second copy).
+                if (g.board.status == GameStatus.Won || g.board.status == GameStatus.Lost) {
+                    if (stackTopName(stackPtr) == "game") {
+                        if (g.board.status == GameStatus.Won) {
+                            showResult(
+                                g, stackPtr, uiPtr, "YOU WON",
+                                g.board.mineCount.toString() + " mines in "
+                                        + g.elapsed.toString() + "s"
+                            )
+                        } else {
+                            showResult(
+                                g, stackPtr, uiPtr, "BOOM",
+                                "you hit a mine, of " + g.board.mineCount.toString()
+                            )
+                        }
+                    }
+                }
             }
             return true
         }
@@ -567,6 +659,15 @@ fun main(args: List<Str>): Int {
             val box: &Frame = gamePtr.frame
             paintCell(gamePtr, *box, uiPtr, node)
         }
+        if (screen == "result") {
+            // The scrim: dim what is below. This is the one thing only the app can paint (the
+            // panel's own chrome is the painter's), and its rect is the window - the loader wrote
+            // the node, `showResult` stretched it.
+            val box: &Frame = gamePtr.result
+            val f: *Frame = *box
+            val r: Rect = f.nodes[node].rect
+            uiFill(uiPtr, r, uiColor(150, 8, 10, 16))
+        }
     }
 
     val pushed: Int = runScript(script)
@@ -596,21 +697,23 @@ fun main(args: List<Str>): Int {
                         running = false
                     }
                 } else if (e.key == SDLK_r) {
-                    if (stackTopName(*stackPtr) == "game") {
+                    // R restarts the game whether or not its result panel is up (the panel is a
+                    // layer over the same game); on the menu there is no game to restart.
+                    if (stackTopName(*stackPtr) != "menu") {
                         val d: Difficulty = gamePtr.difficulty
                         showGame(gamePtr, *stackPtr, uiPtr, d)
                         println("  key restart")
                     }
                 } else if (e.key == SDLK_1) {
-                    if (stackTopName(*stackPtr) == "game") {
+                    if (stackTopName(*stackPtr) != "menu") {
                         showGame(gamePtr, *stackPtr, uiPtr, Difficulty.Beginner)
                     }
                 } else if (e.key == SDLK_2) {
-                    if (stackTopName(*stackPtr) == "game") {
+                    if (stackTopName(*stackPtr) != "menu") {
                         showGame(gamePtr, *stackPtr, uiPtr, Difficulty.Intermediate)
                     }
                 } else if (e.key == SDLK_3) {
-                    if (stackTopName(*stackPtr) == "game") {
+                    if (stackTopName(*stackPtr) != "menu") {
                         showGame(gamePtr, *stackPtr, uiPtr, Difficulty.Expert)
                     }
                 }

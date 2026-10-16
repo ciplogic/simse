@@ -122,6 +122,8 @@ fun setName(f: *Frame, node: Int, name: Str): Bool      // false on a duplicate 
 fun setText / setPayload / setPalette / setSprite / setVisible / setEnabled
 fun nodeNamed(f: *Frame, name: Str): Int                // -1 when no node has that name
 fun setTextNamed(f: *Frame, name: Str, text: Str): Bool // the live readouts: counter, clock, status
+fun setRect(f: *Frame, node: Int, rect: Rect)           // the whole rect: a window, an overlay's scrim
+fun moveNode(f: *Frame, node: Int, dx: Int, dy: Int)    // shift a subtree: the one transform v1 has
 fun frameOn(f: *Frame, name: Str, action: Int, payload: Int): Bool   // the listener binding
 ```
 
@@ -270,6 +272,12 @@ The rules, in one place, so they are testable headless (`stress/minui-xml` pins 
 - **A push shares, never copies**: the layer holds the caller's `&Frame`, and the app keeps the
   same box (`game.frame`, in the example) - a write through `stackTop` is visible through the app's
   own handle, which is what the stress case's last section proves.
+- **Modal is not a flag**: input only ever reaches the top layer, so *any* top layer is modal; what
+  makes an overlay read as one over the screen below is `opaque = false` (the painter starts at the
+  last opaque layer, so the screen below is painted and the scrim is painted over it). The example's
+  result panel is exactly that: a 260x180 dialog in XML, the app stretching a `<custom name="scrim">`
+  to the real window (`setRect`) and moving the dialog subtree to its middle (`moveNode`) - the two
+  numbers the XML cannot know.
 
 The app's per-screen *data* stays the app's: the example needs one `Game` and nothing for the menu,
 and switches on `stackTopName` where a class hierarchy would have virtuals. A family of screens
@@ -497,10 +505,10 @@ Verification, none of which needs a human at the keyboard:
   only when something changed; per-rect damage is for when a frame costs more than ~2 ms.
 - **Keyboard focus navigation, text input, IME.** `keyFocus` is in `Frame` from the start so the
   rule has a home; tabbing and editors are later.
-- **A modal layer that dims what is below it.** The stack has everything it needs - `opaque=false`
-  paints the layer below, and input already stops at the top layer - but no screen has needed the
-  scrim yet, so the dimming itself is the first overlay's to write (three lines of `uiFill` with an
-  alpha). The example's stack is two opaque screens.
+- **A modal layer that dims what is below it - LANDED.** The stack needed no new flag (input
+  already stops at the top layer); the dimming is the overlay's own painting, which is why the
+  example's scrim is a `custom` node the app fills with a translucent colour. The recipe is in
+  §5: `setRect` for the window, `moveNode` for the middle.
 - **Scroll containers, animations/tweens, themes beyond one palette list, i18n, accessibility.**
 - **XML for *everything*.** Custom painting stays in code, by design: XML describes structure and
   built-in styling, the app describes what only it can draw. Screens are *loaded* once, never
@@ -570,6 +578,13 @@ Probes in `build/` (git-ignored, not part of the deliverable), run on Windows ar
   the workaround and the clearer shape.
 - **`Array<T>` answers `count()`, not `size()`** (a `List` answers `size()`): the length operation
   on the counted block, used by the loader to walk an `XmlNode`'s children.
+- **A local redeclared with the same name in one scope is accepted, and becomes one slot.** Two
+  declarations of the same name (different types) in one function compile, then share the emitted
+  variable, typed by the *later* one: the earlier binding is dropped and its uses are mistyped
+  (`cannot convert argument 2 from 'ns2_Frame' to 'Int'`, or a `Frame` with `.toString()` on it).
+  This bit the tree case when a new section declared `var panel: Frame` next to an earlier
+  `val panel: Int`; Kotlin rejects the redeclaration, Simse should too (`build/shadowprobe` is the
+  three-line repro). Until then: unique local names per function.
 
 ## 12. Shots
 
@@ -621,5 +636,17 @@ Probes in `build/` (git-ignored, not part of the deliverable), run on Windows ar
    which needed `uiPushKey` (a synthetic keystroke in the glue, `:K` in a script) to be testable
    headless at all: `r:K` prints `key restart` and leaves a fresh board, `2:K` resizes to
    Intermediate's 504x592, `esc:K` pops to the menu.
+
+6. **The modal result panel - LANDED** (`app/src/main.kt`'s `resultXml` + `showResult`, the tree's
+   `setRect`/`moveNode`): a finished board pushes a result screen over itself - `opaque = false`, so
+   the board is painted and then dimmed by a scrim the app fills, and the top layer takes every
+   click, so the board under it is untouchable. The panel is XML at one nominal size; the app
+   stretches the scrim to the window and moves the dialog to the middle. Verified by scripted runs:
+   a loss and a win both raise it (the win's reads `YOU WON` over a fully flagged board), a click on
+   the board under it prints *nothing* (the modal holds), `PLAY AGAIN` and `R` play the same board
+   again, `MENU` and the panel's own button go back to the menu, and a revealed cell under the scrim
+   measures (16,21,30) where it is (30,38,52) undimmed - the blend, to the byte.
+   `stress/minui-dispatch` pins the two tree transforms it rests on (a moved subtree carries its
+   children; the hit test follows; a second move adds).
 
 Each shot is independently verifiable, and shots 2 and 3 are independent of each other.
