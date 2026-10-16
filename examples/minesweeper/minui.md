@@ -360,22 +360,29 @@ fun uiButtons(ui: *Ui): Int                      // the mask held right now (cho
 fun uiColor(alpha: Int, red: Int, green: Int, blue: Int): Int
 fun uiRgb(red: Int, green: Int, blue: Int): Int
 fun uiClear(ui: *Ui, color: Int): Unit
-fun uiFill(ui: *Ui, x: Int, y: Int, width: Int, height: Int, color: Int): Unit
-fun uiRoundFill(ui: *Ui, x: Int, y: Int, width: Int, height: Int, radius: Int, color: Int): Unit
-fun uiOutline(ui: *Ui, x: Int, y: Int, width: Int, height: Int, color: Int): Unit   // 1px, stroke
+fun uiFill(ui: *Ui, rect: Rect, color: Int): Unit
+fun uiRoundFill(ui: *Ui, rect: Rect, radius: Int, color: Int): Unit
+fun uiOutline(ui: *Ui, rect: Rect, color: Int): Unit     // 1px, stroke
 fun uiLine(ui: *Ui, x0: Int, y0: Int, x1: Int, y1: Int, color: Int): Unit
 fun uiCircle(ui: *Ui, centerX: Int, centerY: Int, radius: Int, color: Int): Unit
-fun uiPie(ui: *Ui, x: Int, y: Int, width: Int, height: Int, startDegrees: Int, sweepDegrees: Int, color: Int): Unit
+fun uiPie(ui: *Ui, rect: Rect, startDegrees: Int, sweepDegrees: Int, color: Int): Unit
 fun uiLoadFont(ui: *Ui, family: Str, size: Int, boldSize: Int): Bool   // system fonts, no .ttf
 fun uiText(ui: *Ui, x: Int, baselineY: Int, text: Str, color: Int, bold: Bool): Unit
-fun uiTextBox(ui: *Ui, x: Int, y: Int, width: Int, height: Int, text: Str, color: Int, bold: Bool): Unit
+fun uiTextBox(ui: *Ui, rect: Rect, text: Str, color: Int, bold: Bool): Unit
 fun uiTextWidth(ui: *Ui, text: Str, bold: Bool): Int      // Skia measures; centred text uses it
 fun uiLoadSheet(ui: *Ui, path: Str, cell: Int): Bool      // a PNG atlas, square cells, row-major
-fun uiSprite(ui: *Ui, index: Int, x: Int, y: Int, size: Int): Unit   // nearest sampling
+fun uiSprite(ui: *Ui, index: Int, rect: Rect): Unit       // nearest sampling
 fun uiScreenshot(ui: *Ui, path: Str): Bool               // the verification path
 fun uiTicks(): Int                                       // SDL's clock, for the game timer
 fun uiDelay(milliseconds: Int): Unit
 ```
+
+Every rect in that surface is the tree's own (`Rect`, `Int` fields; `smRect(x, y, w, h)` builds
+one). Skia wants four *floats*, so the widening happens in the glue, once:
+`winRect(left, top, right, bottom)` widens four integers into the library's own memory and hands
+back its address, which the `sk_*` call takes as an opaque pointer. **No float coordinate and no
+Skia-shaped type exists above the glue** - which is what keeps a control's code down to arithmetic
+on the rect it already has.
 
 `ui.event` is a `UiEvent` field on `Ui`, filled by `uiPollEvent` — no allocation, no `Opt`
 copy, and the app's loop reads the fields it needs:
@@ -462,8 +469,12 @@ Probes in `build/` (git-ignored, not part of the deliverable), run on Windows ar
   `*Node`, and copy-out/copy-back through a `*List<T>`.
 - **A class *construction* is braced initialization** in the emitted C++ (`SkRect{x, y, ...}`), so a
   runtime `Int` in a `Float32` field is a narrowing *error* - while a literal (`1.0`) is fine, and a
-  call argument or a field write converts freely. Coordinates cross through one widening helper
-  (`skFloat` in `ui.kt`).
+  call argument or a field write converts freely. The wrapper does not lean on any of that: rects
+  cross as four integers and the widening lives in the glue (`winRect`), so the surface above it
+  carries no float coordinate at all.
+- **A rect scratch, not a rect type**: Skia reads four floats from memory, and a call can need two
+  rects at once (`sk_canvas_draw_image_rect` reads a source and a destination), so the glue keeps a
+  four-slot pool and hands out one address per call.
 - **A `native` declaration may take a pointer to a class** (`*SkRect`, `*SkImageInfo`): the thunk
   spells it `void*` and the argument crosses as the address, which is what a mirrored
   `native class` is for. The generator refused it before (`stress/native-struct-pointer` is the

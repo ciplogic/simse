@@ -275,44 +275,39 @@ fun uiRgb(red: Int, green: Int, blue: Int): Int {
 
 // ---- drawing --------------------------------------------------------------
 
-// `Int` -> `Float32`, explicitly, for the one place the language's own conversion is not enough.
-// A call argument and a field write convert freely (`sk_canvas_draw_circle(..., radius, ...)`, a
-// `rect.left = x`), but a class *construction* is braced initialization in the emitted C++
-// (`SkRect{x, y, ...}`) and a runtime `Int` there is a narrowing error - while a literal `0.0` is
-// fine, which is why the scratch rects below start from literals. So every coordinate that comes
-// from an `Int` crosses through here.
-fun skFloat(value: Int): Float32 {
-    return value
-}
+// Every primitive takes the tree's own `Rect` (`Int` fields): the four floats Skia reads are built
+// from it once, in the glue (`winRect`), so no call site here converts anything and no float type
+// is named above the glue at all.
 
 fun uiClear(ui: *Ui, color: Int): Unit {
     sk_canvas_clear(ui.canvas, color)
 }
 
-fun uiFill(ui: *Ui, x: Int, y: Int, width: Int, height: Int, color: Int): Unit {
-    var rect: SkRect = SkRect(skFloat(x), skFloat(y), skFloat(x + width), skFloat(y + height))
+fun uiFill(ui: *Ui, rect: Rect, color: Int): Unit {
     sk_paint_set_color(ui.paint, color)
     sk_paint_set_style(ui.paint, SK_STYLE_FILL)
-    sk_canvas_draw_rect(ui.canvas, *rect, ui.paint)
+    sk_canvas_draw_rect(ui.canvas, winRect(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height), ui.paint)
 }
 
-fun uiRoundFill(ui: *Ui, x: Int, y: Int, width: Int, height: Int, radius: Int, color: Int): Unit {
-    var rect: SkRect = SkRect(skFloat(x), skFloat(y), skFloat(x + width), skFloat(y + height))
+fun uiRoundFill(ui: *Ui, rect: Rect, radius: Int, color: Int): Unit {
     sk_paint_set_color(ui.paint, color)
     sk_paint_set_style(ui.paint, SK_STYLE_FILL)
-    sk_canvas_draw_round_rect(ui.canvas, *rect, radius, radius, ui.paint)
+    sk_canvas_draw_round_rect(
+        ui.canvas, winRect(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height),
+        radius, radius, ui.paint
+    )
 }
 
 // A one-pixel outline. The paint is a stroke only for this call, then back to a fill.
-fun uiOutline(ui: *Ui, x: Int, y: Int, width: Int, height: Int, color: Int): Unit {
-    var rect: SkRect = SkRect(skFloat(x), skFloat(y), skFloat(x + width), skFloat(y + height))
+fun uiOutline(ui: *Ui, rect: Rect, color: Int): Unit {
     sk_paint_set_color(ui.paint, color)
     sk_paint_set_style(ui.paint, SK_STYLE_STROKE)
     sk_paint_set_stroke_width(ui.paint, 1)
-    sk_canvas_draw_rect(ui.canvas, *rect, ui.paint)
+    sk_canvas_draw_rect(ui.canvas, winRect(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height), ui.paint)
     sk_paint_set_style(ui.paint, SK_STYLE_FILL)
 }
 
+// A line is not a rect, so it takes its two points.
 fun uiLine(ui: *Ui, x0: Int, y0: Int, x1: Int, y1: Int, color: Int): Unit {
     sk_paint_set_color(ui.paint, color)
     sk_paint_set_style(ui.paint, SK_STYLE_STROKE)
@@ -327,16 +322,15 @@ fun uiCircle(ui: *Ui, centerX: Int, centerY: Int, radius: Int, color: Int): Unit
     sk_canvas_draw_circle(ui.canvas, centerX, centerY, radius, ui.paint)
 }
 
-// A pie slice: the arc of the box (x, y, width, height), `startDegrees` clockwise from three
-// o'clock, swept by `sweepDegrees`, filled to the centre.
-fun uiPie(
-    ui: *Ui, x: Int, y: Int, width: Int, height: Int,
-    startDegrees: Int, sweepDegrees: Int, color: Int
-): Unit {
-    var oval: SkRect = SkRect(skFloat(x), skFloat(y), skFloat(x + width), skFloat(y + height))
+// A pie slice: the arc of `rect`, `startDegrees` clockwise from three o'clock, swept by
+// `sweepDegrees`, filled to the centre.
+fun uiPie(ui: *Ui, rect: Rect, startDegrees: Int, sweepDegrees: Int, color: Int): Unit {
     sk_paint_set_color(ui.paint, color)
     sk_paint_set_style(ui.paint, SK_STYLE_FILL)
-    sk_canvas_draw_arc(ui.canvas, *oval, startDegrees, sweepDegrees, true, ui.paint)
+    sk_canvas_draw_arc(
+        ui.canvas, winRect(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height),
+        startDegrees, sweepDegrees, true, ui.paint
+    )
 }
 
 // ---- text -----------------------------------------------------------------
@@ -404,27 +398,23 @@ fun uiTextWidth(ui: *Ui, text: Str, bold: Bool): Int {
     if (font == null) {
         return 0
     }
-    var bounds: SkRect = SkRect(0.0, 0.0, 0.0, 0.0)
     val width: Float32 = sk_font_measure_text(
         font, text, text.size(), SK_ENCODING_UTF8,
-        *bounds, ui.paint
+        null, ui.paint
     )
     return width + 0.5
 }
 
 // A line centred in a box: horizontally by measurement, vertically by half the face's size (the
 // baseline sits about a third of the size below the middle of a line of text).
-fun uiTextBox(
-    ui: *Ui, x: Int, y: Int, width: Int, height: Int, text: Str, color: Int,
-    bold: Bool
-): Unit {
+fun uiTextBox(ui: *Ui, rect: Rect, text: Str, color: Int, bold: Bool): Unit {
     val textWidth: Int = uiTextWidth(ui, text, bold)
     var size: Int = ui.fontSize
     if (bold) {
         size = ui.boldSize
     }
-    val textX: Int = x + (width - textWidth) / 2
-    val baseline: Int = y + height / 2 + size / 3
+    val textX: Int = rect.x + (rect.width - textWidth) / 2
+    val baseline: Int = rect.y + rect.height / 2 + size / 3
     uiText(ui, textX, baseline, text, color, bold)
 }
 
@@ -452,9 +442,9 @@ fun uiLoadSheet(ui: *Ui, path: Str, cell: Int): Bool {
     return true
 }
 
-// One atlas cell (row-major from the top-left) drawn into a `size` box. Nearest sampling, because
+// One atlas cell (row-major from the top-left) drawn into `rect`. Nearest sampling, because
 // whole-number scaling of pixel art must stay crisp.
-fun uiSprite(ui: *Ui, index: Int, x: Int, y: Int, size: Int): Unit {
+fun uiSprite(ui: *Ui, index: Int, rect: Rect): Unit {
     if (ui.sheet == null || ui.cell <= 0) {
         return
     }
@@ -464,13 +454,13 @@ fun uiSprite(ui: *Ui, index: Int, x: Int, y: Int, size: Int): Unit {
     }
     val column: Int = index % columns
     val row: Int = index / columns
-    var source: SkRect = SkRect(
-        skFloat(column * ui.cell), skFloat(row * ui.cell),
-        skFloat(column * ui.cell + ui.cell), skFloat(row * ui.cell + ui.cell)
-    )
-    var target: SkRect = SkRect(skFloat(x), skFloat(y), skFloat(x + size), skFloat(y + size))
     sk_paint_set_filter_quality(ui.paint, SK_FILTER_QUALITY_NONE)
-    sk_canvas_draw_image_rect(ui.canvas, ui.sheet, *source, *target, null, ui.paint)
+    sk_canvas_draw_image_rect(
+        ui.canvas, ui.sheet,
+        winRect(column * ui.cell, row * ui.cell, column * ui.cell + ui.cell, row * ui.cell + ui.cell),
+        winRect(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height),
+        null, ui.paint
+    )
 }
 
 // ---- clock ----------------------------------------------------------------

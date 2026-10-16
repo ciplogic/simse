@@ -168,7 +168,7 @@ fun paintCell(f: *Frame, demo: *Demo, board: Int, ui: *Ui, node: Int, sheetLoade
     val inside: Bool = ui.mouseX >= rect.x && ui.mouseX < rect.x + rect.width
             && ui.mouseY >= rect.y && ui.mouseY < rect.y + rect.height
     if (!revealed && sheetLoaded) {
-        uiSprite(ui, 0, rect.x + 1, rect.y + 1, rect.width - 2)
+        uiSprite(ui, 0, smRect(rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2))
         return
     }
     var face: Int = uiRgb(58, 90, 138)
@@ -179,14 +179,15 @@ fun paintCell(f: *Frame, demo: *Demo, board: Int, ui: *Ui, node: Int, sheetLoade
     } else if (inside) {
         face = uiRgb(78, 116, 172)
     }
-    uiRoundFill(ui, rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2, 4, face)
+    val inner: Rect = smRect(rect.x + 1, rect.y + 1, rect.width - 2, rect.height - 2)
+    uiRoundFill(ui, inner, 4, face)
     if (flagged) {
-        uiPie(ui, rect.x + 9, rect.y + 7, 14, 16, 0 - 60, 300, uiRgb(232, 193, 90))
+        uiPie(ui, smRect(rect.x + 9, rect.y + 7, 14, 16), 0 - 60, 300, uiRgb(232, 193, 90))
         return
     }
     if (revealed) {
         uiPie(
-            ui, rect.x + 11, rect.y + 11, 10, 10, 0 - 90, 90 + (index % 5) * 60,
+            ui, smRect(rect.x + 11, rect.y + 11, 10, 10), 0 - 90, 90 + (index % 5) * 60,
             uiRgb(143, 211, 244)
         )
     }

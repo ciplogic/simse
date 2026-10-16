@@ -136,13 +136,13 @@ fun sk_paint_set_stroke_width(paint: RawPtr, width: Float32): Unit
 fun sk_canvas_clear(canvas: RawPtr, color: Int): Unit
 
 @SmGen("native", "libSkiaSharp.dll", "sk_canvas_draw_rect")
-fun sk_canvas_draw_rect(canvas: RawPtr, rect: *SkRect, paint: RawPtr): Unit
+fun sk_canvas_draw_rect(canvas: RawPtr, rect: *Int8, paint: RawPtr): Unit
 
 @SmGen("native", "libSkiaSharp.dll", "sk_canvas_draw_round_rect")
-fun sk_canvas_draw_round_rect(canvas: RawPtr, rect: *SkRect, rx: Float32, ry: Float32, paint: RawPtr): Unit
+fun sk_canvas_draw_round_rect(canvas: RawPtr, rect: *Int8, rx: Float32, ry: Float32, paint: RawPtr): Unit
 
 @SmGen("native", "libSkiaSharp.dll", "sk_canvas_draw_oval")
-fun sk_canvas_draw_oval(canvas: RawPtr, rect: *SkRect, paint: RawPtr): Unit
+fun sk_canvas_draw_oval(canvas: RawPtr, rect: *Int8, paint: RawPtr): Unit
 
 @SmGen("native", "libSkiaSharp.dll", "sk_canvas_draw_circle")
 fun sk_canvas_draw_circle(canvas: RawPtr, cx: Float32, cy: Float32, radius: Float32, paint: RawPtr): Unit
@@ -153,7 +153,7 @@ fun sk_canvas_draw_line(canvas: RawPtr, x0: Float32, y0: Float32, x1: Float32, y
 // `startAngle`/`sweepAngle` in degrees, `useCenter` for a pie.
 @SmGen("native", "libSkiaSharp.dll", "sk_canvas_draw_arc")
 fun sk_canvas_draw_arc(
-    canvas: RawPtr, oval: *SkRect, startAngle: Float32, sweepAngle: Float32,
+    canvas: RawPtr, oval: *Int8, startAngle: Float32, sweepAngle: Float32,
     useCenter: Bool, paint: RawPtr
 ): Unit
 
@@ -161,7 +161,7 @@ fun sk_canvas_draw_arc(
 // is a latent bug - it worked once by luck).
 @SmGen("native", "libSkiaSharp.dll", "sk_canvas_draw_image_rect")
 fun sk_canvas_draw_image_rect(
-    canvas: RawPtr, image: RawPtr, src: *SkRect, dst: *SkRect,
+    canvas: RawPtr, image: RawPtr, src: *Int8, dst: *Int8,
     sampling: RawPtr, paint: RawPtr
 ): Unit
 
@@ -221,12 +221,12 @@ fun sk_font_set_edging(font: RawPtr, value: Int): Unit
 @SmGen("native", "libSkiaSharp.dll", "sk_font_set_embolden")
 fun sk_font_set_embolden(font: RawPtr, value: Bool): Unit
 
-// `sk_font_measure_text` answers the advance width and writes the ink bounds through `bounds` -
-// that width is what centred text and layout are built on.
+// `sk_font_measure_text` answers the advance width - what centred text and layout are built on -
+// and writes the ink bounds through `bounds`, which is null here: nothing needs them yet.
 @SmGen("native", "libSkiaSharp.dll", "sk_font_measure_text")
 fun sk_font_measure_text(
     font: RawPtr, text: Str, byteLength: Int64, encoding: Int,
-    bounds: *SkRect, paint: RawPtr
+    bounds: *Int8, paint: RawPtr
 ): Float32
 
 @SmGen("native", "libSkiaSharp.dll", "sk_canvas_draw_simple_text")
@@ -235,17 +235,16 @@ fun sk_canvas_draw_simple_text(
     x: Float32, y: Float32, font: RawPtr, paint: RawPtr
 ): Unit
 
-// ---- the two structs a call has to hand over physically -------------------
+// ---- the one struct a call has to hand over physically --------------------
 
-// Skia's `sk_imageinfo_t` and `sk_rect_t` as the ABI defines them. `native class` is exactly this
-// job: the host's own alignment instead of the language's 4-byte packing. `SkImageInfo`'s field
-// order is the trap the probe caught - colorspace *first*, then width/height/colorType/alphaType.
+// Skia's `sk_imageinfo_t` as the ABI defines it. `native class` is exactly this job: the host's own
+// alignment instead of the language's 4-byte packing. Its field order is the trap the probe caught -
+// colorspace *first*, then width/height/colorType/alphaType. (A rect needs no type up here at all:
+// `winRect` builds Skia's four floats in the glue, so nothing above the glue spells one.)
 native class SkImageInfo(
     var colorspace: RawPtr, var width: Int, var height: Int,
     var colorType: Int, var alphaType: Int
 )
-
-native class SkRect(var left: Float32, var top: Float32, var right: Float32, var bottom: Float32)
 
 // ---- the C++ helpers (`_res.md`, section `uiwin`) -------------------------
 
@@ -278,6 +277,12 @@ fun winWindowEvent(event: RawPtr): Int
 // A synthetic mouse event, built by the glue and handed to `SDL_PushEvent`.
 @SmGen("res", "uiwin", "simse_ui_mouseEvent")
 fun winMouseEvent(kind: Int, x: Int, y: Int, button: Int): RawPtr
+
+// Four integers in, the address of Skia's own four-float rect out: the widening (and the memory the
+// library reads) stays on the C++ side, so no Simse code above this line carries a float
+// coordinate.
+@SmGen("res", "uiwin", "simse_ui_rect")
+fun winRect(left: Int, top: Int, right: Int, bottom: Int): *Int8
 
 // The pixel buffer and the readback buffer: one allocation each, owned here rather than by a
 // Simse value, because a `Ui` struct is *copied* when it is returned or assigned - a `List<Int8>`

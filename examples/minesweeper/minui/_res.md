@@ -48,6 +48,7 @@ Int32 simse_ui_eventKey(const void* event);
 Int32 simse_ui_eventWheel(const void* event);
 Int32 simse_ui_windowEvent(const void* event);
 void* simse_ui_mouseEvent(Int32 kind, Int32 x, Int32 y, Int32 button);
+Int8* simse_ui_rect(Int32 left, Int32 top, Int32 right, Int32 bottom);
 Int8* simse_ui_pixels(Int32 width, Int32 height);
 Int8* simse_ui_readPixels(Int32 width, Int32 height);
 Int32 simse_ui_writeBmp(const Str& path, const Int8* pixels, Int32 width, Int32 height);
@@ -138,6 +139,31 @@ void* simse_ui_mouseEvent(Int32 kind, Int32 x, Int32 y, Int32 button) {
         event.button.clicks = 1;
     }
     return reinterpret_cast<void*>(&event);
+}
+
+// The rect scratch. Skia's `sk_rect_t` is four *floats* and its ABI wants that memory, so a rect
+// that starts as Simse's integers is widened here, in one place, and handed back as the address the
+// `sk_*` call takes (`void*` on both sides - the thunk casts it). Nothing above this line has a
+// float in it.
+//
+// Four slots, because one call can need two rects at once (`sk_canvas_draw_image_rect` reads a
+// source and a destination), and no single drawing call builds more than that.
+struct simse_ui_rect_t {
+    float left;
+    float top;
+    float right;
+    float bottom;
+};
+
+Int8* simse_ui_rect(Int32 left, Int32 top, Int32 right, Int32 bottom) {
+    static simse_ui_rect_t pool[4];
+    static Int32 slot = 0;
+    slot = (slot + 1) % 4;
+    pool[slot].left = (float) left;
+    pool[slot].top = (float) top;
+    pool[slot].right = (float) right;
+    pool[slot].bottom = (float) bottom;
+    return reinterpret_cast<Int8*>(&pool[slot]);
 }
 
 // One buffer per job, grown on demand and kept for the process: `simse_ui_pixels` is what Skia

@@ -56,9 +56,9 @@ fun paintSelf(f: *Frame, theme: *UiTheme, ui: *Ui, node: Int, custom: (Int) -> U
     val kind: NodeKind = f.nodes[node].kind
     if (kind == NodeKind.Panel) {
         val rect: Rect = f.nodes[node].rect
-        uiRoundFill(ui, rect.x, rect.y, rect.width, rect.height, 8, theme.panel)
+        uiRoundFill(ui, rect, 8, theme.panel)
         if (f.nodes[node].palette == PaletteEmphasized) {
-            uiOutline(ui, rect.x, rect.y, rect.width, rect.height, theme.panelEdge)
+            uiOutline(ui, rect, theme.panelEdge)
         }
         return
     }
@@ -72,7 +72,7 @@ fun paintSelf(f: *Frame, theme: *UiTheme, ui: *Ui, node: Int, custom: (Int) -> U
     }
     if (kind == NodeKind.Sprite) {
         val rect: Rect = f.nodes[node].rect
-        uiSprite(ui, f.nodes[node].sprite, rect.x, rect.y, rect.width)
+        uiSprite(ui, f.nodes[node].sprite, rect)
         return
     }
     if (kind == NodeKind.Custom) {
@@ -100,7 +100,7 @@ fun paintLabel(f: *Frame, theme: *UiTheme, ui: *Ui, node: Int): Unit {
     val text: Str = f.nodes[node].text
     val align: Int = f.nodes[node].align
     if (align == Align.Center.toInt()) {
-        uiTextBox(ui, rect.x, rect.y, rect.width, rect.height, text, color, bold)
+        uiTextBox(ui, rect, text, color, bold)
         return
     }
     var size: Int = ui.fontSize
@@ -130,6 +130,6 @@ fun paintButton(f: *Frame, theme: *UiTheme, ui: *Ui, node: Int): Unit {
     } else if (f.hover == node) {
         face = theme.buttonHover
     }
-    uiRoundFill(ui, rect.x, rect.y, rect.width, rect.height, 6, face)
-    uiTextBox(ui, rect.x, rect.y, rect.width, rect.height, f.nodes[node].text, theme.body, false)
+    uiRoundFill(ui, rect, 6, face)
+    uiTextBox(ui, rect, f.nodes[node].text, theme.body, false)
 }

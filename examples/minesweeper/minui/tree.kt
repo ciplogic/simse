@@ -27,6 +27,13 @@ enum class NodeKind {
 
 data class Rect(var x: Int, var y: Int, var width: Int, var height: Int)
 
+// The rect builder the app and the painter spell: `smRect(8, 8, 100, 24)`. It is the same value the
+// constructor builds (the language has no default arguments yet), named so a call site reads as the
+// Simse rect it is - there is no other rect type above the glue, and no float in it.
+fun smRect(x: Int, y: Int, width: Int, height: Int): Rect {
+    return Rect(x, y, width, height)
+}
+
 // The kinds of input the loop feeds the tree. `Tick` is the frame clock (a timer), not a device.
 enum class UiEventKind {
     None = 0,
