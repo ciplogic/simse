@@ -138,25 +138,22 @@ fun xmlRectAttr(node: *XmlNode, name: Str): Res<Rect> {
     return Res<Rect>.ok(Rect(numbers[0], numbers[1], numbers[2], numbers[3]))
 }
 
-// The palette names map to the painter's values (paint.kt); an unknown name is an error.
-fun xmlPaletteAttr(node: *XmlNode): Res<Int> {
+// The palette names map to the painter's enum (tree.kt); an unknown name is an error.
+fun xmlPaletteAttr(node: *XmlNode): Res<Palette> {
     val name: Str = xmlAttrOf(node, "palette")
-    if (name.size() == 0) {
-        return Res<Int>.ok(PalettePlain)
-    }
-    if (name == "plain") {
-        return Res<Int>.ok(PalettePlain)
+    if (name.size() == 0 || name == "plain") {
+        return Res<Palette>.ok(Palette.Plain)
     }
     if (name == "emphasized") {
-        return Res<Int>.ok(PaletteEmphasized)
+        return Res<Palette>.ok(Palette.Emphasized)
     }
     if (name == "accent") {
-        return Res<Int>.ok(PaletteAccent)
+        return Res<Palette>.ok(Palette.Accent)
     }
     if (name == "dim") {
-        return Res<Int>.ok(PaletteDim)
+        return Res<Palette>.ok(Palette.Dim)
     }
-    return xmlFail<Int>(xmlLine(node), "no palette \"" + name + "\"")
+    return xmlFail<Palette>(xmlLine(node), "no palette \"" + name + "\"")
 }
 
 fun xmlAlignAttr(node: *XmlNode): Res<Align> {
@@ -266,7 +263,7 @@ fun xmlMapElement(f: *Frame, parent: Int, node: XmlNode): Res<Int> {
         if (element == "custom" && name.size() == 0) {
             return xmlFail<Int>(line, "<custom> needs a name - the app paints it by name")
         }
-        val palette: Res<Int> = xmlPaletteAttr(*node)
+        val palette: Res<Palette> = xmlPaletteAttr(*node)
         if (!palette.isOk()) {
             return Res<Int>.err(palette.error())
         }
@@ -353,7 +350,7 @@ fun loadScreen(text: Str): Res<Frame> {
     if (widthResult.value() <= 0 || heightResult.value() <= 0) {
         return xmlFail<Frame>(line, "<screen> needs a positive width and height")
     }
-    var f: Frame = newFrame(widthResult.value(), heightResult.value())
+    var f: Frame = newFrame(smSize(widthResult.value(), heightResult.value()))
     val name: Str = xmlAttrOf(*doc, "name")
     if (name.size() > 0) {
         if (!nameRoot(*f, name)) {

@@ -8,28 +8,38 @@ package minui
 // state on a node: hover and press come from the frame, so a button's chrome is a function of the
 // frame rather than of the last frame's leftovers.
 
-// `Node.palette`: which of its kind's looks a node takes. The labels are read per kind - a Panel's
-// `Emphasized` draws its edge, a Label's is title-bold, and `Accent`/`Dim` are text colours - so
-// the kind owns the meaning and the XML's `palette="accent"` has somewhere to land.
-val PalettePlain: Int = 0
-val PaletteEmphasized: Int = 1
-val PaletteAccent: Int = 2
-val PaletteDim: Int = 3
+// A colour: the four channels, each 0..255, in the order the four letters are in. No packing and no
+// magic integer: `winArgb` is where the shift happens (the one place `Uint32` exists), and nothing
+// above the glue holds a value that has to be taken apart again.
+data class Color(var red: Int, var green: Int, var blue: Int, var alpha: Int)
+
+// The builders, like `smRect` for rects: `smColor(58, 90, 138)` is the opaque spelling and
+// `smRgba(150, 8, 10, 16)` names its alpha.
+fun smColor(red: Int, green: Int, blue: Int): Color {
+    return Color(red, green, blue, 255)
+}
+
+fun smRgba(red: Int, green: Int, blue: Int, alpha: Int): Color {
+    return Color(red, green, blue, alpha)
+}
 
 // The colours the built-in kinds use. A theme is one value, so a screen's palette is one thing to
-// keep in step (and a second theme is a second value, not a second code path).
+// keep in step (and a second theme is a second value, not a second code path). `Node.palette`
+// (`Palette`, tree.kt) says which of them a node takes: a Panel's `Emphasized` draws its edge, a
+// Label's is title-bold, and `Accent`/`Dim` are text colours - so the kind owns the meaning and the
+// XML's `palette="accent"` has somewhere to land.
 data class UiTheme(
-    var background: Int,
-    var panel: Int,
-    var panelEdge: Int,
-    var button: Int,
-    var buttonHover: Int,
-    var buttonPressed: Int,
-    var buttonDisabled: Int,
-    var title: Int,
-    var body: Int,
-    var accent: Int,
-    var dim: Int
+    var background: Color,
+    var panel: Color,
+    var panelEdge: Color,
+    var button: Color,
+    var buttonHover: Color,
+    var buttonPressed: Color,
+    var buttonDisabled: Color,
+    var title: Color,
+    var body: Color,
+    var accent: Color,
+    var dim: Color
 )
 
 // The visitor. `theme` colours the built-in kinds, and `custom` is called for every visible
@@ -57,7 +67,7 @@ fun paintSelf(f: *Frame, theme: *UiTheme, ui: *Ui, node: Int, custom: (Int) -> U
     if (kind == NodeKind.Panel) {
         val rect: Rect = f.nodes[node].rect
         uiRoundFill(ui, rect, 8, theme.panel)
-        if (f.nodes[node].palette == PaletteEmphasized) {
+        if (f.nodes[node].palette == Palette.Emphasized.toInt()) {
             uiOutline(ui, rect, theme.panelEdge)
         }
         return
@@ -87,14 +97,14 @@ fun paintSelf(f: *Frame, theme: *UiTheme, ui: *Ui, node: Int, custom: (Int) -> U
 fun paintLabel(f: *Frame, theme: *UiTheme, ui: *Ui, node: Int): Unit {
     val rect: Rect = f.nodes[node].rect
     val palette: Int = f.nodes[node].palette
-    var color: Int = theme.body
+    var color: Color = theme.body
     var bold: Bool = false
-    if (palette == PaletteEmphasized) {
+    if (palette == Palette.Emphasized.toInt()) {
         color = theme.title
         bold = true
-    } else if (palette == PaletteAccent) {
+    } else if (palette == Palette.Accent.toInt()) {
         color = theme.accent
-    } else if (palette == PaletteDim) {
+    } else if (palette == Palette.Dim.toInt()) {
         color = theme.dim
     }
     val text: Str = f.nodes[node].text
@@ -103,16 +113,16 @@ fun paintLabel(f: *Frame, theme: *UiTheme, ui: *Ui, node: Int): Unit {
         uiTextBox(ui, rect, text, color, bold)
         return
     }
-    var size: Int = ui.fontSize
+    var points: Int = ui.fontSize
     if (bold) {
-        size = ui.boldSize
+        points = ui.boldSize
     }
     val textWidth: Int = uiTextWidth(ui, text, bold)
     var x: Int = rect.x
     if (align == Align.Right.toInt()) {
         x = rect.x + rect.width - textWidth
     }
-    val baseline: Int = rect.y + rect.height / 2 + size / 3
+    val baseline: Int = rect.y + rect.height / 2 + points / 3
     uiText(ui, x, baseline, text, color, bold)
 }
 
@@ -122,7 +132,7 @@ fun paintLabel(f: *Frame, theme: *UiTheme, ui: *Ui, node: Int): Unit {
 fun paintButton(f: *Frame, theme: *UiTheme, ui: *Ui, node: Int): Unit {
     val rect: Rect = f.nodes[node].rect
     val enabled: Bool = f.nodes[node].enabled
-    var face: Int = theme.button
+    var face: Color = theme.button
     if (!enabled) {
         face = theme.buttonDisabled
     } else if (f.pressed == node) {

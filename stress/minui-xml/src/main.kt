@@ -189,8 +189,8 @@ fun main(): Int {
 
     // ---- the stack ----------------------------------------------------------
     println("--- the stack")
-    var lower: Frame = newFrame(100, 80)
-    var upper: Frame = newFrame(200, 120)
+    var lower: Frame = newFrame(smSize(100, 80))
+    var upper: Frame = newFrame(smSize(200, 120))
     val tick: Int = addNode(*upper, upper.root, NodeKind.Label, 0, 0, 40, 12)
     setName(*upper, tick, "tick")
     setText(*upper, tick, "-")

@@ -25,7 +25,9 @@ modules/minui/    the module (`import minui`, `--module modules/minui`):
   _res.md           the C++ glue: the SDL_Event union readers, the buffers, the BMP writer
 examples/minesweeper/
   game/api.kt       the rules, UI-free: board, PRNG, first-click-safe seeding, reveal/flag/chord
-  app/src/main.kt   the game: `import minui` + `import minesweeper`, the menu XML, both screens
+  app/src/main.kt   the game: `import minui` + `import minesweeper`, the named colours and
+                    geometry, the event answer, both screens' bindings
+  app/src/_res.md   the screens (XML) and their keys: `Screens:Menu`, `Screens:Result`
 ```
 
 `minui` depends on the `xml` module (`modules/xml`) for the parse tree's types (`XmlNode`,
@@ -82,7 +84,11 @@ pixel-exact at every size and all it has to do is blit.
 
 ## What the game does
 
-- **Two screens on a stack.** The menu (360x348) pushes the board; the board's MENU button or
+- **The screens are resources.** The menu and the result panel are XML in `app/src/_res.md`,
+  fenced as ```xml (so they highlight) and read by name: `Resources.get("Screens:Menu")`. The
+  compiler embeds them in the program's string table, so there is no data file at runtime, and a
+  screen is a file to edit rather than a string literal at the top of `main.kt`.
+- **The two screens on a stack.** The menu (360x348) pushes the board; the board's MENU button or
   Escape pops back to it, and Escape on the menu closes the window. The stack paints bottom-up
   (starting at the last opaque layer, so the covered menu costs nothing), dispatches input to the
   top layer only, and resizes the window to the top screen - which is why the menu and Expert's

@@ -25,6 +25,15 @@ enum class NodeKind {
     Custom = 5
 }
 
+// Which of a kind's looks a node takes (paint.kt reads it). An enum, like `Align`, so a call site
+// says `Palette.Emphasized` rather than carrying an index of its own.
+enum class Palette {
+    Plain = 0,
+    Emphasized = 1,
+    Accent = 2,
+    Dim = 3
+}
+
 data class Rect(var x: Int, var y: Int, var width: Int, var height: Int)
 
 // The rect builder the app and the painter spell: `smRect(8, 8, 100, 24)`. It is the same value the
@@ -32,6 +41,14 @@ data class Rect(var x: Int, var y: Int, var width: Int, var height: Int)
 // Simse rect it is - there is no other rect type above the glue, and no float in it.
 fun smRect(x: Int, y: Int, width: Int, height: Int): Rect {
     return Rect(x, y, width, height)
+}
+
+// A width and a height that travel together: a window's, a frame's, a cell's. `Rect` is the four
+// numbers a *place* needs; most sizes are not places, and `smSize(294, 382)` says which is which.
+data class Size(var width: Int, var height: Int)
+
+fun smSize(width: Int, height: Int): Size {
+    return Size(width, height)
 }
 
 // The kinds of input the loop feeds the tree. `Tick` is the frame clock (a timer), not a device.
@@ -142,11 +159,11 @@ data class Frame(
     var keyFocus: Int
 )
 
-// A frame with one `Root` node covering (0, 0, width, height), already named `"root"` so code can
+// A frame with one `Root` node covering the whole size, already named `"root"` so code can
 // bind a listener to the background (a screen that wants to see clicks nobody else took).
-fun newFrame(width: Int, height: Int): Frame {
+fun newFrame(size: Size): Frame {
     val root: Node = Node(
-        NodeKind.Root, "root", Rect(0, 0, width, height), 0 - 1,
+        NodeKind.Root, "root", Rect(0, 0, size.width, size.height), 0 - 1,
         List<Int>(0, 0), 0 - 1, 0, "", 0, 0, 0, true, true
     )
     var nodes: List<Node> = List<Node>(0, root)
@@ -252,8 +269,8 @@ fun setPayload(f: *Frame, node: Int, payload: Int): Unit {
     f.nodes[node].payload = payload
 }
 
-fun setPalette(f: *Frame, node: Int, palette: Int): Unit {
-    f.nodes[node].palette = palette
+fun setPalette(f: *Frame, node: Int, palette: Palette): Unit {
+    f.nodes[node].palette = palette.toInt()
 }
 
 // Which of the kind's looks a node takes (see `paint.kt`), and where a label's text sits.

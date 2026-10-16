@@ -83,7 +83,7 @@ fun feed(f: *Frame, e: *UiEvent, trace: *List<Str>, answer: (Hit, *UiEvent) -> B
 }
 
 fun main(): Int {
-    var f: Frame = newFrame(320, 240)
+    var f: Frame = newFrame(smSize(320, 240))
     var fp: *Frame = *f
 
     // A panel with three buttons; the first has a label inside it, which is what a click really
@@ -206,7 +206,7 @@ fun main(): Int {
     // the middle. `setRect` writes a whole rect; `moveNode` shifts a subtree, because the rects are
     // absolute and a child does not follow its parent by itself.
     println("--- setRect and moveNode")
-    var dialogFrame: Frame = newFrame(200, 120)
+    var dialogFrame: Frame = newFrame(smSize(200, 120))
     var dp: *Frame = *dialogFrame
     val dialog: Int = addNode(dp, dp.root, NodeKind.Panel, 10, 20, 100, 60)
     setName(dp, dialog, "dialog")

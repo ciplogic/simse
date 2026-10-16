@@ -111,5 +111,5 @@ fun stackEvent(stack: *ScreenStack, e: *UiEvent, answer: (Hit, *UiEvent) -> Bool
 fun stackResizeTop(stack: *ScreenStack, ui: *Ui): Bool {
     val f: *Frame = stackTop(stack)
     val r: Rect = f.nodes[f.root].rect
-    return uiResize(ui, r.width, r.height)
+    return uiResize(ui, smSize(r.width, r.height))
 }

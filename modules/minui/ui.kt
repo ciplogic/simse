@@ -38,7 +38,7 @@ data class Ui(
     var sheetWidth: Int,
     var sheetHeight: Int,
     var cell: Int,         // atlas cell size, square
-    var background: Int,   // ARGB
+    var background: Color,   // what `uiClear` starts from, before a theme paints
     var event: UiEvent     // what `uiPollEvent` last filled
 )
 
@@ -54,11 +54,11 @@ fun uiIsOpen(ui: *Ui): Bool {
 // Open the window, the renderer, the streaming texture and the Skia surface over the buffer.
 // A failure at any step closes what was opened and answers a `Ui` whose `window` is null (check it
 // with `uiIsOpen`, and `uiFailed()` for the reason).
-fun uiOpen(title: Str, width: Int, height: Int, resizable: Bool, vsync: Bool): Ui {
+fun uiOpen(title: Str, size: Size, resizable: Bool, vsync: Bool): Ui {
     var ui: Ui = Ui(
-        null, null, null, null, null, null, null, width, height, 0, 0,
+        null, null, null, null, null, null, null, size.width, size.height, 0, 0,
         null, null, 16, 20, null, 0, 0, 16,
-        winArgb(255, 24, 32, 48), UiEvent(UiEventKind.None, 0, 0, Button.None, 0, 0, 0)
+        smRgba(24, 32, 48, 255), UiEvent(UiEventKind.None, 0, 0, Button.None, 0, 0, 0)
     )
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         return ui
@@ -69,7 +69,7 @@ fun uiOpen(title: Str, width: Int, height: Int, resizable: Bool, vsync: Bool): U
     }
     ui.window = SDL_CreateWindow(
         title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        width, height, windowFlags
+        size.width, size.height, windowFlags
     )
     if (ui.window == null) {
         SDL_Quit()
@@ -94,18 +94,18 @@ fun uiOpen(title: Str, width: Int, height: Int, resizable: Bool, vsync: Bool): U
     }
     ui.texture = SDL_CreateTexture(
         ui.renderer, SDL_PIXELFORMAT_ARGB8888,
-        SDL_TEXTUREACCESS_STREAMING, width, height
+        SDL_TEXTUREACCESS_STREAMING, size.width, size.height
     )
     if (ui.texture == null) {
         uiClose(*ui)
         return ui
     }
-    ui.pixels = winPixels(width, height)
+    ui.pixels = winPixels(size.width, size.height)
     var info: SkImageInfo = SkImageInfo(
-        null, width, height, SK_COLORTYPE_BGRA_8888,
+        null, size.width, size.height, SK_COLORTYPE_BGRA_8888,
         SK_ALPHATYPE_PREMUL
     )
-    ui.surface = sk_surface_new_raster_direct(*info, ui.pixels, width * 4, null, null, null)
+    ui.surface = sk_surface_new_raster_direct(*info, ui.pixels, size.width * 4, null, null, null)
     if (ui.surface == null) {
         uiClose(*ui)
         return ui
@@ -176,29 +176,29 @@ fun uiPresent(ui: *Ui): Unit {
 // is C++'s and may have moved, so the surface is rebuilt on the new address (which is why this
 // exists rather than a caller poking `ui.width`). The frame's own geometry is the caller's: a
 // bigger board is a rebuilt tree, not a stretched one.
-fun uiResize(ui: *Ui, width: Int, height: Int): Bool {
-    if (!uiIsOpen(ui) || width <= 0 || height <= 0) {
+fun uiResize(ui: *Ui, size: Size): Bool {
+    if (!uiIsOpen(ui) || size.width <= 0 || size.height <= 0) {
         return false
     }
-    SDL_SetWindowSize(ui.window, width, height)
+    SDL_SetWindowSize(ui.window, size.width, size.height)
     if (ui.texture != null) {
         SDL_DestroyTexture(ui.texture)
     }
     ui.texture = SDL_CreateTexture(
         ui.renderer, SDL_PIXELFORMAT_ARGB8888,
-        SDL_TEXTUREACCESS_STREAMING, width, height
+        SDL_TEXTUREACCESS_STREAMING, size.width, size.height
     )
-    ui.width = width
-    ui.height = height
-    ui.pixels = winPixels(width, height)
+    ui.width = size.width
+    ui.height = size.height
+    ui.pixels = winPixels(size.width, size.height)
     if (ui.surface != null) {
         sk_surface_unref(ui.surface)
     }
     var info: SkImageInfo = SkImageInfo(
-        null, width, height, SK_COLORTYPE_BGRA_8888,
+        null, size.width, size.height, SK_COLORTYPE_BGRA_8888,
         SK_ALPHATYPE_PREMUL
     )
-    ui.surface = sk_surface_new_raster_direct(*info, ui.pixels, width * 4, null, null, null)
+    ui.surface = sk_surface_new_raster_direct(*info, ui.pixels, size.width * 4, null, null, null)
     if (ui.surface == null) {
         return false
     }
@@ -324,12 +324,10 @@ fun uiPushKey(kind: UiEventKind, key: Int): Bool {
 
 // ---- colours --------------------------------------------------------------
 
-fun uiColor(alpha: Int, red: Int, green: Int, blue: Int): Int {
-    return winArgb(alpha, red, green, blue)
-}
-
-fun uiRgb(red: Int, green: Int, blue: Int): Int {
-    return winArgb(255, red, green, blue)
+// The one place above the glue that packs a `Color` into the integer Skia wants: every drawing call
+// below reads the four channels here, and nothing else in minui or the app shifts a colour.
+fun colorArgb(color: Color): Int {
+    return winArgb(color.alpha, color.red, color.green, color.blue)
 }
 
 // ---- drawing --------------------------------------------------------------
@@ -338,18 +336,18 @@ fun uiRgb(red: Int, green: Int, blue: Int): Int {
 // from it once, in the glue (`winRect`), so no call site here converts anything and no float type
 // is named above the glue at all.
 
-fun uiClear(ui: *Ui, color: Int): Unit {
-    sk_canvas_clear(ui.canvas, color)
+fun uiClear(ui: *Ui, color: Color): Unit {
+    sk_canvas_clear(ui.canvas, colorArgb(color))
 }
 
-fun uiFill(ui: *Ui, rect: Rect, color: Int): Unit {
-    sk_paint_set_color(ui.paint, color)
+fun uiFill(ui: *Ui, rect: Rect, color: Color): Unit {
+    sk_paint_set_color(ui.paint, colorArgb(color))
     sk_paint_set_style(ui.paint, SK_STYLE_FILL)
     sk_canvas_draw_rect(ui.canvas, winRect(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height), ui.paint)
 }
 
-fun uiRoundFill(ui: *Ui, rect: Rect, radius: Int, color: Int): Unit {
-    sk_paint_set_color(ui.paint, color)
+fun uiRoundFill(ui: *Ui, rect: Rect, radius: Int, color: Color): Unit {
+    sk_paint_set_color(ui.paint, colorArgb(color))
     sk_paint_set_style(ui.paint, SK_STYLE_FILL)
     sk_canvas_draw_round_rect(
         ui.canvas, winRect(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height),
@@ -358,8 +356,8 @@ fun uiRoundFill(ui: *Ui, rect: Rect, radius: Int, color: Int): Unit {
 }
 
 // A one-pixel outline. The paint is a stroke only for this call, then back to a fill.
-fun uiOutline(ui: *Ui, rect: Rect, color: Int): Unit {
-    sk_paint_set_color(ui.paint, color)
+fun uiOutline(ui: *Ui, rect: Rect, color: Color): Unit {
+    sk_paint_set_color(ui.paint, colorArgb(color))
     sk_paint_set_style(ui.paint, SK_STYLE_STROKE)
     sk_paint_set_stroke_width(ui.paint, 1)
     sk_canvas_draw_rect(ui.canvas, winRect(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height), ui.paint)
@@ -367,24 +365,24 @@ fun uiOutline(ui: *Ui, rect: Rect, color: Int): Unit {
 }
 
 // A line is not a rect, so it takes its two points.
-fun uiLine(ui: *Ui, x0: Int, y0: Int, x1: Int, y1: Int, color: Int): Unit {
-    sk_paint_set_color(ui.paint, color)
+fun uiLine(ui: *Ui, x0: Int, y0: Int, x1: Int, y1: Int, color: Color): Unit {
+    sk_paint_set_color(ui.paint, colorArgb(color))
     sk_paint_set_style(ui.paint, SK_STYLE_STROKE)
     sk_paint_set_stroke_width(ui.paint, 1)
     sk_canvas_draw_line(ui.canvas, x0, y0, x1, y1, ui.paint)
     sk_paint_set_style(ui.paint, SK_STYLE_FILL)
 }
 
-fun uiCircle(ui: *Ui, centerX: Int, centerY: Int, radius: Int, color: Int): Unit {
-    sk_paint_set_color(ui.paint, color)
+fun uiCircle(ui: *Ui, centerX: Int, centerY: Int, radius: Int, color: Color): Unit {
+    sk_paint_set_color(ui.paint, colorArgb(color))
     sk_paint_set_style(ui.paint, SK_STYLE_FILL)
     sk_canvas_draw_circle(ui.canvas, centerX, centerY, radius, ui.paint)
 }
 
 // A pie slice: the arc of `rect`, `startDegrees` clockwise from three o'clock, swept by
 // `sweepDegrees`, filled to the centre.
-fun uiPie(ui: *Ui, rect: Rect, startDegrees: Int, sweepDegrees: Int, color: Int): Unit {
-    sk_paint_set_color(ui.paint, color)
+fun uiPie(ui: *Ui, rect: Rect, startDegrees: Int, sweepDegrees: Int, color: Color): Unit {
+    sk_paint_set_color(ui.paint, colorArgb(color))
     sk_paint_set_style(ui.paint, SK_STYLE_FILL)
     sk_canvas_draw_arc(
         ui.canvas, winRect(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height),
@@ -432,7 +430,7 @@ fun uiMakeFont(face: RawPtr, size: Int, bold: Bool): RawPtr {
 
 // One line, its *baseline* at `baselineY` - Skia's own convention, so nothing here guesses at line
 // height. `uiTextBox` is the "somewhere in this box" version, which is what a button wants.
-fun uiText(ui: *Ui, x: Int, baselineY: Int, text: Str, color: Int, bold: Bool): Unit {
+fun uiText(ui: *Ui, x: Int, baselineY: Int, text: Str, color: Color, bold: Bool): Unit {
     var font: RawPtr = ui.font
     if (bold) {
         font = ui.bold
@@ -440,7 +438,7 @@ fun uiText(ui: *Ui, x: Int, baselineY: Int, text: Str, color: Int, bold: Bool): 
     if (font == null) {
         return
     }
-    sk_paint_set_color(ui.paint, color)
+    sk_paint_set_color(ui.paint, colorArgb(color))
     sk_canvas_draw_simple_text(
         ui.canvas, text, text.size(), SK_ENCODING_UTF8, x, baselineY,
         font, ui.paint
@@ -466,7 +464,7 @@ fun uiTextWidth(ui: *Ui, text: Str, bold: Bool): Int {
 
 // A line centred in a box: horizontally by measurement, vertically by half the face's size (the
 // baseline sits about a third of the size below the middle of a line of text).
-fun uiTextBox(ui: *Ui, rect: Rect, text: Str, color: Int, bold: Bool): Unit {
+fun uiTextBox(ui: *Ui, rect: Rect, text: Str, color: Color, bold: Bool): Unit {
     val textWidth: Int = uiTextWidth(ui, text, bold)
     var size: Int = ui.fontSize
     if (bold) {

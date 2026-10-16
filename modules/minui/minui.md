@@ -115,17 +115,23 @@ children a node usually has, and reverse iteration for z-order is trivial.
 The builder API that is landed (`tree.kt`), geometry absolute and no layout:
 
 ```kt
-fun newFrame(width: Int, height: Int): Frame            // one Root node, already named "root"
+fun newFrame(size: Size): Frame                         // one Root node, already named "root"
 fun addNode(f: *Frame, parent: Int, kind: NodeKind, x: Int, y: Int, width: Int, height: Int): Int
 fun addGrid(f: *Frame, parent: Int, name: Str, x: Int, y: Int, cell: Int, cols: Int, rows: Int): Int
 fun setName(f: *Frame, node: Int, name: Str): Bool      // false on a duplicate or an empty name
-fun setText / setPayload / setPalette / setSprite / setVisible / setEnabled
-fun nodeNamed(f: *Frame, name: Str): Int                // -1 when no node has that name
-fun setTextNamed(f: *Frame, name: Str, text: Str): Bool // the live readouts: counter, clock, status
+fun setText / setPayload / setPalette(Palette) / setSprite / setVisible / setEnabled
 fun setRect(f: *Frame, node: Int, rect: Rect)           // the whole rect: a window, an overlay's scrim
 fun moveNode(f: *Frame, node: Int, dx: Int, dy: Int)    // shift a subtree: the one transform v1 has
+fun nodeNamed(f: *Frame, name: Str): Int                // -1 when no node has that name
+fun setTextNamed(f: *Frame, name: Str, text: Str): Bool // the live readouts: counter, clock, status
 fun frameOn(f: *Frame, name: Str, action: Int, payload: Int): Bool   // the listener binding
 ```
+
+The value types the builder and the painter speak: `Rect` and `Size` (a width and a height that
+travel together - a window's, a frame's), both built by their `sm*` builders (`smRect`, `smSize`);
+`Palette`, an enum (`Plain`, `Emphasized`, `Accent`, `Dim`); and `Color` (paint.kt), the four
+channels in the order of the four letters (`smColor(r, g, b)`, `smRgba(r, g, b, a)`), packed for
+Skia once, in `colorArgb`.
 
 ## 4. Interaction: names, listeners, bubbling
 
@@ -318,8 +324,11 @@ The two hooks that keep the framework small and the app free:
   live in the arena, its look lives in the app. The callback is the screen's own closure, so no
   vtable is needed to reach it, and it gets the node's index - `f.nodes[node]` is the geometry and
   `payload`.
-- **`UiTheme`** - one value holding every colour the built-ins use. `argb(a, r, g, b)` (the `win*`
-  glue) packs them, because `255 << 24` in Simse arithmetic is a needless signed-overflow question.
+- **`UiTheme`** - one value holding every colour the built-ins use, as `Color` values (paint.kt).
+  The app names its palette once (`val CoveredFace: Color = smColor(58, 90, 138)`) and the theme
+  takes those names, so a screen's look is one thing to change and no call site holds magic
+  channels. `argb` packing happens in `colorArgb`, because `255 << 24` in Simse arithmetic is a
+  needless signed-overflow question.
 
 ## 7. XML: a loader, not the model - LANDED (`xmlread.kt` + `xml.kt`)
 
@@ -381,6 +390,13 @@ The vocabulary, and nothing beyond it:
 The `grid` line is the important one: it is a *generator*, so the board gets one listener and
 per-cell hit-testing without 480 XML lines - the loader calls the same `addGrid` the app would.
 
+Where the text comes *from* is the app's business, and the resources mechanism (`_res.md`,
+`specs/resources.md`) is the answer it wants: the example keeps its two screens in
+`examples/minesweeper/app/src/_res.md` under a section named `Screens`, and one line of code names
+one - `loadScreen(Resources.get(`Screens:@(name)`).toString())`. The compiler embeds the text in
+the program's string table (no file at runtime, no FFI), the editor sees a fenced ```xml block and
+highlights it, and a screen is a file rather than a string literal in the middle of the code.
+
 Deliberately **not** in the XML: behaviour (names are inert on their own), custom painting,
 layout beyond absolute rects, and logic. And deliberately not in the *reader*: entity
 *declarations*, CDATA, namespaces, a DOCTYPE, attribute values without quotes - a screen is a
@@ -418,28 +434,26 @@ The typed surface is integer-coordinate (the UI is pixel art) and has no object 
 manage by hand beyond `uiOpen`/`uiClose`. This is the landed surface (`ui.kt`):
 
 ```kt
-fun uiOpen(title: Str, width: Int, height: Int, resizable: Bool, vsync: Bool): Ui
+fun uiOpen(title: Str, size: Size, resizable: Bool, vsync: Bool): Ui
 fun uiClose(ui: *Ui): Unit
 fun uiIsOpen(ui: *Ui): Bool
 fun uiFailed(): Str                              // SDL_GetError(), for the app's own message
-fun uiResize(ui: *Ui, width: Int, height: Int): Bool   // new window/texture/buffer/surface size
+fun uiResize(ui: *Ui, size: Size): Bool          // new window/texture/buffer/surface size
 fun uiPresent(ui: *Ui): Unit                     // upload + copy + present (0.16-0.37 ms, see §11)
 fun uiPollEvent(ui: *Ui): Bool                   // one event into `ui.event`, false when none left
 fun uiPushMouse(kind: UiEventKind, x: Int, y: Int, button: Button): Bool   // scripted input
 fun uiPushKey(kind: UiEventKind, key: Int): Bool    // ... and a scripted keystroke (`:K`)
 fun uiButtons(ui: *Ui): Int                      // the mask held right now (chording)
-fun uiColor(alpha: Int, red: Int, green: Int, blue: Int): Int
-fun uiRgb(red: Int, green: Int, blue: Int): Int
-fun uiClear(ui: *Ui, color: Int): Unit
-fun uiFill(ui: *Ui, rect: Rect, color: Int): Unit
-fun uiRoundFill(ui: *Ui, rect: Rect, radius: Int, color: Int): Unit
-fun uiOutline(ui: *Ui, rect: Rect, color: Int): Unit     // 1px, stroke
-fun uiLine(ui: *Ui, x0: Int, y0: Int, x1: Int, y1: Int, color: Int): Unit
-fun uiCircle(ui: *Ui, centerX: Int, centerY: Int, radius: Int, color: Int): Unit
-fun uiPie(ui: *Ui, rect: Rect, startDegrees: Int, sweepDegrees: Int, color: Int): Unit
+fun uiClear(ui: *Ui, color: Color): Unit
+fun uiFill(ui: *Ui, rect: Rect, color: Color): Unit
+fun uiRoundFill(ui: *Ui, rect: Rect, radius: Int, color: Color): Unit
+fun uiOutline(ui: *Ui, rect: Rect, color: Color): Unit     // 1px, stroke
+fun uiLine(ui: *Ui, x0: Int, y0: Int, x1: Int, y1: Int, color: Color): Unit
+fun uiCircle(ui: *Ui, centerX: Int, centerY: Int, radius: Int, color: Color): Unit
+fun uiPie(ui: *Ui, rect: Rect, startDegrees: Int, sweepDegrees: Int, color: Color): Unit
 fun uiLoadFont(ui: *Ui, family: Str, size: Int, boldSize: Int): Bool   // system fonts, no .ttf
-fun uiText(ui: *Ui, x: Int, baselineY: Int, text: Str, color: Int, bold: Bool): Unit
-fun uiTextBox(ui: *Ui, rect: Rect, text: Str, color: Int, bold: Bool): Unit
+fun uiText(ui: *Ui, x: Int, baselineY: Int, text: Str, color: Color, bold: Bool): Unit
+fun uiTextBox(ui: *Ui, rect: Rect, text: Str, color: Color, bold: Bool): Unit
 fun uiTextWidth(ui: *Ui, text: Str, bold: Bool): Int      // Skia measures; centred text uses it
 fun uiLoadSheet(ui: *Ui, path: Str, cell: Int): Bool      // a PNG atlas, square cells, row-major
 fun uiSprite(ui: *Ui, index: Int, rect: Rect): Unit       // nearest sampling
@@ -447,6 +461,10 @@ fun uiScreenshot(ui: *Ui, path: Str): Bool               // the verification pat
 fun uiTicks(): Int                                       // SDL's clock, for the game timer
 fun uiDelay(milliseconds: Int): Unit
 ```
+
+A colour crosses that surface as a `Color` (four `Int` channels, `smColor`/`smRgba`), and a size
+as a `Size` (`smSize`): `colorArgb` packs the four channels for Skia once, the way `winRect` widens
+a rect. **Nothing above the glue is a packed integer or a bare width/height pair.**
 
 Every rect in that surface is the tree's own (`Rect`, `Int` fields; `smRect(x, y, w, h)` builds
 one). Skia wants four *floats*, so the widening happens in the glue, once:
@@ -589,6 +607,11 @@ Probes in `build/` (git-ignored, not part of the deliverable), run on Windows ar
   the workaround and the clearer shape.
 - **`Array<T>` answers `count()`, not `size()`** (a `List` answers `size()`): the length operation
   on the counted block, used by the loader to walk an `XmlNode`'s children.
+- **A `listOf` holds four elements.** `listOf<T>(...)` with five or more emits a variadic call the
+  RTL does not have (`simse_listOf` takes one pack pointer: `no matching overloaded function
+  found`), because four is `List<T>`'s inline capacity. Building the list by appending is the way
+  around it (`build/listprobe` is the four-line repro); the app's eight number colours are appended
+  for exactly this reason. The compiler's own sources happen to use literals of at most four.
 - **A local redeclared with the same name in one scope is accepted, and becomes one slot.** Two
   declarations of the same name (different types) in one function compile, then share the emitted
   variable, typed by the *later* one: the earlier binding is dropped and its uses are mistyped
