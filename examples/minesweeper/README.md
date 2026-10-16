@@ -1,18 +1,19 @@
-# Minesweeper in Simse - and `minui`, the layer it is built on
+# Minesweeper in Simse - on `minui`, the module it is built on
 
 The example is two things at once:
 
-- **`minui`** - a minimal retained-mode UI layer: an SDL2 window, a Skia canvas, a tree of nodes
-  with names and listeners, a **stack of screens**, an **XML loader**, and a painter
-  (`minui.md` is its design, shot by shot). It is the seed of the small 2D UI framework a
-  Heroes-style game would want.
-- **the game** - Minesweeper on top of it. The rules are a module of their own with no UI import
+- **`minui`** - a minimal retained-mode UI layer, and a module of its own (`modules/minui/`, beside
+  `modules/xml` and the rest): an SDL2 window, a Skia canvas, a tree of nodes with names and
+  listeners, a **stack of screens**, an **XML loader**, and a painter (`minui.md`, in the module's
+  folder, is its design, shot by shot). It is the seed of the small 2D UI framework a Heroes-style
+  game would want.
+- **the game** - Minesweeper on top of it. The rules are an example-local module with no UI import
   at all, so they are testable headless (`stress/minesweeper`); the menu screen is **XML text**
   and the board is code, because its cells are painted by the app.
 
 ```
-minui.md          the design: the tree, names/listeners/bubbling, screens, XML, the shots
-minui/            the module (`import minui`):
+modules/minui/    the module (`import minui`, `--module modules/minui`):
+  minui.md          the design: the tree, names/listeners/bubbling, screens, XML, the shots
   tree.kt           the headless core: arena, names, listeners, hit-test, the walk, the two
                     geometry transforms (`setRect`, `moveNode`)
   paint.kt          the painter: the theme, the palette values, the visitor
@@ -22,13 +23,15 @@ minui/            the module (`import minui`):
   api.kt            the raw @SmGen declarations: SDL2, Skia's C API, the glue helpers, constants
   ui.kt             the typed surface the app calls (window, canvas, text, sprites, events)
   _res.md           the C++ glue: the SDL_Event union readers, the buffers, the BMP writer
-game/api.kt       the rules, UI-free: board, PRNG, first-click-safe seeding, reveal/flag/chord
-app/src/main.kt   the game: `import minui` + `import minesweeper`, the menu XML, both screens
+examples/minesweeper/
+  game/api.kt       the rules, UI-free: board, PRNG, first-click-safe seeding, reveal/flag/chord
+  app/src/main.kt   the game: `import minui` + `import minesweeper`, the menu XML, both screens
 ```
 
 `minui` depends on the `xml` module (`modules/xml`) for the parse tree's types (`XmlNode`,
-`Attribute`), so the build names three roots: `examples/minesweeper/minui`,
-`examples/minesweeper/game` and `modules/xml`.
+`Attribute`), so a build names three roots: `modules/minui`, `examples/minesweeper/game` and
+`modules/xml`. The module is deliberately *not* part of the compiler's own build (`tools/roots.mjs`
+lists what the compiler is built from): it needs SDL and Skia where the compiler needs neither.
 
 ## Build and run
 

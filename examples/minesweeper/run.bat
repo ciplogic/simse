@@ -6,7 +6,7 @@ rem --script "x,y:L; x,y:R; x,y:M").
 setlocal
 pushd "%~dp0..\.."
 
-simse.exe --root examples/minesweeper/app/src --module examples/minesweeper/minui --module examples/minesweeper/game --module modules/xml -o examples/minesweeper/app/out.cpp
+simse.exe --root examples/minesweeper/app/src --module modules/minui --module examples/minesweeper/game --module modules/xml -o examples/minesweeper/app/out.cpp
 if errorlevel 1 goto :fail
 
 call bun build.js --release --cpp examples/minesweeper/app/out.cpp --exe examples/minesweeper/app/minesweeperdemo.exe

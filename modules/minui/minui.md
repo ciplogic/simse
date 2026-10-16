@@ -392,16 +392,27 @@ which it does.
 Two files of declarations (SDL2, Skia), one of glue, one of types:
 
 ```
-examples/minesweeper/minui/
+modules/minui/      the module itself - what a program names: `--module modules/minui`
+                    (and `--module modules/xml`: screens are XML, and the loader builds them on
+                    the `xml` module's tree types)
   tree.kt      the headless core (landed, shot 2a): arena, names, listeners, hit-test, walk, events
   paint.kt     the painter (landed, shot 2b): UiTheme, the palette values, the visitor
+  screens.kt   the layer stack (landed, shot 5): push/pop, the paint base, the window follows the top
+  xmlread.kt   the XML text reader (landed, shot 5): the `xml` module has the tree types, not a reader
+  xml.kt       the loader (landed, shot 5): XML text -> a `Frame`
   api.kt       the raw @SmGen declarations (landed): SDL2, Skia's C API, the `win*` glue helpers,
                every constant the two libraries need (in decimal, printed from their own headers)
   ui.kt        the typed surface the app calls (landed): window, canvas, text, sprites, input
   _res.md      the C++ glue (landed): the SDL_Event union readers, the two buffers, the BMP writer,
-               `argb`, and the synthetic mouse event the scripted modes push through SDL
-app/src/       `main.kt` - the game itself, shot 3 + 4 (see the README)
+               `argb`, and the synthetic mouse/key events the scripted modes push through SDL
+  minui.md     this file: the module's design, shot by shot
 ```
+
+Beside the module is the example that uses it (`examples/minesweeper/`): the rules as a module of
+their own (`game/`), the app (`app/src/main.kt` - shot 3, 4 and 6), and `run.bat`/`README.md` with
+the commands. The module is named on the command line like any other; it is deliberately *not* part
+of the compiler's own build (`tools/roots.mjs`), which is why the move out of the example's folder
+cost the compiler nothing.
 
 The typed surface is integer-coordinate (the UI is pixel art) and has no object lifetime to
 manage by hand beyond `uiOpen`/`uiClose`. This is the landed surface (`ui.kt`):
@@ -588,14 +599,14 @@ Probes in `build/` (git-ignored, not part of the deliverable), run on Windows ar
 
 ## 12. Shots
 
-1. **minui v0 - LANDED** (`examples/minesweeper/minui/{api,ui}.kt`, `_res.md`,
+1. **minui v0 - LANDED** (`modules/minui/{api,ui}.kt`, `_res.md`,
    `app/src/main.kt`): the SDL window, the Skia canvas over a byte buffer, `uiPresent`,
    `uiScreenshot`, the event pump, system-font text, PNG sprites and the scripted-input push, all
    from Simse. Verified by screenshots whose pixels are then measured (idle/hovered/pressed fills),
    and by `--frames` smoke runs; the present path is SDL's software blitter (§11). The example's
    README has the commands.
 2. **The tree, in two halves**:
-   - **2a, headless — LANDED** (`examples/minesweeper/minui/tree.kt`, verified by
+   - **2a, headless — LANDED** (`modules/minui/tree.kt`, verified by
      `stress/minui-dispatch`): the arena, names, `frameOn` listeners, hit-test, bubbling,
      capture and the event path, with no window at all. The case's `expected.stdout` is the
      contract: it pins each claim in §4 line by line (leaf-first bubbling, the disabled step-over,

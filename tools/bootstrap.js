@@ -30,6 +30,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from "nod
 import * as path from "node:path";
 
 import { developerEnv, fail as failTool, hostArch, normalizeArch, REPO, whichCl } from "./msvc.mjs";
+import { compilerRootArgs } from "./roots.mjs";
 
 const TOOL = "bootstrap";
 const fail = (message) => failTool(TOOL, message);
@@ -120,10 +121,10 @@ function main() {
     if (!hasWorking) fail("--quick needs a working compiler (build one with `bun build.js`)");
     const quickOut = path.join(work, "working_out.cpp");
     const t0 = performance.now();
-    const run = spawnSync(working, ["--root", "src", "--root", "modules", "-o", quickOut], { cwd: REPO, encoding: "utf8" });
+    const run = spawnSync(working, [...compilerRootArgs, "-o", quickOut], { cwd: REPO, encoding: "utf8" });
     const seconds = ((performance.now() - t0) / 1000).toFixed(1);
     if (run.status !== 0) {
-      console.log(`bootstrap: FAILED - ${path.relative(REPO, working)} could not transpile src + modules`);
+      console.log(`bootstrap: FAILED - ${path.relative(REPO, working)} could not transpile the compiler's roots`);
       console.log((run.stderr || run.stdout || "").split("\n").slice(0, 6).join("\n"));
       return 1;
     }
@@ -175,12 +176,12 @@ function main() {
   ], 1, env);
   console.log("");
   console.log("2. transpile the compiler's own source trees");
-  const bootTime = timed(`simse_boot.exe (just built) --root src --root modules`,
-        bootExe, ["--root", "src", "--root", "modules", "-o", bootOut], opts.runs);
+  const bootTime = timed(`simse_boot.exe (just built) transpiles the compiler's roots`,
+        bootExe, [...compilerRootArgs, "-o", bootOut], opts.runs);
   let workTime = null;
   if (hasWorking) {
-    workTime = timed(`working compiler (${path.relative(REPO, working)}) --root src --root modules`,
-          working, ["--root", "src", "--root", "modules", "-o", workingOut], opts.runs);
+    workTime = timed(`working compiler (${path.relative(REPO, working)}) transpiles them`,
+          working, [...compilerRootArgs, "-o", workingOut], opts.runs);
   } else {
     console.log(`  ${"(no ./simse.exe to compare with)".padEnd(52)} build one with \`bun build.js\``);
   }

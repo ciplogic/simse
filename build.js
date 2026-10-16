@@ -29,7 +29,8 @@
 //                     `--out src/simse_bootstrap.cpp` refreshes the published
 //                     bootstrap)
 //   --root <dir>      a source tree to transpile, relative to the repo; repeatable
-//                     (default: src and modules - the compiler's own build)
+//                     (default: the compiler's own roots, tools/roots.mjs - src and the
+//                     module directories the compiler is built from)
 //   --module <dir>    a module of the build, scanned without its `generators/`;
 //                     repeatable (a `--module <dir>` beside `--root`)
 //   --compiler <exe>  the Simse compiler to transpile with (default: ./simse.exe,
@@ -68,6 +69,7 @@
 import { $ } from "bun";
 import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import * as path from "node:path";
+import { compilerRoots } from "./tools/roots.mjs";
 
 import {
   developerEnv,
@@ -90,7 +92,7 @@ function usage() {
   --out <file>      generated C++ name/path (default: simse_out.cpp;
                     --out src/simse_bootstrap.cpp refreshes the published bootstrap)
   --root <dir>      a source tree to transpile, relative to the repo; repeatable
-                    (default: src and modules - the compiler's own build)
+                    (default: the compiler's own roots, tools/roots.mjs)
   --module <dir>    a module of the build, scanned without its generators/; repeatable
   --compiler <exe>  the Simse compiler to transpile with (default: ./simse.exe,
                     else the bootstrap compiled for this build)
@@ -230,9 +232,11 @@ async function main() {
   }
   const cwd = process.cwd();
   const mode = opts.release ? "release" : opts.fast ? "fast" : "debug";
-  // The compiler's own build names both of its trees; any `--root` given replaces the
-  // default, so a project's build names exactly what it was told (plus its `--module`s).
-  const roots = opts.roots.length > 0 ? opts.roots : ["src", "modules"];
+  // The compiler's own build names its trees explicitly (`tools/roots.mjs`): the module set is
+  // the compiler's dependency list, and a module for *programs* (`modules/minui`) is not in it.
+  // Any `--root` given replaces the default, so a project's build names exactly what it was told
+  // (plus its `--module`s).
+  const roots = opts.roots.length > 0 ? opts.roots : compilerRoots;
   const work = path.join(REPO, "build", mode);
   const objDir = path.join(work, "obj");
   mkdirSync(objDir, { recursive: true });
