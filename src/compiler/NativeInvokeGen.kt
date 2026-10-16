@@ -75,7 +75,7 @@ fun nativeInvokeEmit(ctx: *SourceGenContext): SourceGenTransform {
     var argExprs: List<Str> = List<Str>()
     for (*param in params) {
         val typeNode: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
-        val valueType: Str = nativeInvokeValueType(typeNode)
+        val valueType: Str = nativeInvokeParamType(typeNode)
         if (valueType == "") {
             val declNameText: Str = ctx.declName
             ctx.error = `native: '@declNameText' has a parameter type the generator cannot map`
@@ -128,7 +128,8 @@ fun nativeInvokeEmit(ctx: *SourceGenContext): SourceGenTransform {
         }
         val declNameText3: Str = ctx.declName
         val fileNameText: Str = ctx.fileName
-        ctx.error = `native: '@declNameText3' (@fileNameText) generates the thunk '@thunk' with a different binding - rename one`
+        ctx.error =
+            `native: '@declNameText3' (@fileNameText) generates the thunk '@thunk' with a different binding - rename one`
         return SourceGenTransform(SourceTransformation.None, "")
     }
     ctx.state.definitions.insert(thunk, bindKey)
@@ -235,6 +236,25 @@ fun nativeInvokeValueType(typeNode: *AstXmlNode): Str {
         return "void"
     }
     return ""
+}
+
+// The C++ type of a *parameter*'s Simse type. It is `nativeInvokeValueType`'s spelling except
+// for the case a library's ABI asks for constantly: a pointer to a type the generator cannot name,
+// which is the platform's own struct mirrored by a `native class` (`*SkRect`, a `*SYSTEMTIME`).
+// The argument crosses as the address (`(void*) rect`, `nativeInvokeArgExpr`) and the function
+// pointer's own slot is `void*` already (`nativeInvokeNativeType`), so the thunk spells it `void*`
+// too - the callee reads it as its own type, which is the whole point of a mirrored struct.
+//
+// A *return* keeps the strict spelling: a thunk returning `void*` into a `T*` is not C++.
+fun nativeInvokeParamType(typeNode: *AstXmlNode): Str {
+    if (xmlKind(typeNode) != AstNodeCategory.TypePointer) {
+        return nativeInvokeValueType(typeNode)
+    }
+    val inner: Str = nativeInvokeValueType(xmlChildPtr(typeNode, AstNodeKind.Inner))
+    if (inner == "") {
+        return "void*"
+    }
+    return inner + "*"
 }
 
 // The type inside the native function pointer: a handle is the library's own pointer (`void*`,

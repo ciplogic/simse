@@ -3146,6 +3146,7 @@ Str ns3_nativeInvokeBody(Str signature, Str nativeSig, Str library, Str symbol, 
 Str ns3_nativeInvokeDefault(Str retValue);
 Str ns3_nativeInvokeCall(Str retValue, Str args);
 Str ns3_nativeInvokeValueType(ns3_AstXmlNode* typeNode);
+Str ns3_nativeInvokeParamType(ns3_AstXmlNode* typeNode);
 Str ns3_nativeInvokeNativeType(ns3_AstXmlNode* typeNode);
 Str ns3_nativeInvokeArgExpr(ns3_AstXmlNode* typeNode, Str name);
 Str ns3_nativeInvokeJoin(List<Str>* parts);
@@ -36020,7 +36021,7 @@ ns3_SourceGenTransform ns3_nativeInvokeEmit(ns3_SourceGenContext* ctx) {
     param = _sm_for1.current;
     _sm_base6 = ns3_AstNodeKind::Type;
     typeNode = ns2_xmlChildPtr(param, _sm_base6);
-    valueType = ns3_nativeInvokeValueType(typeNode);
+    valueType = ns3_nativeInvokeParamType(typeNode);
     _sm_base7 = &valueType;
     _sm_expr4 = simse_spanOfStr(_sm_base7);
     _sm_expr1 = equals(simse_addressOf(_sm_expr4), __sm_stringTable[1182]);
@@ -36505,6 +36506,43 @@ Str ns3_nativeInvokeValueType(ns3_AstXmlNode* typeNode) {
     return __sm_stringTable[1038];
     L29:;
     return __sm_stringTable[1182];
+}
+// src/compiler/NativeInvokeGen.kt
+Str ns3_nativeInvokeParamType(ns3_AstXmlNode* typeNode) {
+    char* __sm_catP;
+    ns3_AstNodeKind _sm_base1;
+    Str* _sm_base2;
+    ns3_AstNodeCategory _sm_expr1, _sm_expr2;
+    Bool _sm_expr3;
+    Str _sm_expr4, inner;
+    ns3_AstXmlNode* _sm_expr5;
+    Span<Char> _sm_expr6;
+    _sm_expr1 = ns2_xmlKind(typeNode);
+    _sm_expr2 = ns3_AstNodeCategory::TypePointer;
+    _sm_expr3 = _sm_expr1 != _sm_expr2;
+    if (_sm_expr3) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr4 = ns3_nativeInvokeValueType(typeNode);
+    return _sm_expr4;
+    L2:;
+    _sm_base1 = ns3_AstNodeKind::Inner;
+    _sm_expr5 = ns2_xmlChildPtr(typeNode, _sm_base1);
+    inner = ns3_nativeInvokeValueType(_sm_expr5);
+    _sm_base2 = &inner;
+    _sm_expr6 = simse_spanOfStr(_sm_base2);
+    _sm_expr3 = equals(simse_addressOf(_sm_expr6), __sm_stringTable[1182]);
+    if (_sm_expr3) goto L3;
+    goto L4;
+    L3:;
+    return __sm_stringTable[968];
+    L4:;
+    _sm_expr4.resize(1 + inner.size());
+    __sm_catP = _sm_expr4.data();
+    std::memcpy(__sm_catP, inner.data(), inner.size());
+    __sm_catP = __sm_catP + inner.size();
+    *__sm_catP = (char) ('*');
+    return _sm_expr4;
 }
 // src/compiler/NativeInvokeGen.kt
 Str ns3_nativeInvokeNativeType(ns3_AstXmlNode* typeNode) {
