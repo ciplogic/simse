@@ -287,8 +287,8 @@ fun uiButtons(ui: *Ui): Int {
     return SDL_GetMouseState(*ui.mouseX, *ui.mouseY)
 }
 
-// Feed a synthetic mouse event through SDL's own queue: the scripted-input path (`--click`,
-// `--press`, the game's click sequences). It is the real path - the event is written as SDL writes
+// Feed a synthetic mouse event through SDL's own queue: the scripted-input path (the app's
+// `--script` click entries). It is the real path - the event is written as SDL writes
 // it, polled as SDL polls it - so what a scripted run proves is what a real click would do. The
 // *mask* stays the real device's (`uiButtons`), which is why a control should take its pressed
 // state from the down/up events rather than the mask; the mask is for chording.
@@ -304,6 +304,22 @@ fun uiPushMouse(kind: UiEventKind, x: Int, y: Int, button: Button): Bool {
         return false
     }
     return SDL_PushEvent(winMouseEvent(code, x, y, button.toInt())) != 0
+}
+
+// Feed a synthetic key event through SDL's own queue, for the scripted `:K` entries: the same bytes
+// SDL writes for a real keystroke (the loop reads `keysym.sym`, which is the ASCII value for letters
+// and digits and SDL's own number for the rest). A script can therefore press R, Escape or 1/2/3
+// without a hand on the keyboard - which is also the only way a headless run can press anything.
+fun uiPushKey(kind: UiEventKind, key: Int): Bool {
+    var code: Int = 0
+    if (kind == UiEventKind.KeyDown) {
+        code = SDL_KEYDOWN
+    } else if (kind == UiEventKind.KeyUp) {
+        code = SDL_KEYUP
+    } else {
+        return false
+    }
+    return SDL_PushEvent(winKeyEvent(code, key)) != 0
 }
 
 // ---- colours --------------------------------------------------------------

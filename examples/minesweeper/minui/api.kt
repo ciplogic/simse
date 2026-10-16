@@ -281,6 +281,10 @@ fun winWindowEvent(event: RawPtr): Int
 @SmGen("res", "uiwin", "simse_ui_mouseEvent")
 fun winMouseEvent(kind: Int, x: Int, y: Int, button: Int): RawPtr
 
+// The same, for a keystroke: `kind` is SDL's event type, `key` an `SDLK_*` code.
+@SmGen("res", "uiwin", "simse_ui_keyEvent")
+fun winKeyEvent(kind: Int, key: Int): RawPtr
+
 // Four integers in, the address of Skia's own four-float rect out: the widening (and the memory the
 // library reads) stays on the C++ side, so no Simse code above this line carries a float
 // coordinate.

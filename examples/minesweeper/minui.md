@@ -229,40 +229,52 @@ fun gameBind(f: *Frame): Unit {
 }
 ```
 
-## 5. Screens: the stack
+## 5. Screens: the stack - LANDED (`screens.kt`)
 
 Heroes-shaped navigation: menu → game → city/battle, each screen pushed, `Escape`/a Back button
-popping. The stack is a `List<Layer>` - each layer holds its `&Frame` boxed, so a push shares the
-frame rather than copying an arena of 480 nodes - plus a *kind per frame* for dispatch, since
-there is no vtable:
+popping. The stack is a `List<Layer>` - each layer holds its `&Frame` **boxed**, so a push shares
+the frame rather than copying an arena of 480 nodes - and the layer's *name* is what the app
+switches on where an interface would dispatch on a type (there is no vtable):
 
 ```kt
-union class Screen(var Menu: MenuScreen, var Game: GameScreen, var Result: ResultScreen)
+data class Layer(var frame: &Frame, var name: Str, var opaque: Bool)
+data class ScreenStack(var layers: List<Layer>)
 
-data class Layer(
-    var screen: Screen,
-    var frame: &Frame,
-    var opaque: Bool,   // true: nothing below this layer is painted (a city screen)
-    var modal: Bool     // true: no event reaches below it. An overlay is opaque = false, modal =
-                        // true: the screen below is painted (then dimmed by the overlay itself)
-                        // and gets no input - a Heroes dialog, a battle result
-)
-
-fun push(stack: *List<Layer>, layer: Layer): Unit
-fun pop(stack: *List<Layer>): Unit
-fun top(stack: *List<Layer>): Layer     // no layers is a bug: the menu is always there
+fun newStack(first: &Frame, name: Str, opaque: Bool): ScreenStack   // the menu is always there
+fun stackPush(stack: *ScreenStack, frame: &Frame, name: Str, opaque: Bool): Unit
+fun stackPop(stack: *ScreenStack): Bool                // false at the bottom layer: it stays
+fun stackSize(stack: *ScreenStack): Int
+fun stackTopName(stack: *ScreenStack): Str             // "menu", "game", ...
+fun stackTop(stack: *ScreenStack): *Frame              // valid while the box is in the stack
+fun stackPaintBase(stack: *ScreenStack): Int           // the last opaque layer
+fun stackPaint(stack: *ScreenStack, theme: *UiTheme, ui: *Ui, custom: (Str, Int) -> Unit): Unit
+fun stackEvent(stack: *ScreenStack, e: *UiEvent, answer: (Hit, *UiEvent) -> Bool): Hit
+fun stackResizeTop(stack: *ScreenStack, ui: *Ui): Bool // the window follows the top screen
 ```
 
-Rules, in one place so they are testable:
+The rules, in one place, so they are testable headless (`stress/minui-xml` pins each one):
 
-- **Painting**: from the bottom up, **skipping everything below the last opaque layer**. A modal
-  overlay paints a scrim over the frame below and then itself, which is how a Heroes dialog and a
-  battle screen differ from the city screen.
-- **Input**: only the top layer is dispatched to (`uiDispatch` takes its layer). Popping is
-  `Escape` or a `Act.BACK` listener, applied *after* the event is handled so a screen can refuse
-  to close.
-- Screens are values; a screen that owns a `Board` owns it by value and mutates it by pointer.
-  Nothing in the stack is shared between two layers except through `&`.
+- **A stack is never empty.** `newStack` takes the first screen, and `stackPop` refuses to take the
+  last layer away - so there is no "no screen" case for any caller to handle, and `stackTop` needs
+  no error arm. An app that wants Escape to close the window asks `stackSize` and decides itself;
+  minui does not decide when a window closes.
+- **Painting**: from the bottom up, **starting at the last opaque layer** (`stackPaintBase`) -
+  everything below it is covered anyway, so a menu under a full-window game screen costs no drawing
+  at all. A translucent overlay is an `opaque=false` layer: it paints over what is below it and
+  dims it itself, by drawing a scrim.
+- **Input**: only the top layer is dispatched to. Hover and press state is each frame's own fields,
+  so a screen that is not on top keeps whatever it had and comes back as it was.
+- **The window follows the top layer** (`stackResizeTop`): the size is the frame's root rect, which
+  is where `newFrame`'s width and height went. The menu (360x348) and Expert's board (744x496) are
+  one stack because of it.
+- **A push shares, never copies**: the layer holds the caller's `&Frame`, and the app keeps the
+  same box (`game.frame`, in the example) - a write through `stackTop` is visible through the app's
+  own handle, which is what the stress case's last section proves.
+
+The app's per-screen *data* stays the app's: the example needs one `Game` and nothing for the menu,
+and switches on `stackTopName` where a class hierarchy would have virtuals. A family of screens
+that carry different state each is where a `union class Screen` (the sketch this section started
+with) earns its place - v1 has not needed one.
 
 ## 6. Painting: the visitor - LANDED (`paint.kt`)
 
@@ -301,40 +313,71 @@ The two hooks that keep the framework small and the app free:
 - **`UiTheme`** - one value holding every colour the built-ins use. `argb(a, r, g, b)` (the `win*`
   glue) packs them, because `255 << 24` in Simse arithmetic is a needless signed-overflow question.
 
-## 7. XML: a loader, not the model
+## 7. XML: a loader, not the model - LANDED (`xmlread.kt` + `xml.kt`)
 
-The runtime model is the arena. XML is a **front end** that builds it, parsed once per screen
-(`xml` module); the names it carries are what code binds to. The reasons to insist on this
-direction: a per-frame walk of an XML tree re-scans attribute lists (the compiler's own profile
-was made of exactly that), hit-testing would compare strings, and custom painting cannot be
-expressed in XML anyway.
+The runtime model is the arena. XML is a **front end** that builds it, parsed once per screen; the
+names it carries are what code binds to. The reasons to insist on this direction: a per-frame walk
+of an XML tree re-scans attribute lists (the compiler's own profile was made of exactly that),
+hit-testing would compare strings, and custom painting cannot be expressed in XML anyway.
+
+Two files, because the two halves fail differently:
+
+- **`xmlread.kt`** reads XML *text* into the `xml` module's own tree (`XmlNode`, `Attribute`) -
+  the module supplies the types but not a reader. Elements with quoted attributes, self-closing
+  tags, text content (it becomes the element's `text` attribute: `XmlNode` has no text slot),
+  comments, and the five predefined entities; no namespaces, CDATA, processing instructions or
+  DOCTYPE, and an unknown entity is an error rather than silence. Every element carries a `line`
+  attribute, first in its list - XML text has no line numbers, and the loader's messages are worth
+  little without them - and a document that writes `line` itself is refused. Every failure is a
+  `Res` error with the line whose problem it is: `line 3: </screen> closes <panel>`.
+- **`xml.kt`** maps that tree onto a `Frame` and rejects what it cannot use: an unknown element, an
+  attribute the element has no use for (`widht`), a missing rect, a duplicate name, a grid whose
+  size does not divide into its cells. A screen that loads is a screen that says what it means.
+
+```kt
+// A bad screen is a message with a line number, never a crash and never a half-built tree: the
+// whole document is parsed and mapped before anything is returned, and a failed load leaves
+// nothing behind to click on. A duplicate name is an error here (the name -> index map is built
+// here), and `frameOn` reports a name that is not in the tree when the screen binds - both long
+// before a click happens.
+fun loadScreen(text: Str): Res<Frame>
+fun parseXmlText(text: Str): Res<XmlNode>     // the reader on its own, for a tool that wants it
+```
+
+The vocabulary, and nothing beyond it:
 
 ```xml
-<!-- One screen, absolute geometry (Heroes 2's own layout model). Loaded once; the arena it
-     builds is what the painter and the hit test walk. Names are the author's handles - the
-     behaviour that goes with them is registered in code (`frameOn`), never in the XML. -->
-<screen name="menu" width="360" height="420">
-  <panel rect="16,64,328,120" palette="panel"/>
-  <label rect="16,72,328,24" palette="title" align="center">MINESWEEPER</label>
-  <button name="beginner" rect="32,200,120,32" palette="primary">BEGINNER</button>
-  <button name="expert"   rect="32,240,120,32" palette="primary">EXPERT</button>
-  <grid name="board" rect="8,8,288,288" cell="32"/>
+<!-- The menu, as the example ships it: absolute geometry, Heroes 2's own layout model. Loaded
+     once; the arena it builds is what the painter and the hit test walk. Names are the author's
+     handles - the behaviour that goes with them is registered in code (`frameOn`). -->
+<screen name="menu" width="360" height="348">
+  <panel rect="12,16,336,84" palette="plain"/>
+  <label rect="12,36,336,30" palette="emphasized" align="center">MINESWEEPER</label>
+  <label rect="12,72,336,18" palette="dim" align="center">minui - SDL2 + Skia</label>
+  <button name="beginner" rect="80,120,200,32">BEGINNER</button>
+  <grid name="board" rect="12,52,270,270" cell="30"/>
 </screen>
 ```
 
-```kt
-// A loader answers Res: a bad screen is a message with a line number, never a crash. A duplicate
-// name in one screen is an error (the name->index map is built here), and `frameOn` reports a
-// name that is not in the tree when the screen binds - both long before a click happens.
-fun loadScreen(xmlText: Str): Res<Frame>
-```
+| element | adds | becomes |
+| --- | --- | --- |
+| `screen` | `name` (renames the root), `width`, `height` | the `Frame` itself |
+| `panel` | - | `NodeKind.Panel` |
+| `label` | `text` (content or attribute), `align` | `NodeKind.Label` |
+| `button` | `text` | `NodeKind.Button` |
+| `sprite` | `index` (the atlas cell) | `NodeKind.Sprite` |
+| `custom` | `name` (required), `payload` | `NodeKind.Custom` - the app paints it |
+| `grid` | `name` (required), `cell` | one named node plus `rows*cols` anonymous cells, `payload` = row-major index |
+| every element | `name`, `rect`, `palette`, `visible`, `enabled` | the node's fields |
 
-Deliberately **not** in the XML: behaviour (names are inert on their own), custom painting, layout
-beyond absolute rects, and logic. v1 parses: `screen`, `panel`, `label`, `button`, `sprite`,
-`grid` (a uniform cell grid, which is what the board is), with `name`, `rect`, `palette`, `align`
-and `text` — where `text` may be an attribute or the element's content (content wins, trimmed).
-A `grid` node is a *generator*: the loader expands it into N `Custom` cell nodes with `payload` =
-cell index, which is how the board gets per-cell hit-testing without 480 XML lines.
+The `grid` line is the important one: it is a *generator*, so the board gets one listener and
+per-cell hit-testing without 480 XML lines - the loader calls the same `addGrid` the app would.
+
+Deliberately **not** in the XML: behaviour (names are inert on their own), custom painting,
+layout beyond absolute rects, and logic. And deliberately not in the *reader*: entity
+*declarations*, CDATA, namespaces, a DOCTYPE, attribute values without quotes - a screen is a
+small hand-written document, and one that needs more than the reader has should say so loudly,
+which it does.
 
 ## 8. The wrapper API (`import minui`)
 
@@ -364,6 +407,7 @@ fun uiResize(ui: *Ui, width: Int, height: Int): Bool   // new window/texture/buf
 fun uiPresent(ui: *Ui): Unit                     // upload + copy + present (0.16-0.37 ms, see §11)
 fun uiPollEvent(ui: *Ui): Bool                   // one event into `ui.event`, false when none left
 fun uiPushMouse(kind: UiEventKind, x: Int, y: Int, button: Button): Bool   // scripted input
+fun uiPushKey(kind: UiEventKind, key: Int): Bool    // ... and a scripted keystroke (`:K`)
 fun uiButtons(ui: *Ui): Int                      // the mask held right now (chording)
 fun uiColor(alpha: Int, red: Int, green: Int, blue: Int): Int
 fun uiRgb(red: Int, green: Int, blue: Int): Int
@@ -449,13 +493,18 @@ Verification, none of which needs a human at the keyboard:
 - **Layout engine** (rows, columns, anchors, stretch). v1 is absolute rects plus the `grid`
   generator, which is exactly Heroes 2's model. A box model is v2, and the arena is where it will
   write.
-- **Damage tracking** (repaint only what changed). A full redraw is 0.19 ms; revisit when a frame
-  costs more than ~2 ms.
+- **Damage tracking** (repaint only what changed). A full redraw is ~0.2 ms and the loop draws
+  only when something changed; per-rect damage is for when a frame costs more than ~2 ms.
 - **Keyboard focus navigation, text input, IME.** `keyFocus` is in `Frame` from the start so the
   rule has a home; tabbing and editors are later.
+- **A modal layer that dims what is below it.** The stack has everything it needs - `opaque=false`
+  paints the layer below, and input already stops at the top layer - but no screen has needed the
+  scrim yet, so the dimming itself is the first overlay's to write (three lines of `uiFill` with an
+  alpha). The example's stack is two opaque screens.
 - **Scroll containers, animations/tweens, themes beyond one palette list, i18n, accessibility.**
 - **XML for *everything*.** Custom painting stays in code, by design: XML describes structure and
-  built-in styling, the app describes what only it can draw.
+  built-in styling, the app describes what only it can draw. Screens are *loaded* once, never
+  walked per frame.
 - **A second window.** One window, one renderer; layers are screens, not OS windows.
 
 ## 11. Verified facts this rests on
@@ -501,13 +550,26 @@ Probes in `build/` (git-ignored, not part of the deliverable), run on Windows ar
   `SDL_TEXTUREACCESS_STREAMING` is 1 (both printed from the kit's headers by
   `build/sdlconst.cpp`; a guessed value had been wrong in each direction).
 - **Scripted input can go through SDL's own queue**: the glue builds the bytes SDL would have
-  written and the app hands them to `SDL_PushEvent`, so a screenshot proves the whole input path -
-  the button fills measure 58,90,138 idle, 78,116,172 hovered and 44,68,104 pressed.
+  written (`simse_ui_mouseEvent`, `simse_ui_keyEvent`) and the app hands them to `SDL_PushEvent`,
+  so a screenshot proves the whole input path - the button fills measure 58,90,138 idle, 78,116,172
+  hovered and 44,68,104 pressed, and a `:K` entry reaches the same handler a real keystroke does.
 - **A member call on a value reached through a pointer needs a local first**: `e.kind.toInt()`
   where `e` is a parameter emits `static_cast<Int>(simse_addressOf(e->kind))` - the field's
   *address* - which cl.exe refuses. The compiler's own sources carry the same workaround with the
   same reason (`src/linear/ReuseExprs.kt`: "The opcode as a local first: `op.kind.toInt()`
   addresses a member of a pointer"). Read the field into a `val` and call the member on that.
+- **`Res<Unit>` transpiles and then does not compile**: the payload becomes a `void` field
+  (`Res<void>`, `SmResStorage<true, void>`), and a `Res<Int>` whose payload is always 0 is what the
+  reader's and loader's internal "it worked" results are spelled as instead. The public surface is
+  `Res<Frame>`/`Res<XmlNode>` either way.
+- **Two address-of-a-plain-`Int` locals before a lambda literal break the parser.** `val a: *Int =
+  *x` once is fine (and a pointer to a struct, a `List` or a class is fine any number of times,
+  which is why the rest of minui never hits it); twice - or a `*List` plus a `*Int` - before a
+  lambda is either `expected ')'` at the lambda's parameter list or `unsupported: assignment
+  target` at its `=`. The stress case keeps one `*LastClick` for its three results, which is both
+  the workaround and the clearer shape.
+- **`Array<T>` answers `count()`, not `size()`** (a `List` answers `size()`): the length operation
+  on the counted block, used by the loader to walk an `XmlNode`'s children.
 
 ## 12. Shots
 
@@ -515,7 +577,8 @@ Probes in `build/` (git-ignored, not part of the deliverable), run on Windows ar
    `app/src/main.kt`): the SDL window, the Skia canvas over a byte buffer, `uiPresent`,
    `uiScreenshot`, the event pump, system-font text, PNG sprites and the scripted-input push, all
    from Simse. Verified by screenshots whose pixels are then measured (idle/hovered/pressed fills),
-   and by `--frames` smoke runs with VSync on. The example's README has the commands.
+   and by `--frames` smoke runs; the present path is SDL's software blitter (§11). The example's
+   README has the commands.
 2. **The tree, in two halves**:
    - **2a, headless — LANDED** (`examples/minesweeper/minui/tree.kt`, verified by
      `stress/minui-dispatch`): the arena, names, `frameOn` listeners, hit-test, bubbling,
@@ -524,12 +587,13 @@ Probes in `build/` (git-ignored, not part of the deliverable), run on Windows ar
      one listener for 25 cells with the leaf naming the cell, capture across a drag, a declining
      listener, an unclaimed click, and the button mask that makes a chord a chord).
    - **2b, painted - LANDED** (`paint.kt`, `app/src/main.kt`): the same tree drawn through minui,
-     the three fake buttons with names and listeners, an 8x8 board of custom cells, a status line
-     the handlers rewrite. Verified by scripted runs whose output *and* pixels say the same thing:
-     `--click 210,115` prints `action new_game count=1` and the button measures hovered
-     (78,116,172), `--press` measures pressed (44,68,104), `--click 162,344` prints `action cell
-     26` and the cell measures revealed (30,38,52) with the status line reading `cell 26`, and
-     `--rclick 162,344` prints `action cell flag 26` with the flag's own gold at the cell's centre.
+     three fake buttons with names and listeners, a board of custom cells, a status line the
+     handlers rewrite. Verified by scripted runs whose output *and* pixels say the same thing:
+     `--script "210,115:L"` printed `action new_game count=1` and the button measured hovered
+     (78,116,172), a press-only script measured pressed (44,68,104), `--script "162,344:L"` printed
+     `action cell 26` and the cell measured revealed (30,38,52), and `:R` printed the flag with the
+     flag's own red at the cell's centre. (Those drills were the demo's own buttons; the app that
+     replaced it keeps the same prefix-free dispatch, and shot 4's list has its commands.)
 3. **The rules - LANDED** (`examples/minesweeper/game/api.kt`, verified by `stress/minesweeper`):
    a UI-free module - deterministic (Schrage PRNG), first click always safe (a 3x3 kept clear),
    flood reveal, flag/unflag, chord only when the number is satisfied, win/lose transitions. The
@@ -543,8 +607,19 @@ Probes in `build/` (git-ignored, not part of the deliverable), run on Windows ar
    costs no CPU. Verified end to end: a 72-click `--script` wins the seeded board (counter `000`,
    every mine flagged, `you won in 0s`), a click on a mine reddens it and X's a wrong flag, a
    chord after one flag opens the rest, and every measured colour survives the resize.
-5. **Screens and XML**: the stack of section 5 is designed but not used by the app yet - the game
-   is a single screen. The loader plus a menu screen on top of it, and a generated PNG atlas if
-   the drawn glyphs need replacing, are the next shot.
+5. **Screens and XML - LANDED** (`screens.kt`, `xmlread.kt`, `xml.kt`, verified by
+   `stress/minui-xml`): the stack of §5 and the loader of §7, with the menu that the example now
+   opens on. The case is headless and pins every line: a document that loads (kinds, geometry,
+   names, the renamed root, text with an entity decoded, the grid expansion, a click through the
+   loaded tree naming the cell), twenty documents that do not (each with its line: unterminated
+   tags and comments, an unknown entity, a duplicate attribute, the reserved `line`, a mismatched
+   close tag, an unknown element, a missing rect, a duplicate name, a grid that does not divide),
+   and the stack's own rules (top/name/size, the paint base under and over overlays, the bottom
+   layer that cannot be popped, and a write through the stack's top read back through the app's
+   own boxed handle). The app's screenshots then show the same thing painted: the menu, BEGINNER
+   pushing a 294x382 board, EXPERT pushing 744x496, MENU popping back to the menu - and the keys,
+   which needed `uiPushKey` (a synthetic keystroke in the glue, `:K` in a script) to be testable
+   headless at all: `r:K` prints `key restart` and leaves a fresh board, `2:K` resizes to
+   Intermediate's 504x592, `esc:K` pops to the menu.
 
 Each shot is independently verifiable, and shots 2 and 3 are independent of each other.

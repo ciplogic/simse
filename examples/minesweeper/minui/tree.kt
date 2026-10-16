@@ -223,6 +223,27 @@ fun setName(f: *Frame, node: Int, name: Str): Bool {
     return true
 }
 
+// Rename a frame's root, which starts as "root" (the name a background listener binds to before a
+// screen has a name of its own). A general rename would have to move the old entry out of the map;
+// this is the one case that needs it - the XML loader names its root from `<screen name="...">` -
+// and doing it here keeps the map honest instead of writing a second entry for the same node.
+fun nameRoot(f: *Frame, name: Str): Bool {
+    val old: Str = f.nodes[f.root].name
+    if (name.size() == 0) {
+        return false
+    }
+    if (name == old) {
+        return true
+    }
+    if (f.names.has(name)) {
+        return false
+    }
+    f.names.remove(old)
+    f.nodes[f.root].name = name
+    f.names.insert(name, f.root)
+    return true
+}
+
 fun setText(f: *Frame, node: Int, text: Str): Unit {
     f.nodes[node].text = text
 }

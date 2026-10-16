@@ -3,32 +3,36 @@ package minesweeperapp
 import minui
 import minesweeper
 
-// Minesweeper, played on the tree.
+// Minesweeper, played on the tree, in two screens on a stack.
 //
 // The rules are the `minesweeper` module's (no UI import, tested headless by `stress/minesweeper`);
-// the window, the tree and the painter are minui's. This file is the glue and the look: a counter,
-// a timer, a restart button, three difficulty buttons, the board, and a status line that says what
-// happened.
+// the window, the tree, the painter, the XML loader and the screen stack are minui's. The menu's
+// screen is loaded from the XML below, so it is edited as text; the board's is built by code,
+// because its cells are painted by the app. This file is the glue and the look.
 //
-//   minesweeperdemo.exe                        play (Beginner, seeded, until Escape)
-//   minesweeperdemo.exe --difficulty 1         start on Intermediate (2 is Expert)
-//   minesweeperdemo.exe --seed 7                a different board
-//   minesweeperdemo.exe --frames 3             three frames and leave (a smoke test)
-//   minesweeperdemo.exe --screenshot out.bmp   write what the renderer presented
-//   minesweeperdemo.exe --script "4,4:L; 0,0:L"  clicks through SDL's own queue, in order
-//                                              (:L left, :R right, :M middle/chord)
+//   minesweeperdemo.exe                          the menu, until Escape or the window's X
+//   minesweeperdemo.exe --difficulty 1           skip the menu: start on Intermediate (2: Expert)
+//   minesweeperdemo.exe --seed 7                 a different board
+//   minesweeperdemo.exe --frames 3               three frames and leave (a smoke test)
+//   minesweeperdemo.exe --screenshot out.bmp     write what the renderer presented
+//   minesweeperdemo.exe --script "180,136:L; r:K"  clicks and keystrokes through SDL's own queue
+//                                                (x,y:L left, :R right, :M middle; r:K, esc:K,
 //
-// Playing: left click opens, right click flags, middle (or both buttons held) chords, R restarts,
-// 1/2/3 switch difficulty, Escape leaves.
+// Playing: the menu's buttons pick a difficulty (QUIT leaves); on the board a left click opens, a
+// right click flags, the middle button chords, R restarts, 1/2/3 switch difficulty, and Escape (or
+// MENU) goes back to the menu.
 
-// The action codes this screen answers. minui only ever sees the `Int`s.
+// The action codes a screen answers. minui only ever sees the `Int`s, and each code belongs to one
+// screen's bindings: the menu plays and quits, the game opens cells, restarts and backs out. The
+// *codes* are shared, the *bindings* are not - each screen's frame carries only its own listeners.
 enum class Act {
     None = 0,
     Cell = 1,
     Restart = 2,
-    Difficulty = 3,
+    Play = 3,
     Quit = 4,
-    Background = 5
+    Background = 5,
+    Back = 6
 }
 
 // One difficulty's geometry: the cell size and the window it needs. There is no layout engine in
@@ -50,11 +54,11 @@ fun layoutFor(difficulty: Difficulty): BoardLayout {
     )
 }
 
-// The app's whole state. The frame lives here because a difficulty change rebuilds it: the arena is
-// data and a new difficulty is new data (names survive it; indices do not, which is why the
-// handlers look their nodes up by name).
+// The app's whole state. The game screen's frame lives here *boxed* (`&Frame`): a difficulty change
+// replaces the box with a fresh arena, and the stack holds the same box - a push shares a screen
+// rather than copying it, which is the point of a layer holding a reference.
 data class Game(
-    var frame: Frame,
+    var frame: &Frame,
     var board: Board,
     var difficulty: Difficulty,
     var seed: Int,
@@ -66,11 +70,39 @@ data class Game(
 )
 
 fun freshGame(difficulty: Difficulty, seed: Int): Game {
+    var placeholder: Frame = newFrame(1, 1)
     return Game(
-        newFrame(1, 1), newGame(difficulty, seed), difficulty, seed, 0, 0,
-        "left click opens, right click flags, middle chords", false, 0 - 1
+        & placeholder, newGame(difficulty, seed), difficulty, seed, 0, 0,
+    "left opens, right flags, middle chords", false, 0-1
     )
 }
+
+// The level the command line and the menu's buttons speak (0/1/2), as the rules' enum.
+fun levelDifficulty(level: Int): Difficulty {
+    if (level == 1) {
+        return Difficulty.Intermediate
+    }
+    if (level == 2) {
+        return Difficulty.Expert
+    }
+    return Difficulty.Beginner
+}
+
+// The menu screen, in XML. minui's loader builds the arena (the window size comes with it); the
+// names are what `menuBind` binds behaviour to, and there is no other construction of this screen
+// anywhere - editing it is editing this text.
+val menuXml: Str = `
+<!-- Absolute geometry, Heroes 2's own layout model: minui v1 has no layout engine. -->
+<screen name="menu" width="360" height="348">
+<panel rect="12,16,336,84" palette="plain"/>
+<label rect="12,36,336,30" palette="emphasized" align="center">MINESWEEPER</label>
+<label rect="12,72,336,18" palette="dim" align="center">minui - SDL2 + Skia</label>
+<button name="beginner" rect="80,120,200,32">BEGINNER</button>
+<button name="medium" rect="80,160,200,32">MEDIUM</button>
+<button name="expert" rect="80,200,200,32">EXPERT</button>
+<button name="quit" rect="80,264,200,32">QUIT</button>
+</screen>
+`
 
 // The theme: one value, so the palette is one thing to keep in step.
 fun gameTheme(): UiTheme {
@@ -107,77 +139,52 @@ fun numberColor(count: Int): Int {
     return uiRgb(170, 180, 200)
 }
 
-// The board's tree: mostly a rectangle of named buttons, and the cells (one `Custom` node each,
-// `payload` = the cell index, one listener on the grid for all of them).
-fun buildGame(g: *Game, ui: *Ui): Bool {
+// The board's tree: the two readouts, the bottom row (back to the menu, a fresh board), the status
+// line, and the cells (one `Custom` node each, `payload` = the cell index, one listener on the grid
+// for all of them). Rebuilt whole - a difficulty is new geometry.
+fun buildGameScreen(g: *Game, ui: *Ui): Frame {
     val size: BoardLayout = layoutFor(g.difficulty)
     val board: Layout = layoutOf(g.difficulty)
     val boardWidth: Int = board.width * size.cell
     val margin: Int = 12
     val footer: Int = 52 + board.height * size.cell
 
-    if (!uiResize(ui, size.width, size.height)) {
-        return false
-    }
     var f: Frame = newFrame(size.width, size.height)
     var fp: *Frame = *f
 
-    val counter: Int = addNode(fp, fp.root, NodeKind.Label, margin, 10, 90, 32)
+    val counter: Int = addNode(fp, fp.root, NodeKind.Label, margin, 10, 72, 32)
     setName(fp, counter, "counter")
     setText(fp, counter, "000")
     setPalette(fp, counter, PaletteEmphasized)
 
-    val timer: Int = addNode(fp, fp.root, NodeKind.Label, size.width - margin - 90, 10, 90, 32)
+    val timer: Int = addNode(fp, fp.root, NodeKind.Label, size.width - margin - 72, 10, 72, 32)
     setName(fp, timer, "timer")
     setText(fp, timer, "0")
     setPalette(fp, timer, PaletteEmphasized)
     setAlign(fp, timer, Align.Right)
 
-    val restart: Int = addNode(fp, fp.root, NodeKind.Button, (size.width - 168) / 2, 8, 168, 36)
-    setName(fp, restart, "restart")
-    setText(fp, restart, "NEW GAME  (R)")
-
     // The board: one named grid, its cells anonymous with `payload` = row-major index.
     addGrid(fp, fp.root, "board", margin, 52, size.cell, board.width, board.height)
 
-    // Three difficulty buttons, the current one disabled (it is the one in play).
-    // `g.difficulty.toInt()` would address a member of a pointer (the trap `minui.md` records), so
-    // the level is read into a local first.
-    val currentDifficulty: Difficulty = g.difficulty
-    val currentLevel: Int = currentDifficulty.toInt()
-    val buttonWidth: Int = (boardWidth - 16) / 3
-    var level: Int = 0
-    while (level < 3) {
-        val name: Str = "diff" + level.toString()
-        val button: Int = addNode(
-            fp, fp.root, NodeKind.Button,
-            margin + level * (buttonWidth + 8), footer + 8, buttonWidth, 30
-        )
-        setName(fp, button, name)
-        var label: Str = "BEGINNER"
-        if (level == 1) {
-            label = "MEDIUM"
-        }
-        if (level == 2) {
-            label = "EXPERT"
-        }
-        setText(fp, button, label)
-        setEnabled(fp, button, level != currentLevel)
-        level = level + 1
-    }
+    // The bottom row: back to the menu (the stack pops), or a fresh board on this difficulty.
+    val menu: Int = addNode(fp, fp.root, NodeKind.Button, margin, footer + 8, 100, 30)
+    setName(fp, menu, "menu")
+    setText(fp, menu, "MENU")
+    val restart: Int = addNode(fp, fp.root, NodeKind.Button, size.width - margin - 100, footer + 8, 100, 30)
+    setName(fp, restart, "restart")
+    setText(fp, restart, "NEW GAME")
 
     val status: Int = addNode(fp, fp.root, NodeKind.Label, margin, footer + 42, boardWidth, 18)
     setName(fp, status, "status")
     setText(fp, status, g.status)
     setPalette(fp, status, PaletteDim)
 
-    g.frame = f
-    g.boardNode = nodeNamed(*g.frame, "board")
-    return bindGame(*g.frame)
+    g.boardNode = nodeNamed(fp, "board")
+    return f
 }
 
-// The bindings: name -> action, resolved once per build. The Bool each call answers is the check
-// that the name is in the tree (a typo shows up here, not as a dead button).
+// The game screen's bindings: name -> action, resolved once per build. The Bool each call answers
+// is the check that the name is in the tree (a typo shows up here, not as a dead button).
 fun bindGame(fp: *Frame): Bool {
     var bound: Bool = true
     if (!frameOn(fp, "board", Act.Cell.toInt(), 0)) {
@@ -186,13 +193,7 @@ fun bindGame(fp: *Frame): Bool {
     if (!frameOn(fp, "restart", Act.Restart.toInt(), 0)) {
         bound = false
     }
-    if (!frameOn(fp, "diff0", Act.Difficulty.toInt(), 0)) {
-        bound = false
-    }
-    if (!frameOn(fp, "diff1", Act.Difficulty.toInt(), 1)) {
-        bound = false
-    }
-    if (!frameOn(fp, "diff2", Act.Difficulty.toInt(), 2)) {
+    if (!frameOn(fp, "menu", Act.Back.toInt(), 0)) {
         bound = false
     }
     if (!frameOn(fp, "root", Act.Background.toInt(), 0)) {
@@ -201,13 +202,34 @@ fun bindGame(fp: *Frame): Bool {
     return bound
 }
 
+// The menu's bindings. Its frame comes from the loader, which renamed its root from "root" to the
+// screen's own name - so a click on the background is bound as "menu" here, not "root".
+fun menuBind(fp: *Frame): Bool {
+    var bound: Bool = true
+    if (!frameOn(fp, "beginner", Act.Play.toInt(), Difficulty.Beginner.toInt())) {
+        bound = false
+    }
+    if (!frameOn(fp, "medium", Act.Play.toInt(), Difficulty.Intermediate.toInt())) {
+        bound = false
+    }
+    if (!frameOn(fp, "expert", Act.Play.toInt(), Difficulty.Expert.toInt())) {
+        bound = false
+    }
+    if (!frameOn(fp, "quit", Act.Quit.toInt(), 0)) {
+        bound = false
+    }
+    if (!frameOn(fp, "menu", Act.Background.toInt(), 0)) {
+        bound = false
+    }
+    return bound
+}
+
 // One cell: the painter's `custom` hook. The arena carries the cell's geometry and identity; the
 // rules say what is under it; the pointer's place and the frame's `pressed` say how it looks.
-fun paintCell(g: *Game, ui: *Ui, node: Int): Unit {
+fun paintCell(g: *Game, f: *Frame, ui: *Ui, node: Int): Unit {
     if (node == g.boardNode) {
         return // the grid itself draws nothing; its cells do
     }
-    val f: *Frame = *g.frame
     val rect: Rect = f.nodes[node].rect
     val index: Int = f.nodes[node].payload
     val cell: Cell = g.board.cells[index]
@@ -263,31 +285,26 @@ fun paintCell(g: *Game, ui: *Ui, node: Int): Unit {
     }
 }
 
-// A new board on the same difficulty, and the tree rebuilt after it.
-fun restartGame(g: *Game, ui: *Ui, seed: Int): Unit {
-    g.seed = seed
-    g.board = newGame(g.difficulty, seed)
-    g.startedAt = 0
-    g.elapsed = 0
-    g.status = "left click opens, right click flags, middle chords"
-    buildGame(g, ui)
-}
-
-// A different difficulty: a new board, a new window size, a rebuilt tree.
-fun switchDifficulty(g: *Game, ui: *Ui, level: Int): Unit {
-    var difficulty: Difficulty = Difficulty.Beginner
-    if (level == 1) {
-        difficulty = Difficulty.Intermediate
-    }
-    if (level == 2) {
-        difficulty = Difficulty.Expert
-    }
+// Push a fresh game screen on top of the menu: a new board for `difficulty`, a rebuilt arena, the
+// window sized to it. A restart and a difficulty change are the same operation (both land here),
+// and the stack never grows a second game screen: whatever game screen was there is popped first,
+// and its arena goes with it. `seed` is kept, so a restart is the same board again.
+fun showGame(g: *Game, stack: *ScreenStack, ui: *Ui, difficulty: Difficulty): Unit {
     g.difficulty = difficulty
     g.board = newGame(difficulty, g.seed)
     g.startedAt = 0
     g.elapsed = 0
-    g.status = difficultyName(difficulty) + ": left click opens, right click flags"
-    buildGame(g, ui)
+    g.status = difficultyName(difficulty) + ": left opens, right flags"
+    var frame: Frame = buildGameScreen(g, ui)
+    var fp: *Frame = *frame
+    bindGame(fp)
+    g.frame = & frame
+            while (stackSize(stack) > 1) {
+                stackPop(stack)
+            }
+    val box: &Frame = g.frame
+    stackPush(stack, box, "game", true)
+    stackResizeTop(stack, ui)
 }
 
 // Three digits, so the counter does not jump as the width changes.
@@ -304,8 +321,31 @@ fun counterText(value: Int): Str {
     return value.toString()
 }
 
-// The scripted clicks: "x,y:L; x,y:R; x,y:M" - left, right, middle (chord). Each one is pushed
-// through SDL's own queue, so a script drives the real path: poll, translate, tree, rules.
+// The key a `:K` script entry names: the words this app knows, or SDL's own number. `keysym.sym`
+// is the ASCII value for a letter or a digit, so the app's own constants (`SDLK_r`, `SDLK_ESCAPE`)
+// are what a script writes down - `r:K` and `114:K` are the same keystroke.
+fun scriptKey(name: Str): Opt<Int> {
+    if (name == "esc") {
+        return Opt<Int>.some(SDLK_ESCAPE)
+    }
+    if (name == "r") {
+        return Opt<Int>.some(SDLK_r)
+    }
+    if (name == "1") {
+        return Opt<Int>.some(SDLK_1)
+    }
+    if (name == "2") {
+        return Opt<Int>.some(SDLK_2)
+    }
+    if (name == "3") {
+        return Opt<Int>.some(SDLK_3)
+    }
+    return name.toInt()
+}
+
+// The scripted input: "x,y:L; x,y:R; x,y:M" for clicks (left, right, middle/chord) and "r:K" for a
+// keystroke. Each one is pushed through SDL's own queue, so a script drives the real path: poll,
+// translate, tree, rules - and the keys the real path handles are reachable from a script too.
 fun runScript(script: Str): Int {
     var pushed: Int = 0
     if (script.size() == 0) {
@@ -315,16 +355,27 @@ fun runScript(script: Str): Int {
     var i: Int = 0
     while (i < entries.size()) {
         val entry: Str = entries[i].trim()
+        val colon: Int = entry.find(":")
+        if (colon > 0 && entry.substr(colon + 1, 1) == "K") {
+            val key: Opt<Int> = scriptKey(entry.substr(0, colon).trim())
+            if (key.hasValue()) {
+                uiPushKey(UiEventKind.KeyDown, key.value())
+                uiPushKey(UiEventKind.KeyUp, key.value())
+                pushed = pushed + 1
+            }
+            i = i + 1
+            continue
+        }
         val parts: List<Str> = entry.split(",")
         if (parts.size() == 2) {
             val pointX: Opt<Int> = parts[0].toInt()
             val yAndFlag: Str = parts[1]
             var yText: Str = yAndFlag
             var button: Button = Button.Left
-            val colon: Int = yAndFlag.find(":")
-            if (colon > 0) {
-                yText = yAndFlag.substr(0, colon)
-                val flag: Str = yAndFlag.substr(colon + 1, 1)
+            val click: Int = yAndFlag.find(":")
+            if (click > 0) {
+                yText = yAndFlag.substr(0, click)
+                val flag: Str = yAndFlag.substr(click + 1, 1)
                 if (flag == "R") {
                     button = Button.Right
                 }
@@ -353,6 +404,10 @@ fun main(args: List<Str>): Int {
     var script: Str = ""
     var seed: Int = 12345
     var level: Int = 0
+    // `--difficulty 0` and "no flag at all" would otherwise be the same thing (0 is Beginner),
+    // and they mean different things: the flag wants a board on screen at startup, its absence
+    // wants the menu. So the flag is *set*, and the menu is what an empty command line shows.
+    var startOnBoard: Bool = false
     var index: Int = 0
     while (index < args.size()) {
         if (args[index] == "--frames" && index + 1 < args.size()) {
@@ -377,6 +432,7 @@ fun main(args: List<Str>): Int {
             val parsed: Opt<Int> = args[index + 1].toInt()
             if (parsed.hasValue() && parsed.value() >= 0 && parsed.value() <= 2) {
                 level = parsed.value()
+                startOnBoard = true
             }
             index = index + 1
         }
@@ -396,33 +452,54 @@ fun main(args: List<Str>): Int {
     }
     var game: Game = freshGame(Difficulty.Beginner, seed)
     var gamePtr: *Game = *game
-    if (level != 0) {
-        game.difficulty = Difficulty.Intermediate
-        if (level == 2) {
-            game.difficulty = Difficulty.Expert
-        }
-        game.board = newGame(game.difficulty, seed)
-        game.status = difficultyName(game.difficulty) + ": left click opens, right click flags"
+
+    // The menu, from XML. A screen that does not load is a message with a line in it, and nothing
+    // else happens: no half-built window, no clickable nothing.
+    val menuScreen: Res<Frame> = loadScreen(menuXml)
+    if (!menuScreen.isOk()) {
+        println("menu screen: " + menuScreen.error())
+        uiClose(*ui)
+        return 1
     }
+    var menuValue: Frame = menuScreen.value()
+    var menuBox: &Frame = &menuValue
+    var menuPtr: *Frame = *menuBox
+    if (!menuBind(menuPtr)) {
+        println("menu: one of the bound names is not in the tree")
+        uiClose(*ui)
+        return 1
+    }
+    var stack: ScreenStack = newStack(menuBox, "menu", true)
+    var stackPtr: *ScreenStack = *stack
+
+    // `--difficulty`: skip the menu's own click and push a game screen at startup. The menu stays
+    // below it, so Escape from the board still lands on the menu.
+    if (startOnBoard) {
+        showGame(gamePtr, stackPtr, uiPtr, levelDifficulty(level))
+    }
+    stackResizeTop(stackPtr, uiPtr)
+
     var theme: UiTheme = gameTheme()
-    val built: Bool = buildGame(gamePtr, uiPtr)
-    val startedDifficulty: Difficulty = game.difficulty
-    val startedLevel: Int = startedDifficulty.toInt()
+    var themePtr: *UiTheme = *theme
+    val topFrame: *Frame = stackTop(stackPtr)
+    val topRect: Rect = topFrame.nodes[topFrame.root].rect
     println(
-        "minesweeper: difficulty=" + startedLevel.toString()
-                + " seed=" + seed.toString() + " built=" + built.toString()
-                + " nodes=" + gamePtr.frame.nodes.size().toString()
-                + " size=" + gamePtr.frame.nodes[0].rect.width.toString()
-                + "x" + gamePtr.frame.nodes[0].rect.height.toString()
+        "minesweeper: seed=" + seed.toString() + " screen=" + stackTopName(stackPtr)
+                + " nodes=" + topFrame.nodes.size().toString()
+                + " size=" + topRect.width.toString() + "x" + topRect.height.toString()
     )
 
-    // The screen's answer. The action says *what*, the event says which button, the leaf's payload
-    // says which cell - and the rules module does the rest.
+    // The screens' answer. The action says *what*, the event says which button, the leaf's payload
+    // says which cell - and the rules module does the rest. One closure serves both screens because
+    // the codes are distinct per screen: only the game binds Cell/Restart/Back, only the menu binds
+    // Play/Quit, and the walk only ever visits the top screen's listeners.
     val answer: (Hit, *UiEvent) -> Bool = (h: Hit, e: *UiEvent) -> {
         val g: *Game = gamePtr
         if (h.action == Act.Cell.toInt()) {
             if (e.kind == UiEventKind.MouseDown) {
-                val cellIndex: Int = g.frame.nodes[h.hit].payload
+                val box: &Frame = g.frame
+                val fp: *Frame = *box
+                val cellIndex: Int = fp.nodes[h.hit].payload
                 val x: Int = cellIndex % g.board.width
                 val y: Int = cellIndex / g.board.width
                 if (e.buttons == MaskLeft + MaskRight || e.button == Button.Middle) {
@@ -444,22 +521,33 @@ fun main(args: List<Str>): Int {
                 if (g.board.status == GameStatus.Won) {
                     g.status = "you won in " + g.elapsed.toString() + "s"
                 }
-                setTextNamed(*g.frame, "status", g.status)
+                setTextNamed(fp, "status", g.status)
                 println("  action " + h.action.toString() + " " + g.status)
             }
             return true
         }
         if (h.action == Act.Restart.toInt()) {
             if (e.kind == UiEventKind.MouseDown) {
-                restartGame(g, uiPtr, g.seed)
+                val d: Difficulty = g.difficulty
+                showGame(g, stackPtr, uiPtr, d)
                 println("  action restart")
             }
             return true
         }
-        if (h.action == Act.Difficulty.toInt()) {
+        if (h.action == Act.Play.toInt()) {
             if (e.kind == UiEventKind.MouseDown) {
-                switchDifficulty(g, uiPtr, h.payload)
-                println("  action difficulty " + h.payload.toString())
+                showGame(g, stackPtr, uiPtr, levelDifficulty(h.payload))
+                println("  menu play level=" + h.payload.toString())
+            }
+            return true
+        }
+        if (h.action == Act.Back.toInt()) {
+            if (e.kind == UiEventKind.MouseDown) {
+                while (stackSize(stackPtr) > 1) {
+                    stackPop(stackPtr)
+                }
+                stackResizeTop(stackPtr, uiPtr)
+                println("  back to the menu")
             }
             return true
         }
@@ -474,8 +562,11 @@ fun main(args: List<Str>): Int {
         }
         return false
     }
-    val custom: (Int) -> Unit = (node: Int) -> {
-        paintCell(gamePtr, uiPtr, node)
+    val custom: (Str, Int) -> Unit = (screen: Str, node: Int) -> {
+        if (screen == "game") {
+            val box: &Frame = gamePtr.frame
+            paintCell(gamePtr, *box, uiPtr, node)
+        }
     }
 
     val pushed: Int = runScript(script)
@@ -496,19 +587,35 @@ fun main(args: List<Str>): Int {
                 running = false
             } else if (e.kind == UiEventKind.KeyDown) {
                 if (e.key == SDLK_ESCAPE) {
-                    running = false
+                    // Back out of a screen; on the bottom layer (the menu) the window closes.
+                    if (stackSize(*stackPtr) > 1) {
+                        stackPop(*stackPtr)
+                        stackResizeTop(*stackPtr, uiPtr)
+                        println("  key escape: back to the menu")
+                    } else {
+                        running = false
+                    }
                 } else if (e.key == SDLK_r) {
-                    restartGame(gamePtr, uiPtr, gamePtr.seed)
-                    println("  key restart")
+                    if (stackTopName(*stackPtr) == "game") {
+                        val d: Difficulty = gamePtr.difficulty
+                        showGame(gamePtr, *stackPtr, uiPtr, d)
+                        println("  key restart")
+                    }
                 } else if (e.key == SDLK_1) {
-                    switchDifficulty(gamePtr, uiPtr, 0)
+                    if (stackTopName(*stackPtr) == "game") {
+                        showGame(gamePtr, *stackPtr, uiPtr, Difficulty.Beginner)
+                    }
                 } else if (e.key == SDLK_2) {
-                    switchDifficulty(gamePtr, uiPtr, 1)
+                    if (stackTopName(*stackPtr) == "game") {
+                        showGame(gamePtr, *stackPtr, uiPtr, Difficulty.Intermediate)
+                    }
                 } else if (e.key == SDLK_3) {
-                    switchDifficulty(gamePtr, uiPtr, 2)
+                    if (stackTopName(*stackPtr) == "game") {
+                        showGame(gamePtr, *stackPtr, uiPtr, Difficulty.Expert)
+                    }
                 }
             } else {
-                uiEvent(*gamePtr.frame, *e, answer)
+                stackEvent(*stackPtr, *e, answer)
             }
         }
         if (hadEvent) {
@@ -532,10 +639,13 @@ fun main(args: List<Str>): Int {
             dirty = true
         }
         if (dirty) {
-            setTextNamed(*gamePtr.frame, "counter", counterText(minesRemaining(*gamePtr.board)))
-            setTextNamed(*gamePtr.frame, "timer", gamePtr.elapsed.toString())
+            // The readouts only exist while the game screen does; `setTextNamed` on a name that is
+            // not in a frame is quiet by design, so a menu frame costs nothing here.
+            val box: &Frame = gamePtr.frame
+            setTextNamed(*box, "counter", counterText(minesRemaining(*gamePtr.board)))
+            setTextNamed(*box, "timer", gamePtr.elapsed.toString())
             uiClear(*uiPtr, theme.background)
-            paintFrame(*gamePtr.frame, *theme, uiPtr, custom)
+            stackPaint(*stackPtr, *themePtr, uiPtr, custom)
             uiPresent(*uiPtr)
             frames = frames + 1
             dirty = false

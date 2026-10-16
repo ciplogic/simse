@@ -3,44 +3,56 @@
 The example is two things at once:
 
 - **`minui`** - a minimal retained-mode UI layer: an SDL2 window, a Skia canvas, a tree of nodes
-  with names and listeners, screens, and a painter (`minui.md` is its design, shot by shot). It is
-  the seed of the small 2D UI framework a Heroes-style game would want.
+  with names and listeners, a **stack of screens**, an **XML loader**, and a painter
+  (`minui.md` is its design, shot by shot). It is the seed of the small 2D UI framework a
+  Heroes-style game would want.
 - **the game** - Minesweeper on top of it. The rules are a module of their own with no UI import
-  at all, so they are testable headless (`stress/minesweeper`), and the app is a thin client: a
-  tree, a theme, and one handler per action.
+  at all, so they are testable headless (`stress/minesweeper`); the menu screen is **XML text**
+  and the board is code, because its cells are painted by the app.
 
 ```
 minui.md          the design: the tree, names/listeners/bubbling, screens, XML, the shots
 minui/            the module (`import minui`):
-  tree.kt           the headless half: arena, names, listeners, hit-test, the leaf-to-root walk
+  tree.kt           the headless core: arena, names, listeners, hit-test, the leaf-to-root walk
   paint.kt          the painter: the theme, the palette values, the visitor
+  screens.kt        the layer stack: push/pop, the paint base, the window follows the top screen
+  xmlread.kt        the XML text reader (the `xml` module has the tree types, not a reader)
+  xml.kt            the loader: XML text -> a `Frame` (kinds, geometry, names, the grid expansion)
   api.kt            the raw @SmGen declarations: SDL2, Skia's C API, the glue helpers, constants
   ui.kt             the typed surface the app calls (window, canvas, text, sprites, events)
   _res.md           the C++ glue: the SDL_Event union readers, the buffers, the BMP writer
 game/api.kt       the rules, UI-free: board, PRNG, first-click-safe seeding, reveal/flag/chord
-app/src/main.kt   the game: `import minui` + `import minesweeper`, the whole client
+app/src/main.kt   the game: `import minui` + `import minesweeper`, the menu XML, both screens
 ```
+
+`minui` depends on the `xml` module (`modules/xml`) for the parse tree's types (`XmlNode`,
+`Attribute`), so the build names three roots: `examples/minesweeper/minui`,
+`examples/minesweeper/game` and `modules/xml`.
 
 ## Build and run
 
 From the repository root (the compiler has to be built first: `build.bat --release`):
 
 ```bat
-run.bat                                    :: the game, until Escape or the window's X
-run.bat --difficulty 1                     :: start on intermediate (2: expert, 0: beginner)
-run.bat --seed 7                           :: a different board
-run.bat --frames 3 --screenshot out.bmp    :: three frames and exit, writing what was drawn
-run.bat --frames 3 --script "147,187:L"    :: ... after a click at (147,187): opens cell 4,4
-run.bat --script "147,187:L; 207,127:L"    :: ... and then a mine: the loss screen
+run.bat                                      :: the menu, until Escape or the window's X
+run.bat --difficulty 1                       :: straight to a board (0: beginner, 2: expert)
+run.bat --seed 7                             :: a different board
+run.bat --frames 3 --screenshot out.bmp      :: three frames and exit, writing what was drawn
+run.bat --frames 3 --script "180,136:L"      :: ... after a click on the menu's BEGINNER
+run.bat --difficulty 0 --script "147,187:L"  :: ... or straight to the board and a click on 4,4
+run.bat --difficulty 0 --script "147,187:L; r:K"        :: open a cell, then press R (a fresh board)
+run.bat --difficulty 0 --script "esc:K"      :: press Escape: back to the menu
 ```
 
-`run.bat` does the four steps by hand: transpile with the two `--module` flags, compile the
+`run.bat` does the four steps by hand: transpile with the three `--module` flags, compile the
 amalgamation with `bun build.js --release --cpp`, copy the two DLLs beside the executable, run.
 
-The scripted clicks go through SDL's own event queue, so the path under test is the real one:
+The scripted input goes through SDL's own event queue, so the path under test is the real one:
 poll, translate, hit-test, bubble, action, rules. Coordinates are pixels of the window; for
-Beginner (cell 30, board at 12,52) a cell's centre is `12 + col*30 + 15`, `52 + row*30 + 15`.
-`:L` is a left click, `:R` a right click (flag), `:M` a middle click (chord).
+Beginner (cell 30, board at 12,52) a cell's centre is `12 + col*30 + 15`, `52 + row*30 + 15`, the
+menu's buttons are at `80,120` (BEGINNER), `80,160` (MEDIUM), `80,200` (EXPERT) and `80,264`
+(QUIT). `:L` is a left click, `:R` a right click (flag), `:M` a middle click (chord), and `:K` is
+a keystroke (`r:K`, `esc:K`, `1:K`, or SDL's own number: `114:K`).
 
 ## The two dependencies
 
@@ -64,18 +76,21 @@ pixel-exact at every size and all it has to do is blit.
 
 ## What the game does
 
-- **A board of cells.** One `grid` node holds all of them; each cell is an anonymous `Custom` node
-  whose `payload` is its index, and one listener on the grid answers for all of them. The painter
-  asks the rules what is under each cell and draws the covered face, the numbers 1-8, a flag, a
-  mine, or the red of the one that exploded.
-- **Clicks.** Left opens, right flags, middle (or both buttons) chords - a chord opens the covered
-  neighbours of a satisfied number. A loss turns wrongly flagged cells into an X; a win flags every
-  mine and the counter reads 000.
-- **Three difficulties** (Beginner 9x9/10, Intermediate 16x16/40, Expert 30x16/99), each with its
-  own cell size and window size: switching rebuilds the tree and resizes the window. The counter,
-  the clock, the NEW GAME button and the difficulty buttons are ordinary nodes with names, bound
-  once per build (`frameOn`) to actions.
-- **Keys**: R restarts, 1/2/3 switch difficulty, Escape quits.
+- **Two screens on a stack.** The menu (360x348) pushes the board; the board's MENU button or
+  Escape pops back to it, and Escape on the menu closes the window. The stack paints bottom-up
+  (starting at the last opaque layer, so the covered menu costs nothing), dispatches input to the
+  top layer only, and resizes the window to the top screen - which is why the menu and Expert's
+  744x496 board can live on the same stack.
+- **The menu is XML.** `<screen name="menu" width="360" height="348">` with a panel, two labels
+  and four buttons; `loadScreen` builds the arena, `menuBind` binds behaviour to the names, and a
+  screen that does not load is a message with the line it is on. Its buttons carry the difficulty
+  as their listener's *payload* (`Act.Play`), which is how one handler serves all three.
+- **The board is code.** Counter, clock, status line, MENU and NEW GAME are named nodes; the board
+  is one `grid` whose cells are anonymous `Custom` nodes whose `payload` is the cell index, painted
+  by `paintCell`. Left opens, right flags, middle (or both buttons) chords - a chord opens the
+  covered neighbours of a satisfied number. A loss turns wrongly flagged cells into an X; a win
+  flags every mine and the counter reads 000.
 - **A frame is drawn when something changed** - an event, or the clock moving a second on. An idle
   window burns no CPU (measured: 0.000 s over 3 idle seconds), which is the whole point of a
   retained tree.
+- **Keys**: R restarts, 1/2/3 switch difficulty, Escape backs out one screen.

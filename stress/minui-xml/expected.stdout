@@ -1,0 +1,48 @@
+--- a document that loads
+nodes=24
+screen: name=fixture rect=200x160 name "root" is gone=true
+named: go=3 off=4 icon=5 view=6 cells=7
+kinds: go=3 off=3 cells=5
+button go: text=GO rect=10,70
+button off: enabled=false text=OFF
+label: name=(anonymous) text=HELLO & GOODBYE palette=1 align=1
+sprite: index=3 custom: payload=7
+grid: rect=64x64 children=16
+cell[1]: rect=76,100 payload=1
+--- clicks on the loaded screen
+bound=true
+click(50,82) on GO: action=2 payload=0 leaf=go
+click(100,124) cell row1 col2: action=1 leaf payload=6
+click(150,5) on the panel: action=-1 node=none leaf=(anonymous) payload=0
+click(250,150) outside: action=-1 node=none leaf=none payload=0
+--- documents that do not load
+line 1: unterminated <screen>
+line 1: the root element must be <screen>, not <window>
+line 1: no element
+line 1: unterminated comment
+line 1: attribute name needs a quoted value
+line 1: unknown entity &nope; in attribute name
+line 2: attribute rect written twice
+line 2: `line` is the reader's own attribute
+line 3: </screen> closes <panel>
+line 1: text after the root element
+line 1: no element <blink>
+line 1: <panel> has no attribute colour
+line 1: <panel> needs a rect="x,y,w,h"
+line 1: no palette "loud"
+line 1: <label> needs content or a text="..."
+line 1: <grid> 30x30 does not divide into cells of 16
+line 1: <grid> needs a name - its listener binds to it
+line 1: the name "x" is already used
+line 1: <screen> needs a positive width and height
+line 1: <custom> needs a name - the app paints it by name
+--- the stack
+size=1 top=menu
+push a game screen: size=2 top=game paintBase=1
+the top screen's window: 200x120
+a write through the stack's top, read through the app's handle: 12
+pop -> true size=1 top=menu
+pop the last -> false size=1
+a translucent overlay on the menu: paintBase=0
+an opaque dialog on top: paintBase=2
+dialog closed: paintBase=0

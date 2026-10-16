@@ -19,6 +19,10 @@ spell:
   to have to be looked at, including by the harness.
 - **`simse_ui_argb`** - packing a colour. `255 << 24` in Simse arithmetic is a needless question
   about signed overflow, so the shift happens where `Uint32` exists.
+- **The synthetic events** (`simse_ui_mouseEvent`, `simse_ui_keyEvent`) - the bytes SDL writes for
+  a real click or keystroke, handed back for `SDL_PushEvent`. That is what the scripted modes
+  push, and it runs the *app* as well as the glue; `--script` (a click at x,y; `:K` a key) is the
+  only way a headless run can press anything.
 
 The SDL header comes from the kit under `Lib/3rdparty/`, which every build has on its include path
 (`build.js` passes `/I<repo>`); `emit: reached` gates the text for the module's declarations, so a
@@ -48,6 +52,7 @@ Int32 simse_ui_eventKey(const void* event);
 Int32 simse_ui_eventWheel(const void* event);
 Int32 simse_ui_windowEvent(const void* event);
 void* simse_ui_mouseEvent(Int32 kind, Int32 x, Int32 y, Int32 button);
+void* simse_ui_keyEvent(Int32 kind, Int32 key);
 Int8* simse_ui_rect(Int32 left, Int32 top, Int32 right, Int32 bottom);
 Int8* simse_ui_pixels(Int32 width, Int32 height);
 Int8* simse_ui_readPixels(Int32 width, Int32 height);
@@ -138,6 +143,20 @@ void* simse_ui_mouseEvent(Int32 kind, Int32 x, Int32 y, Int32 button) {
         event.button.state = (kind == SDL_MOUSEBUTTONDOWN) ? SDL_PRESSED : SDL_RELEASED;
         event.button.clicks = 1;
     }
+    return reinterpret_cast<void*>(&event);
+}
+
+// The same for a keystroke, for the app's scripted `:K` entries: SDL's own bytes, with
+// `keysym.sym` the value the loop reads (the ASCII for a letter or a digit - SDLK_r is 114,
+// SDLK_ESCAPE 27 - and SDL's own number for anything else). No scancode: nothing above the loop
+// reads one, and a scripted key is about the key, not about where it is on a keyboard.
+void* simse_ui_keyEvent(Int32 kind, Int32 key) {
+    static SDL_Event event;
+    std::memset(&event, 0, sizeof(event));
+    event.type = (Uint32) kind;
+    event.key.state = (kind == SDL_KEYDOWN) ? SDL_PRESSED : SDL_RELEASED;
+    event.key.repeat = 0;
+    event.key.keysym.sym = (SDL_Keycode) key;
     return reinterpret_cast<void*>(&event);
 }
 
