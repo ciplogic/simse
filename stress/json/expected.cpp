@@ -372,7 +372,6 @@ void simse_str_append(Str& self, Char value);
 void simse_str_appendStr(Str& self, const Str& value);
 void simse_str_appendStrPtr(Str& self, const Str* value);
 void simse_str_reserve(Str& self, Int count);
-Str simse_int_toString(Int self);
 
 Int simse_lenOf(const Str& self);
 template <class T, int N>
@@ -395,9 +394,9 @@ Opt<Float64> simse_str_toFloat(const Str& self);
 
 void simse_str_initByValue(Str& self, const Str& value);
 
+Str simse_int64_toString(Int64 self);
 template <class T>
 Str simse_num_toString(const T& self);
-Str simse_char_toString(Char self);
 Str simse_bool_toString(Bool self);
 
 #include <algorithm>
@@ -533,6 +532,9 @@ template <class T>
 Res<T> simse_resErr(Str message);
 void initByValue(Str* self);
 Str substr(Str* self, Int start, Int len);
+Str toString(Int* self);
+Str toString(Int64* self);
+Str toString(Char* self);
 Str jsonQuoted(Str value);
 Str toJson(ns1_Point* self);
 Str toJson(Int* self);
@@ -785,6 +787,23 @@ Str substr(Str* self, Int start, Int len) {
     L9:;
     return out;
 }
+Str toString(Int* self) {
+    Str _sm_expr1;
+    _sm_expr1 = simse_int64_toString((*self));
+    return _sm_expr1;
+}
+Str toString(Int64* self) {
+    Str _sm_expr1;
+    _sm_expr1 = simse_int64_toString((*self));
+    return _sm_expr1;
+}
+Str toString(Char* self) {
+    Int64 value;
+    Str _sm_expr1;
+    value = (*self);
+    _sm_expr1 = simse_int64_toString(value);
+    return _sm_expr1;
+}
 // stress/json/src/main.kt
 int main() {
     ns1_Point p, _sm_expr3;
@@ -892,7 +911,7 @@ Str toJson(ns1_Point* self) {
 // <generated>/kt.kt
 Str toJson(Int* self) {
     Str _sm_expr1;
-    _sm_expr1 = simse_int_toString((*self));
+    _sm_expr1 = toString(self);
     return _sm_expr1;
 }
 // <generated>/kt.kt
@@ -1038,10 +1057,6 @@ inline void simse_str_reserve(Str& self, Int count) {
     self.reserve((Str::size_type) count);
 }
 
-inline Str simse_int_toString(Int self) {
-    return std::to_string(self);
-}
-
 inline Int simse_lenOf(const Str& self) {
     return self.size();
 }
@@ -1135,13 +1150,13 @@ inline void simse_str_initByValue(Str& self, const Str& value) {
     self = value;
 }
 
-template <class T>
-inline Str simse_num_toString(const T& self) {
+inline Str simse_int64_toString(Int64 self) {
     return std::to_string(self);
 }
 
-inline Str simse_char_toString(Char self) {
-    return std::to_string((int) self);
+template <class T>
+inline Str simse_num_toString(const T& self) {
+    return std::to_string(self);
 }
 
 inline Str simse_bool_toString(Bool self) {

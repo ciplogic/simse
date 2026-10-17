@@ -151,6 +151,60 @@ fun semWithType(decl: *AstXmlNode, typeNode: *AstXmlNode): AstXmlNode {
     return AstXmlNode(decl.name, decl.kind, copy(decl.attributes), kids.toArray())
 }
 
+// The wider of two numeric operand types: `Int - Int64` answers `Int64`, the way the C++
+// the emitter writes computes the expression (the usual arithmetic conversions). Empty
+// unless *both* sides are plain numeric scalars and the right one is strictly wider - a
+// tie, a declared operator, or a non-numeric operand leaves the caller's left-operand rule
+// standing. The destination-typed conversions still narrow afterwards (`val ch: Char =
+// ch - 32`), so widening the *expression* changes no call site's spelling.
+fun semWiderNumeric(left: *AstXmlNode, right: *AstXmlNode): AstXmlNode {
+    val leftName: Str = semNumericName(left)
+    val rightName: Str = semNumericName(right)
+    if (leftName.size() == 0 || rightName.size() == 0) {
+        return xmlEmptyNode()
+    }
+    if (semNumericRank(rightName) <= semNumericRank(leftName)) {
+        return xmlEmptyNode()
+    }
+    return semNamedType(rightName)
+}
+
+// The numeric scalar a type names, or "" when it is not one. `Char` ranks with `Int8`
+// (specs/built-in-types.md: same representation and arithmetic), `Int` with `Int32`.
+fun semNumericName(typeNode: *AstXmlNode): Str {
+    val base: AstXmlNode = semPointee(typeNode)
+    if (xmlIsEmpty(base) || xmlKind(base) != AstNodeCategory.TypeNamed) {
+        return ""
+    }
+    val name: Str = xmlAttr(base, AstNodeAttributeKind.Name)
+    if (semNumericRank(name) == 0) {
+        return ""
+    }
+    return name
+}
+
+fun semNumericRank(name: Str): Int {
+    if (name == "Char" || name == "Int8") {
+        return 1
+    }
+    if (name == "Int16") {
+        return 2
+    }
+    if (name == "Int" || name == "Int32") {
+        return 3
+    }
+    if (name == "Int64") {
+        return 4
+    }
+    if (name == "Float32") {
+        return 5
+    }
+    if (name == "Float64") {
+        return 6
+    }
+    return 0
+}
+
 // The pointee after stripping any number of `&`/`*` handles.
 fun semPointee(typeNode: *AstXmlNode): AstXmlNode {
     var current: *AstXmlNode = typeNode

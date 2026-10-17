@@ -320,35 +320,6 @@ static struct __SmStringTableInitType {
     }
 } __sm_stringTableInit;
 
-#include <cstdint>
-#include <type_traits>
-
-
-template <class T>
-void simse_list_append(List<T>& self, const std::type_identity_t<T>& value);
-
-template <class T>
-List<T> simse_listOf(const List<T>* values);
-
-template <class T>
-void simse_list_removeAt(List<T>& self, Int index);
-template <class T>
-void simse_list_removeRange(List<T>& self, Int start, Int end);
-template <class T>
-Int simse_array_count(const Array<T>& self);
-template <class T>
-Array<T> simse_list_toArray(const List<T>& self);
-template <class T>
-List<T> simse_array_toList(const Array<T>& self);
-template <class T>
-Array<T> simse_arrayEmpty();
-
-void simse_str_append(Str& self, Char value);
-void simse_str_appendStr(Str& self, const Str& value);
-void simse_str_appendStrPtr(Str& self, const Str* value);
-void simse_str_reserve(Str& self, Int count);
-Str simse_int_toString(Int self);
-
 Int simse_lenOf(const Str& self);
 template <class T, int N>
 Int simse_lenOf(const SmallVector<T, N>& self);
@@ -370,9 +341,9 @@ Opt<Float64> simse_str_toFloat(const Str& self);
 
 void simse_str_initByValue(Str& self, const Str& value);
 
+Str simse_int64_toString(Int64 self);
 template <class T>
 Str simse_num_toString(const T& self);
-Str simse_char_toString(Char self);
 Str simse_bool_toString(Bool self);
 
 #include <algorithm>
@@ -481,13 +452,6 @@ inline void simse_println(const T& value, FILE* out) {
 template <class T>
 Int size(Span<T>* self);
 template <class T>
-T at(Span<T>* self, Int index);
-Str substr(Span<Char>* self, Int from, Int count);
-Str toString(Span<Char>* self);
-Int compareTo(Span<Char>* self, Span<Char> other);
-Bool equals(Span<Char>* self, Span<Char> other);
-Str plus(Span<Char>* self, Span<Char> other);
-template <class T>
 Bool simse_optHasValue(Opt<T>* self);
 template <class T>
 T simse_optValue(Opt<T>* self);
@@ -506,7 +470,9 @@ Res<T> simse_resOk(T value);
 template <class T>
 Res<T> simse_resErr(Str message);
 void initByValue(Str* self);
-Str substr(Str* self, Int start, Int len);
+Str toString(Int* self);
+Str toString(Int64* self);
+Str toString(Char* self);
 Int ns1_width(Str* value);
 Int ns1_width(Str* value, Int extra);
 Int ns1_use(Str* text);
@@ -516,134 +482,6 @@ Int size(Span<T>* self) {
     Int _sm_expr1;
     _sm_expr1 = self->len;
     return _sm_expr1;
-}
-template <class T>
-T at(Span<T>* self, Int index) {
-    T* _sm_base1;
-    _sm_base1 = self->ptr;
-    auto _sm_expr1 = _sm_base1[index];
-    return _sm_expr1;
-}
-Str substr(Span<Char>* self, Int from, Int count) {
-    Int len, begin, take;
-    Bool _sm_expr1;
-    len = size(self);
-    begin = from;
-    _sm_expr1 = begin < 0;
-    if (_sm_expr1) goto L1;
-    goto L2;
-    L1:;
-    begin = 0;
-    L2:;
-    _sm_expr1 = begin > len;
-    if (_sm_expr1) goto L3;
-    goto L4;
-    L3:;
-    begin = len;
-    L4:;
-    take = len - begin;
-    _sm_expr1 = count >= 0;
-    if (_sm_expr1) goto L7;
-    goto L6;
-    L7:;
-    _sm_expr1 = count < take;
-    if (_sm_expr1) goto L5;
-    goto L6;
-    L5:;
-    take = count;
-    L6:;
-    Str out;
-    _sm_expr1 = take > 0;
-    if (_sm_expr1) goto L8;
-    goto L9;
-    L8:;
-    simse_str_setBytes(out, self->ptr, begin, take);
-    L9:;
-    return out;
-}
-Str toString(Span<Char>* self) {
-    Int _sm_expr1;
-    Str _sm_expr2;
-    _sm_expr1 = size(self);
-    _sm_expr2 = substr(self, 0, _sm_expr1);
-    return _sm_expr2;
-}
-Int compareTo(Span<Char>* self, Span<Char> other) {
-    Bool _sm_expr3, _sm_expr4, _sm_expr7;
-    Int _sm_diff_2, _sm_expr8, diff;
-    auto _sm_expr1 = self->len;
-    auto _sm_expr2 = other.len;
-    _sm_expr3 = _sm_expr1 <= _sm_expr2;
-    if (_sm_expr3) goto L1;
-    goto L2;
-    L1:;
-    _sm_diff_2 = simse_mem_compare(self->ptr, 0, other.ptr, 0, self->len);
-    _sm_expr4 = _sm_diff_2 != 0;
-    if (_sm_expr4) goto L3;
-    goto L4;
-    L3:;
-    return _sm_diff_2;
-    L4:;
-    {
-        auto _sm_expr5 = self->len;
-        auto _sm_expr6 = other.len;
-        _sm_expr7 = _sm_expr5 == _sm_expr6;
-        if (_sm_expr7) goto L5;
-        goto L6;
-        L5:;
-        return 0;
-        L6:;
-        _sm_expr8 = -1;
-        return _sm_expr8;
-    }
-    L2:;
-    diff = simse_mem_compare(self->ptr, 0, other.ptr, 0, other.len);
-    _sm_expr3 = diff != 0;
-    if (_sm_expr3) goto L7;
-    goto L8;
-    L7:;
-    return diff;
-    L8:;
-    return 1;
-}
-Bool equals(Span<Char>* self, Span<Char> other) {
-    Bool _sm_expr3;
-    Int _sm_expr4;
-    auto _sm_expr1 = self->len;
-    auto _sm_expr2 = other.len;
-    _sm_expr3 = _sm_expr1 != _sm_expr2;
-    if (_sm_expr3) goto L1;
-    goto L2;
-    L1:;
-    return false;
-    L2:;
-    _sm_expr4 = simse_mem_compare(self->ptr, 0, other.ptr, 0, self->len);
-    _sm_expr3 = _sm_expr4 == 0;
-    return _sm_expr3;
-}
-Str plus(Span<Char>* self, Span<Char> other) {
-    Str* _sm_base3;
-    Bool _sm_expr2;
-    Int at, _sm_expr4;
-    Char* _sm_expr5;
-    Str result;
-    simse_str_setBytes(result, self->ptr, 0, self->len);
-    auto _sm_expr1 = other.len;
-    _sm_expr2 = _sm_expr1 > 0;
-    if (_sm_expr2) goto L1;
-    goto L2;
-    L1:;
-    at = simse_lenOf(result);
-    {
-        auto _sm_expr3 = other.len;
-        _sm_expr4 = at + _sm_expr3;
-        result.resize(_sm_expr4);
-        _sm_base3 = &result;
-        _sm_expr5 = simse_str_data(_sm_base3);
-        simse_mem_copy(_sm_expr5, at, other.ptr, 0, other.len);
-    }
-    L2:;
-    return result;
 }
 template <class T>
 Bool simse_optHasValue(Opt<T>* self) {
@@ -708,47 +546,22 @@ Res<T> simse_resErr(Str message) {
 }
 void initByValue(Str* self) {
 }
-Str substr(Str* self, Int start, Int len) {
-    Str* _sm_base1;
-    Int begin, _sm_expr2, count;
-    Bool _sm_expr1;
-    Char* _sm_expr8;
-    begin = start;
-    _sm_expr1 = begin < 0;
-    if (_sm_expr1) goto L1;
-    goto L2;
-    L1:;
-    begin = 0;
-    L2:;
-    _sm_expr2 = simse_lenOf((*self));
-    _sm_expr1 = begin > _sm_expr2;
-    if (_sm_expr1) goto L3;
-    goto L4;
-    L3:;
-    begin = simse_lenOf((*self));
-    L4:;
-    _sm_expr2 = simse_lenOf((*self));
-    count = _sm_expr2 - begin;
-    _sm_expr1 = len >= 0;
-    if (_sm_expr1) goto L7;
-    goto L6;
-    L7:;
-    _sm_expr1 = len < count;
-    if (_sm_expr1) goto L5;
-    goto L6;
-    L5:;
-    count = len;
-    L6:;
-    Str out;
-    _sm_expr1 = count > 0;
-    if (_sm_expr1) goto L8;
-    goto L9;
-    L8:;
-    _sm_base1 = self;
-    _sm_expr8 = simse_str_data(_sm_base1);
-    simse_str_setBytes(out, _sm_expr8, begin, count);
-    L9:;
-    return out;
+Str toString(Int* self) {
+    Str _sm_expr1;
+    _sm_expr1 = simse_int64_toString((*self));
+    return _sm_expr1;
+}
+Str toString(Int64* self) {
+    Str _sm_expr1;
+    _sm_expr1 = simse_int64_toString((*self));
+    return _sm_expr1;
+}
+Str toString(Char* self) {
+    Int64 value;
+    Str _sm_expr1;
+    value = (*self);
+    _sm_expr1 = simse_int64_toString(value);
+    return _sm_expr1;
 }
 // stress/borrow-overload/src/main.kt
 Int ns1_width(Str* value) {
@@ -779,87 +592,13 @@ int main() {
     name = __sm_stringTable[0];
     _sm_base1 = &name;
     _sm_expr1 = ns1_use(_sm_base1);
-    _sm_expr2 = simse_int_toString(_sm_expr1);
+    _sm_expr2 = toString(simse_addressOf(_sm_expr1));
     simse_println((_sm_expr2), stdout);
     _sm_base2 = &name;
     _sm_expr3 = ns1_width(_sm_base2);
-    _sm_expr4 = simse_int_toString(_sm_expr3);
+    _sm_expr4 = toString(simse_addressOf(_sm_expr3));
     simse_println((_sm_expr4), stdout);
     return 0;
-}
-
-template <class T>
-inline void simse_list_append(List<T>& self, const std::type_identity_t<T>& value) {
-    self.push_back(value);
-}
-
-template <class T>
-inline List<T> simse_listOf(const List<T>* values) {
-    return *values;
-}
-
-template <class T>
-inline void simse_list_removeAt(List<T>& self, Int index) {
-    self.erase(self.begin() + index);
-}
-
-template <class T>
-inline void simse_list_removeRange(List<T>& self, Int start, Int end) {
-    self.erase(self.begin() + start, self.begin() + end);
-}
-
-template <class T>
-inline Int simse_array_count(const Array<T>& self) {
-    return self.count();
-}
-
-template <class T>
-inline Array<T> simse_list_toArray(const List<T>& self) {
-    const Int count = self.size();
-    if (count <= 0) {
-        return Array<T>();
-    }
-    Array<T> result(count);
-    for (Int i = 0; i < count; i++) {
-        result[i] = self[i];
-    }
-    return result;
-}
-
-template <class T>
-inline List<T> simse_array_toList(const Array<T>& self) {
-    List<T> result;
-    const Int count = self.count();
-    result.reserve(count);
-    for (Int i = 0; i < count; i++) {
-        result.push_back(self[i]);
-    }
-    return result;
-}
-
-template <class T>
-inline Array<T> simse_arrayEmpty() {
-    return Array<T>();
-}
-
-inline void simse_str_append(Str& self, Char value) {
-    self.push_back(static_cast<char>(value));
-}
-
-inline void simse_str_appendStr(Str& self, const Str& value) {
-    self.append(value);
-}
-
-inline void simse_str_appendStrPtr(Str& self, const Str* value) {
-    if (value != nullptr) self.append(*value);
-}
-
-inline void simse_str_reserve(Str& self, Int count) {
-    self.reserve((Str::size_type) count);
-}
-
-inline Str simse_int_toString(Int self) {
-    return std::to_string(self);
 }
 
 inline Int simse_lenOf(const Str& self) {
@@ -955,13 +694,13 @@ inline void simse_str_initByValue(Str& self, const Str& value) {
     self = value;
 }
 
-template <class T>
-inline Str simse_num_toString(const T& self) {
+inline Str simse_int64_toString(Int64 self) {
     return std::to_string(self);
 }
 
-inline Str simse_char_toString(Char self) {
-    return std::to_string((int) self);
+template <class T>
+inline Str simse_num_toString(const T& self) {
+    return std::to_string(self);
 }
 
 inline Str simse_bool_toString(Bool self) {

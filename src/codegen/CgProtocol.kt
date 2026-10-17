@@ -121,7 +121,10 @@ fun Emitter.usedProtocols(): Dictionary<Str, Bool> {
 
 // Prelude implementations the dispatch sets reach must have their bodies emitted: a
 // protocol call can instantiate a prelude type no call in the program names by itself, and
-// the reached-name rule (`reachesPreludeBody`) only sees names the program writes.
+// the reached-name rule (`reachesPreludeBody`) only sees names the program writes. The
+// rule wants the receiver's *type* named too, so the type goes in beside the name - the
+// prelude's `toString` on `Int16` satisfies a protocol structurally, the generated dispatch
+// forwards to it, and no program line spells `Int16`.
 fun Emitter.collectProtocolReach(): Unit {
     val used: Dictionary<Str, Bool> = this.usedProtocols()
     for (*name in used.keys()) {
@@ -133,6 +136,10 @@ fun Emitter.collectProtocolReach(): Unit {
             val fn: *CgFn = *this.functions[impl.fnIndex]
             if (fn.prelude && !fn.isNative) {
                 this.referencedNames.insert(fn.name, true)
+                val receiverName: Str = this.outerTypeName(cgReceiverPattern(fn))
+                if (receiverName != "") {
+                    this.referencedTypes.insert(receiverName, true)
+                }
             }
         }
     }

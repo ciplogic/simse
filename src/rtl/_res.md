@@ -189,7 +189,6 @@ void simse_str_append(Str& self, Char value);
 void simse_str_appendStr(Str& self, const Str& value);
 void simse_str_appendStrPtr(Str& self, const Str* value);
 void simse_str_reserve(Str& self, Int count);
-Str simse_int_toString(Int self);
 ```
 bodies:
 ```cpp
@@ -275,11 +274,6 @@ inline void simse_str_appendStrPtr(Str& self, const Str* value) {
 // instead of copying the accumulated prefix at every growth step. A *hint*, not a length.
 inline void simse_str_reserve(Str& self, Int count) {
     self.reserve((Str::size_type) count);
-}
-
-// `Int.toString()`: the scalar-to-inline-string conversion (specs/memory-model.md).
-inline Str simse_int_toString(Int self) {
-    return std::to_string(self);
 }
 ```
 
@@ -627,11 +621,12 @@ Opt<Float64> simse_str_toFloat(const Str& self);
 // setting the receiver in place. The empty form is a Simse method (an empty body).
 void simse_str_initByValue(Str& self, const Str& value);
 
-// The numeric and `Bool` spellings of `toString` (src/rtl/rtl.kt explains why they are not
-// Simse bodies): `std::to_string` behind one template, plus the `Char` and `Bool` forms.
+// The one integer formatter: `std::to_string` of the `Int64` every width widens to
+// (src/rtl/rtl.kt names the spellings that ride it). The template stays for the two floats,
+// whose format is `std::to_string` of themselves; `Bool` keeps its own word.
+Str simse_int64_toString(Int64 self);
 template <class T>
 Str simse_num_toString(const T& self);
-Str simse_char_toString(Char self);
 Str simse_bool_toString(Bool self);
 ```
 bodies:
@@ -721,13 +716,13 @@ inline void simse_str_initByValue(Str& self, const Str& value) {
     self = value;
 }
 
-template <class T>
-inline Str simse_num_toString(const T& self) {
+inline Str simse_int64_toString(Int64 self) {
     return std::to_string(self);
 }
 
-inline Str simse_char_toString(Char self) {
-    return std::to_string((int) self);
+template <class T>
+inline Str simse_num_toString(const T& self) {
+    return std::to_string(self);
 }
 
 inline Str simse_bool_toString(Bool self) {

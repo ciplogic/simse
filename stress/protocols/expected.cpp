@@ -355,7 +355,6 @@ void simse_str_append(Str& self, Char value);
 void simse_str_appendStr(Str& self, const Str& value);
 void simse_str_appendStrPtr(Str& self, const Str* value);
 void simse_str_reserve(Str& self, Int count);
-Str simse_int_toString(Int self);
 
 Int simse_lenOf(const Str& self);
 template <class T, int N>
@@ -378,9 +377,9 @@ Opt<Float64> simse_str_toFloat(const Str& self);
 
 void simse_str_initByValue(Str& self, const Str& value);
 
+Str simse_int64_toString(Int64 self);
 template <class T>
 Str simse_num_toString(const T& self);
-Str simse_char_toString(Char self);
 Str simse_bool_toString(Bool self);
 
 #include <algorithm>
@@ -515,6 +514,10 @@ template <class T>
 Res<T> simse_resErr(Str message);
 void initByValue(Str* self);
 Str substr(Str* self, Int start, Int len);
+Str toString(Int* self);
+Str toString(Int16* self);
+Str toString(Int64* self);
+Str toString(Char* self);
 Str ns1_toString(ns1_Crate* self);
 Int ns1_countItems(ns1_Crate* self);
 template <class TOther>
@@ -527,9 +530,9 @@ template <class T, class U>
 void ns1_sameAs(T* left, U* right);
 Str ns1_Printable_proto_toString(Span<Char>* self);
 Str ns1_Printable_proto_toString(Int* self);
-Str ns1_Printable_proto_toString(Int8* self);
 Str ns1_Printable_proto_toString(Int16* self);
 Str ns1_Printable_proto_toString(Int64* self);
+Str ns1_Printable_proto_toString(Char* self);
 Str ns1_Printable_proto_toString(Float32* self);
 Str ns1_Printable_proto_toString(Float64* self);
 Str ns1_Printable_proto_toString(Bool* self);
@@ -777,6 +780,28 @@ Str substr(Str* self, Int start, Int len) {
     L9:;
     return out;
 }
+Str toString(Int* self) {
+    Str _sm_expr1;
+    _sm_expr1 = simse_int64_toString((*self));
+    return _sm_expr1;
+}
+Str toString(Int16* self) {
+    Str _sm_expr1;
+    _sm_expr1 = simse_int64_toString((*self));
+    return _sm_expr1;
+}
+Str toString(Int64* self) {
+    Str _sm_expr1;
+    _sm_expr1 = simse_int64_toString((*self));
+    return _sm_expr1;
+}
+Str toString(Char* self) {
+    Int64 value;
+    Str _sm_expr1;
+    value = (*self);
+    _sm_expr1 = simse_int64_toString(value);
+    return _sm_expr1;
+}
 // stress/protocols/src/main.kt
 Str ns1_toString(ns1_Crate* self) {
     return __sm_stringTable[3];
@@ -847,7 +872,7 @@ int main() {
     ns1_sameAs(_sm_base2, _sm_base3);
     n = 4;
     simse_print((__sm_stringTable[4]), stdout);
-    _sm_expr1 = simse_int_toString(n);
+    _sm_expr1 = toString(simse_addressOf(n));
     simse_print((_sm_expr1), stdout);
     simse_print((__sm_stringTable[6]), stdout);
     return 0;
@@ -856,16 +881,16 @@ Str ns1_Printable_proto_toString(Span<Char>* self) {
     return toString(self);
 }
 Str ns1_Printable_proto_toString(Int* self) {
-    return simse_int_toString((*self));
-}
-Str ns1_Printable_proto_toString(Int8* self) {
-    return simse_num_toString((*self));
+    return toString(self);
 }
 Str ns1_Printable_proto_toString(Int16* self) {
-    return simse_num_toString((*self));
+    return toString(self);
 }
 Str ns1_Printable_proto_toString(Int64* self) {
-    return simse_num_toString((*self));
+    return toString(self);
+}
+Str ns1_Printable_proto_toString(Char* self) {
+    return toString(self);
 }
 Str ns1_Printable_proto_toString(Float32* self) {
     return simse_num_toString((*self));
@@ -955,10 +980,6 @@ inline void simse_str_appendStrPtr(Str& self, const Str* value) {
 
 inline void simse_str_reserve(Str& self, Int count) {
     self.reserve((Str::size_type) count);
-}
-
-inline Str simse_int_toString(Int self) {
-    return std::to_string(self);
 }
 
 inline Int simse_lenOf(const Str& self) {
@@ -1054,13 +1075,13 @@ inline void simse_str_initByValue(Str& self, const Str& value) {
     self = value;
 }
 
-template <class T>
-inline Str simse_num_toString(const T& self) {
+inline Str simse_int64_toString(Int64 self) {
     return std::to_string(self);
 }
 
-inline Str simse_char_toString(Char self) {
-    return std::to_string((int) self);
+template <class T>
+inline Str simse_num_toString(const T& self) {
+    return std::to_string(self);
 }
 
 inline Str simse_bool_toString(Bool self) {

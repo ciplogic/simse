@@ -73,7 +73,6 @@ void simse_str_append(Str& self, Char value);
 void simse_str_appendStr(Str& self, const Str& value);
 void simse_str_appendStrPtr(Str& self, const Str* value);
 void simse_str_reserve(Str& self, Int count);
-Str simse_int_toString(Int self);
 
 #include <cstdio>
 
@@ -224,10 +223,6 @@ inline void simse_str_appendStrPtr(Str& self, const Str* value) {
 
 inline void simse_str_reserve(Str& self, Int count) {
     self.reserve((Str::size_type) count);
-}
-
-inline Str simse_int_toString(Int self) {
-    return std::to_string(self);
 }
 
 template <class T>

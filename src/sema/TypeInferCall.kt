@@ -825,7 +825,7 @@ fun SemInfer.infer(e: *AstXmlNode): AstXmlNode {
                 return semNamedType("Bool")
             }
             // A declared operator answers the expression's type (`a + b` is `a.plus(b)`,
-            // specs/functions.md); the built-in rule below answers the left operand.
+            // specs/functions.md); the built-in rule below answers the operands.
             val operatorName: Str = semBinaryOperatorName(op)
             if (operatorName != "") {
                 val operatorType: AstXmlNode = this.operatorBinaryReturn(
@@ -835,9 +835,19 @@ fun SemInfer.infer(e: *AstXmlNode): AstXmlNode {
                     return operatorType
                 }
             }
-            // The operation is on *values*: a handle operand is read through to its
-            // pointee, so the result is the left operand as a value. Returning the handle
-            // itself would make the emitter declare every slot for `a + b` as one.
+            // Two numeric scalars answer the *wider* one (`Int - Int64` is an `Int64`, the
+            // way the C++ the emitter writes computes it): the left operand alone made
+            // `0 - big` a 32-bit expression whose value wrapped on assignment. Anything
+            // else answers the left operand as a *value* - a handle operand is read
+            // through to its pointee, and returning the handle itself would make the
+            // emitter declare every slot for `a + b` as one.
+            val wider: AstXmlNode = semWiderNumeric(
+                this.infer(xmlChildPtr(e, AstNodeKind.Lhs)),
+                this.infer(xmlChildPtr(e, AstNodeKind.Rhs))
+            )
+            if (!xmlIsEmpty(wider)) {
+                return wider
+            }
             return semPointee(this.infer(xmlChildPtr(e, AstNodeKind.Lhs)))
         }
     }

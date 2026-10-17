@@ -363,7 +363,6 @@ void simse_str_append(Str& self, Char value);
 void simse_str_appendStr(Str& self, const Str& value);
 void simse_str_appendStrPtr(Str& self, const Str* value);
 void simse_str_reserve(Str& self, Int count);
-Str simse_int_toString(Int self);
 
 #include <algorithm>
 #include <type_traits>
@@ -428,9 +427,9 @@ Opt<Float64> simse_str_toFloat(const Str& self);
 
 void simse_str_initByValue(Str& self, const Str& value);
 
+Str simse_int64_toString(Int64 self);
 template <class T>
 Str simse_num_toString(const T& self);
-Str simse_char_toString(Char self);
 Str simse_bool_toString(Bool self);
 
 #include <bit>
@@ -602,6 +601,9 @@ Str toUpper(Str* self);
 Str toLower(Str* self);
 Bool isEmpty(Str* self);
 Bool isSpace(Char* self);
+Str toString(Int* self);
+Str toString(Int64* self);
+Str toString(Char* self);
 Int ns1_partStrIsEmpty();
 Int ns1_partStringEscapes();
 Int ns1_partStrings();
@@ -1397,6 +1399,23 @@ Bool isSpace(Char* self) {
     _sm_expr2 = _sm_base4 == '\r';
     _sm_expr1 = _sm_expr2;
     _sm_sc1:;
+    return _sm_expr1;
+}
+Str toString(Int* self) {
+    Str _sm_expr1;
+    _sm_expr1 = simse_int64_toString((*self));
+    return _sm_expr1;
+}
+Str toString(Int64* self) {
+    Str _sm_expr1;
+    _sm_expr1 = simse_int64_toString((*self));
+    return _sm_expr1;
+}
+Str toString(Char* self) {
+    Int64 value;
+    Str _sm_expr1;
+    value = (*self);
+    _sm_expr1 = simse_int64_toString(value);
     return _sm_expr1;
 }
 // stress/strings/src/main.kt
@@ -2329,10 +2348,6 @@ inline void simse_str_reserve(Str& self, Int count) {
     self.reserve((Str::size_type) count);
 }
 
-inline Str simse_int_toString(Int self) {
-    return std::to_string(self);
-}
-
 template <class K, class V>
 inline Dictionary<K, V> simse_dictionaryOf() {
     return Dictionary<K, V>();
@@ -2503,13 +2518,13 @@ inline void simse_str_initByValue(Str& self, const Str& value) {
     self = value;
 }
 
-template <class T>
-inline Str simse_num_toString(const T& self) {
+inline Str simse_int64_toString(Int64 self) {
     return std::to_string(self);
 }
 
-inline Str simse_char_toString(Char self) {
-    return std::to_string((int) self);
+template <class T>
+inline Str simse_num_toString(const T& self) {
+    return std::to_string(self);
 }
 
 inline Str simse_bool_toString(Bool self) {

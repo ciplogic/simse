@@ -550,37 +550,46 @@ fun Char.isSpace(): Bool {
     return this == ' ' || this == '\t' || this == '\n' || this == '\r'
 }
 
-// The numeric and `Bool` spellings of `toString` stay natives over `std::to_string`, and that
-// is deliberate rather than unfinished: a *body* extension is emitted only when the program
-// reaches it (`reachesPreludeBody`, src/codegen/CgEmitType.kt), which wants the receiver's
-// type named somewhere - and a program holds and prints scalar values it never spells
-// (`println(n.toString())` on an inferred local, a protocol instantiated on `Int16`). The
-// reach collector then drops the body while the call stays, which is a C++ error at the call
-// site. `find`/`lastIndexOf`/`toInt` share one receiver type (`Str`), so their group falls
-// into the rule's "no receiver named - emit the whole group" arm; the scalars would not.
-@SmGen("res", "listops", "simse_int_toString")
-borrow fun toString(this: Int): Str
+// The one numeric formatter the C++ carries: `std::to_string` of an `Int64`. Every integer
+// width's `toString` lands here - the Simse bodies below widen the small widths at the call,
+// which is all a cast between signed widths is - and the two alias spellings (`Int8` ≡
+// `Char` and `Int32` ≡ `Int` are one C++ type each, where two bodies would define one
+// function twice) ride the same symbol as natives, the receiver converting at the call.
+@SmGen("res", "strops", "simse_int64_toString")
+borrow fun intToStr(value: Int64): Str
 
-@SmGen("res", "strops", "simse_num_toString")
+fun Int.toString(): Str {
+    return intToStr(this)
+}
+
+fun Int16.toString(): Str {
+    return intToStr(this)
+}
+
+fun Int64.toString(): Str {
+    return intToStr(this)
+}
+
+// A `Char` stringifies as its *numeric* value (the byte, signed): `'A'` is `"65"`.
+fun Char.toString(): Str {
+    val value: Int64 = this
+    return intToStr(value)
+}
+
+// The two alias spellings a body cannot declare (see `intToStr` above).
+@SmGen("res", "strops", "simse_int64_toString")
 borrow fun toString(this: Int8): Str
 
-@SmGen("res", "strops", "simse_num_toString")
-borrow fun toString(this: Int16): Str
-
-@SmGen("res", "strops", "simse_num_toString")
+@SmGen("res", "strops", "simse_int64_toString")
 borrow fun toString(this: Int32): Str
 
-@SmGen("res", "strops", "simse_num_toString")
-borrow fun toString(this: Int64): Str
-
+// The floats keep `std::to_string` of themselves: a different format (`%f`-style), which is
+// what the corpus pins.
 @SmGen("res", "strops", "simse_num_toString")
 borrow fun toString(this: Float32): Str
 
 @SmGen("res", "strops", "simse_num_toString")
 borrow fun toString(this: Float64): Str
-
-@SmGen("res", "strops", "simse_char_toString")
-borrow fun toString(this: Char): Str
 
 @SmGen("res", "strops", "simse_bool_toString")
 borrow fun toString(this: Bool): Str

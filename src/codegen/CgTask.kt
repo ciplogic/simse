@@ -361,6 +361,11 @@ fun Emitter.emitAsyncMain(fn: *CgFn, className: *Str, task: *TskTask): Unit {
 
 fun Emitter.run(): Res<Str> {
     this.collect()
+    // The protocol implementations the dispatch sets will reach must count as reached
+    // *before* the reached-name fixpoint runs (`CgProtocol.kt`): a prelude body the glue
+    // reaches calls its own callees, and the fixpoint is what pulls those in - after it,
+    // `StrView.toString` would be emitted while the `size`/`substr` it calls are not.
+    this.collectProtocolReach()
     // Reachability before the coloring: `collectAsync` keeps only the suspending declarations
     // the program reaches, which is what tells a prelude `suspend fun` from one of the
     // program's own.
@@ -412,9 +417,6 @@ fun Emitter.run(): Res<Str> {
     if (this.failed) {
         return Res<Str>.err(this.error)
     }
-    // The protocol implementations the dispatch sets will reach must count as reached
-    // before the prototype pass decides which prelude bodies to emit (`CgProtocol.kt`).
-    this.collectProtocolReach()
     this.sections.begin("prototypes")
     this.emitFunctions(true, facts)
     if (this.failed) {

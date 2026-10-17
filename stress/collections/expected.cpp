@@ -394,7 +394,6 @@ void simse_str_append(Str& self, Char value);
 void simse_str_appendStr(Str& self, const Str& value);
 void simse_str_appendStrPtr(Str& self, const Str* value);
 void simse_str_reserve(Str& self, Int count);
-Str simse_int_toString(Int self);
 
 #include <algorithm>
 #include <type_traits>
@@ -459,9 +458,9 @@ Opt<Float64> simse_str_toFloat(const Str& self);
 
 void simse_str_initByValue(Str& self, const Str& value);
 
+Str simse_int64_toString(Int64 self);
 template <class T>
 Str simse_num_toString(const T& self);
-Str simse_char_toString(Char self);
 Str simse_bool_toString(Bool self);
 
 #include <bit>
@@ -677,6 +676,9 @@ Int find(Str* self, Str sub);
 Str substr(Str* self, Int start, Int len);
 Bool startsWith(Str* self, Str prefix);
 Bool isEmpty(Str* self);
+Str toString(Int* self);
+Str toString(Int64* self);
+Str toString(Char* self);
 List<Str> ns1_texts();
 Int ns1_partArrayLayout();
 Int ns1_partBulkList();
@@ -822,7 +824,7 @@ void ns1_partLambdaFor_closure1_invoke(ns1_partLambdaFor_closure1 self, Int n) {
     goto L1;
     L2:;
     _sm_expr3 = total + n;
-    _sm_expr4 = simse_int_toString(_sm_expr3);
+    _sm_expr4 = toString(simse_addressOf(_sm_expr3));
     simse_println((_sm_expr4), stdout);
 }
 
@@ -840,7 +842,7 @@ void ns1_partLambdaFor_closure2_invoke(ns1_partLambdaFor_closure2 self, Int n) {
     if (!(_sm_expr2)) goto L2;
     value = _sm_for14.current;
     _sm_expr3 = value + n;
-    _sm_expr4 = simse_int_toString(_sm_expr3);
+    _sm_expr4 = toString(simse_addressOf(_sm_expr3));
     simse_println((_sm_expr4), stdout);
     goto L1;
     L2:;
@@ -1369,6 +1371,23 @@ Bool isEmpty(Str* self) {
     _sm_expr2 = _sm_expr1 == 0;
     return _sm_expr2;
 }
+Str toString(Int* self) {
+    Str _sm_expr1;
+    _sm_expr1 = simse_int64_toString((*self));
+    return _sm_expr1;
+}
+Str toString(Int64* self) {
+    Str _sm_expr1;
+    _sm_expr1 = simse_int64_toString((*self));
+    return _sm_expr1;
+}
+Str toString(Char* self) {
+    Int64 value;
+    Str _sm_expr1;
+    value = (*self);
+    _sm_expr1 = simse_int64_toString(value);
+    return _sm_expr1;
+}
 // stress/collections/src/main.kt
 List<Str> ns1_texts() {
     List<Str> texts;
@@ -1639,7 +1658,7 @@ Int ns1_partForArray() {
     _sm_expr3 = advance(&_sm_for3);
     if (!(_sm_expr3)) goto L2;
     value = _sm_for3.current;
-    _sm_expr4 = simse_int_toString(value);
+    _sm_expr4 = toString(simse_addressOf(value));
     simse_println((_sm_expr4), stdout);
     goto L1;
     L2:;
@@ -1675,11 +1694,11 @@ Int ns1_partForArray() {
     L4:;
     _sm_base3 = &numbers;
     _sm_expr14 = ns1_arraySum(_sm_base3);
-    _sm_expr15 = simse_int_toString(_sm_expr14);
+    _sm_expr15 = toString(simse_addressOf(_sm_expr14));
     simse_println((_sm_expr15), stdout);
     _sm_base4 = &numbers;
     _sm_expr16 = ns1_spanSum(_sm_base4);
-    _sm_expr17 = simse_int_toString(_sm_expr16);
+    _sm_expr17 = toString(simse_addressOf(_sm_expr16));
     simse_println((_sm_expr17), stdout);
     return 0;
 }
@@ -1726,7 +1745,7 @@ Int ns1_partForContainer() {
     _sm_expr2 = advance(&_sm_for6);
     if (!(_sm_expr2)) goto L2;
     value = _sm_for6.current;
-    _sm_expr3 = simse_int_toString(value);
+    _sm_expr3 = toString(simse_addressOf(value));
     simse_println((_sm_expr3), stdout);
     goto L1;
     L2:;
@@ -1744,7 +1763,7 @@ Int ns1_partForContainer() {
     _sm_index7 = _sm_index7 + 1;
     word = _sm_for7.current;
     index = _sm_index7;
-    _sm_expr6 = simse_int_toString(index);
+    _sm_expr6 = toString(simse_addressOf(index));
     _sm_expr7.resize(1 + _sm_expr6.size());
     __sm_catP = _sm_expr7.data();
     std::memcpy(__sm_catP, _sm_expr6.data(), _sm_expr6.size());
@@ -1772,13 +1791,13 @@ Int ns1_partForContainer() {
     if (_sm_expr2) goto L5;
     _sm_expr2 = _sm_value_2 > 25;
     if (_sm_expr2) goto L6;
-    word = simse_int_toString(_sm_index_2);
+    word = toString(simse_addressOf(_sm_index_2));
     _sm_expr6.resize(1 + word.size());
     __sm_catP = _sm_expr6.data();
     std::memcpy(__sm_catP, word.data(), word.size());
     __sm_catP = __sm_catP + word.size();
     *__sm_catP = (char) ('=');
-    _sm_expr7 = simse_int_toString(_sm_value_2);
+    _sm_expr7 = toString(simse_addressOf(_sm_value_2));
     _sm_expr16.resize(_sm_expr6.size() + _sm_expr7.size());
     __sm_catP = _sm_expr16.data();
     std::memcpy(__sm_catP, _sm_expr6.data(), _sm_expr6.size());
@@ -1789,7 +1808,7 @@ Int ns1_partForContainer() {
     L6:;
     _sm_base4 = &numbers;
     _sm_expr17 = ns1_total(_sm_base4);
-    _sm_expr18 = simse_int_toString(_sm_expr17);
+    _sm_expr18 = toString(simse_addressOf(_sm_expr17));
     simse_println((_sm_expr18), stdout);
     return 0;
 }
@@ -1920,19 +1939,19 @@ Int ns1_partForPointer() {
     simse_list_append(cells, _sm_expr3);
     _sm_base1 = &cells;
     _sm_expr4 = ns1_bump(_sm_base1);
-    _sm_expr5 = simse_int_toString(_sm_expr4);
+    _sm_expr5 = toString(simse_addressOf(_sm_expr4));
     simse_println((_sm_expr5), stdout);
     _sm_base2 = &cells;
     ns1_report(_sm_base2);
     _sm_base4 = simse_addressOf(cells[0]);
     _sm_base3 = simse_addressOf(_sm_base4->value);
-    _sm_expr6 = simse_int_toString((*_sm_base3));
+    _sm_expr6 = toString(_sm_base3);
     simse_println((_sm_expr6), stdout);
     _sm_base5 = &cells;
     _sm_expr7 = ns1_arrayBump(_sm_base5);
-    _sm_expr8 = simse_int_toString(_sm_expr7);
+    _sm_expr8 = toString(simse_addressOf(_sm_expr7));
     simse_println((_sm_expr8), stdout);
-    _sm_expr9 = simse_int_toString((*_sm_base3));
+    _sm_expr9 = toString(_sm_base3);
     simse_println((_sm_expr9), stdout);
     numbers = List<Int>();
     simse_list_append(numbers, 4);
@@ -1940,7 +1959,7 @@ Int ns1_partForPointer() {
     simse_list_append(numbers, 9);
     _sm_base8 = &numbers;
     _sm_expr10 = ns1_spanSumPointer(_sm_base8);
-    _sm_expr11 = simse_int_toString(_sm_expr10);
+    _sm_expr11 = toString(simse_addressOf(_sm_expr10));
     simse_println((_sm_expr11), stdout);
     return 0;
 }
@@ -2074,46 +2093,46 @@ Int ns1_partPackArgs() {
     _sm_base1 = List<Int>{1, 2, 3};
     _sm_base2 = &_sm_base1;
     _sm_expr1 = ns1_addAll(_sm_base2);
-    _sm_expr2 = simse_int_toString(_sm_expr1);
+    _sm_expr2 = toString(simse_addressOf(_sm_expr1));
     simse_println((_sm_expr2), stdout);
     _sm_base3 = List<Int>{10};
     _sm_base4 = &_sm_base3;
     _sm_expr3 = ns1_addAll(_sm_base4);
-    _sm_expr4 = simse_int_toString(_sm_expr3);
+    _sm_expr4 = toString(simse_addressOf(_sm_expr3));
     simse_println((_sm_expr4), stdout);
     _sm_base5 = List<Int>{};
     _sm_base6 = &_sm_base5;
     _sm_expr5 = ns1_addAll(_sm_base6);
-    _sm_expr6 = simse_int_toString(_sm_expr5);
+    _sm_expr6 = toString(simse_addressOf(_sm_expr5));
     simse_println((_sm_expr6), stdout);
     numbers = List<Int>{4, 5};
     _sm_base7 = &numbers;
     _sm_expr7 = ns1_addAll(_sm_base7);
-    _sm_expr8 = simse_int_toString(_sm_expr7);
+    _sm_expr8 = toString(simse_addressOf(_sm_expr7));
     simse_println((_sm_expr8), stdout);
     _sm_base8 = &numbers;
     _sm_expr9 = ns1_addAll(_sm_base8);
-    _sm_expr10 = simse_int_toString(_sm_expr9);
+    _sm_expr10 = toString(simse_addressOf(_sm_expr9));
     simse_println((_sm_expr10), stdout);
     _sm_base9 = List<Int>{6, 7, 8};
     _sm_expr11 = ns1_sumValues(_sm_base9);
-    _sm_expr12 = simse_int_toString(_sm_expr11);
+    _sm_expr12 = toString(simse_addressOf(_sm_expr11));
     simse_println((_sm_expr12), stdout);
     _sm_expr13 = ns1_sumValues(numbers);
-    _sm_expr14 = simse_int_toString(_sm_expr13);
+    _sm_expr14 = toString(simse_addressOf(_sm_expr13));
     simse_println((_sm_expr14), stdout);
     _sm_base10 = &numbers;
     _sm_base11 = *(_sm_base10);
     _sm_expr15 = ns1_sumValues(_sm_base11);
-    _sm_expr16 = simse_int_toString(_sm_expr15);
+    _sm_expr16 = toString(simse_addressOf(_sm_expr15));
     simse_println((_sm_expr16), stdout);
     _sm_base12 = makeRef<std::remove_cvref_t<decltype((numbers))>>(numbers);
     _sm_expr17 = ns1_countBoxed(_sm_base12);
-    _sm_expr18 = simse_int_toString(_sm_expr17);
+    _sm_expr18 = toString(simse_addressOf(_sm_expr17));
     simse_println((_sm_expr18), stdout);
     keywords = List<Str>{__sm_stringTable[2], __sm_stringTable[16], __sm_stringTable[15]};
     _sm_expr19 = simse_lenOf(keywords);
-    _sm_expr20 = simse_int_toString(_sm_expr19);
+    _sm_expr20 = toString(simse_addressOf(_sm_expr19));
     simse_println((_sm_expr20), stdout);
     _sm_base13 = keywords[2];
     simse_println((_sm_base13), stdout);
@@ -2131,16 +2150,16 @@ Int ns1_partPackArgs() {
     primes = List<Int>{2, 3, 5, 7};
     _sm_base18 = &primes;
     _sm_expr25 = ns1_addAll(_sm_base18);
-    _sm_expr26 = simse_int_toString(_sm_expr25);
+    _sm_expr26 = toString(simse_addressOf(_sm_expr25));
     simse_println((_sm_expr26), stdout);
     zeros = List<Int>(3);
     _sm_base19 = &zeros;
     _sm_expr27 = ns1_addAll(_sm_base19);
-    _sm_expr28 = simse_int_toString(_sm_expr27);
+    _sm_expr28 = toString(simse_addressOf(_sm_expr27));
     simse_println((_sm_expr28), stdout);
     falses = List<Bool>(4, false);
     _sm_expr29 = simse_lenOf(falses);
-    _sm_expr30 = simse_int_toString(_sm_expr29);
+    _sm_expr30 = toString(simse_addressOf(_sm_expr29));
     simse_println((_sm_expr30), stdout);
     return 0;
 }
@@ -2379,7 +2398,7 @@ Int ns1_partForPromote() {
     total = total + _sm_expr5;
     goto L9;
     L10:;
-    _sm_expr20 = simse_int_toString(total);
+    _sm_expr20 = toString(simse_addressOf(total));
     simse_println((_sm_expr20), stdout);
     return 0;
 }
@@ -2513,7 +2532,7 @@ Int ns1_partForStr() {
     count = count + 1;
     goto L1;
     L2:;
-    _sm_expr3 = simse_int_toString(count);
+    _sm_expr3 = toString(simse_addressOf(count));
     simse_println((_sm_expr3), stdout);
     upper = __sm_stringTable[29];
     _sm_base2 = &phrase;
@@ -2551,7 +2570,7 @@ Int ns1_partForStr() {
     same = same + 1;
     goto L8;
     L9:;
-    _sm_expr8 = simse_int_toString(same);
+    _sm_expr8 = toString(simse_addressOf(same));
     simse_println((_sm_expr8), stdout);
     lines = List<ns1_Line>();
     _sm_expr9 = ns1_Line{__sm_stringTable[18]};
@@ -2581,7 +2600,7 @@ Int ns1_partForStr() {
     hits = hits + 1;
     goto L12;
     L11:;
-    _sm_expr16 = simse_int_toString(hits);
+    _sm_expr16 = toString(simse_addressOf(hits));
     simse_println((_sm_expr16), stdout);
     room = List<Int>();
     simse_list_append(room, 4);
@@ -2590,7 +2609,7 @@ Int ns1_partForStr() {
     rack = ns1_Rack{_sm_expr17};
     _sm_base7 = &rack;
     _sm_expr18 = ns1_rackTotal(_sm_base7);
-    _sm_expr19 = simse_int_toString(_sm_expr18);
+    _sm_expr19 = toString(simse_addressOf(_sm_expr18));
     simse_println((_sm_expr19), stdout);
     _sm_expr20 = simse_lenOf(phrase);
     _sm_expr2 = _sm_expr20 > 0;
@@ -2606,7 +2625,7 @@ Int ns1_partForStr() {
     _sm_expr2 = advance(&_sm_for30);
     if (!(_sm_expr2)) goto L19;
     y = _sm_for30.current;
-    _sm_expr24 = simse_int_toString(y);
+    _sm_expr24 = toString(simse_addressOf(y));
     simse_println((_sm_expr24), stdout);
     goto L18;
     L19:;
@@ -2718,10 +2737,6 @@ inline void simse_str_appendStrPtr(Str& self, const Str* value) {
 
 inline void simse_str_reserve(Str& self, Int count) {
     self.reserve((Str::size_type) count);
-}
-
-inline Str simse_int_toString(Int self) {
-    return std::to_string(self);
 }
 
 template <class K, class V>
@@ -2894,13 +2909,13 @@ inline void simse_str_initByValue(Str& self, const Str& value) {
     self = value;
 }
 
-template <class T>
-inline Str simse_num_toString(const T& self) {
+inline Str simse_int64_toString(Int64 self) {
     return std::to_string(self);
 }
 
-inline Str simse_char_toString(Char self) {
-    return std::to_string((int) self);
+template <class T>
+inline Str simse_num_toString(const T& self) {
+    return std::to_string(self);
 }
 
 inline Str simse_bool_toString(Bool self) {
