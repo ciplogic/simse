@@ -49,8 +49,17 @@ Four properties of Simse fix the design; each of them is a decision, not an acci
 ## 3. The arena
 
 ```kt
-// Kinds the *framework* knows how to paint; `Custom` is painted by the screen.
-enum class NodeKind { Root = 0, Panel = 1, Label = 2, Button = 3, Sprite = 4, Custom = 5 }
+// Kinds the *framework* knows how to paint; `Custom` is painted by the screen. The last four are
+// the built-in controls: a checkbox the tree toggles, an edit the tree types into, a slider the
+// tree tracks, a progress bar only the app writes.
+enum class NodeKind {
+    Root = 0, Panel = 1, Label = 2, Button = 3, Sprite = 4, Custom = 5,
+    Checkbox = 6, Edit = 7, Slider = 8, Progress = 9
+}
+
+// How a node places its children: `None` is absolute rects, `Column`/`Row` are the box model
+// (`layoutFrame`) - the one-axis layout a form needs, and deliberately no more.
+enum class BoxLayout { None = 0, Column = 1, Row = 2 }
 
 data class Rect(var x: Int, var y: Int, var width: Int, var height: Int)
 
@@ -58,10 +67,14 @@ data class Rect(var x: Int, var y: Int, var width: Int, var height: Int)
 // `name` is the author's handle (`x:Name`, HTML's `id`) - how code finds the node and how a
 // listener is attached; `""` when anonymous. `listener` is the *resolved* registration (-1 =
 // inert), so the click path never compares strings. `payload` is the app's own index into what the
-// node shows (a cell number, a difficulty, a slot) - the framework never reads it. (`data` is a
-// keyword in Simse - `data class` - so the field is `payload`, `setPayload` its setter.)
-// `palette` is the paint variant (which of a kind's looks, `paint.kt`); `align` places a label's
-// text; `sprite` is an atlas cell of the loaded sheet.
+// node shows (a cell number, a difficulty, a slot) - the framework never reads it, with the one
+// documented exception of an `Edit`, whose `payload` is its max length. (`data` is a keyword in
+// Simse - `data class` - so the field is `payload`, `setPayload` its setter.) `palette` is the
+// paint variant (which of a kind's looks, `paint.kt`); `align` places a label's text; `sprite` is
+// an atlas cell of the loaded sheet. The last four are the box model and the control state:
+// `layout`/`spacing`/`padding` say how a *box* arranges its children, and `value` is the
+// framework-owned state of a control - a Checkbox's 0/1, a Slider's and a Progress's 0..1000
+// (hover and press are the frame's; a control's own setting has to live on the node).
 data class Node(
     var kind: NodeKind,
     var name: Str,            // "" when anonymous
@@ -69,13 +82,17 @@ data class Node(
     var parent: Int,          // arena index, -1 for the frame's root
     var children: List<Int>,  // arena indices, in paint order (later = on top)
     var listener: Int,        // index into Frame.listeners, -1 = none
-    var payload: Int,         // the app's payload
-    var text: Str,            // labels and counters
+    var payload: Int,         // the app's payload; an Edit's max length
+    var text: Str,            // labels, counters, an edit's contents
     var palette: Int,         // which of the kind's looks
     var align: Int,           // Align: Left / Center / Right
     var sprite: Int,          // atlas cell of the loaded sheet
     var visible: Bool,
-    var enabled: Bool
+    var enabled: Bool,
+    var layout: Int,          // BoxLayout: None / Column / Row
+    var spacing: Int,         // gap between a box's children
+    var padding: Int,         // gap around them
+    var value: Int            // a control's own state (checked; slider/progress 0..1000)
 )
 
 enum class Align { Left = 0, Center = 1, Right = 2 }
@@ -120,12 +137,28 @@ fun addNode(f: *Frame, parent: Int, kind: NodeKind, x: Int, y: Int, width: Int, 
 fun addGrid(f: *Frame, parent: Int, name: Str, x: Int, y: Int, cell: Int, cols: Int, rows: Int): Int
 fun setName(f: *Frame, node: Int, name: Str): Bool      // false on a duplicate or an empty name
 fun setText / setPayload / setPalette(Palette) / setSprite / setVisible / setEnabled
+fun setLayout(BoxLayout) / setSpacing / setPadding      // make a node a layout box (or shape one)
+fun setValue(f: *Frame, node: Int, value: Int)          // a control's state: checked, 0..1000
 fun setRect(f: *Frame, node: Int, rect: Rect)           // the whole rect: a window, an overlay's scrim
 fun moveNode(f: *Frame, node: Int, dx: Int, dy: Int)    // shift a subtree: the one transform v1 has
+fun layoutFrame(f: *Frame)                              // resolve every box, once, after building
 fun nodeNamed(f: *Frame, name: Str): Int                // -1 when no node has that name
 fun setTextNamed(f: *Frame, name: Str, text: Str): Bool // the live readouts: counter, clock, status
 fun frameOn(f: *Frame, name: Str, action: Int, payload: Int): Bool   // the listener binding
 ```
+
+The box model (`layoutFrame`, one shot per build): a node with `layout` set places its children
+along one axis - `Column` top to bottom, `Row` left to right - `spacing` apart inside `padding`.
+A child's own size is what it asks for, except that a **0 means "the box decides"**: on the main
+axis an equal share of the space the fixed children left over (a board under a toolbar, a spring;
+several such children split it equally), on the cross axis the box's inner width or height (a
+button in a column is a full-width button). Layout writes the resolved sizes over the requested
+ones and shifts each subtree into place (`moveNode`), so it is idempotent and the painter and hit
+test only ever see placed rects; a frame that needs to re-flow is rebuilt - the same idiom a
+difficulty change already uses. Hiding a child takes it out of the paint and the hit test, not
+out of the layout. A box inside a box is laid out against the rect its parent just gave it
+(`layoutFrame` runs parents before children). `loadScreen` runs it before answering; a frame
+built in code calls it once after the last node is added.
 
 The value types the builder and the painter speak: `Rect` and `Size` (a width and a height that
 travel together - a window's, a frame's), both built by their `sm*` builders (`smRect`, `smSize`);
@@ -160,20 +193,28 @@ is a real error and `frameOn` reports it at setup, where it is cheap to see.
 // The whole input path, one event at a time (`uiEvent` in tree.kt, which is landed; the layer
 // entry `uiDispatch` above it comes with the window):
 //
-//  1. hit-test: the top-most node whose rect contains the point (children before parents, later
+//  1. hit-test: the top-most node under the point (children before parents, later
 //     siblings above earlier ones - the painter's order, reversed),
 //  2. bubble: from that leaf up to the root; the first listener to consume wins,
 //  3. capture: a press goes to the node a click would reach, and that node's listener gets the
 //     release even when the cursor has left it - without this, dragging off a control misfires.
 //     A move is delivered only while a press is captured (so a control can track a drag);
 //     otherwise a move only updates `hover` and the app reads that.
+//  4. the controls the tree owns: a press focuses the `Edit` under the cursor (and a press
+//     anywhere else gives the focus up), toggles a `Checkbox`'s `value` *before* its listener
+//     runs (never on a right press), and a captured drag keeps a `Slider`'s `value` tracking the
+//     cursor, clamped to 0..1000. A `KeyDown` goes to the focused `Edit`: printable keys append
+//     (up to its `payload` limit), Backspace drops the last character, Return walks the Edit's
+//     listener - the commit hook. Escape is never consumed: what it does stays the app's.
 //
 // `visible = false` is not hit at all; `enabled = false` *is* hit and still bubbles, but its own
 // listener is skipped, so a control can paint itself greyed out while an ancestor still sees the
-// click. Key events do not hit-test: they go to the top layer (and to `keyFocus` once keyboard
-// navigation exists).
+// click. A built-in control is a bubble target even with no listener bound - its state and chrome
+// work whether or not the app asked to be told. Keys with no Edit focused come back unconsumed
+// for the app's own shortcuts.
 fun uiHitTest(f: *Frame, x: Int, y: Int): Int                        // arena index, -1 when nothing
 fun uiEvent(f: *Frame, e: *UiEvent, answer: (Hit, *UiEvent) -> Bool): Hit   // the tree's whole path
+fun keyDown(key: Int): UiEvent                                       // the headless keystroke
 ```
 
 The framework stops at the listener: the *screen* reads the action code and answers. That split is
@@ -314,6 +355,13 @@ The look of the built-in kinds, in one place:
   `f.pressed == node`, else `f.hover == node`, else idle, and `theme.buttonDisabled` when the
   node is disabled (it is hit, but `uiEvent` steps over it, so nothing hovers it). Its own `text`
   is centred; a button does not need a label child.
+- **Checkbox**: a 16x16 ticked square in the button's three fills, an accent check when `value`
+  is set, and its text beside the box - the tree did the toggling; this only draws it.
+- **Edit**: a flat field in `theme.panel` with the panel edge - the accent edge and a blinking
+  caret (SDL's clock) while it holds the key focus. The editing is the tree's (`uiKey`).
+- **Slider**: a 4px track with the accent fill up to `value` and a thumb in the button's three
+  fills. `uiEvent` keeps `value` under the cursor while a press is captured.
+- **Progress**: the slider's look without the thumb and without any input - `value` is the app's.
 - **Sprite**: one atlas cell of the loaded sheet at the node's rect.
 - **Custom**: handed to `custom(node)` - the app's own painting.
 
@@ -378,14 +426,27 @@ The vocabulary, and nothing beyond it:
 
 | element | adds | becomes |
 | --- | --- | --- |
-| `screen` | `name` (renames the root), `width`, `height` | the `Frame` itself |
-| `panel` | - | `NodeKind.Panel` |
+| `screen` | `name` (renames the root), `width`, `height`, and the box metrics below | the `Frame` itself |
+| `panel` | `layout` (the box axis), `spacing`, `padding` | `NodeKind.Panel` |
+| `vbox` / `hbox` | `spacing`, `padding` | a Panel whose `layout` the element names itself |
 | `label` | `text` (content or attribute), `align` | `NodeKind.Label` |
 | `button` | `text` | `NodeKind.Button` |
+| `check` | `checked`, `text` | `NodeKind.Checkbox` - the tree toggles `value` |
+| `edit` | `payload` (the max length), `text` | `NodeKind.Edit` - the tree edits `text` |
+| `slider` | `value` (0..1000) | `NodeKind.Slider` - the tree tracks the drag |
+| `progress` | `value` (0..1000) | `NodeKind.Progress` - display only, the app writes `value` |
 | `sprite` | `index` (the atlas cell) | `NodeKind.Sprite` |
 | `custom` | `name` (required), `payload` | `NodeKind.Custom` - the app paints it |
 | `grid` | `name` (required), `cell` | one named node plus `rows*cols` anonymous cells, `payload` = row-major index |
-| every element | `name`, `rect`, `palette`, `visible`, `enabled` | the node's fields |
+| every element | `name`, `palette`, `visible`, `enabled`, and the geometry below | the node's fields |
+
+The geometry row is where a screen says which model it is in: outside a layout box an element
+carries a `rect`; inside one (a `<vbox>`, an `<hbox>`, a `<panel layout="...">`, or the `<screen>`
+itself) it carries `width` and `height` instead, where 0 means "the box decides" - and the loader
+refuses the wrong one by name (`<button> is inside a layout box: width/height place it, not
+rect`), because a rect a box will overwrite is a mistake the author wants to hear about. A `grid`
+keeps its `rect` either way - its cell count *is* its size - so a box positions it without
+resizing it.
 
 The `grid` line is the important one: it is a *generator*, so the board gets one listener and
 per-cell hit-testing without 480 XML lines - the loader calls the same `addGrid` the app would.
@@ -411,11 +472,13 @@ Two files of declarations (SDL2, Skia), one of glue, one of types:
 modules/minui/      the module itself - what a program names: `--module modules/minui`
                     (and `--module modules/xml`: screens are XML, and the loader builds them on
                     the `xml` module's tree types)
-  tree.kt      the headless core (landed, shot 2a): arena, names, listeners, hit-test, walk, events
-  paint.kt     the painter (landed, shot 2b): UiTheme, the palette values, the visitor
+  tree.kt      the headless core (landed, shot 2a + shot 7): arena, names, listeners, hit-test,
+               walk, events, the box model (`layoutFrame`), the controls' input behaviour
+  paint.kt     the painter (landed, shot 2b + shot 7): UiTheme, the palette values, the visitor,
+               the four built-in controls' looks
   screens.kt   the layer stack (landed, shot 5): push/pop, the paint base, the window follows the top
   xmlread.kt   the XML text reader (landed, shot 5): the `xml` module has the tree types, not a reader
-  xml.kt       the loader (landed, shot 5): XML text -> a `Frame`
+  xml.kt       the loader (landed, shot 5 + shot 7): XML text -> a `Frame`, boxes laid out once
   api.kt       the raw @SmGen declarations (landed): SDL2, Skia's C API, the `win*` glue helpers,
                every constant the two libraries need (in decimal, printed from their own headers)
   ui.kt        the typed surface the app calls (landed): window, canvas, text, sprites, input
@@ -527,13 +590,16 @@ Verification, none of which needs a human at the keyboard:
 
 ## 10. Not in v1 (and why)
 
-- **Layout engine** (rows, columns, anchors, stretch). v1 is absolute rects plus the `grid`
-  generator, which is exactly Heroes 2's model. A box model is v2, and the arena is where it will
-  write.
+- **A layout engine - the one-axis box LANDED (shot 7).** `layoutFrame` (tree.kt) is what a form
+  actually needs: a column or a row, `spacing` and `padding`, a child's 0 meaning "the box
+  decides" on each axis. Still out: anchors, percentages, wrapping, and anything constraint-shaped
+  - the box writes the arena's rects, so a richer model lands in the same place when something
+  needs it.
 - **Damage tracking** (repaint only what changed). A full redraw is ~0.2 ms and the loop draws
   only when something changed; per-rect damage is for when a frame costs more than ~2 ms.
-- **Keyboard focus navigation, text input, IME.** `keyFocus` is in `Frame` from the start so the
-  rule has a home; tabbing and editors are later.
+- **Keyboard navigation beyond one edit - partly landed (shot 7).** An `Edit` holds `keyFocus`,
+  takes the printable keys, Backspace and Return (its commit walk), and gives the focus up when a
+  press lands elsewhere. Still out: tabbing between controls, caret movement, selection, IME.
 - **A modal layer that dims what is below it - LANDED.** The stack needed no new flag (input
   already stops at the top layer); the dimming is the overlay's own painting, which is why the
   example's scrim is a `custom` node the app fills with a translucent colour. The recipe is in
@@ -682,5 +748,26 @@ Probes in `build/` (git-ignored, not part of the deliverable), run on Windows ar
    measures (16,21,30) where it is (30,38,52) undimmed - the blend, to the byte.
    `stress/minui-dispatch` pins the two tree transforms it rests on (a moved subtree carries its
    children; the hit test follows; a second move adds).
+
+7. **The box model and the controls - LANDED** (`tree.kt`'s `BoxLayout`/`layoutFrame` and the
+   control behaviours in `uiEvent`, `paint.kt`'s four new painters, `xml.kt`'s box-aware
+   vocabulary, verified by `stress/minui-layout`): what a tool's UI was missing. A `Column` or a
+   `Row` box places its children - a child's 0 asks the box to decide (an equal share of what the
+   fixed children left on the main axis, the full inner width/height on the cross axis), `spacing`
+   and `padding` shape the rest, and a box inside a box is laid out against the rect its parent
+   just gave it. The four built-in controls make a form usable with a mouse: a **Checkbox** the
+   tree toggles on the press (before its listener runs, never on a right press), an **Edit** that
+   takes the key focus on its press, appends printable keys up to its `payload` limit, edits on
+   Backspace and walks its listener on Return - and never consumes Escape - a **Slider** whose
+   `value` tracks a captured drag, clamped to 0..1000, with or without a listener, and a
+   **Progress** bar that is the slider's look with only the app writing `value`. XML names the
+   model an element is in: `rect` outside a box, `width`/`height` (0 = the box decides) inside
+   one, and the loader refuses the wrong one by name. `stress/minui-layout` pins each claim
+   headless: the column's fixed/fill/stretch arithmetic to the rect, a row with a column inside
+   it, the loader's form (five rects, a grid a box positions but does not resize), six documents
+   that do not load with their line numbers, the toggle (carried value 1 into the listener), the
+   disabled step-over, the drag (550 → 300 → 1000 clamped → 0), a listener reading the press's
+   own value (500), and the edit's focus/limit/Backspace/Return/Escape path. The two older minui
+   cases pass unchanged - the new `Node` fields default to exactly v1's behaviour.
 
 Each shot is independently verifiable, and shots 2 and 3 are independent of each other.

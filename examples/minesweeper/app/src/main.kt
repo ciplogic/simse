@@ -37,8 +37,8 @@ enum class Act {
     Back = 6
 }
 
-// One difficulty's geometry: the cell size and the window it needs. There is no layout engine in
-// minui v1, so a new difficulty is new geometry - a rebuilt tree and a resized window.
+// One difficulty's geometry: the cell size and the window it needs. A board is a grid, not a box,
+// so a new difficulty is new geometry - a rebuilt tree and a resized window.
 data class BoardLayout(var cell: Int, var window: Size)
 
 // The board's own frame, named: the margins around it and the strip above (counter, clock) and
@@ -696,34 +696,40 @@ fun main(args: List<Str>): Int {
             if (e.kind == UiEventKind.Close) {
                 running = false
             } else if (e.kind == UiEventKind.KeyDown) {
-                if (e.key == SDLK_ESCAPE) {
-                    // Back out of a screen; on the bottom layer (the menu) the window closes.
-                    if (stackSize(*stackPtr) > 1) {
-                        stackPop(*stackPtr)
-                        stackResizeTop(*stackPtr, uiPtr)
-                        println("  key escape: back to the menu")
-                    } else {
-                        running = false
-                    }
-                } else if (e.key == SDLK_r) {
-                    // R restarts the game whether or not its result panel is up (the panel is a
-                    // layer over the same game); on the menu there is no game to restart.
-                    if (stackTopName(*stackPtr) != "menu") {
-                        val d: Difficulty = gamePtr.difficulty
-                        showGame(gamePtr, *stackPtr, uiPtr, d)
-                        println("  key restart")
-                    }
-                } else if (e.key == SDLK_1) {
-                    if (stackTopName(*stackPtr) != "menu") {
-                        showGame(gamePtr, *stackPtr, uiPtr, Difficulty.Beginner)
-                    }
-                } else if (e.key == SDLK_2) {
-                    if (stackTopName(*stackPtr) != "menu") {
-                        showGame(gamePtr, *stackPtr, uiPtr, Difficulty.Intermediate)
-                    }
-                } else if (e.key == SDLK_3) {
-                    if (stackTopName(*stackPtr) != "menu") {
-                        showGame(gamePtr, *stackPtr, uiPtr, Difficulty.Expert)
+                // Keys reach the tree first: a focused edit consumes the printable ones and walks
+                // its listener on Return. Whatever comes back unconsumed (`h.hit < 0` - no edit
+                // took it) is the app's own shortcut business below.
+                val keyHit: Hit = stackEvent(*stackPtr, *e, answer)
+                if (keyHit.hit < 0) {
+                    if (e.key == SDLK_ESCAPE) {
+                        // Back out of a screen; on the bottom layer (the menu) the window closes.
+                        if (stackSize(*stackPtr) > 1) {
+                            stackPop(*stackPtr)
+                            stackResizeTop(*stackPtr, uiPtr)
+                            println("  key escape: back to the menu")
+                        } else {
+                            running = false
+                        }
+                    } else if (e.key == SDLK_r) {
+                        // R restarts the game whether or not its result panel is up (the panel is
+                        // a layer over the same game); on the menu there is no game to restart.
+                        if (stackTopName(*stackPtr) != "menu") {
+                            val d: Difficulty = gamePtr.difficulty
+                            showGame(gamePtr, *stackPtr, uiPtr, d)
+                            println("  key restart")
+                        }
+                    } else if (e.key == SDLK_1) {
+                        if (stackTopName(*stackPtr) != "menu") {
+                            showGame(gamePtr, *stackPtr, uiPtr, Difficulty.Beginner)
+                        }
+                    } else if (e.key == SDLK_2) {
+                        if (stackTopName(*stackPtr) != "menu") {
+                            showGame(gamePtr, *stackPtr, uiPtr, Difficulty.Intermediate)
+                        }
+                    } else if (e.key == SDLK_3) {
+                        if (stackTopName(*stackPtr) != "menu") {
+                            showGame(gamePtr, *stackPtr, uiPtr, Difficulty.Expert)
+                        }
                     }
                 }
             } else {

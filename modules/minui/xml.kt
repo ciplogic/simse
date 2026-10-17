@@ -13,13 +13,26 @@ import xml
 // The vocabulary, and nothing beyond it:
 //
 //   <screen name="menu" width="360" height="348">   the root; the name renames the frame's root
-//     <panel  rect="12,16,120,40" palette="plain"/>
+//     <screen layout="column" spacing="6" padding="10">   ... or a box: its children are placed
+//     <panel  rect="12,16,120,40" palette="plain"/>       by the box, not by their own rects
+//     <vbox   rect="..." spacing="6">   a panel whose children stack top to bottom
+//     <hbox   rect="..." spacing="6">   a panel whose children line up left to right
 //     <label  rect="..." palette="emphasized|accent|dim" align="left|center|right">TEXT</label>
 //     <button name="ok" rect="...">OK</button>       a name is optional; a listener needs one
 //     <sprite rect="..." index="3"/>                 one atlas cell (uiLoadSheet)
 //     <custom name="board" rect="..." payload="0"/>  the app paints it (paintFrame's custom hook)
 //     <grid   name="board" rect="8,8,288,288" cell="32"/>   expanded to one cell per square
+//     <check  name="opt" rect="..." checked="true">TEXT</check>   a checkbox; the tree toggles it
+//     <edit   name="field" rect="..." payload="40">text</edit>    a one-line field; payload is
+//                                                    the max length (the tree edits `text`)
+//     <slider name="vol" rect="..." value="500"/>    the tree tracks the drag into `value`
+//     <progress name="bar" rect="..." value="250"/>  display only: the app writes `value`
 //     <text is the element's content, or a text="..." attribute; one or the other, not both>
+//
+// Geometry is where a screen says which model it is in: outside a layout box an element carries a
+// `rect`; inside one it carries `width`/`height` instead, where 0 means "the box decides" (stretch
+// on the cross axis, a share of the remainder on the main one). A `grid` keeps its `rect` either
+// way - its cell count *is* its size - and a box positions it without resizing it.
 //
 // Every element takes `visible="false"` and `enabled="false"`; every element takes a `name`.
 // Anything else - an unknown element, an unknown attribute, a missing rect, a duplicate name, a
@@ -170,46 +183,132 @@ fun xmlAlignAttr(node: *XmlNode): Res<Align> {
     return xmlFail<Align>(xmlLine(node), "no align \"" + name + "\"")
 }
 
-// What each element is allowed to write. The empty answer is "no such element".
-fun xmlAllowedAttrs(element: Str): Str {
+// `layout="column|row"` on a `<screen>` or a `<panel>`: the box a node's children are arranged
+// along (`layoutFrame`, tree.kt). `<vbox>`/`<hbox>` carry the attribute's meaning in their name,
+// so they do not take it.
+fun xmlLayoutAttr(node: *XmlNode): Res<BoxLayout> {
+    val name: Str = xmlAttrOf(node, "layout")
+    if (name.size() == 0 || name == "none") {
+        return Res<BoxLayout>.ok(BoxLayout.None)
+    }
+    if (name == "column") {
+        return Res<BoxLayout>.ok(BoxLayout.Column)
+    }
+    if (name == "row") {
+        return Res<BoxLayout>.ok(BoxLayout.Row)
+    }
+    return xmlFail<BoxLayout>(xmlLine(node), "no layout \"" + name + "\"")
+}
+
+// `spacing`/`padding` on a box, and `width`/`height` on a box's child: zero or more. A negative
+// spacing would overlap the neighbours and a negative size is not a size; and zero on a child is
+// meaningful - "the box decides" (stretch on the cross axis, a share of the remainder on the
+// main one).
+fun xmlNonNegative(node: *XmlNode, name: Str): Res<Int> {
+    val parsed: Res<Int> = xmlIntAttr(node, name, 0)
+    if (!parsed.isOk()) {
+        return parsed
+    }
+    if (parsed.value() < 0) {
+        return xmlFail<Int>(xmlLine(node), name + " wants zero or more, got \"" + parsed.value().toString() + "\"")
+    }
+    return parsed
+}
+
+// What each element is allowed to write. The empty answer is "no such element". The geometry an
+// element takes depends on where it sits: `rect` under a parent that is not a box, `width` and
+// `height` inside one (a box places its children; their own x/y would be overwritten anyway).
+// The one exception is a grid, whose cell count *is* its rect - it keeps its rect everywhere and
+// a box positions it without resizing it.
+fun xmlAllowedAttrs(element: Str, boxed: Bool): Str {
+    var attrs: Str = ""
     if (element == "panel") {
-        return "name rect palette visible enabled"
+        attrs = "name palette visible enabled layout spacing padding"
+    } else if (element == "vbox" || element == "hbox") {
+        attrs = "name palette visible enabled spacing padding"
+    } else if (element == "label") {
+        attrs = "name palette align text visible enabled"
+    } else if (element == "button") {
+        attrs = "name palette text visible enabled"
+    } else if (element == "sprite") {
+        attrs = "name index visible enabled"
+    } else if (element == "custom") {
+        attrs = "name payload visible enabled"
+    } else if (element == "grid") {
+        attrs = "name cell visible enabled"
+    } else if (element == "check") {
+        attrs = "name checked text visible enabled"
+    } else if (element == "edit") {
+        attrs = "name payload text visible enabled"
+    } else if (element == "slider") {
+        attrs = "name value visible enabled"
+    } else if (element == "progress") {
+        attrs = "name value visible enabled"
+    } else {
+        return ""
     }
-    if (element == "label") {
-        return "name rect palette align text visible enabled"
+    if (element == "grid" || !boxed) {
+        return attrs + " rect"
     }
-    if (element == "button") {
-        return "name rect palette text visible enabled"
-    }
-    if (element == "sprite") {
-        return "name rect index visible enabled"
-    }
-    if (element == "custom") {
-        return "name rect payload visible enabled"
-    }
-    if (element == "grid") {
-        return "name rect cell visible enabled"
-    }
-    return ""
+    return attrs + " width height"
 }
 
 // One element and its children. `Returns` the arena index it built, so the parent can recurse.
+// A child of a layout box is placed by the box (`layoutFrame`): only its width and height are
+// read, so those are the attributes it takes - a `rect` there is the one geometry mistake the
+// loader can name rather than just refuse.
 fun xmlMapElement(f: *Frame, parent: Int, node: XmlNode): Res<Int> {
     val element: Str = xmlElementName(*node)
     val line: Int = xmlLine(*node)
-    val allowed: Str = xmlAllowedAttrs(element)
+    val boxed: Bool = f.nodes[parent].layout != BoxLayout.None.toInt()
+    val allowed: Str = xmlAllowedAttrs(element, boxed)
     if (allowed.size() == 0) {
         return xmlFail<Int>(line, "no element <" + element + ">")
+    }
+    if (element != "grid") {
+        if (boxed && xmlAttrOf(*node, "rect").size() > 0) {
+            return xmlFail<Int>(
+                line, "<" + element + "> is inside a layout box: width/height place it, not rect"
+            )
+        }
+        if (!boxed && xmlAttrOf(*node, "width").size() > 0) {
+            return xmlFail<Int>(
+                line, "<" + element + "> takes a rect (its parent is not a layout box)"
+            )
+        }
     }
     val checked: Res<Int> = xmlCheckAttrs(*node, allowed)
     if (!checked.isOk()) {
         return Res<Int>.err(checked.error())
     }
-    val rectResult: Res<Rect> = xmlRectAttr(*node, "rect")
-    if (!rectResult.isOk()) {
-        return Res<Int>.err(rectResult.error())
+
+    // The geometry: a rect of its own outside a box, a requested size inside one.
+    var x: Int = 0
+    var y: Int = 0
+    var width: Int = 0
+    var height: Int = 0
+    if (element == "grid" || !boxed) {
+        val rectResult: Res<Rect> = xmlRectAttr(*node, "rect")
+        if (!rectResult.isOk()) {
+            return Res<Int>.err(rectResult.error())
+        }
+        val rect: Rect = rectResult.value()
+        x = rect.x
+        y = rect.y
+        width = rect.width
+        height = rect.height
+    } else {
+        val widthResult: Res<Int> = xmlNonNegative(*node, "width")
+        if (!widthResult.isOk()) {
+            return Res<Int>.err(widthResult.error())
+        }
+        val heightResult: Res<Int> = xmlNonNegative(*node, "height")
+        if (!heightResult.isOk()) {
+            return Res<Int>.err(heightResult.error())
+        }
+        width = widthResult.value()
+        height = heightResult.value()
     }
-    val rect: Rect = rectResult.value()
 
     var index: Int = 0 - 1
     if (element == "grid") {
@@ -223,10 +322,10 @@ fun xmlMapElement(f: *Frame, parent: Int, node: XmlNode): Res<Int> {
         if (cell <= 0) {
             return xmlFail<Int>(line, "<grid> needs a positive cell")
         }
-        if (rect.width % cell != 0 || rect.height % cell != 0) {
+        if (width % cell != 0 || height % cell != 0) {
             return xmlFail<Int>(
                 line,
-                "<grid> " + rect.width.toString() + "x" + rect.height.toString()
+                "<grid> " + width.toString() + "x" + height.toString()
                         + " does not divide into cells of " + cell.toString()
             )
         }
@@ -234,10 +333,7 @@ fun xmlMapElement(f: *Frame, parent: Int, node: XmlNode): Res<Int> {
         if (name.size() == 0) {
             return xmlFail<Int>(line, "<grid> needs a name - its listener binds to it")
         }
-        index = addGrid(
-            f, parent, name, rect.x, rect.y, cell,
-            rect.width / cell, rect.height / cell
-        )
+        index = addGrid(f, parent, name, x, y, cell, width / cell, height / cell)
     } else {
         var kind: NodeKind = NodeKind.Panel
         if (element == "label") {
@@ -252,7 +348,27 @@ fun xmlMapElement(f: *Frame, parent: Int, node: XmlNode): Res<Int> {
         if (element == "custom") {
             kind = NodeKind.Custom
         }
-        index = addNode(f, parent, kind, rect.x, rect.y, rect.width, rect.height)
+        if (element == "check") {
+            kind = NodeKind.Checkbox
+        }
+        if (element == "edit") {
+            kind = NodeKind.Edit
+        }
+        if (element == "slider") {
+            kind = NodeKind.Slider
+        }
+        if (element == "progress") {
+            kind = NodeKind.Progress
+        }
+        index = addNode(f, parent, kind, x, y, width, height)
+        // A box element is a panel that arranges its children (the element names the layout, so
+        // `<vbox>`/`<hbox>` take no `layout` of their own).
+        if (element == "vbox") {
+            setLayout(f, index, BoxLayout.Column)
+        }
+        if (element == "hbox") {
+            setLayout(f, index, BoxLayout.Row)
+        }
 
         val name: Str = xmlAttrOf(*node, "name")
         if (name.size() > 0) {
@@ -300,12 +416,53 @@ fun xmlMapElement(f: *Frame, parent: Int, node: XmlNode): Res<Int> {
             }
             setSprite(f, index, sprite.value())
         }
-        if (element == "custom") {
+        if (element == "custom" || element == "edit") {
+            // A `custom`'s payload is the app's own index; an `edit`'s is its max length (the
+            // one payload the framework reads - tree.kt's `uiKey`).
             val payload: Res<Int> = xmlIntAttr(*node, "payload", 0)
             if (!payload.isOk()) {
                 return Res<Int>.err(payload.error())
             }
             setPayload(f, index, payload.value())
+        }
+        if (element == "check") {
+            val isChecked: Res<Bool> = xmlBoolAttr(*node, "checked", false)
+            if (!isChecked.isOk()) {
+                return Res<Int>.err(isChecked.error())
+            }
+            if (isChecked.value()) {
+                setValue(f, index, 1)
+            }
+        }
+        if (element == "slider" || element == "progress") {
+            val value: Res<Int> = xmlIntAttr(*node, "value", 0)
+            if (!value.isOk()) {
+                return Res<Int>.err(value.error())
+            }
+            if (value.value() < 0 || value.value() > 1000) {
+                return xmlFail<Int>(line, "value wants 0..1000, got \"" + value.value().toString() + "\"")
+            }
+            setValue(f, index, value.value())
+        }
+        // The box metrics, read before the children so that they can see the box they are in.
+        if (element == "panel" || element == "vbox" || element == "hbox") {
+            if (element == "panel") {
+                val layout: Res<BoxLayout> = xmlLayoutAttr(*node)
+                if (!layout.isOk()) {
+                    return Res<Int>.err(layout.error())
+                }
+                setLayout(f, index, layout.value())
+            }
+            val spacing: Res<Int> = xmlNonNegative(*node, "spacing")
+            if (!spacing.isOk()) {
+                return Res<Int>.err(spacing.error())
+            }
+            setSpacing(f, index, spacing.value())
+            val padding: Res<Int> = xmlNonNegative(*node, "padding")
+            if (!padding.isOk()) {
+                return Res<Int>.err(padding.error())
+            }
+            setPadding(f, index, padding.value())
         }
     }
 
@@ -323,7 +480,10 @@ fun xmlMapElement(f: *Frame, parent: Int, node: XmlNode): Res<Int> {
     return Res<Int>.ok(index)
 }
 
-// A whole screen: one `<screen width height>` element with everything else inside it.
+// A whole screen: one `<screen width height>` element with everything else inside it. The screen
+// itself may be a layout box (`layout="column"`, the usual toolbar-over-content shape); whatever
+// boxes the screen names, their arrangement is resolved once, here, before the frame is answered -
+// the painter and the hit test only ever see placed rects.
 fun loadScreen(text: Str): Res<Frame> {
     val parsed: Res<XmlNode> = parseXmlText(text)
     if (!parsed.isOk()) {
@@ -335,7 +495,7 @@ fun loadScreen(text: Str): Res<Frame> {
     if (tag != "screen") {
         return xmlFail<Frame>(line, "the root element must be <screen>, not <" + tag + ">")
     }
-    val checked: Res<Int> = xmlCheckAttrs(*doc, "name width height")
+    val checked: Res<Int> = xmlCheckAttrs(*doc, "name width height layout spacing padding")
     if (!checked.isOk()) {
         return Res<Frame>.err(checked.error())
     }
@@ -357,6 +517,21 @@ fun loadScreen(text: Str): Res<Frame> {
             return xmlFail<Frame>(line, "the screen name \"" + name + "\" is already used")
         }
     }
+    val layout: Res<BoxLayout> = xmlLayoutAttr(*doc)
+    if (!layout.isOk()) {
+        return Res<Frame>.err(layout.error())
+    }
+    setLayout(*f, f.root, layout.value())
+    val spacing: Res<Int> = xmlNonNegative(*doc, "spacing")
+    if (!spacing.isOk()) {
+        return Res<Frame>.err(spacing.error())
+    }
+    setSpacing(*f, f.root, spacing.value())
+    val padding: Res<Int> = xmlNonNegative(*doc, "padding")
+    if (!padding.isOk()) {
+        return Res<Frame>.err(padding.error())
+    }
+    setPadding(*f, f.root, padding.value())
     var index: Int = 0
     val children: Array<XmlNode> = doc.Children
     while (index < children.count()) {
@@ -366,5 +541,6 @@ fun loadScreen(text: Str): Res<Frame> {
         }
         index = index + 1
     }
+    layoutFrame(*f)
     return Res<Frame>.ok(f)
 }

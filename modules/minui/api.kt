@@ -336,9 +336,11 @@ val SDL_WINDOWEVENT_RESIZED: Int = 5
 val SDL_WINDOWEVENT_SIZE_CHANGED: Int = 6
 val SDL_WINDOWEVENT_CLOSE: Int = 14
 
-// The keys this UI names. SDL reports its own `SDLK_*` code; these are the ones the example uses.
+// The keys this UI names. SDL reports its own `SDLK_*` code; these are the ones the example and
+// the tree's Edit key path use (a letter or digit's code is its ASCII value).
 val SDLK_ESCAPE: Int = 27
 val SDLK_RETURN: Int = 13
+val SDLK_BACKSPACE: Int = 8
 val SDLK_SPACE: Int = 32
 val SDLK_1: Int = 49
 val SDLK_2: Int = 50

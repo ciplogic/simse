@@ -22,7 +22,21 @@ enum class NodeKind {
     Label = 2,
     Button = 3,
     Sprite = 4,
-    Custom = 5
+    Custom = 5,
+    Checkbox = 6,
+    Edit = 7,
+    Slider = 8,
+    Progress = 9
+}
+
+// How a node places its children: `None` is v1's absolute rects (the child's own `rect` is where
+// it is), `Column` stacks them top to bottom and `Row` lines them up left to right (`layoutFrame`).
+// A box keeps painting and hit-testing exactly as any node does - layout is only where the rects
+// come from.
+enum class BoxLayout {
+    None = 0,
+    Column = 1,
+    Row = 2
 }
 
 // Which of a kind's looks a node takes (paint.kt reads it). An enum, like `Align`, so a call site
@@ -107,12 +121,23 @@ fun mouseUp(x: Int, y: Int, button: Button, buttons: Int): UiEvent {
     return UiEvent(UiEventKind.MouseUp, x, y, button, buttons, 0, 0)
 }
 
+// A keystroke, for the headless tests of the key path (a script's `:K` entries reach the app's
+// loop as these, through SDL's own queue).
+fun keyDown(key: Int): UiEvent {
+    return UiEvent(UiEventKind.KeyDown, 0, 0, Button.None, 0, key, 0)
+}
+
 // One node. POD-ish on purpose: the walk reads these by pointer and never copies one.
 // `name` is the author's handle (`x:Name`, HTML's `id`), `""` when anonymous; `listener` is the
 // *resolved* registration (-1 = none); `payload` is the app's own index into what the node shows
-// (a cell, a difficulty, a slot) and the framework never reads it; `palette` is the paint
-// variant (which of a kind's looks, see `paint.kt`); `align` places a `Label`'s text
-// (`Align`). (`data` is a keyword here, so the field is `payload` - `setPayload` is the setter.)
+// (a cell, a difficulty, a slot) and the framework never reads it - with one exception, an
+// `Edit`'s max length; `palette` is the paint variant (which of the kind's looks, see
+// `paint.kt`); `align` places a `Label`'s text (`Align`). (`data` is a keyword here, so the field
+// is `payload` - `setPayload` is the setter.) The last four are the box model and the controls:
+// `layout`/`spacing`/`padding` say how a *box* arranges its children (`BoxLayout`, `layoutFrame`)
+// and `value` is the framework-owned state of a control (a Checkbox's 0/1, a Slider's and a
+// Progress's 0..1000) - hover and press are the frame's, but a control's own setting has to live
+// on the node.
 data class Node(
     var kind: NodeKind,
     var name: Str,
@@ -126,7 +151,11 @@ data class Node(
     var align: Int,
     var sprite: Int,
     var visible: Bool,
-    var enabled: Bool
+    var enabled: Bool,
+    var layout: Int,
+    var spacing: Int,
+    var padding: Int,
+    var value: Int
 )
 
 // What a name resolved to, once: the node, the action code the screen wants called for it, and
@@ -164,7 +193,7 @@ data class Frame(
 fun newFrame(size: Size): Frame {
     val root: Node = Node(
         NodeKind.Root, "root", Rect(0, 0, size.width, size.height), 0 - 1,
-        List<Int>(0, 0), 0 - 1, 0, "", 0, 0, 0, true, true
+        List<Int>(0, 0), 0 - 1, 0, "", 0, 0, 0, true, true, 0, 0, 0, 0
     )
     var nodes: List<Node> = List<Node>(0, root)
     nodes.append(root)
@@ -174,11 +203,17 @@ fun newFrame(size: Size): Frame {
 }
 
 // Append a child of `parent` and answer its arena index - the node's identity, which is what
-// hover, press and the walk compare. Geometry is absolute; there is no layout in v1.
+// hover, press and the walk compare. Geometry is absolute unless the parent is a layout box, in
+// which case `layoutFrame` places the child and only its width/height are read (0 = stretch or
+// fill, `layoutFrame` below).
+// Append a child of `parent` and answer its arena index - the node's identity, which is what
+// hover, press and the walk compare. Geometry is absolute unless the parent is a layout box, in
+// which case `layoutFrame` places the child and only its width/height are read (0 = stretch or
+// fill, `layoutFrame` below).
 fun addNode(f: *Frame, parent: Int, kind: NodeKind, x: Int, y: Int, width: Int, height: Int): Int {
     val node: Node = Node(
         kind, "", Rect(x, y, width, height), parent, List<Int>(0, 0),
-        0 - 1, 0, "", 0, 0, 0, true, true
+        0 - 1, 0, "", 0, 0, 0, true, true, 0, 0, 0, 0
     )
     val index: Int = f.nodes.size()
     f.nodes.append(node)
@@ -290,6 +325,165 @@ fun setEnabled(f: *Frame, node: Int, enabled: Bool): Unit {
     f.nodes[node].enabled = enabled
 }
 
+// Make a node a layout box (`vbox`/`hbox` in XML): its children are placed by `layoutFrame`
+// instead of carrying their own x/y. `spacing` is the gap between children, `padding` the gap
+// around them, and a control's `value` is its own state (a Checkbox's 0/1, a Slider's and a
+// Progress's 0..1000) - the framework keeps hover and press, the app reads and writes this.
+fun setLayout(f: *Frame, node: Int, layout: BoxLayout): Unit {
+    f.nodes[node].layout = layout.toInt()
+}
+
+fun setSpacing(f: *Frame, node: Int, spacing: Int): Unit {
+    f.nodes[node].spacing = spacing
+}
+
+fun setPadding(f: *Frame, node: Int, padding: Int): Unit {
+    f.nodes[node].padding = padding
+}
+
+fun setValue(f: *Frame, node: Int, value: Int): Unit {
+    f.nodes[node].value = value
+}
+
+// ---- layout: the box model ---------------------------------------------------
+//
+// A box (any node with `layout != None`, the root included) places its children along one axis:
+// a `Column` stacks them top to bottom, a `Row` lines them up left to right, `spacing` apart
+// inside `padding`. A child's own size is what it asks for:
+//
+//   - main axis (the column's height, the row's width): the child's own value, or - when it is 0
+//     - an equal share of the space the other children left over (a board under a toolbar, a
+//     spring; several such children split it equally),
+//   - cross axis: the child's own value, or - when it is 0 - the box's inner width/height, so a
+//     button in a column is a full-width button and a row's children share one height.
+//
+// Layout is **one shot per build**: `layoutFrame` writes the resolved sizes over the requested
+// ones (a stretched child really is as wide as the box afterwards), so a frame that needs to
+// re-flow is rebuilt - the same idiom a difficulty change already uses. Children of a moved
+// child move with it (`moveNode`): a grid or a hand-placed panel inside a box keeps its inside.
+
+// Lay out every box in the frame, parents before children (an inner box is sized by its own
+// parent before it sizes its children). `loadScreen` runs this before answering; a frame built
+// in code runs it once, after the last node is added.
+fun layoutFrame(f: *Frame): Unit {
+    layoutNode(f, f.root)
+}
+
+fun layoutNode(f: *Frame, node: Int): Unit {
+    val layout: Int = f.nodes[node].layout
+    if (layout != BoxLayout.None.toInt()) {
+        layoutChildren(f, node, layout)
+    }
+    val kids: List<Int> = f.nodes[node].children
+    var i: Int = 0
+    while (i < kids.size()) {
+        layoutNode(f, kids[i])
+        i = i + 1
+    }
+}
+
+// One box's children, along `layout`. All children are laid out whether or not they are visible:
+// hiding a row is not re-flowing the screen (rebuild the frame for that), it is taking it out of
+// the paint and the hit test only.
+fun layoutChildren(f: *Frame, box: Int, layout: Int): Unit {
+    val kids: List<Int> = f.nodes[box].children
+    val count: Int = kids.size()
+    if (count == 0) {
+        return
+    }
+    val rect: Rect = f.nodes[box].rect
+    val pad: Int = f.nodes[box].padding
+    val gap: Int = f.nodes[box].spacing
+    val innerX: Int = rect.x + pad
+    val innerY: Int = rect.y + pad
+    val innerWidth: Int = rect.width - pad * 2
+    val innerHeight: Int = rect.height - pad * 2
+    val column: Bool = layout == BoxLayout.Column.toInt()
+
+    // The measure pass: what the fixed children take, and how many want the remainder.
+    var fixed: Int = 0
+    var fills: Int = 0
+    var i: Int = 0
+    while (i < count) {
+        val child: Int = kids[i]
+        if (column) {
+            if (f.nodes[child].rect.height > 0) {
+                fixed = fixed + f.nodes[child].rect.height
+            } else {
+                fills = fills + 1
+            }
+        } else {
+            if (f.nodes[child].rect.width > 0) {
+                fixed = fixed + f.nodes[child].rect.width
+            } else {
+                fills = fills + 1
+            }
+        }
+        i = i + 1
+    }
+    var each: Int = 0
+    if (fills > 0) {
+        var remain: Int = 0
+        if (column) {
+            remain = innerHeight - gap * (count - 1) - fixed
+        } else {
+            remain = innerWidth - gap * (count - 1) - fixed
+        }
+        if (remain < 0) {
+            remain = 0
+        }
+        each = remain / fills
+    }
+
+    // The place pass: position the subtree (children of a child move with it), then write the
+    // resolved main size over the requested one.
+    var cursor: Int = innerY
+    if (!column) {
+        cursor = innerX
+    }
+    i = 0
+    while (i < count) {
+        val child: Int = kids[i]
+        val old: Rect = f.nodes[child].rect
+        var x: Int = innerX
+        var y: Int = innerY
+        var width: Int = old.width
+        var height: Int = old.height
+        if (column) {
+            height = old.height
+            if (old.height <= 0) {
+                height = each
+            }
+            if (old.width <= 0) {
+                width = innerWidth
+            }
+            y = cursor
+        } else {
+            width = old.width
+            if (old.width <= 0) {
+                width = each
+            }
+            if (old.height <= 0) {
+                height = innerHeight
+            }
+            x = cursor
+        }
+        val dx: Int = x - old.x
+        val dy: Int = y - old.y
+        if (dx != 0 || dy != 0) {
+            moveNode(f, child, dx, dy)
+        }
+        f.nodes[child].rect.width = width
+        f.nodes[child].rect.height = height
+        if (column) {
+            cursor = y + height + gap
+        } else {
+            cursor = x + width + gap
+        }
+        i = i + 1
+    }
+}
+
 // Write a whole rect. The two things v1 needs it for are both "the whole screen": a frame's own
 // size, which `stackResizeTop` reads from the root, and a modal overlay's scrim, which has to
 // cover a window the XML cannot know the size of.
@@ -355,12 +549,17 @@ fun uiHitTestNode(f: *Frame, node: Int, x: Int, y: Int): Int {
 }
 
 // The node a click on `leaf` reaches: the first ancestor (leaf included) that is enabled and has
-// a listener. A disabled node is still *hit* (and still paints itself greyed out) but it does not
-// take the click - the walk steps over it to the parent, which is what `hover` shows.
+// a listener - or is an enabled built-in control, which owns its own state and chrome even when
+// no listener is bound (a Checkbox toggles, a Slider tracks, whether or not the app asked to be
+// told). A disabled node is still *hit* (and still paints itself greyed out) but it does not take
+// the click - the walk steps over it to the parent, which is what `hover` shows.
 fun uiBubbleTarget(f: *Frame, leaf: Int): Int {
     var node: Int = leaf
     while (node >= 0) {
-        if (f.nodes[node].listener >= 0 && f.nodes[node].enabled) {
+        val kind: NodeKind = f.nodes[node].kind
+        val control: Bool = kind == NodeKind.Checkbox || kind == NodeKind.Edit
+                || kind == NodeKind.Slider
+        if (f.nodes[node].enabled && (f.nodes[node].listener >= 0 || control)) {
             return node
         }
         node = f.nodes[node].parent
@@ -394,21 +593,30 @@ fun uiWalk(
 // The framework's whole input path for one event:
 //
 //   move  -> `hover` becomes the node a click would reach; while a press is held, the move is
-//            delivered to the captured node (so a control can track a drag)
+//            delivered to the captured node (so a control can track a drag) and a captured
+//            Slider follows the cursor (its `value` is updated before the walk, so a listener
+//            reads the position live).
 //   down  -> the walk runs from the leaf; the node a click would reach is captured. Whether the
 //            app *acts* on the press or on the release is the app's business: Minesweeper's cells
 //            open on the press, a menu button fires on the release, and both get their event.
+//            A press also settles the two states a click owns outright: an `Edit` under the
+//            cursor takes the key focus (a press anywhere else gives it up), and a `Checkbox`
+//            toggles its `value` - before the walk, so its listener reads the new setting.
 //   up    -> delivered to the captured node (and its ancestors), wherever the cursor is now; the
 //            capture is released. `h.hit` is the leaf under the cursor at release, so a control
 //            can implement drag-off-cancel by comparing `h.hit` with `h.node`.
+//   key   -> a KeyDown goes to `keyFocus` when that is an `Edit` (printable keys append,
+//            Backspace removes, Return walks the Edit's listener - the commit hook); anything
+//            else, and every key with no Edit focused, is handed back unconsumed for the app.
 //
-// Other kinds (keys, wheel, close, tick) do not hit-test; a caller sends those straight to the
-// layer, and `Tick` is what drives a redraw when nothing else happens.
+// Wheel, close and tick do not hit-test; a caller sends those straight to the layer, and `Tick`
+// is what drives a redraw when nothing else happens.
 fun uiEvent(f: *Frame, e: *UiEvent, answer: (Hit, *UiEvent) -> Bool): Hit {
     if (e.kind == UiEventKind.MouseMove) {
         val leaf: Int = uiHitTest(f, e.x, e.y)
         f.hover = uiBubbleTarget(f, leaf)
         if (f.pressed >= 0) {
+            sliderTrack(f, f.pressed, e.x)
             return uiWalk(f, e, f.pressed, leaf, answer)
         }
         return Hit(0 - 1, 0 - 1, leaf, 0)
@@ -416,7 +624,19 @@ fun uiEvent(f: *Frame, e: *UiEvent, answer: (Hit, *UiEvent) -> Bool): Hit {
     if (e.kind == UiEventKind.MouseDown) {
         val leaf: Int = uiHitTest(f, e.x, e.y)
         f.hover = uiBubbleTarget(f, leaf)
+        f.keyFocus = uiEditAt(f, leaf)
+        if (leaf >= 0 && e.button != Button.Right) {
+            val leafKind: NodeKind = f.nodes[leaf].kind
+            if (leafKind == NodeKind.Checkbox && f.nodes[leaf].enabled) {
+                if (f.nodes[leaf].value == 0) {
+                    f.nodes[leaf].value = 1
+                } else {
+                    f.nodes[leaf].value = 0
+                }
+            }
+        }
         f.pressed = f.hover
+        sliderTrack(f, f.hover, e.x)
         return uiWalk(f, e, leaf, leaf, answer)
     }
     if (e.kind == UiEventKind.MouseUp) {
@@ -428,6 +648,88 @@ fun uiEvent(f: *Frame, e: *UiEvent, answer: (Hit, *UiEvent) -> Bool): Hit {
             return uiWalk(f, e, captured, leaf, answer)
         }
         return Hit(0 - 1, 0 - 1, leaf, 0)
+    }
+    if (e.kind == UiEventKind.KeyDown) {
+        return uiKey(f, e, answer)
+    }
+    return Hit(0 - 1, 0 - 1, 0 - 1, 0)
+}
+
+// The Edit a press on `leaf` focuses: the leaf itself when it is an enabled Edit, otherwise -1 -
+// a click anywhere else means the Edit gives the keys up. The *leaf* rather than the bubble
+// target, so an Edit whose listener sits on an ancestor still takes the focus.
+fun uiEditAt(f: *Frame, leaf: Int): Int {
+    if (leaf < 0 || f.nodes[leaf].kind != NodeKind.Edit || !f.nodes[leaf].enabled) {
+        return 0 - 1
+    }
+    return leaf
+}
+
+// A Slider's value from an x: where the cursor is along the track, as 0..1000. No-op for any
+// other node (or a disabled slider), so the event path can call it unconditionally.
+fun sliderTrack(f: *Frame, node: Int, x: Int): Unit {
+    if (node < 0 || f.nodes[node].kind != NodeKind.Slider || !f.nodes[node].enabled) {
+        return
+    }
+    val rect: Rect = f.nodes[node].rect
+    if (rect.width <= 0) {
+        return
+    }
+    var value: Int = (x - rect.x) * 1000 / rect.width
+    if (value < 0) {
+        value = 0
+    }
+    if (value > 1000) {
+        value = 1000
+    }
+    f.nodes[node].value = value
+}
+
+// The 95 printable ASCII characters, in code order: SDL's keycode for a letter or a digit *is*
+// its ASCII value, so the character a key means is this table's entry `key - 32`. (There is no
+// Int-to-Char conversion in the language, and this table is smaller than one.)
+val EditPrintable: Str = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+
+// An Edit's default maximum length, when its `payload` does not name one. `payload` is otherwise
+// the app's own index and the framework never reads it - an Edit's max length is the one
+// documented exception (the loader's `payload="40"` is this and nothing else).
+val EditDefaultLimit: Int = 120
+
+// One keystroke for the focused Edit. Printable ASCII appends (to the end - there is no caret
+// to move, no selection, no IME in this UI), Backspace drops the last character, Return walks
+// the Edit's own listener so the app can commit on it. Escape is *not* consumed: what Escape
+// does stays the app's decision (the example pops a screen with it).
+fun uiKey(f: *Frame, e: *UiEvent, answer: (Hit, *UiEvent) -> Bool): Hit {
+    val focus: Int = f.keyFocus
+    if (focus < 0) {
+        return Hit(0 - 1, 0 - 1, 0 - 1, 0)
+    }
+    val kind: NodeKind = f.nodes[focus].kind
+    if (kind != NodeKind.Edit || !f.nodes[focus].enabled) {
+        return Hit(0 - 1, 0 - 1, 0 - 1, 0)
+    }
+    val key: Int = e.key
+    if (key == SDLK_BACKSPACE) {
+        val text: Str = f.nodes[focus].text
+        if (text.size() > 0) {
+            f.nodes[focus].text = text.substr(0, text.size() - 1)
+        }
+        return Hit(0 - 1, 0 - 1, focus, 0)
+    }
+    if (key == SDLK_RETURN) {
+        return uiWalk(f, e, focus, focus, answer)
+    }
+    if (key >= 32 && key <= 126) {
+        var limit: Int = f.nodes[focus].payload
+        if (limit <= 0) {
+            limit = EditDefaultLimit
+        }
+        var text: Str = f.nodes[focus].text
+        if (text.size() < limit) {
+            text.append(EditPrintable.charAt(key - 32))
+            f.nodes[focus].text = text
+        }
+        return Hit(0 - 1, 0 - 1, focus, 0)
     }
     return Hit(0 - 1, 0 - 1, 0 - 1, 0)
 }

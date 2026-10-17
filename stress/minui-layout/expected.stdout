@@ -1,0 +1,45 @@
+--- a column: fixed, fill, and the cross-axis stretch
+one#1=10,10,90,30
+fill#2=10,45,200,230
+two#3=10,280,200,30
+--- a row with a box inside it
+panel#1=0,0,50,100
+inner#2=0,0,50,24
+rest#3=54,0,146,20
+--- a form out of the loader
+top#1=10,10,180,30
+mid#2=10,45,180,210
+a#3=10,45,50,20
+b#4=64,45,126,20
+bot#5=10,260,180,30
+--- a grid a box positions but does not resize
+cap#1=0,0,120,18
+cells#2=0,24,60,30
+cell 0: anon#3=0,24,10,10
+--- documents that do not load
+line 1: <button> is inside a layout box: width/height place it, not rect
+line 1: <button> takes a rect (its parent is not a layout box)
+line 1: spacing wants zero or more, got "-2"
+line 1: no layout "diag"
+line 1: width wants zero or more, got "-5"
+line 1: value wants 0..1000, got "2000"
+--- the controls
+bound=true
+key with no focus: hit=-1 text=""
+click on opt: action=3 value=1 carried=1
+again: value=0
+click on off: action=-1 value=0
+down on vol: pressed=vol#3 value=550
+drag to 70: value=300
+drag past the end: value=1000
+drag before the start: value=0
+down on gain: action=5 carried=500
+press on field: focus=field#5
+typed "hi": text="hi" hit=5
+backspace: text="h"
+typed "abc" (limit 4): text="habc"
+a fifth char: text="habc"
+press on the background: focus=none
+key with no focus again: hit=-1 text="habc"
+return: action=6 text="habc"
+escape while focused: hit=-1 text="habc"
