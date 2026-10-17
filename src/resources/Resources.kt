@@ -60,13 +60,92 @@ fun resMarkedName(raw: *Str): ResMarked {
     return ResMarked(raw.substr(i, raw.size() - i).trim(), compileOnly, binary)
 }
 
-// The format's two byte-level helpers, generated from the `resfmt` resource section
-// (impl_specs/generators.md): hex dump to bytes, and bytes back out as a C++ literal.
-@SmGen("res", "resfmt", "simse_resHexToBytes")
-fun resHexToBytes(hex: Str): Str
+// The format's two byte-level helpers, written in the language (they were the `resfmt`
+// section of the RTL's C++, `src/rtl/_res.md`, and are the compiler's alone): a hex dump to
+// bytes, and bytes back out as a C++ literal.
 
-@SmGen("res", "resfmt", "simse_resQuoteBinary")
-fun resQuoteBinary(bytes: Str): Str
+// The bytes a `*`-marked value's hex stands for: every pair of hex digits is one byte, in
+// order, so the value is a byte string like any other - a `Str` with a length, which may hold
+// a `\0` in the middle.
+//
+// The hex is **lower case** and whitespace (spaces, tabs, newlines) is not part of it, so a
+// dump may be wrapped however the file likes; decoding stops at the first character that is
+// neither, and a last digit left unpaired is dropped. Stopping rather than skipping is
+// deliberate: a value that is not lower-case hex decodes to nothing rather than to half its
+// bytes, which is the loudest failure this format can give - it validates nothing anywhere, so
+// the program's own output is where a bad dump shows up.
+fun resHexToBytes(hex: Str): Str {
+    var out: Str = ""
+    out.reserve(hex.size() / 2)
+    var high: Int = 0 - 1
+    var i: Int = 0
+    while (i < hex.size()) {
+        val ch: Char = hex.charAt(i)
+        if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
+            i = i + 1
+            continue
+        }
+        var digit: Int = 0 - 1
+        if (ch >= '0' && ch <= '9') {
+            digit = ch - '0'
+        } else if (ch >= 'a' && ch <= 'f') {
+            digit = ch - 'a' + 10
+        }
+        if (digit < 0) {
+            break
+        }
+        if (high < 0) {
+            high = digit
+        } else {
+            val byte: Char = high * 16 + digit
+            out.append(byte)
+            high = 0 - 1
+        }
+        i = i + 1
+    }
+    return out
+}
+
+// Bytes as the C++ literal the pool holds them as: printable bytes stand for themselves, and
+// every other byte is an octal escape with all three digits written, so that a following
+// character which happens to be an octal digit cannot run the escape on (`\x` would: it takes
+// every hex digit that follows it). `cgLiteralByteLength` counts an octal escape as the one
+// byte it is, which is what keeps the pool and its length index in step - and it is what makes
+// a `\0` in the middle of a value an ordinary byte of the pool.
+fun resQuoteBinary(bytes: Str): Str {
+    var out: Str = "\""
+    out.reserve(bytes.size() + 2)
+    var i: Int = 0
+    while (i < bytes.size()) {
+        val ch: Char = bytes.charAt(i)
+        // The byte as the *unsigned* value the C++ spelled (`(unsigned char) ch`): a `Char`
+        // reads back signed, so 0xFF is -56 until it is put back in range.
+        var byte: Int = ch
+        if (byte < 0) {
+            byte = byte + 256
+        }
+        if (ch == '\\') {
+            out.appendStr("\\\\")
+        } else if (ch == '\"') {
+            out.appendStr("\\\"")
+        } else if (byte >= 32 && byte <= 126) {
+            out.append(ch)
+        } else {
+            // The three octal digits, most significant first: `/64`, `/8 %8`, `%8` - the
+            // shifts the C++ wrote, in the arithmetic the language has.
+            val high: Char = '0' + byte / 64
+            val mid: Char = '0' + byte / 8 % 8
+            val low: Char = '0' + byte % 8
+            out.append('\\')
+            out.append(high)
+            out.append(mid)
+            out.append(low)
+        }
+        i = i + 1
+    }
+    out.append('"')
+    return out
+}
 
 // True when `line` is a section underline: non-blank once trimmed, and all `=`.
 fun resIsUnderline(line: *Str): Bool {

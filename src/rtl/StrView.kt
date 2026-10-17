@@ -39,7 +39,9 @@ fun StrView.startsWith(text: Str): Bool {
     return compareResult == 0
 }
 
-// The index of the first occurrence of `sub`, or -1 (compared in place).
+// The index of the first occurrence of `sub`, or -1 (compared in place). `memFindByte`
+// (`memchr`) jumps to each candidate first byte and `memCompare` (`memcmp`) confirms the
+// rest - the shape `std::string::find` has, which is what this replaces byte-loop by byte-loop.
 fun StrView.find(sub: Str): Int {
     val needle = sub.size()
     if (needle == 0) {
@@ -49,16 +51,13 @@ fun StrView.find(sub: Str): Int {
     if (needle > len) {
         return -1
     }
-    var i = 0
-    while (i + needle <= len) {
-        var j = 0
-        while (j < needle && this.ptr[i + j] == sub.charAt(j)) {
-            j = j + 1
-        }
-        if (j == needle) {
+    val subBytes = strBytes(sub)
+    var i = memFindByte(this.ptr, 0, len, subBytes[0])
+    while (i >= 0 && i + needle <= len) {
+        if (needle == 1 || memCompare(this.ptr, i, subBytes, 0, needle) == 0) {
             return i
         }
-        i = i + 1
+        i = memFindByte(this.ptr, i + 1, len - i - 1, subBytes[0])
     }
     return -1
 }
@@ -83,16 +82,12 @@ fun StrView.findView(sub: StrView): Int {
     if (needle > len) {
         return -1
     }
-    var i = 0
-    while (i + needle <= len) {
-        var j = 0
-        while (j < needle && this.ptr[i + j] == sub.ptr[j]) {
-            j = j + 1
-        }
-        if (j == needle) {
+    var i = memFindByte(this.ptr, 0, len, sub.ptr[0])
+    while (i >= 0 && i + needle <= len) {
+        if (needle == 1 || memCompare(this.ptr, i, sub.ptr, 0, needle) == 0) {
             return i
         }
-        i = i + 1
+        i = memFindByte(this.ptr, i + 1, len - i - 1, sub.ptr[0])
     }
     return -1
 }

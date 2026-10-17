@@ -583,7 +583,6 @@ inline void simse_list_sort(List<T>& self, F less) {
 forward:
 ```cpp
 #include <cerrno>
-#include <charconv>
 #include <cstddef>
 #include <cstdlib>
 #include <system_error>
@@ -597,10 +596,15 @@ forward:
 // are unchecked where the underlying operation is unchecked; the `Opt`-returning
 // conversions never throw.
 //
-// What is only a byte loop is Simse now (src/rtl/rtl.kt: `trim`, `substr`,
-// `startsWith`/`endsWith`, case folding and the `Char` predicates); what stays is what
-// reaches `SmString` internals (`charAt`, `find`, `lastIndexOf`, `split`, `replace`) or the
-// standard library (`std::from_chars`, `std::to_string`).
+// What is a byte loop is Simse (src/rtl/rtl.kt: `trim`, `substr`, `startsWith`/`endsWith`,
+// case folding, the `Char` predicates, `find`/`lastIndexOf` over the memory intrinsics, and
+// `toInt` with `from_chars`' semantics). What stays is what the borrow prover cannot prove a
+// Simse body clean for - `split`/`replace` call `append`, a mutating name, and a body that
+// calls one is not borrow-clean, so its receiver would copy per call (a native's `borrow`
+// mark is what keeps them by-reference) - what the emitter's reach rule makes hazardous as a
+// body (the `toString` family over scalar receivers, src/rtl/rtl.kt), and what reaches
+// `SmString` internals (`charAt`) or the standard library (`std::strtod`,
+// `std::to_string`).
 
 // `Str.charAt(index)`: the byte at `index` (unchecked; no bounds test).
 Char simse_str_charAt(const Str& self, Int index);
@@ -610,29 +614,21 @@ Char simse_str_charAt(const Str& self, Int index);
 List<Str> simse_str_split(const Str& self, const Str& separator);
 List<Str> simse_str_split(const Str& self, Char separator);
 
-// `Str.find(sub)` returns the first index of `sub`, or -1 when absent (the language's
-// spelling of C++ `npos`).
-Int simse_str_find(const Str& self, const Str& sub);
-
-// `Str.lastIndexOf(sub)` returns the last index of `sub`, or -1 when absent.
-Int simse_str_lastIndexOf(const Str& self, const Str& sub);
-
 // `Str.replace(from, to)` replaces every occurrence of `from` with `to`.
 Str simse_str_replace(const Str& self, const Str& from, const Str& to);
 
-// `Str.toInt()`/`Str.toFloat()` parse the whole string; failure (or a non-empty trailing
-// remainder) yields `Opt.none()`. No exceptions. `toInt` uses `std::from_chars` (integer
-// `from_chars` is in libstdc++ since GCC 11); `toFloat` uses `std::strtod`, because libstdc++
-// did not ship floating-point `from_chars` until GCC 14 and the language must build on
-// GCC 12 (docs/building-on-linux.md).
-Opt<Int> simse_str_toInt(const Str& self);
+// `Str.toFloat()` parses the whole string; failure (or a non-empty trailing remainder)
+// yields `Opt.none()`. No exceptions; `std::strtod`, because libstdc++ did not ship
+// floating-point `from_chars` until GCC 14 and the language must build on GCC 12
+// (docs/building-on-linux.md).
 Opt<Float64> simse_str_toFloat(const Str& self);
 
 // `Str.initByValue(value)`: the `initByValue` convention for `Str` (src/rtl/rtl.kt),
 // setting the receiver in place. The empty form is a Simse method (an empty body).
 void simse_str_initByValue(Str& self, const Str& value);
 
-// Numeric conversions. `Char` is an 8-bit integer, so it stringifies as a number.
+// The numeric and `Bool` spellings of `toString` (src/rtl/rtl.kt explains why they are not
+// Simse bodies): `std::to_string` behind one template, plus the `Char` and `Bool` forms.
 template <class T>
 Str simse_num_toString(const T& self);
 Str simse_char_toString(Char self);
@@ -692,16 +688,6 @@ inline List<Str> simse_str_split(const Str& self, Char separator) {
     return parts;
 }
 
-inline Int simse_str_find(const Str& self, const Str& sub) {
-    Int found = self.find(sub);
-    return found == Str::npos ? -1 : found;
-}
-
-inline Int simse_str_lastIndexOf(const Str& self, const Str& sub) {
-    Int found = self.rfind(sub);
-    return found == Str::npos ? -1 : found;
-}
-
 inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
     if (from.empty()) return self;
     Str result;
@@ -716,18 +702,6 @@ inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
         result += to;
         pos = found + from.size();
     }
-    return result;
-}
-
-inline Opt<Int> simse_str_toInt(const Str& self) {
-    if (self.empty()) return Opt<Int>();
-    Int value = 0;
-    const char* begin = self.data();
-    const char* end = begin + self.size();
-    std::from_chars_result parsed = std::from_chars(begin, end, value);
-    if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Int>();
-    Opt<Int> result;
-    result.setValue(value);
     return result;
 }
 
@@ -808,80 +782,6 @@ bodies:
 template <class T>
 inline Span<T> simse_spanOf(List<T>* items) {
     return Span<T>(nullptr, -1);
-}
-```
-
-!resfmt
-====
-forward:
-```cpp
-// The resource format's two byte-level helpers (specs/resources.md, "Markers"): the bytes a
-// hex dump stands for, and those bytes spelled as the C++ literal the pool holds them as.
-//
-// They are reached by the declarations in `src/resources/Resources.kt`, which is a module
-// of the *compiler* - a program neither sees them nor emits them, which is why they are a
-// section of their own rather than part of `strops`: a shared section is emitted whole, so
-// any program that reached `strops` would carry these too.
-Str simse_resHexToBytes(const Str& self);
-Str simse_resQuoteBinary(const Str& self);
-```
-bodies:
-```cpp
-// The bytes a `*`-marked value's hex stands for: every pair of hex digits is one byte, in
-// order, so the value is a byte string like any other - a `Str` with a length, which may hold
-// a `\0` in the middle.
-//
-// The hex is **lower case** and whitespace (spaces, tabs, newlines) is not part of it, so a
-// dump may be wrapped however the file likes; decoding stops at the first character that is
-// neither, and a last digit left unpaired is dropped. Stopping rather than skipping is
-// deliberate: a value that is not lower-case hex decodes to nothing rather than to half its
-// bytes, which is the loudest failure this format can give - it validates nothing anywhere, so
-// the program's own output is where a bad dump shows up.
-inline Str simse_resHexToBytes(const Str& self) {
-    Str out;
-    out.reserve(self.size() / 2);
-    Int high = -1;
-    for (Char ch : self) {
-        if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') continue;
-        Int digit = -1;
-        if (ch >= '0' && ch <= '9') digit = ch - '0';
-        else if (ch >= 'a' && ch <= 'f') digit = ch - 'a' + 10;
-        if (digit < 0) break;
-        if (high < 0) {
-            high = digit;
-        } else {
-            out.push_back((char) (high * 16 + digit));
-            high = -1;
-        }
-    }
-    return out;
-}
-
-// Bytes as the C++ literal the pool holds them as: printable bytes stand for themselves, and
-// every other byte is an octal escape with all three digits written, so that a following
-// character which happens to be an octal digit cannot run the escape on (`\x` would: it takes
-// every hex digit that follows it). `cgLiteralByteLength` counts an octal escape as the one
-// byte it is, which is what keeps the pool and its length index in step - and it is what makes
-// a `\0` in the middle of a value an ordinary byte of the pool.
-inline Str simse_resQuoteBinary(const Str& self) {
-    Str out = "\"";
-    for (Char ch : self) {
-        Int byte = (Int) (unsigned char) ch;
-        if (ch == '\\') {
-            out.append("\\\\");
-        } else if (ch == '\"') {
-            out.append("\\\"");
-        } else if (byte >= 0x20 && byte <= 0x7e) {
-            out.push_back((char) byte);
-        } else {
-            out.push_back('\\');
-            out.push_back((char) ('0' + ((byte >> 6) & 7)));
-            out.push_back((char) ('0' + ((byte >> 3) & 7)));
-            out.push_back((char) ('0' + (byte & 7)));
-        }
-    }
-    out.push_back('"');
-    return out;
 }
 ```
 

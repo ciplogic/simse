@@ -1779,7 +1779,6 @@ template <class T, int N>
 Int simse_lenOf(const SmallVector<T, N>& self);
 
 #include <cerrno>
-#include <charconv>
 #include <cstddef>
 #include <cstdlib>
 #include <system_error>
@@ -1790,13 +1789,8 @@ Char simse_str_charAt(const Str& self, Int index);
 List<Str> simse_str_split(const Str& self, const Str& separator);
 List<Str> simse_str_split(const Str& self, Char separator);
 
-Int simse_str_find(const Str& self, const Str& sub);
-
-Int simse_str_lastIndexOf(const Str& self, const Str& sub);
-
 Str simse_str_replace(const Str& self, const Str& from, const Str& to);
 
-Opt<Int> simse_str_toInt(const Str& self);
 Opt<Float64> simse_str_toFloat(const Str& self);
 
 void simse_str_initByValue(Str& self, const Str& value);
@@ -1856,9 +1850,6 @@ Str simse_process_capture(const Str& command, Int* exitCode);
 #include <system_error>
 
 FileStream* simse_fileStream_open(const Str& path);
-
-Str simse_resHexToBytes(const Str& self);
-Str simse_resQuoteBinary(const Str& self);
 
 #include <cstdio>
 
@@ -2237,12 +2228,17 @@ Bool compareLessThan(Str* left, Str* right);
 void initByValue(Str* self);
 Str fmtStr(Span<Char> fmt, List<Str>* items);
 Str fmtStrWith(Char separator, Span<Char> templateText, List<Str>* items);
+Int findFrom(Str* self, Str* sub, Int from);
+Int find(Str* self, Str sub);
+Int indexOf(Str* self, Str* sub);
+Int lastIndexOf(Str* self, Str* sub);
 Str substr(Str* self, Int start, Int len);
 Bool startsWith(Str* self, Str* prefix);
 Bool endsWith(Str* self, Str* suffix);
 Str trim(Str* self);
 Str toUpper(Str* self);
 Bool isEmpty(Str* self);
+Opt<Int> toInt(Str* self);
 Bool isDigit(Char* self);
 Bool isAlpha(Char* self);
 Bool isAlphaOrDigit(Char* self);
@@ -3902,6 +3898,8 @@ Str ns15_profDots(Str* name);
 Str ns15_profNameTableText(List<Str>* names);
 Str ns15_profPreamble(Int index);
 ns16_ResMarked ns16_resMarkedName(Str* raw);
+Str ns16_resHexToBytes(Str hex);
+Str ns16_resQuoteBinary(Str bytes);
 Bool ns16_resIsUnderline(Str* line);
 Bool ns16_resIsFenceStart(Str* line);
 Bool ns16_resIsFenceEnd(Str* line);
@@ -4477,9 +4475,10 @@ Bool startsWith(Span<Char>* self, Str* text) {
     return _sm_expr1;
 }
 Int find(Span<Char>* self, Str sub) {
-    Int needle, len, _sm_expr3, i, j, _sm_expr7;
-    Bool _sm_expr1, _sm_expr10;
-    Char _sm_expr9;
+    Str* _sm_base1;
+    Int needle, len, _sm_expr3, i, _sm_expr10, _sm_expr12;
+    Bool _sm_expr1;
+    Char* subBytes;
     needle = simse_lenOf(sub);
     _sm_expr1 = needle == 0;
     if (_sm_expr1) goto L1;
@@ -4495,36 +4494,32 @@ Int find(Span<Char>* self, Str sub) {
     _sm_expr3 = -1;
     return _sm_expr3;
     L4:;
-    i = 0;
+    _sm_base1 = &sub;
+    subBytes = simse_str_data(_sm_base1);
+    i = simse_mem_findByte(self->ptr, 0, len, subBytes[0]);
     L5:;
+    _sm_expr1 = i >= 0;
+    if (_sm_expr1) goto L11;
+    goto L6;
+    L11:;
     _sm_expr3 = i + needle;
     _sm_expr1 = _sm_expr3 <= len;
-    if (!(_sm_expr1)) goto L6;
-    j = 0;
-    L7:;
-    _sm_expr1 = j < needle;
     if (_sm_expr1) goto L10;
-    goto L8;
+    goto L6;
     L10:;
-    _sm_expr7 = i + j;
-    {
-        auto _sm_expr8 = self->ptr[_sm_expr7];
-        _sm_expr9 = simse_str_charAt(sub, j);
-        _sm_expr10 = _sm_expr8 == _sm_expr9;
-        if (_sm_expr10) goto L9;
-        goto L8;
-        L9:;
-        j = j + 1;
-        goto L7;
-    }
-    L8:;
-    _sm_expr1 = j == needle;
-    if (_sm_expr1) goto L11;
-    goto L12;
-    L11:;
+    _sm_expr1 = needle == 1;
+    if (_sm_expr1) goto L7;
+    _sm_expr3 = simse_mem_compare(self->ptr, i, subBytes, 0, needle);
+    _sm_expr1 = _sm_expr3 == 0;
+    if (_sm_expr1) goto L7;
+    goto L8;
+    L7:;
     return i;
-    L12:;
-    i = i + 1;
+    L8:;
+    _sm_expr10 = i + 1;
+    _sm_expr3 = len - i;
+    _sm_expr12 = _sm_expr3 - 1;
+    i = simse_mem_findByte(self->ptr, _sm_expr10, _sm_expr12, subBytes[0]);
     goto L5;
     L6:;
     _sm_expr3 = -1;
@@ -4538,8 +4533,8 @@ Int indexOf(Span<Char>* self, Str* sub) {
     return _sm_expr1;
 }
 Int findView(Span<Char>* self, Span<Char> sub) {
-    Int needle, len, _sm_expr3, i, j, _sm_expr7;
-    Bool _sm_expr1, _sm_expr10;
+    Int needle, len, _sm_expr3, i, _sm_expr10, _sm_expr12;
+    Bool _sm_expr1;
     needle = size(simse_addressOf(sub));
     _sm_expr1 = needle == 0;
     if (_sm_expr1) goto L1;
@@ -4555,36 +4550,30 @@ Int findView(Span<Char>* self, Span<Char> sub) {
     _sm_expr3 = -1;
     return _sm_expr3;
     L4:;
-    i = 0;
+    i = simse_mem_findByte(self->ptr, 0, len, sub.ptr[0]);
     L5:;
+    _sm_expr1 = i >= 0;
+    if (_sm_expr1) goto L11;
+    goto L6;
+    L11:;
     _sm_expr3 = i + needle;
     _sm_expr1 = _sm_expr3 <= len;
-    if (!(_sm_expr1)) goto L6;
-    j = 0;
-    L7:;
-    _sm_expr1 = j < needle;
     if (_sm_expr1) goto L10;
-    goto L8;
+    goto L6;
     L10:;
-    _sm_expr7 = i + j;
-    {
-        auto _sm_expr8 = self->ptr[_sm_expr7];
-        auto _sm_expr9 = sub.ptr[j];
-        _sm_expr10 = _sm_expr8 == _sm_expr9;
-        if (_sm_expr10) goto L9;
-        goto L8;
-        L9:;
-        j = j + 1;
-        goto L7;
-    }
-    L8:;
-    _sm_expr1 = j == needle;
-    if (_sm_expr1) goto L11;
-    goto L12;
-    L11:;
+    _sm_expr1 = needle == 1;
+    if (_sm_expr1) goto L7;
+    _sm_expr3 = simse_mem_compare(self->ptr, i, sub.ptr, 0, needle);
+    _sm_expr1 = _sm_expr3 == 0;
+    if (_sm_expr1) goto L7;
+    goto L8;
+    L7:;
     return i;
-    L12:;
-    i = i + 1;
+    L8:;
+    _sm_expr10 = i + 1;
+    _sm_expr3 = len - i;
+    _sm_expr12 = _sm_expr3 - 1;
+    i = simse_mem_findByte(self->ptr, _sm_expr10, _sm_expr12, sub.ptr[0]);
     goto L5;
     L6:;
     _sm_expr3 = -1;
@@ -4955,6 +4944,129 @@ Str fmtStrWith(Char separator, Span<Char> templateText, List<Str>* items) {
     L10:;
     return out;
 }
+Int findFrom(Str* self, Str* sub, Int from) {
+    Str* _sm_base1;
+    Int len, needle, _sm_expr5, _sm_expr8, i, _sm_expr15, _sm_expr17;
+    Bool _sm_expr1;
+    Char* bytes, * subBytes;
+    len = simse_lenOf((*self));
+    needle = simse_lenOf((*sub));
+    _sm_expr1 = needle == 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr1 = from > len;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    return -1;
+    L4:;
+    return from;
+    L2:;
+    _sm_expr1 = needle > len;
+    if (_sm_expr1) goto L5;
+    _sm_expr5 = len - needle;
+    _sm_expr1 = from > _sm_expr5;
+    if (_sm_expr1) goto L5;
+    goto L6;
+    L5:;
+    _sm_expr5 = -1;
+    return _sm_expr5;
+    L6:;
+    _sm_base1 = self;
+    bytes = simse_str_data(_sm_base1);
+    subBytes = simse_str_data(sub);
+    _sm_expr8 = len - from;
+    i = simse_mem_findByte(bytes, from, _sm_expr8, subBytes[0]);
+    L8:;
+    _sm_expr1 = i >= 0;
+    if (_sm_expr1) goto L14;
+    goto L9;
+    L14:;
+    _sm_expr5 = i + needle;
+    _sm_expr1 = _sm_expr5 <= len;
+    if (_sm_expr1) goto L13;
+    goto L9;
+    L13:;
+    _sm_expr1 = needle == 1;
+    if (_sm_expr1) goto L10;
+    _sm_expr5 = simse_mem_compare(bytes, i, subBytes, 0, needle);
+    _sm_expr1 = _sm_expr5 == 0;
+    if (_sm_expr1) goto L10;
+    goto L11;
+    L10:;
+    return i;
+    L11:;
+    _sm_expr15 = i + 1;
+    _sm_expr5 = len - i;
+    _sm_expr17 = _sm_expr5 - 1;
+    i = simse_mem_findByte(bytes, _sm_expr15, _sm_expr17, subBytes[0]);
+    goto L8;
+    L9:;
+    _sm_expr5 = -1;
+    return _sm_expr5;
+}
+Int find(Str* self, Str sub) {
+    Str* _sm_base1;
+    Int _sm_expr1;
+    _sm_base1 = &sub;
+    _sm_expr1 = findFrom(self, _sm_base1, 0);
+    return _sm_expr1;
+}
+Int indexOf(Str* self, Str* sub) {
+    Int _sm_expr1;
+    _sm_expr1 = findFrom(self, sub, 0);
+    return _sm_expr1;
+}
+Int lastIndexOf(Str* self, Str* sub) {
+    Str* _sm_base1;
+    Int len, needle, i, _sm_expr9;
+    Bool _sm_expr1, _sm_expr7;
+    Char* bytes, * subBytes;
+    len = simse_lenOf((*self));
+    needle = simse_lenOf((*sub));
+    _sm_expr1 = needle == 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    return len;
+    L2:;
+    _sm_expr1 = needle > len;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    return -1;
+    L4:;
+    _sm_base1 = self;
+    bytes = simse_str_data(_sm_base1);
+    subBytes = simse_str_data(sub);
+    i = len - needle;
+    L5:;
+    _sm_expr1 = i >= 0;
+    if (!(_sm_expr1)) goto L6;
+    {
+        auto _sm_expr5 = bytes[i];
+        auto _sm_expr6 = subBytes[0];
+        _sm_expr7 = _sm_expr5 == _sm_expr6;
+        if (_sm_expr7) goto L9;
+        goto L8;
+        L9:;
+        _sm_expr1 = needle == 1;
+        if (_sm_expr1) goto L7;
+        _sm_expr9 = simse_mem_compare(bytes, i, subBytes, 0, needle);
+        _sm_expr1 = _sm_expr9 == 0;
+        if (_sm_expr1) goto L7;
+        goto L8;
+        L7:;
+        return i;
+        L8:;
+        i = i - 1;
+        goto L5;
+    }
+    L6:;
+    _sm_expr9 = -1;
+    return _sm_expr9;
+}
 Str substr(Str* self, Int start, Int len) {
     Str* _sm_base1;
     Int begin, _sm_expr2, count;
@@ -5131,6 +5243,100 @@ Bool isEmpty(Str* self) {
     Bool _sm_expr2;
     _sm_expr1 = simse_lenOf((*self));
     _sm_expr2 = _sm_expr1 == 0;
+    return _sm_expr2;
+}
+Opt<Int> toInt(Str* self) {
+    Str* _sm_base1;
+    Int len, i, digit, small, big;
+    Bool _sm_expr1, negative, overflow;
+    Opt<Int> _sm_expr2;
+    Char* bytes;
+    Int64 value, _sm_expr14;
+    Char ch;
+    len = simse_lenOf((*self));
+    _sm_expr1 = len == 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = simse_optNone<Int>();
+    return _sm_expr2;
+    L2:;
+    _sm_base1 = self;
+    bytes = simse_str_data(_sm_base1);
+    i = 0;
+    negative = false;
+    auto _sm_expr3 = bytes[0];
+    _sm_expr1 = _sm_expr3 == '-';
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    negative = true;
+    i = 1;
+    L4:;
+    _sm_expr1 = i == len;
+    if (_sm_expr1) goto L5;
+    goto L6;
+    L5:;
+    _sm_expr2 = simse_optNone<Int>();
+    return _sm_expr2;
+    L6:;
+    value = 0;
+    overflow = false;
+    L7:;
+    _sm_expr1 = i < len;
+    if (!(_sm_expr1)) goto L8;
+    ch = bytes[i];
+    _sm_expr1 = ch < '0';
+    if (_sm_expr1) goto L9;
+    _sm_expr1 = ch > '9';
+    if (_sm_expr1) goto L9;
+    goto L10;
+    L9:;
+    _sm_expr2 = simse_optNone<Int>();
+    return _sm_expr2;
+    L10:;
+    _sm_expr1 = !overflow;
+    if (_sm_expr1) goto L12;
+    goto L16;
+    L12:;
+    _sm_expr1 = value < -214748364;
+    if (_sm_expr1) goto L14;
+    goto L15;
+    L14:;
+    overflow = true;
+    goto L16;
+    L15:;
+    digit = ch - '0';
+    _sm_expr14 = value * 10;
+    value = _sm_expr14 - digit;
+    L16:;
+    i = i + 1;
+    goto L7;
+    L8:;
+    if (overflow) goto L17;
+    goto L18;
+    L17:;
+    _sm_expr2 = simse_optNone<Int>();
+    return _sm_expr2;
+    L18:;
+    if (negative) goto L20;
+    digit = -2147483647;
+    _sm_expr1 = value < digit;
+    if (_sm_expr1) goto L19;
+    goto L20;
+    L19:;
+    _sm_expr2 = simse_optNone<Int>();
+    return _sm_expr2;
+    L20:;
+    if (negative) goto L22;
+    goto L23;
+    L22:;
+    small = value;
+    _sm_expr2 = simse_optSome<Int>(small);
+    return _sm_expr2;
+    L23:;
+    big = 0 - value;
+    _sm_expr2 = simse_optSome<Int>(big);
     return _sm_expr2;
 }
 Bool isDigit(Char* self) {
@@ -8177,7 +8383,7 @@ Str ns8_jsonNumberText(Float64 value) {
     Bool _sm_expr2;
     Char _sm_expr5;
     printed = simse_num_toString(value);
-    _sm_expr1 = simse_str_find(printed, __sm_stringTable[1155]);
+    _sm_expr1 = find(simse_addressOf(printed), __sm_stringTable[1155]);
     _sm_expr2 = _sm_expr1 < 0;
     if (_sm_expr2) goto L1;
     goto L2;
@@ -18685,7 +18891,7 @@ void ns1_emitNativeDeclarations(ns1_Emitter* self) {
     _sm_base6 = &_sm_expr5;
     ns1_setActiveTypeParams(self, _sm_base6);
     _sm_base7 = simse_addressOf(nativeInfo->symbol);
-    _sm_expr6 = simse_str_find((*_sm_base7), __sm_stringTable[1107]);
+    _sm_expr6 = find(_sm_base7, __sm_stringTable[1107]);
     _sm_expr7 = -1;
     _sm_expr3 = _sm_expr6 != _sm_expr7;
     if (_sm_expr3) goto L5;
@@ -21836,12 +22042,14 @@ Int ns1_profIndexOf(ns1_Emitter* self, Str* name) {
 // src/codegen/CgProfile.kt
 Str ns1_prettySymbol(ns1_Emitter* self, Str* name) {
     char* __sm_catP;
-    Str* _sm_base1;
+    Str* _sm_base1, * _sm_base3;
+    Str _sm_base2, rest, digits, _sm_expr12, packageNameText, _sm_expr13;
     Int closureAt, _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr5, d;
     Bool _sm_expr1;
-    Str rest, digits, _sm_expr12, packageNameText, _sm_expr13;
     Char ch;
-    closureAt = simse_str_find((*name), __sm_stringTable[725]);
+    _sm_base2 = __sm_stringTable[725];
+    _sm_base1 = &_sm_base2;
+    closureAt = indexOf(name, _sm_base1);
     _sm_expr1 = closureAt > 0;
     if (_sm_expr1) goto L1;
     goto L9;
@@ -21871,8 +22079,8 @@ Str ns1_prettySymbol(ns1_Emitter* self, Str* name) {
     goto L9;
     L8:;
     _sm_expr12 = substr(name, 0, closureAt);
-    _sm_base1 = &_sm_expr12;
-    packageNameText = ns1_packageName(self, _sm_base1);
+    _sm_base3 = &_sm_expr12;
+    packageNameText = ns1_packageName(self, _sm_base3);
     _sm_expr13.resize(7 + packageNameText.size() + digits.size());
     __sm_catP = _sm_expr13.data();
     std::memcpy(__sm_catP, packageNameText.data(), packageNameText.size());
@@ -30815,13 +31023,14 @@ void ns1_ilFuseConcatUnit(ns1_Emitter* self, ns10_IlUnit* unit) {
 // src/codegen/IlMachine.kt
 void ns1_emitBodyAt(ns1_Emitter* self, ns10_IlFunction* info, List<ns3_AstXmlNode>* body, Str* file, Int level, Bool measure) {
     char* __sm_catP;
-    ns10_IlUnit* _sm_base1, * _sm_base2, * _sm_base4, * _sm_base7, * _sm_base14;
+    ns10_IlUnit* _sm_base1, * _sm_base2, * _sm_base4, * _sm_base7, * _sm_base16;
     ns17_SemFacts* _sm_base3;
     Dictionary<Str, Bool>* _sm_base5, * _sm_base6;
-    Str* _sm_base8, * _sm_base10, * _sm_base13, * _sm_base17, * _sm_base18, * _sm_base19, * _sm_base20;
-    Str _sm_base9, _sm_base23, infoSymbolText, emittedReasonText, message, classesReasonText, _sm_expr10,
-        preamble, _sm_expr14;
-    ns3_Sections* _sm_base21, * _sm_base22;
+    Str* _sm_base8, * _sm_base10, * _sm_base11, * _sm_base15, * _sm_base19, * _sm_base20, * _sm_base21,
+        * _sm_base22;
+    Str _sm_base9, _sm_base12, _sm_base25, infoSymbolText, emittedReasonText, message, classesReasonText,
+        _sm_expr10, preamble, _sm_expr14;
+    ns3_Sections* _sm_base23, * _sm_base24;
     ns10_IlUnit unit;
     ns1_IlText emitted, classes;
     Bool _sm_expr1, _sm_expr2;
@@ -30856,7 +31065,9 @@ void ns1_emitBodyAt(ns1_Emitter* self, ns10_IlFunction* info, List<ns3_AstXmlNod
     ns1_failFromInfo(self, info, _sm_base10);
     return;
     L4:;
-    _sm_expr4 = simse_str_find(emittedReasonText, __sm_stringTable[445]);
+    _sm_base12 = __sm_stringTable[445];
+    _sm_base11 = &_sm_base12;
+    _sm_expr4 = indexOf(simse_addressOf(emittedReasonText), _sm_base11);
     _sm_expr1 = _sm_expr4 >= 0;
     if (_sm_expr1) goto L5;
     goto L6;
@@ -30876,12 +31087,12 @@ void ns1_emitBodyAt(ns1_Emitter* self, ns10_IlFunction* info, List<ns3_AstXmlNod
     std::memcpy(__sm_catP, emittedReasonText.data(), emittedReasonText.size());
     __sm_catP = __sm_catP + emittedReasonText.size();
     *__sm_catP = (char) (')');
-    _sm_base13 = &message;
-    ns1_failFromInfo(self, info, _sm_base13);
+    _sm_base15 = &message;
+    ns1_failFromInfo(self, info, _sm_base15);
     return;
     L2:;
-    _sm_base14 = &unit;
-    classes = ns1_emitClosureClasses(self, _sm_base14);
+    _sm_base16 = &unit;
+    classes = ns1_emitClosureClasses(self, _sm_base16);
     _sm_expr1 = classes.ok;
     _sm_expr2 = !_sm_expr1;
     if (_sm_expr2) goto L7;
@@ -30900,31 +31111,31 @@ void ns1_emitBodyAt(ns1_Emitter* self, ns10_IlFunction* info, List<ns3_AstXmlNod
     std::memcpy(__sm_catP, classesReasonText.data(), classesReasonText.size());
     __sm_catP = __sm_catP + classesReasonText.size();
     *__sm_catP = (char) (')');
-    _sm_base17 = &_sm_expr10;
-    ns1_failFromInfo(self, info, _sm_base17);
+    _sm_base19 = &_sm_expr10;
+    ns1_failFromInfo(self, info, _sm_base19);
     L10:;
     return;
     L8:;
     if (measure) goto L11;
     goto L14;
     L11:;
-    _sm_base19 = simse_addressOf(info->symbol);
-    _sm_base18 = _sm_base19;
-    _sm_expr11 = ns1_profIndexOf(self, _sm_base18);
+    _sm_base21 = simse_addressOf(info->symbol);
+    _sm_base20 = _sm_base21;
+    _sm_expr11 = ns1_profIndexOf(self, _sm_base20);
     preamble = ns15_profPreamble(_sm_expr11);
-    _sm_base20 = &preamble;
-    _sm_expr12 = simse_spanOfStr(_sm_base20);
+    _sm_base22 = &preamble;
+    _sm_expr12 = simse_spanOfStr(_sm_base22);
     _sm_expr1 = (!equals(simse_addressOf(_sm_expr12), __sm_stringTable[1182]));
     if (_sm_expr1) goto L13;
     goto L14;
     L13:;
     _sm_expr14 = ns1_cgIndent(level);
-    _sm_base21 = self->sections;
-    ns3_appendLine(_sm_base21, _sm_expr14, preamble);
+    _sm_base23 = self->sections;
+    ns3_appendLine(_sm_base23, _sm_expr14, preamble);
     L14:;
-    _sm_base22 = self->sections;
-    _sm_base23 = emitted.text;
-    ns3_appendText(_sm_base22, _sm_base23);
+    _sm_base24 = self->sections;
+    _sm_base25 = emitted.text;
+    ns3_appendText(_sm_base24, _sm_base25);
 }
 // src/codegen/IlSlot.kt
 Int ns1_ilIntAt(ns1_Emitter* self, Dictionary<Int, Int>* map, Int key, Int fallback) {
@@ -34049,7 +34260,7 @@ Int ns2_xmlIntAttr(ns3_AstXmlNode* node, ns3_AstNodeAttributeKind name) {
     Bool _sm_expr2;
     fallback = 0;
     _sm_expr1 = ns2_xmlAttr(node, name);
-    parsed = simse_str_toInt((*_sm_expr1));
+    parsed = toInt(_sm_expr1);
     _sm_expr2 = simse_optHasValue(simse_addressOf(parsed));
     if (_sm_expr2) goto L1;
     goto L2;
@@ -34399,7 +34610,8 @@ ns3_SourceGenTransform ns3_cppGen(ns3_SourceGenContext* ctx) {
 }
 // src/compiler/Driver.kt
 List<Str> ns3_driverResourceRoots(Str* prelude) {
-    Str _sm_base1, _sm_base2, _sm_expr4;
+    Str _sm_base1, _sm_base2, _sm_base4, _sm_base6, _sm_expr4;
+    Str* _sm_base3, * _sm_base5;
     List<Str> roots;
     Bool _sm_expr1;
     Int slash, backslash, cut;
@@ -34413,8 +34625,12 @@ List<Str> ns3_driverResourceRoots(Str* prelude) {
     simse_list_append(roots, _sm_base2);
     return roots;
     L2:;
-    slash = simse_str_lastIndexOf((*prelude), __sm_stringTable[1156]);
-    backslash = simse_str_lastIndexOf((*prelude), __sm_stringTable[1125]);
+    _sm_base4 = __sm_stringTable[1156];
+    _sm_base3 = &_sm_base4;
+    slash = lastIndexOf(prelude, _sm_base3);
+    _sm_base6 = __sm_stringTable[1125];
+    _sm_base5 = &_sm_base6;
+    backslash = lastIndexOf(prelude, _sm_base5);
     cut = slash;
     _sm_expr1 = backslash > cut;
     if (_sm_expr1) goto L3;
@@ -34554,11 +34770,11 @@ Bool ns3_driverIsGeneratorSource(Str* path) {
     Str _sm_base2, _sm_base4;
     Int _sm_expr2;
     Bool _sm_expr3, _sm_expr1;
-    _sm_expr2 = simse_str_find((*path), __sm_stringTable[531]);
+    _sm_expr2 = find(path, __sm_stringTable[531]);
     _sm_expr3 = _sm_expr2 >= 0;
     _sm_expr1 = _sm_expr3;
     if (_sm_expr1) goto _sm_sc1;
-    _sm_expr2 = simse_str_find((*path), __sm_stringTable[474]);
+    _sm_expr2 = find(path, __sm_stringTable[474]);
     _sm_expr3 = _sm_expr2 >= 0;
     _sm_expr1 = _sm_expr3;
     if (_sm_expr1) goto _sm_sc1;
@@ -34648,8 +34864,8 @@ List<Str> ns3_driverGatherFiles(List<Str>* moduleRoots, List<Bool>* moduleIsTree
 }
 // src/compiler/Driver.kt
 List<Str> ns3_manifestValues(Str* text, Str* key) {
-    Str* _sm_base1;
-    Str _sm_base2, line, _sm_expr4, _sm_expr5, _sm_expr11, _sm_expr12;
+    Str* _sm_base1, * _sm_base2;
+    Str _sm_base3, _sm_base4, line, _sm_expr4, _sm_expr5, _sm_expr11, _sm_expr12;
     List<Str> out, lines;
     Int i, _sm_expr1, colon, _sm_expr7, _sm_expr9, _sm_expr10;
     Bool _sm_expr2;
@@ -34662,15 +34878,17 @@ List<Str> ns3_manifestValues(Str* text, Str* key) {
     if (!(_sm_expr2)) goto L2;
     _sm_base1 = simse_addressOf(lines[i]);
     line = trim(_sm_base1);
-    colon = simse_str_find(line, __sm_stringTable[1159]);
+    _sm_base3 = __sm_stringTable[1159];
+    _sm_base2 = &_sm_base3;
+    colon = indexOf(simse_addressOf(line), _sm_base2);
     _sm_expr2 = colon > 0;
     if (_sm_expr2) goto L5;
     goto L4;
     L5:;
     _sm_expr4 = substr(simse_addressOf(line), 0, colon);
     _sm_expr5 = trim(simse_addressOf(_sm_expr4));
-    _sm_base2 = *(key);
-    _sm_expr2 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_expr5))), simse_spanOfStr(simse_addressOf(_sm_base2)));
+    _sm_base4 = *(key);
+    _sm_expr2 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_expr5))), simse_spanOfStr(simse_addressOf(_sm_base4)));
     if (_sm_expr2) goto L3;
     goto L4;
     L3:;
@@ -59201,7 +59419,7 @@ Opt<Int> ns12_foldIntValue(ns3_AstXmlNode* e) {
     L2:;
     _sm_base1 = ns3_AstNodeAttributeKind::Text;
     _sm_expr4 = ns2_xmlAttr(e, _sm_base1);
-    _sm_expr5 = simse_str_toInt((*_sm_expr4));
+    _sm_expr5 = toInt(_sm_expr4);
     return _sm_expr5;
 }
 // src/optimizations/FoldExprs.kt
@@ -70554,7 +70772,7 @@ ns3_AstXmlNode ns13_parseEnum(ns13_Parser* self) {
     L18:;
     _sm_expr1 = ns13_advance(self);
     valueText = _sm_expr1.text;
-    _sm_expr24 = simse_str_find(valueText, __sm_stringTable[1155]);
+    _sm_expr24 = find(simse_addressOf(valueText), __sm_stringTable[1155]);
     _sm_expr25 = -1;
     _sm_expr2 = _sm_expr24 != _sm_expr25;
     if (_sm_expr2) goto L19;
@@ -70566,7 +70784,7 @@ ns3_AstXmlNode ns13_parseEnum(ns13_Parser* self) {
     _sm_expr4 = ns13_emptyNode(self);
     return _sm_expr4;
     L20:;
-    parsed = simse_str_toInt(valueText);
+    parsed = toInt(simse_addressOf(valueText));
     _sm_expr2 = simse_optHasValue(simse_addressOf(parsed));
     if (_sm_expr2) goto L21;
     goto L22;
@@ -71401,7 +71619,7 @@ ns13_ExprNode ns13_parsePrimary(ns13_Parser* self) {
     _sm_expr1 = ns13_advance(self);
     text = _sm_expr1.text;
     kind = ns3_AstNodeCategory::ExprIntLit;
-    _sm_expr4 = simse_str_find(text, __sm_stringTable[1155]);
+    _sm_expr4 = find(simse_addressOf(text), __sm_stringTable[1155]);
     _sm_expr5 = -1;
     _sm_expr2 = _sm_expr4 != _sm_expr5;
     if (_sm_expr2) goto L3;
@@ -78418,6 +78636,144 @@ ns16_ResMarked ns16_resMarkedName(Str* raw) {
     return _sm_expr11;
 }
 // src/resources/Resources.kt
+Str ns16_resHexToBytes(Str hex) {
+    Str out;
+    Int _sm_expr1, _sm_expr2, high, i, digit;
+    Bool _sm_expr4;
+    Char ch, _sm_expr13, byte;
+    out = __sm_stringTable[1182];
+    _sm_expr1 = simse_lenOf(hex);
+    _sm_expr2 = _sm_expr1 / 2;
+    simse_str_reserve(out, _sm_expr2);
+    high = -1;
+    i = 0;
+    L1:;
+    _sm_expr1 = simse_lenOf(hex);
+    _sm_expr4 = i < _sm_expr1;
+    if (!(_sm_expr4)) goto L2;
+    ch = simse_str_charAt(hex, i);
+    _sm_expr4 = ch == ' ';
+    if (_sm_expr4) goto L3;
+    _sm_expr4 = ch == '\t';
+    if (_sm_expr4) goto L3;
+    _sm_expr4 = ch == '\n';
+    if (_sm_expr4) goto L3;
+    _sm_expr4 = ch == '\r';
+    if (_sm_expr4) goto L3;
+    goto L4;
+    L3:;
+    i = i + 1;
+    goto L1;
+    L4:;
+    digit = -1;
+    _sm_expr4 = ch >= '0';
+    if (_sm_expr4) goto L10;
+    goto L9;
+    L10:;
+    _sm_expr4 = ch <= '9';
+    if (_sm_expr4) goto L8;
+    goto L9;
+    L8:;
+    digit = ch - '0';
+    goto L13;
+    L9:;
+    _sm_expr4 = ch >= 'a';
+    if (_sm_expr4) goto L14;
+    goto L13;
+    L14:;
+    _sm_expr4 = ch <= 'f';
+    if (_sm_expr4) goto L12;
+    goto L13;
+    L12:;
+    _sm_expr13 = ch - 'a';
+    digit = _sm_expr13 + 10;
+    L13:;
+    _sm_expr4 = digit < 0;
+    if (_sm_expr4) goto L2;
+    _sm_expr4 = high < 0;
+    if (_sm_expr4) goto L17;
+    goto L18;
+    L17:;
+    high = digit;
+    goto L19;
+    L18:;
+    _sm_expr1 = high * 16;
+    byte = _sm_expr1 + digit;
+    simse_str_append(out, byte);
+    high = -1;
+    L19:;
+    i = i + 1;
+    goto L1;
+    L2:;
+    return out;
+}
+// src/resources/Resources.kt
+Str ns16_resQuoteBinary(Str bytes) {
+    Str out;
+    Int _sm_expr1, _sm_expr2, i, byte, _sm_expr11, _sm_expr12, _sm_expr13;
+    Bool _sm_expr4;
+    Char ch, high, mid, low;
+    out = __sm_stringTable[1124];
+    _sm_expr1 = simse_lenOf(bytes);
+    _sm_expr2 = _sm_expr1 + 2;
+    simse_str_reserve(out, _sm_expr2);
+    i = 0;
+    L1:;
+    _sm_expr1 = simse_lenOf(bytes);
+    _sm_expr4 = i < _sm_expr1;
+    if (!(_sm_expr4)) goto L2;
+    ch = simse_str_charAt(bytes, i);
+    byte = ch;
+    _sm_expr4 = byte < 0;
+    if (_sm_expr4) goto L3;
+    goto L4;
+    L3:;
+    byte = byte + 256;
+    L4:;
+    _sm_expr4 = ch == '\\';
+    if (_sm_expr4) goto L5;
+    goto L6;
+    L5:;
+    simse_str_appendStr(out, __sm_stringTable[1007]);
+    goto L14;
+    L6:;
+    _sm_expr4 = ch == '\"';
+    if (_sm_expr4) goto L8;
+    goto L9;
+    L8:;
+    simse_str_appendStr(out, __sm_stringTable[1006]);
+    goto L14;
+    L9:;
+    _sm_expr4 = byte >= 32;
+    if (_sm_expr4) goto L13;
+    goto L12;
+    L13:;
+    _sm_expr4 = byte <= 126;
+    if (_sm_expr4) goto L11;
+    goto L12;
+    L11:;
+    simse_str_append(out, ch);
+    goto L14;
+    L12:;
+    _sm_expr1 = byte / 64;
+    high = '0' + _sm_expr1;
+    _sm_expr11 = byte / 8;
+    _sm_expr12 = _sm_expr11 % 8;
+    mid = '0' + _sm_expr12;
+    _sm_expr13 = byte % 8;
+    low = '0' + _sm_expr13;
+    simse_str_append(out, '\\');
+    simse_str_append(out, high);
+    simse_str_append(out, mid);
+    simse_str_append(out, low);
+    L14:;
+    i = i + 1;
+    goto L1;
+    L2:;
+    simse_str_append(out, '"');
+    return out;
+}
+// src/resources/Resources.kt
 Bool ns16_resIsUnderline(Str* line) {
     Str text;
     Int _sm_expr1, i;
@@ -78521,9 +78877,9 @@ Str ns16_resUnquote(Str text) {
 // src/resources/Resources.kt
 List<ns16_ResourceItem> ns16_resParseText(Str* text) {
     Str* _sm_base1, * _sm_base2, * _sm_base3, * _sm_base4, * _sm_base5, * _sm_base6, * _sm_base7,
-        * _sm_base8, * _sm_base10, * _sm_base11, * _sm_base12, * _sm_base13, * _sm_base14;
-    Str _sm_base9, section, _sm_expr8, line, _sm_expr12, _sm_expr13, key, _sm_expr22, rest, _sm_expr25,
-        _sm_expr26, value, _sm_expr30, body, _sm_expr47;
+        * _sm_base9, * _sm_base10, * _sm_base12, * _sm_base13, * _sm_base14, * _sm_base15, * _sm_base16;
+    Str _sm_base8, _sm_base11, section, _sm_expr8, line, _sm_expr12, _sm_expr13, key, _sm_expr22, rest,
+        _sm_expr25, _sm_expr26, value, _sm_expr30, body, _sm_expr47;
     List<Str> lines;
     List<ns16_ResourceItem> entries;
     Bool compileOnly, binary, _sm_expr2, _sm_expr14, entryCompileOnly, _sm_expr16, entryBinary;
@@ -78573,7 +78929,9 @@ List<ns16_ResourceItem> ns16_resParseText(Str* text) {
     L4:;
     _sm_base6 = simse_addressOf(lines[i]);
     line = trim(_sm_base6);
-    colon = simse_str_find(line, __sm_stringTable[1159]);
+    _sm_base8 = __sm_stringTable[1159];
+    _sm_base7 = &_sm_base8;
+    colon = indexOf(simse_addressOf(line), _sm_base7);
     _sm_expr2 = colon <= 0;
     if (_sm_expr2) goto L8;
     goto L9;
@@ -78583,11 +78941,11 @@ List<ns16_ResourceItem> ns16_resParseText(Str* text) {
     L9:;
     _sm_expr12 = substr(simse_addressOf(line), 0, colon);
     _sm_expr13 = trim(simse_addressOf(_sm_expr12));
-    _sm_base7 = &_sm_expr13;
-    markedKey = ns16_resMarkedName(_sm_base7);
-    _sm_base8 = &section;
-    _sm_base9 = markedKey.name;
-    key = ns16_resQualifiedKey(_sm_base8, _sm_base9);
+    _sm_base9 = &_sm_expr13;
+    markedKey = ns16_resMarkedName(_sm_base9);
+    _sm_base10 = &section;
+    _sm_base11 = markedKey.name;
+    key = ns16_resQualifiedKey(_sm_base10, _sm_base11);
     _sm_expr14 = compileOnly;
     if (_sm_expr14) goto _sm_sc1;
     _sm_expr2 = markedKey.compileOnly;
@@ -78626,8 +78984,8 @@ List<ns16_ResourceItem> ns16_resParseText(Str* text) {
     if (_sm_expr2) goto L15;
     goto L13;
     L15:;
-    _sm_base10 = simse_addressOf(lines[j]);
-    _sm_expr30 = trim(_sm_base10);
+    _sm_base12 = simse_addressOf(lines[j]);
+    _sm_expr30 = trim(_sm_base12);
     _sm_expr1 = simse_lenOf(_sm_expr30);
     _sm_expr2 = _sm_expr1 == 0;
     if (_sm_expr2) goto L14;
@@ -78641,9 +78999,9 @@ List<ns16_ResourceItem> ns16_resParseText(Str* text) {
     if (_sm_expr2) goto L18;
     goto L17;
     L18:;
-    _sm_base12 = simse_addressOf(lines[j]);
-    _sm_base11 = _sm_base12;
-    _sm_expr2 = ns16_resIsFenceStart(_sm_base11);
+    _sm_base14 = simse_addressOf(lines[j]);
+    _sm_base13 = _sm_base14;
+    _sm_expr2 = ns16_resIsFenceStart(_sm_base13);
     if (_sm_expr2) goto L16;
     goto L17;
     L16:;
@@ -78652,9 +79010,9 @@ List<ns16_ResourceItem> ns16_resParseText(Str* text) {
     _sm_expr1 = simse_lenOf(lines);
     _sm_expr2 = j < _sm_expr1;
     if (!(_sm_expr2)) goto L20;
-    _sm_base14 = simse_addressOf(lines[j]);
-    _sm_base13 = _sm_base14;
-    _sm_expr2 = ns16_resIsFenceEnd(_sm_base13);
+    _sm_base16 = simse_addressOf(lines[j]);
+    _sm_base15 = _sm_base16;
+    _sm_expr2 = ns16_resIsFenceEnd(_sm_base15);
     if (_sm_expr2) goto L21;
     goto L22;
     L21:;
@@ -78705,7 +79063,7 @@ Str ns16_resValueText(Str value, Bool binary) {
     L1:;
     return value;
     L2:;
-    _sm_expr2 = simse_resHexToBytes(value);
+    _sm_expr2 = ns16_resHexToBytes(value);
     return _sm_expr2;
 }
 // src/resources/Resources.kt
@@ -78897,7 +79255,7 @@ List<Str> ns16_resStoredLiterals(List<ns16_ResourceItem>* entries) {
     L5:;
     _sm_base7 = simse_addressOf((*entries)[i]);
     _sm_base6 = _sm_base7->value;
-    _sm_expr7 = simse_resQuoteBinary(_sm_base6);
+    _sm_expr7 = ns16_resQuoteBinary(_sm_base6);
     simse_list_append(out, _sm_expr7);
     goto L7;
     L6:;
@@ -94017,16 +94375,6 @@ inline List<Str> simse_str_split(const Str& self, Char separator) {
     return parts;
 }
 
-inline Int simse_str_find(const Str& self, const Str& sub) {
-    Int found = self.find(sub);
-    return found == Str::npos ? -1 : found;
-}
-
-inline Int simse_str_lastIndexOf(const Str& self, const Str& sub) {
-    Int found = self.rfind(sub);
-    return found == Str::npos ? -1 : found;
-}
-
 inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
     if (from.empty()) return self;
     Str result;
@@ -94041,18 +94389,6 @@ inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
         result += to;
         pos = found + from.size();
     }
-    return result;
-}
-
-inline Opt<Int> simse_str_toInt(const Str& self) {
-    if (self.empty()) return Opt<Int>();
-    Int value = 0;
-    const char* begin = self.data();
-    const char* end = begin + self.size();
-    std::from_chars_result parsed = std::from_chars(begin, end, value);
-    if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Int>();
-    Opt<Int> result;
-    result.setValue(value);
     return result;
 }
 
@@ -94467,47 +94803,6 @@ Bool FileStream::nextLineSpan(Int* from, Int* count) {
 void FileStream::take(Str* buffer, const char* text, Int count) {
     buffer->resize(count);
     if (count > 0) std::memcpy(buffer->data(), text, (std::size_t) count);
-}
-
-inline Str simse_resHexToBytes(const Str& self) {
-    Str out;
-    out.reserve(self.size() / 2);
-    Int high = -1;
-    for (Char ch : self) {
-        if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') continue;
-        Int digit = -1;
-        if (ch >= '0' && ch <= '9') digit = ch - '0';
-        else if (ch >= 'a' && ch <= 'f') digit = ch - 'a' + 10;
-        if (digit < 0) break;
-        if (high < 0) {
-            high = digit;
-        } else {
-            out.push_back((char) (high * 16 + digit));
-            high = -1;
-        }
-    }
-    return out;
-}
-
-inline Str simse_resQuoteBinary(const Str& self) {
-    Str out = "\"";
-    for (Char ch : self) {
-        Int byte = (Int) (unsigned char) ch;
-        if (ch == '\\') {
-            out.append("\\\\");
-        } else if (ch == '\"') {
-            out.append("\\\"");
-        } else if (byte >= 0x20 && byte <= 0x7e) {
-            out.push_back((char) byte);
-        } else {
-            out.push_back('\\');
-            out.push_back((char) ('0' + ((byte >> 6) & 7)));
-            out.push_back((char) ('0' + ((byte >> 3) & 7)));
-            out.push_back((char) ('0' + (byte & 7)));
-        }
-    }
-    out.push_back('"');
-    return out;
 }
 
 template <class T>

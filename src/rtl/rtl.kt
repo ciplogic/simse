@@ -279,15 +279,68 @@ fun strAddInt(target: *Char, value: Int64, count: Int): Unit
 @SmGen("res", "listops", "simse_str_reserve")
 fun reserve(this: Str, count: Int): Unit
 
+// The first index at or after `from` where `sub` occurs, or -1 (the language's spelling of
+// npos). Written over the machine intrinsics, the way libstdc++'s own `std::string::find`
+// is: `memFindByte` (`memchr`) jumps to each candidate first byte, `memCompare`
+// (`memcmp`) confirms the rest in word loads. An empty `sub` occurs at `from` itself when
+// `from` is a legal position, which is `std::string`'s answer too.
+fun Str.findFrom(sub: Str, from: Int): Int {
+    val len: Int = this.size()
+    val needle: Int = sub.size()
+    if (needle == 0) {
+        if (from > len) {
+            return 0 - 1
+        }
+        return from
+    }
+    if (needle > len || from > len - needle) {
+        return 0 - 1
+    }
+    val bytes: *Char = strBytes(this)
+    val subBytes: *Char = strBytes(sub)
+    var i: Int = memFindByte(bytes, from, len - from, subBytes[0])
+    while (i >= 0 && i + needle <= len) {
+        if (needle == 1 || memCompare(bytes, i, subBytes, 0, needle) == 0) {
+            return i
+        }
+        i = memFindByte(bytes, i + 1, len - i - 1, subBytes[0])
+    }
+    return 0 - 1
+}
+
 // `find` returns -1 when `sub` is absent (the language's spelling of npos).
-@SmGen("res", "strops", "simse_str_find")
-borrow fun find(this: Str, sub: Str): Int
+fun Str.find(sub: Str): Int {
+    return this.findFrom(sub, 0)
+}
 
-@SmGen("res", "strops", "simse_str_find")
-borrow fun indexOf(this: Str, sub: Str): Int
+// `indexOf` is the other spelling of `find`.
+fun Str.indexOf(sub: Str): Int {
+    return this.findFrom(sub, 0)
+}
 
-@SmGen("res", "strops", "simse_str_lastIndexOf")
-borrow fun lastIndexOf(this: Str, sub: Str): Int
+// The last index of `sub`, or -1; an empty `sub` is found at the end, as `rfind` answers.
+fun Str.lastIndexOf(sub: Str): Int {
+    val len: Int = this.size()
+    val needle: Int = sub.size()
+    if (needle == 0) {
+        return len
+    }
+    if (needle > len) {
+        return 0 - 1
+    }
+    val bytes: *Char = strBytes(this)
+    val subBytes: *Char = strBytes(sub)
+    var i: Int = len - needle
+    while (i >= 0) {
+        if (bytes[i] == subBytes[0]
+            && (needle == 1 || memCompare(bytes, i, subBytes, 0, needle) == 0)
+        ) {
+            return i
+        }
+        i = i - 1
+    }
+    return 0 - 1
+}
 
 // `Str.substr(start, len)` clamps `start` to [0, size]; a `len` of -1 (or one running
 // past the end) takes the rest. One block copy (`setBytes`), not a per-byte append.
@@ -420,9 +473,58 @@ data fun Str.isEmpty(): Bool {
     return this.size() == 0
 }
 
-// Whole-string parses; a malformed string yields `Opt.none()`, not an exception.
-@SmGen("res", "strops", "simse_str_toInt")
-borrow fun toInt(this: Str): Opt<Int>
+// Whole-string parse of a signed 32-bit integer; a malformed string (or one with a trailing
+// remainder, or a value outside the range) yields `Opt.none()`, not an exception. The
+// semantics are `std::from_chars`'s, which this replaces: an optional `-` and nothing else
+// in the way of a sign (a leading `+` fails), no whitespace skipped, at least one digit,
+// the *whole* string consumed, and overflow is a refusal. The digits accumulate *negated*
+// in an `Int64`, so `-2147483648` forms without passing through `+2147483648`, and the
+// running value is clamped the moment it can no longer come back inside the range.
+fun Str.toInt(): Opt<Int> {
+    val len: Int = this.size()
+    if (len == 0) {
+        return simse_optNone<Int>()
+    }
+    val bytes: *Char = strBytes(this)
+    var i: Int = 0
+    var negative: Bool = false
+    if (bytes[0] == '-') {
+        negative = true
+        i = 1
+    }
+    if (i == len) {
+        return simse_optNone<Int>()
+    }
+    var value: Int64 = 0
+    var overflow: Bool = false
+    while (i < len) {
+        val ch: Char = bytes[i]
+        if (ch < '0' || ch > '9') {
+            return simse_optNone<Int>()
+        }
+        if (!overflow) {
+            if (value < 0 - 214748364) {
+                overflow = true
+            } else {
+                val digit: Int = ch - '0'
+                value = value * 10 - digit
+            }
+        }
+        i = i + 1
+    }
+    if (overflow) {
+        return simse_optNone<Int>()
+    }
+    if (!negative && value < 0 - 2147483647) {
+        return simse_optNone<Int>()
+    }
+    if (negative) {
+        val small: Int = value
+        return simse_optSome<Int>(small)
+    }
+    val big: Int = 0 - value
+    return simse_optSome<Int>(big)
+}
 
 @SmGen("res", "strops", "simse_str_toFloat")
 borrow fun toFloat(this: Str): Opt<Float64>
@@ -448,6 +550,14 @@ fun Char.isSpace(): Bool {
     return this == ' ' || this == '\t' || this == '\n' || this == '\r'
 }
 
+// The numeric and `Bool` spellings of `toString` stay natives over `std::to_string`, and that
+// is deliberate rather than unfinished: a *body* extension is emitted only when the program
+// reaches it (`reachesPreludeBody`, src/codegen/CgEmitType.kt), which wants the receiver's
+// type named somewhere - and a program holds and prints scalar values it never spells
+// (`println(n.toString())` on an inferred local, a protocol instantiated on `Int16`). The
+// reach collector then drops the body while the call stays, which is a C++ error at the call
+// site. `find`/`lastIndexOf`/`toInt` share one receiver type (`Str`), so their group falls
+// into the rule's "no receiver named - emit the whole group" arm; the scalars would not.
 @SmGen("res", "listops", "simse_int_toString")
 borrow fun toString(this: Int): Str
 

@@ -337,7 +337,6 @@ static struct __SmStringTableInitType {
 } __sm_stringTableInit;
 
 #include <cerrno>
-#include <charconv>
 #include <cstddef>
 #include <cstdlib>
 #include <system_error>
@@ -348,13 +347,8 @@ Char simse_str_charAt(const Str& self, Int index);
 List<Str> simse_str_split(const Str& self, const Str& separator);
 List<Str> simse_str_split(const Str& self, Char separator);
 
-Int simse_str_find(const Str& self, const Str& sub);
-
-Int simse_str_lastIndexOf(const Str& self, const Str& sub);
-
 Str simse_str_replace(const Str& self, const Str& from, const Str& to);
 
-Opt<Int> simse_str_toInt(const Str& self);
 Opt<Float64> simse_str_toFloat(const Str& self);
 
 void simse_str_initByValue(Str& self, const Str& value);
@@ -674,16 +668,6 @@ inline List<Str> simse_str_split(const Str& self, Char separator) {
     return parts;
 }
 
-inline Int simse_str_find(const Str& self, const Str& sub) {
-    Int found = self.find(sub);
-    return found == Str::npos ? -1 : found;
-}
-
-inline Int simse_str_lastIndexOf(const Str& self, const Str& sub) {
-    Int found = self.rfind(sub);
-    return found == Str::npos ? -1 : found;
-}
-
 inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
     if (from.empty()) return self;
     Str result;
@@ -698,18 +682,6 @@ inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
         result += to;
         pos = found + from.size();
     }
-    return result;
-}
-
-inline Opt<Int> simse_str_toInt(const Str& self) {
-    if (self.empty()) return Opt<Int>();
-    Int value = 0;
-    const char* begin = self.data();
-    const char* end = begin + self.size();
-    std::from_chars_result parsed = std::from_chars(begin, end, value);
-    if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Int>();
-    Opt<Int> result;
-    result.setValue(value);
     return result;
 }
 
