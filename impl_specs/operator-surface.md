@@ -57,11 +57,7 @@ compound assignment: `counter += 1` on a `counter: *Int` reads and writes throug
 pointer (`LinearFormStmt`'s `assignCompound`, the params' declared types from
 `ilFunctionFor`), because the statement position cannot even parse the explicit
 `*p += x` spelling. Never pointer arithmetic - the language has none. Pinned by
-`stress/compound-pointer`. **Known next**: the `Str` case (`out: *Str; out += x`)
-additionally needs the unfused `plus` to be emitted for programs that reach it through
-this path (the fused `a += b` on a value never names `plus`, so its program reach is
-untested there) - the `plusAssign` native alias fixes it and covers lists in the same
-step.
+`stress/compound-pointer`.
 
 ## Phase C — what would complete the set (partly landed)
 
@@ -74,10 +70,15 @@ step.
   `List<T>`'s is the template. So `out += part` and `parts += item` are the
   in-place append — no copy, no fusion dependency — and `n += 1` falls back to the
   binary fold with exactly yesterday's emission. Pinned by
-  `stress/compound-plus-assign`. **Still open**: the handle-typed parameter
-  (`out: *Str; out += x`) folds through the pointee, which for `Str` needs the
-  unfused `plus` emitted — the emitter's `+=` arm wants a local-slot receiver, and
-  a pointer's in-place spelling needs the call built on the pointer itself.
+  `stress/compound-plus-assign`. **The handle-typed parameter landed with it**:
+  `out: *Str; out += x` lowers to the synthetic `out.plusAssign(x)`, and the
+  emitter's own native resolution adapts the pointer receiver (`(*out)`) the way
+  `out.append(ch)` always had - the in-place append through out-parameters for
+  strings, chars and lists alike, while a `*Int` keeps the scalar fold (no
+  `plusAssign` matches, the fallback's point). The decision lives where the
+  natives table is: `ilFunctionFor` unifies each handle parameter's pointee
+  against the `plusAssign` declarations into `plusAssignParams`, and the
+  extractor's handle arm reads it (lambdas inherit the enclosing set).
 - **`in` / `contains` as an operator**: `x in parts` → `parts.contains(x)`.
   Sugar only; `contains` exists.
 - **Ranges (`..`) as index slices** (`s[a..b]` for `substr`): stays deferred with
