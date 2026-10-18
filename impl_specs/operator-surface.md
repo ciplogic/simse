@@ -26,15 +26,28 @@ spelled `append`/`appendStr` where `+=` is both legal and efficient.
 - A missed sweep site degrades gracefully: the checker's permissiveness falls back
   to the C++ subscript, same unchecked semantics as before.
 
-## Phase B — the assignment spelling (sized, not started)
+## Phase B — the assignment spelling (attempted, rejected as a textual sweep)
 
-Sweep `out.append(ch)` → `out += ch` and `out.appendStr(part)` → `out += part` in
-prelude and compiler sources. The desugaring is the fused shape, so the hot loops
-in `intToStr`/`fmtStr` keep their per-iteration cost *if* the fusion treats
-statement-local `a += b` as it does `a = a + b` (it does — that is the probe's
-emission). **Lists are explicitly out**: `list += item` would need a `List.plus`
-that copies per element; `append` stays the in-place spelling there unless a
-`plusAssign`-style in-place operator lands first (Phase C).
+`out += ch` and `out += part` are verified efficient by emission (the fused
+resize-and-write; `Char` operands included). But the sweep of `append`/`appendStr`
+call sites to `+=` **cannot be done textually on this tree**, for three concrete
+reasons the attempt found:
+
+1. **Code-as-text files** — the emitters and generators build Simse or C++ inside
+   string literals (`JsonGen`, `IlEmit`, the profiling prologue); a rewrite that
+   understands Simse string literals still corrupts text that *generates* string
+   literals, because the two nest.
+2. **`*Str` pointer receivers** — `jsonWriteQuoted(out: *Str)`'s `out.append('"')`
+   would have to become `*out += '"'`; sweeping it to `out += '"'` assigns the
+   pointer. Telling the two apart needs types, not text.
+3. **`List<Char>` collisions** — `.append('x')` is legal on both, so char-literal
+   sites are only safe in files the type never appears in.
+
+The way through is one of: a type-aware refactor tool (none exists), a manual
+file-by-file pass outside code-generating files — or doing **Phase C's `plusAssign`
+first**, which subsumes the sweep's purpose: `+=` resolving to the in-place native
+(`simse_str_appendStr`, `simse_list_append`) is both the optimal string path and
+the one that covers lists, leaving nothing to migrate for spelling's sake.
 
 ## Phase C — what would complete the set (deferred, with reasons)
 
