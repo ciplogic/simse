@@ -211,6 +211,21 @@ fun append(this: Str, value: Char): Unit
 @SmGen("res", "listops", "simse_str_appendStr", "mutates")
 fun appendStr(this: Str, value: Str): Unit
 
+// `out += value`: the compound assignment resolved as the in-place append (`specs/
+// functions.md`'s operator conventions; the emitter prefers this declaration and falls
+// back to `out = out + value` where no `plusAssign` matches). Both spellings name one C++
+// symbol whose overloads C++ picks by the value's type - the same-name trick `spanOf`
+// avoids, safe here because both declarations share the symbol.
+@SmGen("res", "listops", "simse_str_plusAssign", "mutates")
+operator fun plusAssign(this: Str, value: Str): Unit
+
+@SmGen("res", "listops", "simse_str_plusAssign", "mutates")
+operator fun plusAssign(this: Str, value: Char): Unit
+
+// `parts += item`: the list's in-place append under the same convention.
+@SmGen("res", "listops", "simse_list_plusAssign", "mutates")
+operator fun plusAssign<T>(this: List<T>, value: T): Unit
+
 // The same append for a borrowed text (`*Str`): nothing is copied on the way.
 @SmGen("res", "listops", "simse_str_appendStrPtr", "mutates")
 fun appendStrPtr(this: Str, value: *Str): Unit

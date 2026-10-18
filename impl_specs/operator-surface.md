@@ -63,12 +63,21 @@ this path (the fused `a += b` on a value never names `plus`, so its program reac
 untested there) - the `plusAssign` native alias fixes it and covers lists in the same
 step.
 
-## Phase C — what would complete the set (deferred, with reasons)
+## Phase C — what would complete the set (partly landed)
 
-- **`plusAssign` (in-place `+=` for containers)**: a `List<T>.plusAssign(value)`
-  desugaring target so `parts += item` appends in place. Needs a sema rule
-  (`+=` prefers `plusAssign`, falls back to `a = a + b`) — the one real language
-  change in this file, and the key that would let Phase B cover lists too.
+- **`plusAssign` (in-place `+=`) — LANDED for value targets**: `+=` travels as its
+  own op into the IL and the emitter resolves a matching `plusAssign` declaration
+  before folding to the binary (`IlEmit`'s `+=` arm). The prelude declares it as
+  native aliases over the append symbols — both `Str` spellings name ONE C++ symbol
+  whose overloads C++ picks by the right operand's type (the same-name trick
+  `spanOf` avoids, safe because the declarations share the symbol), and
+  `List<T>`'s is the template. So `out += part` and `parts += item` are the
+  in-place append — no copy, no fusion dependency — and `n += 1` falls back to the
+  binary fold with exactly yesterday's emission. Pinned by
+  `stress/compound-plus-assign`. **Still open**: the handle-typed parameter
+  (`out: *Str; out += x`) folds through the pointee, which for `Str` needs the
+  unfused `plus` emitted — the emitter's `+=` arm wants a local-slot receiver, and
+  a pointer's in-place spelling needs the call built on the pointer itself.
 - **`in` / `contains` as an operator**: `x in parts` → `parts.contains(x)`.
   Sugar only; `contains` exists.
 - **Ranges (`..`) as index slices** (`s[a..b]` for `substr`): stays deferred with

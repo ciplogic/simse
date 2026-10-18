@@ -182,6 +182,10 @@ Int simse_array_count(const Array<T>& self);
 
 void simse_str_append(Str& self, Char value);
 void simse_str_appendStr(Str& self, const Str& value);
+void simse_str_plusAssign(Str& self, const Str& value);
+void simse_str_plusAssign(Str& self, Char value);
+template <class T>
+void simse_list_plusAssign(List<T>& self, const std::type_identity_t<T>& value);
 void simse_str_appendStrPtr(Str& self, const Str* value);
 void simse_str_reserve(Str& self, Int count);
 ```
@@ -225,6 +229,22 @@ inline void simse_str_append(Str& self, Char value) {
 // `out = out + text` rebuilding the whole buffer on every line (which is quadratic).
 inline void simse_str_appendStr(Str& self, const Str& value) {
     self.append(value);
+}
+
+// `+=` on a `Str`: the two overloads of one symbol, so C++ picks by the right operand's
+// type (the two Simse declarations name this same symbol).
+inline void simse_str_plusAssign(Str& self, const Str& value) {
+    self.append(value);
+}
+
+inline void simse_str_plusAssign(Str& self, Char value) {
+    self.push_back(static_cast<char>(value));
+}
+
+// `+=` on a `List<T>`: the in-place append.
+template <class T>
+inline void simse_list_plusAssign(List<T>& self, const std::type_identity_t<T>& value) {
+    self.push_back(value);
 }
 
 // `Str.appendStrPtr(text)`: the same append for a text the caller only *borrows*, so

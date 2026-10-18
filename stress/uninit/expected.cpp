@@ -341,6 +341,10 @@ Int simse_array_count(const Array<T>& self);
 
 void simse_str_append(Str& self, Char value);
 void simse_str_appendStr(Str& self, const Str& value);
+void simse_str_plusAssign(Str& self, const Str& value);
+void simse_str_plusAssign(Str& self, Char value);
+template <class T>
+void simse_list_plusAssign(List<T>& self, const std::type_identity_t<T>& value);
 void simse_str_appendStrPtr(Str& self, const Str* value);
 void simse_str_reserve(Str& self, Int count);
 
@@ -829,6 +833,19 @@ inline void simse_str_append(Str& self, Char value) {
 
 inline void simse_str_appendStr(Str& self, const Str& value) {
     self.append(value);
+}
+
+inline void simse_str_plusAssign(Str& self, const Str& value) {
+    self.append(value);
+}
+
+inline void simse_str_plusAssign(Str& self, Char value) {
+    self.push_back(static_cast<char>(value));
+}
+
+template <class T>
+inline void simse_list_plusAssign(List<T>& self, const std::type_identity_t<T>& value) {
+    self.push_back(value);
 }
 
 inline void simse_str_appendStrPtr(Str& self, const Str* value) {

@@ -144,7 +144,9 @@ fun IlExtractor.isUnitValue(expr: *AstXmlNode): Bool {
 fun IlExtractor.assign(stmt: *AstXmlNode, target: *AstXmlNode, value: *AstXmlNode): Unit {
     val op: Str = xmlAttr(stmt, AstNodeAttributeKind.Op)
     if (isCompoundAssignOp(op)) {
-        this.assignCompound(target, compoundBinaryOp(op), value)
+        // The raw compound form travels: the emitter resolves `+=` against a `plusAssign`
+        // declaration before folding to the binary (`IlEmit`'s `+=` arm).
+        this.assignCompound(target, op, value)
         return
     }
     val targetKind: AstNodeCategory = xmlKind(target)
@@ -221,6 +223,9 @@ fun IlExtractor.assign(stmt: *AstXmlNode, target: *AstXmlNode, value: *AstXmlNod
 // once, its value read out of it, folded and written back through it - so an index with a
 // side effect runs once and a write cannot land in a copy.
 fun IlExtractor.assignCompound(target: *AstXmlNode, op: Str, value: *AstXmlNode): Unit {
+    // The binary op the fold paths use (`+=` folded to `+`); the local-slot path keeps
+    // the raw form so the emitter can resolve `plusAssign` first.
+    val binOp: Str = compoundBinaryOp(op)
     val targetKind: AstNodeCategory = xmlKind(target)
     when (targetKind) {
         AstNodeCategory.ExprName -> {
@@ -232,7 +237,7 @@ fun IlExtractor.assignCompound(target: *AstXmlNode, op: Str, value: *AstXmlNode)
                 val current: Int = this.readField(target, base, field)
                 this.emit(
                     IlOpKind.SetField,
-                    ilOps3(base, field, this.fold(current, op, value, target))
+                    ilOps3(base, field, this.fold(current, binOp, value, target))
                 )
                 return
             }
@@ -260,7 +265,7 @@ fun IlExtractor.assignCompound(target: *AstXmlNode, op: Str, value: *AstXmlNode)
                         val pointer: Int = this.operandOf(target)
                         val current: Int = this.freshValueSlot(*pointee)
                         this.emit(IlOpKind.Deref, ilOps2(current, pointer))
-                        this.emit(IlOpKind.Store, ilOps2(pointer, this.fold(current, op, value, *pointee)))
+                        this.emit(IlOpKind.Store, ilOps2(pointer, this.fold(current, binOp, value, *pointee)))
                         return
                     }
                     break
@@ -282,7 +287,7 @@ fun IlExtractor.assignCompound(target: *AstXmlNode, op: Str, value: *AstXmlNode)
             val current: Int = this.readStatic(target, staticName)
             this.emit(
                 IlOpKind.SetStatic,
-                ilOps2(staticName, this.fold(current, op, value, target))
+                ilOps2(staticName, this.fold(current, binOp, value, target))
             )
             return
         }
@@ -294,14 +299,14 @@ fun IlExtractor.assignCompound(target: *AstXmlNode, op: Str, value: *AstXmlNode)
                 val baseText: Str = this.baseText(lhs)
                 val field: Int = this.poolIndex(`@baseText.@fieldName`)
                 val current: Int = this.readStatic(target, field)
-                this.emit(IlOpKind.SetStatic, ilOps2(field, this.fold(current, op, value, target)))
+                this.emit(IlOpKind.SetStatic, ilOps2(field, this.fold(current, binOp, value, target)))
                 return
             }
             // The base is located once; the read and the write both name the field on it.
             val base: Int = this.receiverOf(lhs)
             val field: Int = this.poolIndex(fieldName)
             val current: Int = this.readField(target, base, field)
-            this.emit(IlOpKind.SetField, ilOps3(base, field, this.fold(current, op, value, target)))
+            this.emit(IlOpKind.SetField, ilOps3(base, field, this.fold(current, binOp, value, target)))
             return
         }
 
@@ -311,7 +316,7 @@ fun IlExtractor.assignCompound(target: *AstXmlNode, op: Str, value: *AstXmlNode)
             val index: Int = this.operandOf(xmlChildPtr(target, AstNodeKind.Index))
             val current: Int = this.freshValueSlot(target)
             this.emit(IlOpKind.GetIndex, ilOps3(current, base, index))
-            this.emit(IlOpKind.SetIndex, ilOps3(base, index, this.fold(current, op, value, target)))
+            this.emit(IlOpKind.SetIndex, ilOps3(base, index, this.fold(current, binOp, value, target)))
             return
         }
 
@@ -320,7 +325,7 @@ fun IlExtractor.assignCompound(target: *AstXmlNode, op: Str, value: *AstXmlNode)
             val pointer: Int = this.operandOf(xmlChildPtr(target, AstNodeKind.Operand))
             val current: Int = this.freshValueSlot(target)
             this.emit(IlOpKind.Deref, ilOps2(current, pointer))
-            this.emit(IlOpKind.Store, ilOps2(pointer, this.fold(current, op, value, target)))
+            this.emit(IlOpKind.Store, ilOps2(pointer, this.fold(current, binOp, value, target)))
             return
         }
     }

@@ -213,6 +213,46 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             i = i + 1
             continue
         }
+        if (dst >= 0 && kind == IlOpKind.BinaryOp) {
+            // `+=` resolved as an operator before the fold: a matching `plusAssign`
+            // declaration is the in-place append (`out += part` on a Str, `parts += item`
+            // on a List - src/rtl/rtl.kt names the C++), and where none matches the op
+            // falls back to the plain binary below. The compound form only ever arrives
+            // here from a *local slot* compound assignment (`assignCompound`), so the
+            // receiver is a variable the call can take by reference.
+            val opIndexPA: Int = this.ilOpOperand(op.operands, 1)
+            if (opIndexPA >= 0 && opIndexPA < il.pool.size() && il.pool[opIndexPA] == "+=") {
+                val recvPA: AstXmlNode = this.ilSlotNode(il, frame, this.ilOpOperand(op.operands, 2), 0)
+                var spelledPA: Bool = false
+                if (!xmlIsEmpty(recvPA)) {
+                    val extIndexPA: Int = this.findNativeExt("plusAssign", recvPA, 1)
+                    if (extIndexPA >= 0) {
+                        val extsPA: *List<CgNativeExt> = this.nativeExtensions.getPtr("plusAssign")
+                        val extPA: *CgNativeExt = *extsPA[extIndexPA]
+                        this.referencedNames.insert(extPA.symbol, true)
+                        val recvTextPA: Str = this.expr(recvPA, 0, xmlEmptyNode())
+                        val valuePA: AstXmlNode = this.ilOperandNode(il, frame, this.ilOpOperand(op.operands, 3), 0)
+                        val valueTextPA: Str = this.expr(valuePA, 0, xmlEmptyNode())
+                        this.ilLine(text, lvl, extPA.symbol + "(" + recvTextPA + ", " + valueTextPA + ");")
+                        spelledPA = true
+                    }
+                }
+                if (spelledPA) {
+                    i = i + 1
+                    continue
+                }
+                // No `plusAssign`: the fold, spelled here because the pool's `+=` is not a
+                // binary the expression path knows.
+                val lhsPA: AstXmlNode = this.ilOperandNode(il, frame, this.ilOpOperand(op.operands, 2), 0)
+                val rhsPA: AstXmlNode = this.ilOperandNode(il, frame, this.ilOpOperand(op.operands, 3), 0)
+                val foldPA: AstXmlNode = this.ilBinaryNode(lhsPA, "+", rhsPA)
+                val foldTextPA: Str = this.expr(foldPA, 0, xmlEmptyNode())
+                val dstNamePA: Str = il.vars[dst].name
+                this.ilLine(text, lvl, dstNamePA + " = " + foldTextPA + ";")
+                i = i + 1
+                continue
+            }
+        }
         if (dst >= 0 && kind == IlOpKind.Concat) {
             // A concatenation is a *sequence*, not one expression: one length sum, one
             // `resize`, one slot write per part (`ilConcatStatements`).

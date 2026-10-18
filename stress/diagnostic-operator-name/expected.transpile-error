@@ -1,1 +1,1 @@
-'times' is not an operator: 'get', 'set', 'compareTo', 'equals' and 'plus' are the operators
+'times' is not an operator: 'get', 'set', 'compareTo', 'equals', 'plus' and 'plusAssign' are the operators

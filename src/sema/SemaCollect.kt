@@ -64,7 +64,7 @@ fun semOperatorArity(name: *Str): Int {
     if (name == "set") {
         return 2
     }
-    if (name == "compareTo" || name == "equals" || name == "plus") {
+    if (name == "compareTo" || name == "equals" || name == "plus" || name == "plusAssign") {
         return 1
     }
     return -1
@@ -99,7 +99,7 @@ fun Analyzer.checkOperatorDecl(decl: *AstXmlNode, inClass: Bool): Unit {
     if (arity < 0) {
         this.diag(
             line, column,
-            `'@name' is not an operator: 'get', 'set', 'compareTo', 'equals' and 'plus' are the operators`
+            `'@name' is not an operator: 'get', 'set', 'compareTo', 'equals', 'plus' and 'plusAssign' are the operators`
         )
         return
     }
