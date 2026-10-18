@@ -95,19 +95,15 @@ fun ilConcatUseCounts(il: *IlBody): List<Int> {
     return counts
 }
 
-// Whether a format text is one the fusion may split: a string literal, and with no `\` in
-// it - an escape could hide a `|` or a quote, and re-encoding the pieces would need a
-// second decoder for the one `cgLiteralByteLength` already is.
+// Whether a format text is one the fusion may split: a string literal. Escapes are fine,
+// because the split never decodes: the pieces are the source's own substrings re-pooled as
+// written (so each decodes exactly as the whole literal would have), and the item count is
+// checked against the *source's* separator bytes - an escape cannot hide one, since the
+// bytes of `\x7C` are not a `|` byte, and a template whose source and decoded counts could
+// disagree is one whose separators were never spelled as separators at all.
 fun ilConcatSplittable(text: *Str): Bool {
     if (text.size() < 2 || text[0] != '\"' || text[text.size() - 1] != '\"') {
         return false
-    }
-    var i: Int = 1
-    while (i < text.size() - 1) {
-        if (text[i] == '\\') {
-            return false
-        }
-        i = i + 1
     }
     return true
 }

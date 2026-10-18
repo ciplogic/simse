@@ -2085,8 +2085,6 @@ Int ns1_partRawStrings() {
     Str* _sm_base1, * _sm_base2, * _sm_base4;
     Str _sm_base3, text, empty, quoted, who, _sm_expr10, _sm_expr11, _sm_expr12, _sm_expr13, _sm_expr14,
         _sm_expr15, _sm_expr16, _sm_expr17, _sm_expr18, _sm_expr20, multi, piped, plain;
-    List<Str> _sm_base25, _sm_base27;
-    List<Str>* _sm_base26, * _sm_base28;
     Int _sm_expr1, _sm_expr2, _sm_when1_n, _sm_expr9, n;
     Bool _sm_expr3, _sm_expr5, _sm_expr6, _sm_expr7;
     Span<Char> _sm_expr4, _sm_when1_v;
@@ -2204,13 +2202,21 @@ Int ns1_partRawStrings() {
     __sm_catP = __sm_catP + who.size();
     std::memcpy(__sm_catP, " |", 2);
     simse_println((_sm_expr20), stdout);
-    _sm_base25 = List<Str>{who, who};
-    _sm_base26 = &_sm_base25;
-    multi = fmtStrWith('@', __sm_stringTable[5], _sm_base26);
+    multi.resize(14 + who.size() + who.size());
+    __sm_catP = simse_str_data(&multi);
+    std::memcpy(__sm_catP, "first ", 6);
+    __sm_catP = __sm_catP + 6;
+    std::memcpy(__sm_catP, who.data(), who.size());
+    __sm_catP = __sm_catP + who.size();
+    std::memcpy(__sm_catP, "\nsecond ", 8);
+    __sm_catP = __sm_catP + 8;
+    std::memcpy(__sm_catP, who.data(), who.size());
     simse_println((multi), stdout);
-    _sm_base27 = List<Str>{who};
-    _sm_base28 = &_sm_base27;
-    piped = fmtStrWith('@', __sm_stringTable[21], _sm_base28);
+    piped.resize(4 + who.size());
+    __sm_catP = simse_str_data(&piped);
+    std::memcpy(__sm_catP, "x|y\n", 4);
+    __sm_catP = __sm_catP + 4;
+    std::memcpy(__sm_catP, who.data(), who.size());
     simse_println((piped), stdout);
     plain = __sm_stringTable[37];
     simse_println((plain), stdout);

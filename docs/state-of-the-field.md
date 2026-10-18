@@ -90,7 +90,7 @@ program a user would try to write:
 | Float printing | `println` goes through C++'s default formatting | format manually; a defined shortest-round-trip rule is on the roadmap |
 | Error messages | position and message, no source excerpt or caret | read the generated C++ next to it |
 | Confusing overloads | a lambda argument that fits both a plain `T` and a callable parameter of the same-named declarations is reported instead of silently picking the plain one | pass the instantiation explicitly (`pick<Int>(...)`) |
-| Vocabulary | no `foreach` over a container (only `for` over a machine), no `when` pattern labels, no default parameter values, no capture-by-reference, no `Set`, no `map`/`filter` | `while` + `Span`, explicit code, `List` helpers; interpolation is `@name` in a backtick string |
+| Vocabulary | no `foreach` over a container (only `for` over a machine), no `when` pattern labels, no default parameter values, no capture-by-reference, no `Set`, no `map`/`filter` | `while` + `Span`, explicit code, `List` helpers; interpolation is `@name` in a backtick string or `$name`/`${expr}` in a quoted one |
 | Ownership and borrowing | `&x` on a local boxes a *copy*, so a handle does not alias the local; `&T` cycles are not collected | borrow with `*x` (a raw pointer) when you mean "the original"; break cycles by nulling a handle |
 
 ## What is missing
@@ -103,8 +103,9 @@ these):
    Simse), a state machine is its own identity, and ranges (`for (i in 1..5)`, with
    `a until b`, `a downTo b`, `r step n`) carry theirs (`src/rtl/Range.kt`). A
    `Dictionary` is next; walking one still means `for (k in d.keys())`.
-2. **String formatting** - `fmtStr`/`fmtStrWith` and `@name`/`@(name)` interpolation in a
-   backtick string cover the template case, and a protocol (`Printable`) is now the way to
+2. **String formatting** - `fmtStr`/`fmtStrWith` and interpolation in both spellings -
+   `@name` in a backtick string, Kotlin's `$name`/`${expr}` in an ordinary one - cover the
+   template case, and a protocol (`Printable`) is now the way to
    write your own type's rendering - but the prelude protocols and a `println` that goes
    through them are not there yet, so values of a `data class` are still built with `+` and
    `toString()`.

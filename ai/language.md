@@ -82,8 +82,10 @@ prelude values with `iterValues`; `specs/built-in-types.md`, "Ranges"), and `x i
 `x !in c` is the membership test (`c.contains(x)`). **Not implemented**: `Dictionary`
 iteration (walk `keys()`), `break`/`continue` labels, `switch`.
 
-String interpolation is a backtick string: `` `n=@n` `` and `` `@(a+b)` ``; a literal `@` in an
-interpolating string is a diagnostic. `+` concatenates `Str`; `fmtStr("|.|", a, b)` builds one
+String interpolation has two spellings: a backtick string `` `n=@n` `` / `` `@(name)` ``, and
+Kotlin's `$name` / `${expr}` in an ordinary quoted string (`"n is $n"`, `"sum ${a + b}"`). A
+literal `@` in an interpolating backtick string is a diagnostic; a `$` that starts no item is
+a literal dollar (`\$` when the next byte would start one). `+` concatenates `Str`; `fmtStr("|.|", a, b)` builds one
 buffer (prefer it to a chain of `+`).
 
 ## Functions, extensions, lambdas

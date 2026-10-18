@@ -20099,8 +20099,6 @@ void ns1_emitStringTable(ns1_Emitter* self) {
     ns1_StringTable* _sm_base1, * _sm_base2, * _sm_base3, * _sm_base11;
     Str* _sm_base4;
     List<Int>* _sm_base5, * _sm_base6, * _sm_base7, * _sm_base8, * _sm_base12, * _sm_base15;
-    List<Str> _sm_base18;
-    List<Str>* _sm_base19;
     Int _sm_expr1, count, total, previousStart, previousLength, i, length, start, _sm_expr5, _sm_expr6,
         worst, value, _sm_value_2, _sm_expr19, _sm_expr20, _sm_expr21;
     Bool _sm_expr2;
@@ -20252,9 +20250,13 @@ void ns1_emitStringTable(ns1_Emitter* self) {
     *__sm_catP = (char) (';');
     ns1_line(self, 0, _sm_expr24);
     totalText = toString(simse_addressOf(total));
-    _sm_base18 = List<Str>{totalText};
-    _sm_base19 = &_sm_base18;
-    _sm_expr25 = fmtStrWith('@', __sm_stringTable[24], _sm_base19);
+    _sm_expr25.resize(96 + totalText.size());
+    __sm_catP = simse_str_data(&_sm_expr25);
+    std::memcpy(__sm_catP, "static_assert(sizeof(__sm_stringPool) - 1 == ", 45);
+    __sm_catP = __sm_catP + 45;
+    std::memcpy(__sm_catP, totalText.data(), totalText.size());
+    __sm_catP = __sm_catP + totalText.size();
+    std::memcpy(__sm_catP, ", \"the string pool and its length index disagree\");", 51);
     ns1_line(self, 0, _sm_expr25);
     ns1_line(self, 0, __sm_stringTable[112]);
     ns1_line(self, 0, __sm_stringTable[191]);
@@ -37232,8 +37234,6 @@ ns3_SourceGenTransform ns3_ktGen(ns3_SourceGenContext* ctx) {
     ns3_FullCompiledState* _sm_base2;
     Str* _sm_base3, * _sm_base4, * _sm_base10, * _sm_base13;
     Str _sm_base5, _sm_base9, section, key, source;
-    List<Str> _sm_base6;
-    List<Str>* _sm_base7;
     ns3_SourceGenPhase _sm_expr1, _sm_expr2;
     Bool _sm_expr3;
     ns3_SourceGenTransform _sm_expr4;
@@ -37265,9 +37265,17 @@ ns3_SourceGenTransform ns3_ktGen(ns3_SourceGenContext* ctx) {
     if (_sm_expr3) goto L3;
     goto L4;
     L3:;
-    _sm_base6 = List<Str>{section, key};
-    _sm_base7 = &_sm_base6;
-    _sm_base5 = fmtStr(__sm_stringTable[97], _sm_base7);
+    _sm_base5.resize(52 + section.size() + key.size());
+    __sm_catP = simse_str_data(&_sm_base5);
+    std::memcpy(__sm_catP, "no source for @SmGen(\"kt\", \"", 28);
+    __sm_catP = __sm_catP + 28;
+    std::memcpy(__sm_catP, section.data(), section.size());
+    __sm_catP = __sm_catP + section.size();
+    std::memcpy(__sm_catP, "\") (needs the resource ", 23);
+    __sm_catP = __sm_catP + 23;
+    std::memcpy(__sm_catP, key.data(), key.size());
+    __sm_catP = __sm_catP + key.size();
+    *__sm_catP = (char) (')');
     ctx->error = _sm_base5;
     _sm_base8 = ns3_SourceTransformation::None;
     _sm_expr4 = ns3_SourceGenTransform{_sm_base8, section};
@@ -37338,9 +37346,8 @@ ns3_SourceGenTransform ns3_nativeInvokeGen(ns3_SourceGenContext* ctx) {
 }
 // src/compiler/NativeInvokeGen.kt
 ns3_SourceGenTransform ns3_nativeInvokeDeclare(ns3_SourceGenContext* ctx) {
+    Char* __sm_catP;
     Str _sm_base1, _sm_base3, _sm_base6, _sm_expr1;
-    List<Str> _sm_base2;
-    List<Str>* _sm_base4;
     ns3_SourceTransformation _sm_base5, _sm_base9;
     Str* _sm_base7, * _sm_base8;
     Bool _sm_expr2;
@@ -37351,9 +37358,13 @@ ns3_SourceGenTransform ns3_nativeInvokeDeclare(ns3_SourceGenContext* ctx) {
     goto L2;
     L1:;
     _sm_base3 = ctx->declName;
-    _sm_base2 = List<Str>{_sm_base3};
-    _sm_base4 = &_sm_base2;
-    _sm_base1 = fmtStr(__sm_stringTable[50], _sm_base4);
+    _sm_base1.resize(71 + _sm_base3.size());
+    __sm_catP = simse_str_data(&_sm_base1);
+    std::memcpy(__sm_catP, "native: '", 9);
+    __sm_catP = __sm_catP + 9;
+    std::memcpy(__sm_catP, _sm_base3.data(), _sm_base3.size());
+    __sm_catP = __sm_catP + _sm_base3.size();
+    std::memcpy(__sm_catP, "' names no library (@SmGen(\"native\", \"<library>\", \"<symbol>\"))", 62);
     ctx->error = _sm_base1;
     _sm_base5 = ns3_SourceTransformation::None;
     _sm_expr3 = ns3_SourceGenTransform{_sm_base5, __sm_stringTable[1198]};
@@ -37651,10 +37662,8 @@ ns3_SourceGenTransform ns3_nativeInvokeEmit(ns3_SourceGenContext* ctx) {
 // src/compiler/NativeInvokeGen.kt
 Str ns3_nativeInvokeBody(Str* signature, Str* nativeSig, Str* library, Str* symbol, Str* args, Str* missing, Str* call) {
     Char* __sm_catP;
-    Str _sm_base1, _sm_base3, _sm_base6, _sm_base7, _sm_base10, _sm_base13, _sm_expr2, _sm_expr3,
-        _sm_expr4, _sm_expr6, _sm_expr8;
-    List<Str> _sm_base5;
-    List<Str>* _sm_base8;
+    Str _sm_base1, _sm_base3, _sm_base6, _sm_base7, _sm_base10, _sm_base13, _sm_expr2, _sm_expr4,
+        _sm_expr6, _sm_expr8;
     Str body;
     initByValue(simse_addressOf(body));
     _sm_base1 = *(signature);
@@ -37673,13 +37682,18 @@ Str ns3_nativeInvokeBody(Str* signature, Str* nativeSig, Str* library, Str* symb
     simse_str_appendStr(body, _sm_expr2);
     _sm_base6 = *(library);
     _sm_base7 = *(symbol);
-    _sm_base5 = List<Str>{_sm_base6, _sm_base7};
-    _sm_base8 = &_sm_base5;
-    _sm_expr3 = fmtStrWith('@', __sm_stringTable[100], _sm_base8);
-    _sm_expr4.resize(1 + _sm_expr3.size());
+    _sm_expr4.resize(52 + _sm_base6.size() + _sm_base7.size());
     __sm_catP = simse_str_data(&_sm_expr4);
-    std::memcpy(__sm_catP, _sm_expr3.data(), _sm_expr3.size());
-    __sm_catP = __sm_catP + _sm_expr3.size();
+    std::memcpy(__sm_catP, "    static Fn fn = (Fn) __sm_nativeResolve(\"", 44);
+    __sm_catP = __sm_catP + 44;
+    std::memcpy(__sm_catP, _sm_base6.data(), _sm_base6.size());
+    __sm_catP = __sm_catP + _sm_base6.size();
+    std::memcpy(__sm_catP, "\", \"", 4);
+    __sm_catP = __sm_catP + 4;
+    std::memcpy(__sm_catP, _sm_base7.data(), _sm_base7.size());
+    __sm_catP = __sm_catP + _sm_base7.size();
+    std::memcpy(__sm_catP, "\");", 3);
+    __sm_catP = __sm_catP + 3;
     *__sm_catP = (char) ('\n');
     simse_str_appendStr(body, _sm_expr4);
     simse_str_appendStr(body, __sm_stringTable[288]);
@@ -50694,9 +50708,8 @@ Str ns10_ilLabelName(ns10_IlBody* body, Int index) {
 }
 // src/linear/LinearFormSig.kt
 Str ns10_ilPoolAsText(Str* text) {
-    List<Str> _sm_base1;
+    Char* __sm_catP;
     Str _sm_base2, _sm_expr8;
-    List<Str>* _sm_base3;
     Bool _sm_expr1, _sm_expr2, _sm_expr5;
     Char first;
     _sm_expr1 = isEmpty(text);
@@ -50727,9 +50740,13 @@ Str ns10_ilPoolAsText(Str* text) {
     return *(text);
     L4:;
     _sm_base2 = *(text);
-    _sm_base1 = List<Str>{_sm_base2};
-    _sm_base3 = &_sm_base1;
-    _sm_expr8 = fmtStrWith('@', __sm_stringTable[952], _sm_base3);
+    _sm_expr8.resize(2 + _sm_base2.size());
+    __sm_catP = simse_str_data(&_sm_expr8);
+    *__sm_catP = (char) ('\"');
+    __sm_catP = __sm_catP + 1;
+    std::memcpy(__sm_catP, _sm_base2.data(), _sm_base2.size());
+    __sm_catP = __sm_catP + _sm_base2.size();
+    *__sm_catP = (char) ('\"');
     return _sm_expr8;
 }
 // src/linear/LinearFormSig.kt
@@ -52785,7 +52802,7 @@ List<Int> ns10_ilConcatUseCounts(ns10_IlBody* il) {
 }
 // src/linear/MergeConcat.kt
 Bool ns10_ilConcatSplittable(Str* text) {
-    Int _sm_expr1, _sm_expr6, i;
+    Int _sm_expr1, _sm_expr6;
     Bool _sm_expr2;
     Char _sm_expr3;
     _sm_expr1 = simse_lenOf((*text));
@@ -52802,21 +52819,6 @@ Bool ns10_ilConcatSplittable(Str* text) {
     L1:;
     return false;
     L2:;
-    i = 1;
-    L5:;
-    _sm_expr6 = _sm_expr1 - 1;
-    _sm_expr2 = i < _sm_expr6;
-    if (!(_sm_expr2)) goto L6;
-    _sm_expr3 = (*text)[i];
-    _sm_expr2 = _sm_expr3 == '\\';
-    if (_sm_expr2) goto L7;
-    goto L8;
-    L7:;
-    return false;
-    L8:;
-    i = i + 1;
-    goto L5;
-    L6:;
     return true;
 }
 // src/linear/MergeConcat.kt
@@ -53564,6 +53566,7 @@ List<Int> ns10_fmtStrWithParts(ns10_IlConcatFuser* self, ns10_IlOp* op) {
 }
 // src/linear/MergeConcat.kt
 List<Int> ns10_fmtParts(ns10_IlConcatFuser* self, ns10_IlOp* op, Bool withSeparator) {
+    Char* __sm_catP;
     List<Int>* _sm_base1, * _sm_base2, * _sm_base7, * _sm_base17, * _sm_base18, * _sm_base23,
         * _sm_base24, * _sm_base25, * _sm_base39, * _sm_base40, * _sm_base41, * _sm_base42, * _sm_base43,
         * _sm_base44, * _sm_base45, * _sm_base46, * _sm_base49, * _sm_base54, * _sm_base56;
@@ -53576,11 +53579,10 @@ List<Int> ns10_fmtParts(ns10_IlConcatFuser* self, ns10_IlOp* op, Bool withSepara
         derefDst, packDst, pipes, i, start, item, _sm_expr86, _sm_expr92, _sm_expr101;
     ns10_IlVar* _sm_base12;
     ns3_AstXmlNode* _sm_base16;
-    List<Str>* _sm_base19, * _sm_base21, * _sm_base27, * _sm_base29, * _sm_base51;
+    List<Str>* _sm_base19, * _sm_base21, * _sm_base27, * _sm_base29;
     Str* _sm_base31;
     List<ns10_IlOp>* _sm_base32, * _sm_base33;
     ns10_IlOp* _sm_base37, * _sm_base38;
-    List<Str> _sm_base50;
     Dictionary<Int, Bool>* _sm_base57;
     List<Int> parts, _sm_expr104;
     ns10_IlOpKind _sm_expr1, _sm_expr2;
@@ -53910,9 +53912,13 @@ List<Int> ns10_fmtParts(ns10_IlConcatFuser* self, ns10_IlOp* op, Bool withSepara
     goto L73;
     L72:;
     _sm_expr5 = -1;
-    _sm_base50 = List<Str>{piece};
-    _sm_base51 = &_sm_base50;
-    _sm_expr90 = fmtStrWith('@', __sm_stringTable[952], _sm_base51);
+    _sm_expr90.resize(2 + piece.size());
+    __sm_catP = simse_str_data(&_sm_expr90);
+    *__sm_catP = (char) ('\"');
+    __sm_catP = __sm_catP + 1;
+    std::memcpy(__sm_catP, piece.data(), piece.size());
+    __sm_catP = __sm_catP + piece.size();
+    *__sm_catP = (char) ('\"');
     _sm_base52 = self->il;
     _sm_expr15 = ns10_ilConcatPoolIndex(_sm_base52, _sm_expr90);
     _sm_expr92 = _sm_expr5 - _sm_expr15;
@@ -60782,15 +60788,18 @@ ns3_AstXmlNode ns12_foldBoolLit(ns3_AstXmlNode* like, Bool value) {
 }
 // src/optimizations/FoldExprs.kt
 ns3_AstXmlNode ns12_foldStrLit(ns3_AstXmlNode* like, Str* text) {
-    List<Str> _sm_base1;
+    Char* __sm_catP;
     Str _sm_base2, _sm_expr1;
-    List<Str>* _sm_base3;
     ns3_AstNodeCategory _sm_base4;
     ns3_AstXmlNode _sm_expr2;
     _sm_base2 = *(text);
-    _sm_base1 = List<Str>{_sm_base2};
-    _sm_base3 = &_sm_base1;
-    _sm_expr1 = fmtStrWith('@', __sm_stringTable[952], _sm_base3);
+    _sm_expr1.resize(2 + _sm_base2.size());
+    __sm_catP = simse_str_data(&_sm_expr1);
+    *__sm_catP = (char) ('\"');
+    __sm_catP = __sm_catP + 1;
+    std::memcpy(__sm_catP, _sm_base2.data(), _sm_base2.size());
+    __sm_catP = __sm_catP + _sm_base2.size();
+    *__sm_catP = (char) ('\"');
     _sm_base4 = ns3_AstNodeCategory::ExprStrLit;
     _sm_expr2 = ns12_foldAsLiteral(like, _sm_base4, _sm_expr1);
     return _sm_expr2;

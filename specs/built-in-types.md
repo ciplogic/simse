@@ -56,23 +56,35 @@ change the value. A `"` and a `\` are written as they stand; that - and the mult
 form - is what makes a backtick string the way to hold another language's source text
 verbatim (the profiler's emitted C++, `src/profiling/Profiling.kt`).
 
-**Interpolation** is `@name`: the value of `name`, as text. Only a backtick string
-interpolates (`"@x"` is the two characters). A raw string with no `@name` (or `@(name)`) in
-it is a plain literal, `@`s and all (`50% @2` holds them); once a string interpolates, every
-`@` must start a name - one followed by anything else, or by nothing, is an error - and
-there is no escape yet, so a literal `@` next to an interpolation goes in a `"..."` string
-(or another raw string with no interpolation) and is concatenated. A name ends where the
-identifier does, so one followed by another identifier byte - the `_` that separates a
-generated name's parts - takes the parenthesized spelling `@(name)`, whose `)` ends it: in
-`` `_sm_@(x)_@(n)` `` the items are `x` and `n` and the `_` between them is text. The parser
-rewrites the literal into one `fmtStrWith` call before sema
-(`src/parser/ParserInterp.kt`): the template is the
-content with each `@name` reduced to its `@`, and the items are the names, in order - the
-separator is always `@`, and one placeholder per item always holds. So `` `a=@x b=@y` `` is
-`fmtStrWith('@', "a=@ b=@", x, y)`, and the concatenation fusion turns it into one buffer
-exactly as for a hand-written call (`src/linear/MergeConcat.kt`). An item is the `Str`
-the written call takes, so a name of another type formats only while the fusion is on -
-which it is for every template without an escape, and a multi-line one has one - and
+**Interpolation** has two spellings. `@name` - the value of `name`, as text - is the raw
+string's, and `$name` / `${expr}` - Kotlin's form, so a copied Kotlin string works as it
+stands - is the ordinary string's; `${expr}` holds one expression, any the language takes
+(a string literal excepted: the string token ends at the first quote, so an item cannot
+hold one - bind it to a name outside).
+
+A raw string with no `@name` (or `@(name)`) in it is a plain literal, `@`s and all
+(`50% @2` holds them); once a raw string interpolates, every `@` must start a name - one
+followed by anything else, or by nothing, is an error - and there is no escape yet, so a
+literal `@` next to an interpolation goes in a `"..."` string (or another raw string with
+no interpolation) and is concatenated. A name ends where the identifier does, so one
+followed by another identifier byte - the `_` that separates a generated name's parts -
+takes the parenthesized spelling `@(name)`, whose `)` ends it: in `` `_sm_@(x)_@(n)` ``
+the items are `x` and `n` and the `_` between them is text. An ordinary string is the
+looser one: a `$` that starts no item is a literal dollar (`100% done` needs nothing), and
+`\$` is the escaped literal dollar for the case where the next byte would start an item
+(`\$5` is `$5`, not the item `5`). The parser rewrites the literal into one `fmtStrWith`
+call before sema (`src/parser/ParserInterp.kt`): the template is the content with each
+item reduced to a placeholder byte, and the items are the names or expressions, in order -
+one placeholder per item always holds. The raw string's separator is always `@`; the
+ordinary string's is *chosen*, because its text may hold a literal `@` (an email address)
+where a raw string's may not - the first byte the literal text does not contain, `@`
+first, then `|`, `~`, `^`, `%`, and `\x01`, which cannot be in the text. So `` `a=@x b=@y` ``
+is `fmtStrWith('@', "a=@ b=@", x, y)` and `"a=$x b=$y"` is `fmtStrWith('@', "a=@ b=@", x, y)`,
+and the concatenation fusion turns either into one buffer exactly as for a hand-written
+call (`src/linear/MergeConcat.kt`). The split is on the template's own placeholder bytes
+and the pieces are re-pooled as written, so a template with escapes fuses too (`"x\ty $n"`
+is one buffer). An item is the `Str` the written call takes, so a name of another type
+formats only while the fusion is on - which it is for every template - and
 `name.toString()` first is always safe.
 
 Both forms are one entry in the program's literal pool, and at a site a `StrView` into

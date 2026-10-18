@@ -804,10 +804,25 @@ into a requirement a generic function can rely on (`specs/declarations.md`, "Pro
 
 ```kt
 val who: Str = "world"
+val count: Int = 3
 println(`hello @who`)                  // hello world
 println("count = " + count.toString())
 println(2.5.toString())
 println(min(3, 9))
+```
+
+An ordinary `"..."` string interpolates Kotlin's way: `$name`, and `${expr}` for any one
+expression - so a copied Kotlin string works as it stands. A `$` that starts no item is a
+literal dollar, `\$` escapes it where the next byte would start one, and an expression
+item cannot hold a string literal (the token ends at the first quote - bind one to a name
+outside):
+
+```kt
+println("hello $who")                  // hello world
+println("count = $count")              // count = 3
+println("sum ${count + count}")        // sum 6
+println("user@host $count")            // a literal @ is fine there
+println("cost \$5")                    // cost $5
 ```
 
 ## Gotchas worth knowing on day one
@@ -832,8 +847,10 @@ These are known rough edges, not design decisions to admire
 - There is no `foreach` keyword (`for` is it, and a container has an `iterValues` so
   `for (x in list)` works), no `when` pattern labels (`is Type`, `in 1..5`), no default
   parameter values, no capture-by-reference, and no
-  `Set`. Interpolation exists, but only in backtick strings, and only a plain
-  name: `@name`, or `@(name)` where the `)` must end a name that runs into an identifier
-  byte; an expression (`@(a + b)`) is not there - a member or a longer expression is bound
-  to a local first (`val n: Int = tag.count` then `@n`) - and every `@` of an interpolating
-  string must start a name - a literal `@` there is an error, so it goes in a `"..."` string.
+  `Set`. Interpolation in a backtick string takes a plain name only - `@name`, or
+  `@(name)` where the `)` must end a name that runs into an identifier byte; every `@` of
+  an interpolating raw string must start a name (a literal `@` there is an error, so it
+  goes in a `"..."` string). An ordinary string takes Kotlin's form - `$name`, and
+  `${expr}` for any one expression - where a literal `$` that starts no item is one as
+  written and `\$` escapes it; an expression item cannot hold a string literal (the token
+  ends at the first quote), so bind that to a name outside.

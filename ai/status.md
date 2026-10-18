@@ -23,7 +23,8 @@ a snapshot `&Base` - `specs/declarations.md`), `operator` functions (`get`/`set`
 enum, generated `getTypeOf`/`isOfType`/`get<Field>`/`set<Field>`/`setNone`,
 `U()`/`U(value)` construction), enums, `typealias`,
 `Opt`/`Res` and `!!`, `null` for handles,
-memory operators (`*T`, `&T`, `copy`), string interpolation (`` `n=@n` ``), containers and the
+memory operators (`*T`, `&T`, `copy`), string interpolation (`` `n=@n` `` and Kotlin's
+`"n is $n"` / `"sum ${a + b}"` in quoted strings), containers and the
 string library, modules/packages and `simse.md` manifests, `main(args)`, resources (`_res.md`,
 `Resources.get`), source generators (`@SmGen("cpp")`, `@SmGen("kt")`, `@SmGen("res")`,
 `@SmGen("native", ...)` on Windows), diagnostics with positions.

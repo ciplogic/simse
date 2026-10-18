@@ -5301,3 +5301,27 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   machines `strings` carries).
   Verified: `bun tools/iterate.js --full` - **109/109** and both fixed points; the new case
   `stress/interp-minimal` is the minimal program that used to fail.
+
+- **`$name`/`${expr}` interpolation in ordinary quoted strings.** Kotlin's spelling, so a
+  copied Kotlin string works as it stands: the same `fmtStrWith` desugar a backtick
+  `@name` takes (`ParserInterp.kt`), with the differences the quoted form's own rules
+  force. The template keeps the string's *source* bytes and is emitted as an ordinary
+  literal, so the pool decodes escapes exactly as it would have decoded the original; the
+  separator is *chosen* per string (`@` first, `|`/`~`/`^`/`%`, then `\x01`) from bytes the
+  literal text does not contain, because a quoted string may hold a literal `@` where a
+  raw string may not; `\$` is the escaped literal dollar and a `$` that starts no item is
+  one as written. `${expr}` holds one expression - the fragment is scanned and parsed by
+  the parser's own machinery from positions inside the original string, so a diagnostic in
+  an item points where the user wrote it (a string literal is the one thing an item cannot
+  hold: the token ends at the first quote). Two enablers landed with it:
+  `ilConcatSplittable` no longer refuses a template with escapes - the split is on the
+  source's own placeholder bytes and the pieces are re-pooled as written, so `"x\ty $n"`
+  fuses into one buffer where it used to fall back to the runtime call (and an unfused
+  non-`Str` item is silently wrong C++, `List<Str>{5}` being a *count* construction - the
+  fusion is the correctness path for interpolation of numbers, not only the fast one);
+  and the earlier alias-reach fix (above) is what lets a minimal interpolation program
+  reach `fmtStrWith`'s `get` at all.
+  Verified: `bun tools/iterate.js --full` - **110/110** and both fixed points; the new case
+  `stress/interp-dollar` covers names, expressions, a literal `@`/`|` forcing the separator
+  down the list, `\$`, a lone `$`, an escape that decodes to a separator byte, and a
+  template with a tab fusing with an `Int` item.
