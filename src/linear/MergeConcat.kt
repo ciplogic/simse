@@ -64,7 +64,7 @@ fun ilConcatUseCounts(il: *IlBody): List<Int> {
     var i: Int = 0
     while (i < il.vars.size()) {
         counts.append(0)
-        i = i + 1
+        i++
     }
     i = 0
     while (i < il.ops.size()) {
@@ -84,13 +84,13 @@ fun ilConcatUseCounts(il: *IlBody): List<Int> {
                 if (read) {
                     val operand: Int = op.operands[j]
                     if (operand >= 0 && operand < counts.size()) {
-                        counts[operand] = counts[operand] + 1
+                        counts[operand]++
                     }
                 }
-                j = j + 1
+                j++
             }
         }
-        i = i + 1
+        i++
     }
     return counts
 }
@@ -206,12 +206,12 @@ fun ilConcatDstOk(dst: Int, parts: *List<Int>): Bool {
     var i: Int = 0
     while (i < parts.size()) {
         if (parts[i] == dst) {
-            seen = seen + 1
+            seen++
             if (i == 0) {
                 first = true
             }
         }
-        i = i + 1
+        i++
     }
     if (seen == 0) {
         return true
@@ -228,7 +228,7 @@ fun ilConcatPoolIndex(il: *IlBody, text: Str): Int {
         if (il.pool[i] == text) {
             return i
         }
-        i = i + 1
+        i++
     }
     il.pool.append(text)
     return il.pool.size() - 1
@@ -262,7 +262,7 @@ data class IlConcatFuser(
         var i: Int = 0
         while (i < parts.size()) {
             operands.append(parts[i])
-            i = i + 1
+            i++
         }
         this.ops.append(IlOp(IlOpKind.Concat, operands))
         this.lines.append(line)
@@ -297,7 +297,7 @@ data class IlConcatFuser(
         while (t >= 0) {
             this.ops.append(this.taken[t])
             this.lines.append(this.takenLines[t])
-            t = t - 1
+            t--
         }
         this.taken = List<IlOp>()
         this.takenLines = List<Int>()
@@ -310,7 +310,7 @@ data class IlConcatFuser(
         var i: Int = 1
         while (i < last.operands.size()) {
             parts.append(last.operands[i])
-            i = i + 1
+            i++
         }
     }
 
@@ -525,9 +525,9 @@ data class IlConcatFuser(
         var i: Int = 1
         while (i < fmt.size() - 1) {
             if (fmt[i] == separator) {
-                pipes = pipes + 1
+                pipes++
             }
-            i = i + 1
+            i++
         }
         val items: Int = pack.operands.size() - 1
         if (pipes != items) {
@@ -539,7 +539,7 @@ data class IlConcatFuser(
             if (!ilConcatPartOk(this.il, pack.operands[i])) {
                 return parts
             }
-            i = i + 1
+            i++
         }
         // Build the parts first - the literal's own pieces around the items, an empty
         // piece dropped - so nothing is consumed before the answer is known.
@@ -555,10 +555,10 @@ data class IlConcatFuser(
                 start = i + 1
                 if (i < fmt.size() - 1) {
                     parts.append(pack.operands[item + 1])
-                    item = item + 1
+                    item++
                 }
             }
-            i = i + 1
+            i++
         }
         if (parts.size() == 0) {
             // No piece at all: one empty part, which is the empty `Str` the runtime answers.
@@ -587,13 +587,13 @@ data class IlConcatFuser(
                 val fmtParts: List<Int> = this.fmtStrParts(op)
                 if (fmtParts.size() > 0) {
                     this.emitConcat(ilConcatDst(op), *fmtParts, line)
-                    i = i + 1
+                    i++
                     continue
                 }
                 val withParts: List<Int> = this.fmtStrWithParts(op)
                 if (withParts.size() > 0) {
                     this.emitConcat(ilConcatDst(op), *withParts, line)
-                    i = i + 1
+                    i++
                     continue
                 }
             }
@@ -601,12 +601,12 @@ data class IlConcatFuser(
                 val parts: List<Int> = this.plusParts(op)
                 if (parts.size() > 0) {
                     this.emitConcat(ilConcatDst(op), *parts, line)
-                    i = i + 1
+                    i++
                     continue
                 }
             }
             this.keep(op, line)
-            i = i + 1
+            i++
         }
     }
 }
@@ -618,7 +618,7 @@ fun ilConcatWrittenSlots(ops: *List<IlOp>, count: Int): List<Bool> {
     var i: Int = 0
     while (i < count) {
         written.append(false)
-        i = i + 1
+        i++
     }
     i = 0
     while (i < ops.size()) {
@@ -629,7 +629,7 @@ fun ilConcatWrittenSlots(ops: *List<IlOp>, count: Int): List<Bool> {
                 written[dst] = true
             }
         }
-        i = i + 1
+        i++
     }
     return written
 }
@@ -663,13 +663,13 @@ fun ilFuseConcat(il: *IlBody): Bool {
         if (op.kind == IlOpKind.Declare || op.kind == IlOpKind.DeclareInit) {
             val slot: Int = ilOperandAt(*op.operands, 0)
             if (slot >= 0 && slot < written.size() && !written[slot] && fuser.replaced.has(slot)) {
-                i = i + 1
+                i++
                 continue
             }
         }
         ops.append(op)
         lines.append(fuser.lines[i])
-        i = i + 1
+        i++
     }
     il.ops = ops
     il.lines = lines

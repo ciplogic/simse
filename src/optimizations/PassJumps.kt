@@ -16,7 +16,7 @@ fun linResolveJumpTarget(start: Str, next: *Dictionary<Str, Str>): Str {
     var current: Str = start
     var guard: Int = 0
     while (guard < 8) {
-        guard = guard + 1
+        guard++
         val stepPtr: *Str = next.getPtr(current)
         if (stepPtr == null) {
             return current
@@ -35,7 +35,7 @@ fun linCollectJumpThreads(stmts: *List<AstXmlNode>, next: *Dictionary<Str, Str>)
     var i: Int = 0
     while (i < stmts.size()) {
         val stmt: *AstXmlNode = *stmts[i]
-        i = i + 1
+        i++
         if (linIsLabel(stmt)) {
             if (i < stmts.size() && linIsGoto(*stmts[i])) {
                 next.insert(
@@ -104,7 +104,7 @@ fun linThreadJumps(stmts: *List<AstXmlNode>, useDefs: &LinUseDefs): Bool {
     var i: Int = 0
     while (i < names.size()) {
         threads.insert(names[i], linResolveJumpTarget(names[i], *next))
-        i = i + 1
+        i++
     }
     return linThreadJumpsIn(stmts, *threads)
 }

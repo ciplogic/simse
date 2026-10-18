@@ -209,7 +209,7 @@ fun ilReusePure(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
         val op: *IlOp = *il.ops[i]
         val dst: Int = ilReuseDst(op)
         if (dst >= 0 && dst < count) {
-            defCount[dst] = defCount[dst] + 1
+            defCount[dst]++
         }
         if (ilReuseIsCallLike(op.kind)) {
             val methodIndex: Int = ilReuseMethodIndex(op)
@@ -220,7 +220,7 @@ fun ilReusePure(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
                 if (slot >= 0 && slot < count && !ilReuseArgSafe(il, pure, methodIndex, j - base)) {
                     escapes[slot] = true
                 }
-                j = j + 1
+                j++
             }
         }
         val hit: IlReuseHit = ilReuseHit(il, pure, op)
@@ -230,7 +230,7 @@ fun ilReusePure(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
             allDsts.append(hit.dst)
             allArgs.append(hit.arg)
         }
-        i = i + 1
+        i++
     }
 
     // The calls whose argument this body never writes and no call may write through.
@@ -245,7 +245,7 @@ fun ilReusePure(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
             hitKeys.append(allKeys[h])
             hitDsts.append(allDsts[h])
         }
-        h = h + 1
+        h++
     }
     // Per key: the first call (the one that stays) and how many of the key's calls write the
     // slot it writes.
@@ -264,7 +264,7 @@ fun ilReusePure(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
         } else if (dst == * firstDsts . getPtr (key)) {
             sameDsts.insert(key, *sameDsts.getPtr(key) + 1)
         }
-        h = h + 1
+        h++
     }
 
     // A later call of a key is merged when the first one is in the first block and the slot it
@@ -287,7 +287,7 @@ fun ilReusePure(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
                 replaced.insert(dst, firstDst)
             }
         }
-        h = h + 1
+        h++
     }
     if (dropped.size() == 0) {
         return false
@@ -301,13 +301,13 @@ fun ilReusePure(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
     while (i < il.ops.size()) {
         val op: *IlOp = *il.ops[i]
         if (dropped.has(i)) {
-            i = i + 1
+            i++
             continue
         }
         if ((op.kind == IlOpKind.Declare || op.kind == IlOpKind.DeclareInit)
             && op.operands.size() > 0 && replaced.has(op.operands[0])
         ) {
-            i = i + 1
+            i++
             continue
         }
         var operands: List<Int> = List<Int>()
@@ -322,11 +322,11 @@ fun ilReusePure(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
                 }
             }
             operands.append(value)
-            j = j + 1
+            j++
         }
         ops.append(IlOp(op.kind, operands))
         lines.append(il.lines[i])
-        i = i + 1
+        i++
     }
     il.ops = ops
     il.lines = lines

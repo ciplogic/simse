@@ -33,7 +33,7 @@ fun xmlAddChildren(node: *AstXmlNode, children: *List<AstXmlNode>): Unit {
     var i: Int = 0
     while (i < children.size()) {
         all.append(children[i])
-        i = i + 1
+        i++
     }
     node.Children = all.toArray()
 }
@@ -320,7 +320,7 @@ borrow fun xmlCount(node: *AstXmlNode, role: AstNodeKind): Int {
     var count: Int = 0
     for (*child in node.Children) {
         if (child.name == role) {
-            count = count + 1
+            count++
         }
     }
     return count
@@ -399,7 +399,7 @@ fun xmlIsTypeParam(name: *Str, typeParams: *List<Str>): Bool {
         if (typeParams[i] == name) {
             return true
         }
-        i = i + 1
+        i++
     }
     return false
 }

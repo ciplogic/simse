@@ -552,9 +552,9 @@ Bool advance(Span_iterValues_yieldable<T>* self) {
     self->branch = 1;
     return true;
     LY1:;
-    _sm_base12 = self->i;
-    _sm_base11 = _sm_base12 + 1;
-    self->i = _sm_base11;
+    _sm_base11 = self->i;
+    _sm_base12 = _sm_base11 + 1;
+    self->i = _sm_base12;
     goto L1;
     L2:;
     self->branch = -1;

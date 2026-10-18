@@ -238,9 +238,9 @@ fun addGrid(f: *Frame, parent: Int, name: Str, x: Int, y: Int, cell: Int, cols: 
                 x + col * cell, y + row * cell, cell, cell
             )
             setPayload(f, index, row * cols + col)
-            col = col + 1
+            col++
         }
-        row = row + 1
+        row++
     }
     return grid
 }
@@ -378,7 +378,7 @@ fun layoutNode(f: *Frame, node: Int): Unit {
     var i: Int = 0
     while (i < kids.size()) {
         layoutNode(f, kids[i])
-        i = i + 1
+        i++
     }
 }
 
@@ -410,16 +410,16 @@ fun layoutChildren(f: *Frame, box: Int, layout: Int): Unit {
             if (f.nodes[child].rect.height > 0) {
                 fixed = fixed + f.nodes[child].rect.height
             } else {
-                fills = fills + 1
+                fills++
             }
         } else {
             if (f.nodes[child].rect.width > 0) {
                 fixed = fixed + f.nodes[child].rect.width
             } else {
-                fills = fills + 1
+                fills++
             }
         }
-        i = i + 1
+        i++
     }
     var each: Int = 0
     if (fills > 0) {
@@ -480,7 +480,7 @@ fun layoutChildren(f: *Frame, box: Int, layout: Int): Unit {
         } else {
             cursor = x + width + gap
         }
-        i = i + 1
+        i++
     }
 }
 
@@ -502,7 +502,7 @@ fun moveNode(f: *Frame, node: Int, dx: Int, dy: Int): Unit {
     var i: Int = 0
     while (i < kids.size()) {
         moveNode(f, kids[i], dx, dy)
-        i = i + 1
+        i++
     }
 }
 
@@ -538,7 +538,7 @@ fun uiHitTestNode(f: *Frame, node: Int, x: Int, y: Int): Int {
         if (found >= 0) {
             return found
         }
-        i = i - 1
+        i--
     }
     if (x >= f.nodes[node].rect.x && x < f.nodes[node].rect.x + f.nodes[node].rect.width
         && y >= f.nodes[node].rect.y && y < f.nodes[node].rect.y + f.nodes[node].rect.height

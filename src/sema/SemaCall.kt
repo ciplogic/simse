@@ -21,7 +21,7 @@ fun Analyzer.isViewType(typeNode: *AstXmlNode): Bool {
     }
     var guard: Int = 0
     while (name != "" && guard < 64) {
-        guard = guard + 1
+        guard++
         if (name == "StrView") {
             return true
         }
@@ -178,7 +178,7 @@ fun Analyzer.checkCallArity(call: *AstXmlNode): Unit {
             while (a < argCount) {
                 this.checkHandleArgument(name, overload, a, args[a])
                 this.checkViewArgument(name, overload, a, args[a])
-                a = a + 1
+                a++
             }
             return
         }
@@ -235,7 +235,7 @@ fun Analyzer.checkUnionConstruction(
         var t: Int = 0
         while (t < params.size()) {
             bindings.insert(params[t], typeArgs[t])
-            t = t + 1
+            t++
         }
     }
     val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
@@ -247,7 +247,7 @@ fun Analyzer.checkUnionConstruction(
             fieldType = semSubstitute(fieldType, *bindings, *params)
         }
         if (semaSameType(fieldType, argType)) {
-            count = count + 1
+            count++
         }
     }
     if (count > 0) {
@@ -298,7 +298,7 @@ fun Analyzer.unionResolveAlias(typeNode: *AstXmlNode): AstXmlNode {
     var current: AstXmlNode = typeNode
     var guard: Int = 0
     while (!xmlIsEmpty(current) && guard < 16) {
-        guard = guard + 1
+        guard++
         if (xmlKind(current) != AstNodeCategory.TypeNamed) {
             return current
         }
@@ -333,7 +333,7 @@ fun semaSameType(a: *AstXmlNode, b: *AstXmlNode): Bool {
         if (!semaSameType(a.Children[i], b.Children[i])) {
             return false
         }
-        i = i + 1
+        i++
     }
     return true
 }
@@ -646,7 +646,7 @@ fun Analyzer.semaReceiverOuter(actual: AstXmlNode): AstXmlNode {
     var current: AstXmlNode = actual
     var guard: Int = 0
     while (guard < 32) {
-        guard = guard + 1
+        guard++
         val kind: AstNodeCategory = xmlKind(current)
         if (kind == AstNodeCategory.TypeReference || kind == AstNodeCategory.TypePointer) {
             val inner: AstXmlNode = xmlChild(current, AstNodeKind.Inner)
@@ -934,7 +934,7 @@ fun Analyzer.promoteForLoops(stmts: *List<AstXmlNode>): Unit {
         if (!bpNoBorrow()) {
             this.promoteForAt(stmts, i)
         }
-        i = i + 1
+        i++
     }
 }
 
@@ -1026,8 +1026,8 @@ fun Analyzer.forLoopIndex(stmts: *List<AstXmlNode>, index: Int): Int {
                 return j
             }
         }
-        guard = guard + 1
-        j = j + 1
+        guard++
+        j++
     }
     return -1
 }

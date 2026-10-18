@@ -28,7 +28,7 @@ data class Sections(
             if (this.sections[i].name == name) {
                 return i
             }
-            i = i + 1
+            i++
         }
         return -1
     }
@@ -111,7 +111,7 @@ data class Sections(
             while (k < keys.size()) {
                 val item: *Str = section.items.getPtr(keys[k])
                 this.appendBlock(*out, *item)
-                k = k + 1
+                k++
             }
         }
         return out

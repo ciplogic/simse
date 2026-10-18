@@ -59,7 +59,7 @@ fun Emitter.collectAsync(): Unit {
     var i: Int = 0
     while (i < count) {
         val fn: *CgFn = *this.functions[i]
-        i = i + 1
+        i++
         if (this.asyncFns.has(fn.name)) {
             this.addTaskHelpers(fn)
         }

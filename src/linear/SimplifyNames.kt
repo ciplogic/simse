@@ -40,7 +40,7 @@ data class SimRenamer(
             if (renamed != null) {
                 return *renamed
             }
-            i = i - 1
+            i--
         }
         return ""
     }
@@ -52,7 +52,7 @@ data class SimRenamer(
         var n: Int = 2
         var candidate: Str = `_sm_@(name)_@n`
         while (this.used.has(candidate)) {
-            n = n + 1
+            n++
             candidate = `_sm_@(name)_@n`
         }
         return candidate
@@ -86,7 +86,7 @@ data class SimRenamer(
                 stmt.attributes = simNameAttrs(stmt, emitted[i])
             }
             out.append(stmt)
-            i = i + 1
+            i++
         }
         this.scopes.removeAt(this.scopes.size() - 1)
         return out
@@ -127,13 +127,13 @@ data class SimRenamer(
             var p: Int = 0
             while (p < params.size()) {
                 inner.renamed.insert(params[p], params[p])
-                p = p + 1
+                p++
             }
             val names: List<Str> = simBoundNames(xmlChildPtr(node, AstNodeKind.Body), List<Str>())
             p = 0
             while (p < names.size()) {
                 inner.renamed.insert(names[p], names[p])
-                p = p + 1
+                p++
             }
             this.scopes.append(inner)
         }
@@ -158,7 +158,7 @@ data class SimRenamer(
             } else {
                 kids.append(this.rewrite(child, nested))
             }
-            i = i + 1
+            i++
         }
         var out: AstXmlNode = exprLike(node, kids)
         if (kind == AstNodeCategory.ExprName) {
@@ -181,7 +181,7 @@ fun linRenameShadowed(body: *List<AstXmlNode>, reserved: *List<Str>): List<AstXm
     var i: Int = 0
     while (i < reserved.size()) {
         used.insert(reserved[i], true)
-        i = i + 1
+        i++
     }
     var renamer: SimRenamer = SimRenamer(List<SimRenameScope>(), used)
     return renamer.inList(*body)
@@ -212,7 +212,7 @@ fun linIsSpellableType(typeNode: *AstXmlNode): Bool {
                 if (!linIsSpellableType(args[i])) {
                     return false
                 }
-                i = i + 1
+                i++
             }
             return true
         }
@@ -231,7 +231,7 @@ fun linIsSpellableType(typeNode: *AstXmlNode): Bool {
                 if (!linIsSpellableType(params[i])) {
                     return false
                 }
-                i = i + 1
+                i++
             }
             return true
         }
@@ -299,12 +299,12 @@ fun linHoistSlots(body: *List<AstXmlNode>): LinLowered {
     var i: Int = 0
     while (i < decls.size()) {
         hoisted.append(decls[i])
-        i = i + 1
+        i++
     }
     i = 0
     while (i < rewritten.size()) {
         hoisted.append(rewritten[i])
-        i = i + 1
+        i++
     }
     return LinLowered(hoisted, true)
 }
@@ -321,7 +321,7 @@ fun linFinishForEmission(body: *List<AstXmlNode>, reserved: *List<Str>, signatur
     var canChange: Bool = true
     var guard: Int = 0
     while (canChange && guard < 256) {
-        guard = guard + 1
+        guard++
         canChange = false
         val hoisted: LinLowered = linHoistSlots(current)
         current = hoisted.body

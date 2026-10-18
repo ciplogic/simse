@@ -44,10 +44,10 @@ fun ilConcatPoolOf(il: *IlBody): IlConcatPool {
                 } else {
                     pool.pointer = true
                     if (ilConcatNumberOk(ilConcatValueText(il, part))) {
-                        counts = counts + 1
+                        counts++
                     }
                 }
-                j = j + 1
+                j++
             }
             if (counts > pool.counts) {
                 pool.counts = counts
@@ -82,7 +82,7 @@ fun ilConcatCapable(node: *AstXmlNode): Bool {
         if (ilConcatCapable(node.Children[i])) {
             return true
         }
-        i = i + 1
+        i++
     }
     return false
 }
@@ -104,7 +104,7 @@ fun Emitter.ilConcatPoolLiterals(node: *AstXmlNode): Unit {
     var i: Int = 0
     while (i < node.Children.count()) {
         this.ilConcatPoolLiterals(node.Children[i])
-        i = i + 1
+        i++
     }
 }
 
@@ -146,7 +146,7 @@ fun Emitter.ilConcatPreamble(il: *IlBody, out: *Str, level: Int): Unit {
         var c: Int = 0
         while (c < pool.counts) {
             names.append(`__sm_catC@c`)
-            c = c + 1
+            c++
         }
         val cgJoinText: Str = cgJoin(names, ", ")
         this.ilLine(out, level, `Int @cgJoinText;`)
@@ -219,7 +219,7 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
                 return false
             }
             if (text[0] == '\'') {
-                fixed = fixed + 1
+                fixed++
                 writes.append(`*@pName = (char) (@text);`)
                 writes.append(`@pName = @pName + 1;`)
             } else if (text[0] == '\"') {
@@ -259,7 +259,7 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
                 writes.append(`std::memcpy(@pName, @value.data(), @value.size());`)
                 writes.append(`@pName = @pName + @value.size();`)
             } else if (kind == "Char") {
-                fixed = fixed + 1
+                fixed++
                 writes.append(`*@pName = (char) (@value);`)
                 writes.append(`@pName = @pName + 1;`)
             } else if (kind == "Bool") {
@@ -268,7 +268,7 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
                 writes.append(`@pName = @pName + strBoolView(@value).len;`)
             } else if (ilConcatNumberOk(kind)) {
                 val count: Str = `__sm_catC@counts`
-                counts = counts + 1
+                counts++
                 prelude.append(`@count = strCountDigits(@value);`)
                 sums.append(count)
                 writes.append(`strAddInt(@pName, @value, @count);`)
@@ -278,7 +278,7 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
                 return false
             }
         }
-        i = i + 1
+        i++
     }
     if (op.operands.size() < 2) {
         this.ilWhy = "a concatenation with no part"
@@ -297,7 +297,7 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
             val sumsText: Str = sums[s]
             rest = `@rest + @sumsText`
         }
-        s = s + 1
+        s++
     }
     // Every part is expressible, so the buffer is written where the instruction stands: a slot
     // with no type node has no declaration of its own (its `Declare` prints nothing).
@@ -315,7 +315,7 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
     var p: Int = 0
     while (p < prelude.size()) {
         this.ilLine(out, level, prelude[p])
-        p = p + 1
+        p++
     }
     // `at` reads the destination's size *before* the one `resize` moves it, and the counts read
     // only the parts, so the order is: the counts, `at`, the resize, the pointer, the writes.
@@ -334,7 +334,7 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
     p = 0
     while (p < writes.size()) {
         this.ilLine(out, level, writes[p])
-        p = p + 1
+        p++
     }
     return true
 }
@@ -415,7 +415,7 @@ fun Emitter.ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *A
                 return ()
             }
             values.append(this.expr(value, 0, xmlEmptyNode()))
-            j = j + 1
+            j++
         }
         val typeText2: Str = this.type(slotType)
         val cgJoinText2: Str = cgJoin(values, ", ")
@@ -435,7 +435,7 @@ fun Emitter.ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *A
                         return ()
                     }
                     captured.append(this.expr(arg, 0, xmlEmptyNode()))
-                    j = j + 1
+                    j++
                 }
                 val cgJoinText3: Str = cgJoin(captured, ", ")
                 return (`@closureType{@cgJoinText3}`)
@@ -473,7 +473,7 @@ fun Emitter.ilBoxedCtorText(il: *IlBody, frame: *IlFrame, op: *IlOp): Opt<Str> {
             return ()
         }
         args.append(this.expr(arg, 0, xmlEmptyNode()))
-        i = i + 1
+        i++
     }
     val typeText3: Str = this.type(inner)
     val cgJoinText4: Str = cgJoin(args, ", ")

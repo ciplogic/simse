@@ -502,9 +502,9 @@ Bool advance(Range_iterValues_yieldable* self) {
     self->branch = 1;
     return true;
     LY1:;
-    _sm_base11 = self->i;
-    _sm_base10 = _sm_base11 + 1;
-    self->i = _sm_base10;
+    _sm_base10 = self->i;
+    _sm_base11 = _sm_base10 + 1;
+    self->i = _sm_base11;
     goto L1;
     L2:;
     self->branch = -1;

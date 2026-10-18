@@ -294,7 +294,7 @@ data class EpScan(
             var i: Int = 0
             for (*arg in xmlChildren(node, AstNodeKind.Arg)) {
                 this.walk(arg, EpCtx.CallArg, mname, i + 1)
-                i = i + 1
+                i++
             }
             return
         }
@@ -315,7 +315,7 @@ data class EpScan(
             var i: Int = 0
             for (*arg in xmlChildren(node, AstNodeKind.Arg)) {
                 this.walk(arg, EpCtx.CallArg, fname, i)
-                i = i + 1
+                i++
             }
             return
         }
@@ -325,7 +325,7 @@ data class EpScan(
         var i: Int = 0
         for (*arg in xmlChildren(node, AstNodeKind.Arg)) {
             this.walk(arg, EpCtx.CallArg, "(a value call)", i)
-            i = i + 1
+            i++
         }
     }
 
@@ -508,7 +508,7 @@ fun epPreScanDecls(decls: *List<EpDecl>, types: *Dictionary<Str, Bool>): Unit {
         while (k < decl.params.size()) {
             params.insert(decl.params[k], true)
             handles.insert(decl.params[k], decl.handles[k])
-            k = k + 1
+            k++
         }
         var scan: EpScan =
             EpScan(params, handles, types, decl.typeParams, Dictionary<Str, Bool>(), List<EpEvent>())
@@ -547,7 +547,7 @@ fun epAnalyze(preludeModules: List<AstXmlNode>, modules: List<AstXmlNode>): Unit
     var changed: Bool = true
     var guard: Int = 0
     while (changed && guard < 64) {
-        guard = guard + 1
+        guard++
         changed = false
 
         // One round's raw votes: an escape seen, or a declaration that cannot vote clean.
@@ -566,14 +566,14 @@ fun epAnalyze(preludeModules: List<AstXmlNode>, modules: List<AstXmlNode>): Unit
                     if (!decl.trusted) {
                         epMarkOr(*roundBad, *decl.name, k)
                     }
-                    k = k + 1
+                    k++
                 }
                 continue
             }
             var k: Int = 0
             for (pname in decl.params) {
                 epMarkOr(*seen, *decl.name, k)
-                k = k + 1
+                k++
             }
             // The body's shape was scanned once (`epPreScanDecls`): the round collects the
             // events the table now classifies as escaping or unknown.
@@ -594,7 +594,7 @@ fun epAnalyze(preludeModules: List<AstXmlNode>, modules: List<AstXmlNode>): Unit
                 } else if (eventUnknown.has(pname)) {
                     epMarkOr(*roundBad, *decl.name, k)
                 }
-                k = k + 1
+                k++
             }
         }
 
@@ -613,7 +613,7 @@ fun epAnalyze(preludeModules: List<AstXmlNode>, modules: List<AstXmlNode>): Unit
                         changed = true
                     }
                 }
-                k = k + 1
+                k++
             }
         }
     }
@@ -646,7 +646,7 @@ fun epAnalyze(preludeModules: List<AstXmlNode>, modules: List<AstXmlNode>): Unit
                 kind = EpKind.Clean
             }
             row.append(kind)
-            k = k + 1
+            k++
         }
         epTable.insert(*name, row)
     }
@@ -669,7 +669,7 @@ fun epAnalyze(preludeModules: List<AstXmlNode>, modules: List<AstXmlNode>): Unit
                 } else {
                     text = text + "Unknown"
                 }
-                k = k + 1
+                k++
             }
             epNote(text)
         }

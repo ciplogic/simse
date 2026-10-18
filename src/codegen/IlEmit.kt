@@ -36,7 +36,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             val slot: Int = this.ilOpOperand(op.operands, 0)
             // A folded declaration prints nothing, so it needs no block.
             if (this.ilFolded(il, frame, slot)) {
-                scan = scan + 1
+                scan++
                 continue
             }
             // A typed slot is declared where the `Declare` stands; an untyped one at
@@ -50,7 +50,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                     at = def
                 }
                 if (at < 0) {
-                    scan = scan + 1
+                    scan++
                     continue
                 }
             }
@@ -59,7 +59,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                 blockEnd.insert(at, crossing)
             }
         }
-        scan = scan + 1
+        scan++
     }
     // Grouped storage (`ilDeclGroups`): a declaration that needs a block ends a run.
     val declLines: Dictionary<Int, List<Str>> = this.ilDeclGroups(il, frame, *blockEnd)
@@ -74,11 +74,11 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
         // A block ends where its jump lands: the target stays outside it.
         while (scopes.size() > 0 && scopes[scopes.size() - 1].end == i) {
             scopes.removeAt(scopes.size() - 1)
-            lvl = lvl - 1
+            lvl--
             this.ilLine(text, lvl, "}")
         }
         if (i == consumedByDeclare) {
-            i = i + 1
+            i++
             continue
         }
         val op: *IlOp = *il.ops[i]
@@ -95,11 +95,11 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                 if (scopes[s].start > lastJump && scopes[s].end >= end) {
                     covered = true
                 }
-                s = s + 1
+                s++
             }
             if (!covered) {
                 this.ilLine(text, lvl, "{")
-                lvl = lvl + 1
+                lvl++
                 scopes.append(IlScope(i, end))
             }
         }
@@ -110,7 +110,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                 return IlText(false, "", "a declare with no slot")
             }
             if (this.ilFolded(il, frame, slot)) {
-                i = i + 1
+                i++
                 continue // inlined at its use
             }
             val slotType: AstXmlNode = ilVarType(il, slot)
@@ -127,9 +127,9 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                             lineLvl = lvl + 1
                         }
                         this.ilLine(text, lineLvl, shared[s])
-                        s = s + 1
+                        s++
                     }
-                    i = i + 1
+                    i++
                     continue
                 }
                 // A typed slot on its own line: the instruction that computes its value
@@ -139,7 +139,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                 this.ilLine(
                     text, lvl, `@ilDeclTypeTextText @nameText;`
                 )
-                i = i + 1
+                i++
                 continue
             }
             // An untyped slot is declared with `auto` and its own definition as the
@@ -152,7 +152,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                         false, "", `the slot '@nameText2' has neither a type nor an initializer`
                     )
                 }
-                i = i + 1
+                i++
                 continue
             }
             val valueText: Opt<Str> = this.ilValueText(il, frame, def, xmlEmptyNode())
@@ -173,7 +173,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             val valueText2: Str = valueText.value()
             this.ilLine(text, lvl, `auto @nameText3 = @valueText2;`)
             consumedByDeclare = def
-            i = i + 1
+            i++
             continue
         }
         if (kind == IlOpKind.Label) {
@@ -182,7 +182,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                 return IlText(false, "", "a label with no name")
             }
             this.ilLine(text, lvl, il.labels[label] + ":;")
-            i = i + 1
+            i++
             continue
         }
         if (kind == IlOpKind.Goto || kind == IlOpKind.IfTrue || kind == IlOpKind.IfFalse) {
@@ -197,7 +197,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             val target: Str = il.labels[label]
             if (kind == IlOpKind.Goto) {
                 this.ilLine(text, lvl, `goto @target;`)
-                i = i + 1
+                i++
                 continue
             }
             val cond: AstXmlNode = this.ilOperandNode(il, frame, this.ilOpOperand(op.operands, 0), 0)
@@ -210,46 +210,54 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                 jumpLine = `if (@test) goto @target;`
             }
             this.ilLine(text, lvl, jumpLine)
-            i = i + 1
+            i++
             continue
         }
         if (dst >= 0 && kind == IlOpKind.BinaryOp) {
-            // `+=` resolved as an operator before the fold: a matching `plusAssign`
-            // declaration is the in-place append (`out += part` on a Str, `parts += item`
-            // on a List - src/rtl/rtl.kt names the C++), and where none matches the op
-            // falls back to the plain binary below. The compound form only ever arrives
-            // here from a *local slot* compound assignment (`assignCompound`), so the
-            // receiver is a variable the call can take by reference.
+            // `x op= v` resolved as an operator before the fold: `+=` against a matching
+            // `plusAssign` declaration is the in-place append (`out += part` on a Str,
+            // `parts += item` on a List - src/rtl/rtl.kt names the C++), and every compound
+            // op falls back to the fold of its binary, spelled here because the pool's
+            // compound ops are not binaries the expression path knows. The compound form
+            // only ever arrives here from a *local slot* compound assignment
+            // (`assignCompound`), so the receiver is a variable the call can take by
+            // reference.
             val opIndexPA: Int = this.ilOpOperand(op.operands, 1)
-            if (opIndexPA >= 0 && opIndexPA < il.pool.size() && il.pool[opIndexPA] == "+=") {
-                val recvPA: AstXmlNode = this.ilSlotNode(il, frame, this.ilOpOperand(op.operands, 2), 0)
+            if (opIndexPA >= 0 && opIndexPA < il.pool.size()
+                && isCompoundAssignOp(il.pool[opIndexPA])
+            ) {
+                val compoundPA: Str = il.pool[opIndexPA]
                 var spelledPA: Bool = false
-                if (!xmlIsEmpty(recvPA)) {
-                    val extIndexPA: Int = this.findNativeExt("plusAssign", recvPA, 1)
-                    if (extIndexPA >= 0) {
-                        val extsPA: *List<CgNativeExt> = this.nativeExtensions.getPtr("plusAssign")
-                        val extPA: *CgNativeExt = *extsPA[extIndexPA]
-                        this.referencedNames.insert(extPA.symbol, true)
-                        val recvTextPA: Str = this.expr(recvPA, 0, xmlEmptyNode())
-                        val valuePA: AstXmlNode = this.ilOperandNode(il, frame, this.ilOpOperand(op.operands, 3), 0)
-                        val valueTextPA: Str = this.expr(valuePA, 0, xmlEmptyNode())
-                        this.ilLine(text, lvl, extPA.symbol + "(" + recvTextPA + ", " + valueTextPA + ");")
-                        spelledPA = true
+                if (compoundPA == "+=") {
+                    val recvPA: AstXmlNode = this.ilSlotNode(il, frame, this.ilOpOperand(op.operands, 2), 0)
+                    if (!xmlIsEmpty(recvPA)) {
+                        val extIndexPA: Int = this.findNativeExt("plusAssign", recvPA, 1)
+                        if (extIndexPA >= 0) {
+                            val extsPA: *List<CgNativeExt> = this.nativeExtensions.getPtr("plusAssign")
+                            val extPA: CgNativeExt = *extsPA[extIndexPA]
+                            this.referencedNames.insert(extPA.symbol, true)
+                            val recvTextPA: Str = this.expr(recvPA, 0, xmlEmptyNode())
+                            val valuePA: AstXmlNode = this.ilOperandNode(il, frame, this.ilOpOperand(op.operands, 3), 0)
+                            val valueTextPA: Str = this.expr(valuePA, 0, xmlEmptyNode())
+                            this.ilLine(text, lvl, extPA.symbol + "(" + recvTextPA + ", " + valueTextPA + ");")
+                            spelledPA = true
+                        }
                     }
                 }
                 if (spelledPA) {
-                    i = i + 1
+                    i++
                     continue
                 }
-                // No `plusAssign`: the fold, spelled here because the pool's `+=` is not a
-                // binary the expression path knows.
+                // No `plusAssign` (or not a `+=`): the fold of the compound's binary,
+                // spelled here because the pool's compound ops are not binaries the
+                // expression path knows.
                 val lhsPA: AstXmlNode = this.ilOperandNode(il, frame, this.ilOpOperand(op.operands, 2), 0)
                 val rhsPA: AstXmlNode = this.ilOperandNode(il, frame, this.ilOpOperand(op.operands, 3), 0)
-                val foldPA: AstXmlNode = this.ilBinaryNode(lhsPA, "+", rhsPA)
+                val foldPA: AstXmlNode = this.ilBinaryNode(lhsPA, compoundBinaryOp(compoundPA), rhsPA)
                 val foldTextPA: Str = this.expr(foldPA, 0, xmlEmptyNode())
                 val dstNamePA: Str = il.vars[dst].name
                 this.ilLine(text, lvl, dstNamePA + " = " + foldTextPA + ";")
-                i = i + 1
+                i++
                 continue
             }
         }
@@ -263,11 +271,11 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                 }
                 return IlText(false, "", "cannot express " + why)
             }
-            i = i + 1
+            i++
             continue
         }
         if (dst >= 0 && this.ilFolded(il, frame, dst)) {
-            i = i + 1
+            i++
             continue // inlined at its use
         }
         if (dst >= 0) {
@@ -287,7 +295,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                 val nameText4: Str = il.vars[dst].name
                 val valueText3: Str = valueText.value()
                 this.ilLine(text, lvl, `auto @nameText4 = @valueText3;`)
-                i = i + 1
+                i++
                 continue
             }
             if (xmlIsEmpty(slotType)) {
@@ -299,7 +307,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             val nameText6: Str = il.vars[dst].name
             val valueText4: Str = valueText.value()
             this.ilLine(text, lvl, `@nameText6 = @valueText4;`)
-            i = i + 1
+            i++
             continue
         }
         if (kind == IlOpKind.Store) {
@@ -321,7 +329,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             this.ilLine(
                 text, lvl, `@exprText = @exprText2;`
             )
-            i = i + 1
+            i++
             continue
         }
         if (kind == IlOpKind.SetField || kind == IlOpKind.SetIndex) {
@@ -346,7 +354,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                     }
                     val callText: Str = this.operatorIndexSetText(setAt, base, index, setValue)
                     this.ilLine(text, lvl, `@callText;`)
-                    i = i + 1
+                    i++
                     continue
                 }
                 if (this.operatorFn("get", base, 1) >= 0) {
@@ -378,7 +386,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             this.ilLine(
                 text, lvl, `@exprText3 = @exprText4;`
             )
-            i = i + 1
+            i++
             continue
         }
         if (kind == IlOpKind.SetStatic) {
@@ -400,7 +408,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             this.ilLine(
                 text, lvl, `@exprText5 = @exprText6;`
             )
-            i = i + 1
+            i++
             continue
         }
         if (kind == IlOpKind.CallVoid || kind == IlOpKind.CallIndirectVoid) {
@@ -412,13 +420,13 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                 return IlText(false, "", "cannot express " + this.ilWhy)
             }
             this.ilLine(text, lvl, this.expr(call, 0, xmlEmptyNode()) + ";")
-            i = i + 1
+            i++
             continue
         }
         if (kind == IlOpKind.Return || kind == IlOpKind.ReturnVoid) {
             if (kind == IlOpKind.ReturnVoid) {
                 this.ilLine(text, lvl, "return;")
-                i = i + 1
+                i++
                 continue
             }
             val value: AstXmlNode = this.ilOperandNode(il, frame, this.ilOpOperand(op.operands, 0), 0)
@@ -427,7 +435,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             }
             val exprText7: Str = this.expr(value, 0, this.curReturnType)
             this.ilLine(text, lvl, `return @exprText7;`)
-            i = i + 1
+            i++
             continue
         }
         if (kind == IlOpKind.Lambda) {
@@ -441,7 +449,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
     }
     while (scopes.size() > 0) {
         scopes.removeAt(scopes.size() - 1)
-        lvl = lvl - 1
+        lvl--
         this.ilLine(text, lvl, "}")
     }
     return IlText(true, text, "")
@@ -592,7 +600,7 @@ fun Emitter.ilClosureParamList(closure: *IlClosure): List<Str> {
         if (this.failed) {
             return List<Str>()
         }
-        i = i + 1
+        i++
     }
     return params
 }
@@ -624,7 +632,7 @@ fun Emitter.ilClosureFuncType(closure: *IlClosure): Opt<Str> {
         if (this.failed) {
             return ()
         }
-        i = i + 1
+        i++
     }
     val cgJoinText: Str = cgJoin(params, ", ")
     return (`Func<@retText(@cgJoinText)>`)
@@ -689,7 +697,7 @@ fun Emitter.emitClosureStruct(closure: *IlClosure): IlText {
         val fieldTypeText: Str = this.ilClosureTypeOfNode(fieldType)
         val captureText: Str = closure.captures[i]
         text.appendStr(`    @fieldTypeText @captureText;` + "\n")
-        i = i + 1
+        i++
     }
     val indent2: Str = cgIndent(2)
     text.appendStr(`    operator @funcTypeText() const {` + "\n")

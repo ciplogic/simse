@@ -270,7 +270,7 @@ fun cgFoldTypeAliases(text: Str): Str {
         val ch: Char = text[i]
         if (cgIsTypeNameChar(ch)) {
             while (i < size && cgIsTypeNameChar(text[i])) {
-                i = i + 1
+                i++
             }
             val word: Str = text.substr(start, i - start)
             if (word == "Int") {
@@ -282,7 +282,7 @@ fun cgFoldTypeAliases(text: Str): Str {
             }
         } else {
             while (i < size && !cgIsTypeNameChar(text[i])) {
-                i = i + 1
+                i++
             }
             out = out + text.substr(start, i - start)
         }

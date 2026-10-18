@@ -328,7 +328,7 @@ fun Emitter.unifyType(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *Li
                 if (!this.unifyType(patternArgs[i], actualArgs[i], typeParams)) {
                     return false
                 }
-                i = i + 1
+                i++
             }
             return true
         }

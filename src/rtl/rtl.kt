@@ -16,7 +16,7 @@ fun Span<T>.iterValues<T>(): ..T {
     val len = this.size();
     while (i < len) {
         yield this[i]
-        i = i + 1
+        i++
     }
 }
 
@@ -31,7 +31,7 @@ fun Span<T>.iter<T>(): ..*T {
     val len = this.size();
     while (i < len) {
         yield this.atPtr(i)
-        i = i + 1
+        i++
     }
 }
 
@@ -44,7 +44,7 @@ fun Array<T>.iterOf<T>(): ..*T {
     val len: Int = view.size()
     while (i < len) {
         yield view.atPtr(i)
-        i = i + 1
+        i++
     }
 }
 
@@ -65,7 +65,7 @@ fun repeat(n: Int, body: (Int) -> Unit): Unit {
     var i: Int = 0
     while (i < n) {
         body(i)
-        i = i + 1
+        i++
     }
 }
 
@@ -81,7 +81,7 @@ fun Array<T>.forEach<T>(f: (T) -> Unit): Unit {
     val len: Int = this.count()
     while (i < len) {
         f(this[i])
-        i = i + 1
+        i++
     }
 }
 
@@ -124,7 +124,7 @@ fun Str.contains(value: Char): Bool {
         if (this[i] == value) {
             return true
         }
-        i = i + 1
+        i++
     }
     return false
 }
@@ -140,7 +140,7 @@ fun Span<T>.contains<T>(value: T): Bool {
         if (this[i] == value) {
             return true
         }
-        i = i + 1
+        i++
     }
     return false
 }
@@ -203,7 +203,7 @@ fun List<T>.toArray<T>(): Array<T> {
     var i: Int = 0
     while (i < count) {
         out[i] = this[i]
-        i = i + 1
+        i++
     }
     return out
 }
@@ -215,7 +215,7 @@ fun Array<T>.toList<T>(): List<T> {
     var i: Int = 0
     while (i < count) {
         out.append(this[i])
-        i = i + 1
+        i++
     }
     return out
 }
@@ -310,9 +310,9 @@ fun fmtStr(fmt: StrView, items: *List<Str>): Str {
     var i: Int = 0
     while (i < fmt.size()) {
         if (fmt[i] == '|') {
-            points = points + 1
+            points++
         }
-        i = i + 1
+        i++
     }
     if (points != items.size()) {
         return fmt
@@ -325,11 +325,11 @@ fun fmtStr(fmt: StrView, items: *List<Str>): Str {
         val ch: Char = fmt[i]
         if (ch == '|') {
             out.appendStr(items[used])
-            used = used + 1
+            used++
         } else {
             out.append(ch)
         }
-        i = i + 1
+        i++
     }
     return out
 }
@@ -347,9 +347,9 @@ fun fmtStrWith(separator: Char, templateText: StrView, items: *List<Str>): Str {
     var i: Int = 0
     while (i < templateText.size()) {
         if (templateText[i] == separator) {
-            points = points + 1
+            points++
         }
-        i = i + 1
+        i++
     }
     if (points != items.size()) {
         return templateText
@@ -362,11 +362,11 @@ fun fmtStrWith(separator: Char, templateText: StrView, items: *List<Str>): Str {
         val ch: Char = templateText[i]
         if (ch == separator) {
             out.appendStr(items[used])
-            used = used + 1
+            used++
         } else {
             out.append(ch)
         }
-        i = i + 1
+        i++
     }
     return out
 }
@@ -405,14 +405,14 @@ fun strCountDigits(value: Int64): Int {
     var i: Int = 1
     while (i < guess) {
         limit = limit * 10
-        i = i + 1
+        i++
     }
     var digits: Int = guess
     if (value >= limit || value <= 0 - limit) {
-        digits = digits + 1
+        digits++
     }
     if (value < 0) {
-        digits = digits + 1
+        digits++
     }
     return digits
 }
@@ -436,12 +436,12 @@ fun strAddInt(target: *Char, value: Int64, count: Int): Unit {
     }
     while (rest <= -10) {
         val digit: Int = 0 - (rest % 10)
-        at = at - 1
+        at--
         val ch: Char = '0' + digit
         target[at] = ch
         rest = rest / 10
     }
-    at = at - 1
+    at--
     val last: Char = '0' + (0 - rest)
     target[at] = last
 }
@@ -518,7 +518,7 @@ fun Str.lastIndexOf(sub: Str): Int {
         ) {
             return i
         }
-        i = i - 1
+        i--
     }
     return 0 - 1
 }
@@ -570,7 +570,7 @@ fun Str.startsWith(prefix: Str): Bool {
         if (this[i] != prefix[i]) {
             return false
         }
-        i = i + 1
+        i++
     }
     return true
 }
@@ -586,7 +586,7 @@ fun Str.endsWith(suffix: Str): Bool {
         if (this[len - count + i] != suffix[i]) {
             return false
         }
-        i = i + 1
+        i++
     }
     return true
 }
@@ -626,14 +626,14 @@ fun Str.trim(): Str {
         if (!ch.isSpace()) {
             break
         }
-        begin = begin + 1
+        begin++
     }
     while (end > begin) {
         val ch: Char = this[end - 1]
         if (!ch.isSpace()) {
             break
         }
-        end = end - 1
+        end--
     }
     var out: Str
     if (end > begin) {
@@ -674,9 +674,9 @@ fun Str.split(separator: Char): List<Str> {
     var i: Int = 0
     while (i < len) {
         if (bytes[i] == separator) {
-            count = count + 1
+            count++
         }
-        i = i + 1
+        i++
     }
     parts.reserve(count + 1)
     var pos: Int = 0
@@ -703,7 +703,7 @@ fun Str.toUpper(): Str {
             ch = ch - 32
         }
         out.append(ch)
-        i = i + 1
+        i++
     }
     return out
 }
@@ -718,7 +718,7 @@ fun Str.toLower(): Str {
             ch = ch + 32
         }
         out.append(ch)
-        i = i + 1
+        i++
     }
     return out
 }
@@ -770,7 +770,7 @@ fun Str.toInt(): Opt<Int> {
                 value = value * 10 - digit
             }
         }
-        i = i + 1
+        i++
     }
     if (overflow) {
         return simse_optNone<Int>()
@@ -844,7 +844,7 @@ fun intToStr(value: Int64): Str {
     var i: Int = reversed.size() - 1
     while (i >= 0) {
         out.append(reversed[i])
-        i = i - 1
+        i--
     }
     return out
 }

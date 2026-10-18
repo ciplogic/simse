@@ -39,7 +39,7 @@ fun Analyzer.analyzeDecl(decl: *AstXmlNode): Unit {
             var i: Int = 0
             while (i < typeParams.size()) {
                 this.declareType(typeParams[i])
-                i = i + 1
+                i++
             }
             this.pushScope()
             this.declareValue("this", true, false, xmlEmptyNode())
@@ -72,7 +72,7 @@ fun Analyzer.analyzeDecl(decl: *AstXmlNode): Unit {
             var i: Int = 0
             while (i < typeParams.size()) {
                 this.declareType(typeParams[i])
-                i = i + 1
+                i++
             }
             val target: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.TargetType)
             if (!xmlIsEmpty(target)) {
@@ -382,7 +382,7 @@ fun Analyzer.analyzeFunction(decl: *AstXmlNode): Unit {
     var i: Int = 0
     while (i < typeParams.size()) {
         this.declareType(typeParams[i])
-        i = i + 1
+        i++
     }
     this.checkProtocolConstraints(decl)
     this.collectCurrentConstraints(decl)
@@ -534,9 +534,9 @@ fun Analyzer.checkProtocolConstraints(decl: *AstXmlNode): Unit {
                     }
                 }
             }
-            j = j + 1
+            j++
         }
-        i = i + 1
+        i++
     }
 }
 
@@ -665,7 +665,7 @@ fun Analyzer.checkProtocolCall(call: *AstXmlNode, callee: *AstXmlNode): Unit {
         var t: Int = 0
         while (t < typeArgs.size() && t < typeParams.size()) {
             semBindOne(*bindings, typeParams[t], typeArgs[t])
-            t = t + 1
+            t++
         }
         var argTypes: List<AstXmlNode> = List<AstXmlNode>()
         for (*arg in argNodes) {
@@ -785,7 +785,7 @@ fun Analyzer.analyzeStmt(stmt: *AstXmlNode): Unit {
                 this.analyzeExpr(cond)
             }
             this.pushScope()
-            this.loopDepth = this.loopDepth + 1
+            this.loopDepth++
             val body: List<AstXmlNode> = xmlChildren(xmlChildPtr(stmt, AstNodeKind.Body), AstNodeKind.Stmt)
             for (*bodyStmt in body) {
                 this.analyzeStmt(bodyStmt)
@@ -793,7 +793,7 @@ fun Analyzer.analyzeStmt(stmt: *AstXmlNode): Unit {
             // Same as the `if` arms: the rewrite runs in the scope that declares the
             // iterated local, before the scope goes away.
             this.promoteForLoops(*body)
-            this.loopDepth = this.loopDepth - 1
+            this.loopDepth--
             this.popScope()
             return
         }
@@ -952,7 +952,7 @@ fun Analyzer.analyzeExpr(expr: *AstXmlNode): Unit {
                 if (xmlIsEmpty(thisAt)) {
                     thisAt = semLambdaThisNode(bodyContainer.Children[b])
                 }
-                b = b + 1
+                b++
             }
             if (!xmlIsEmpty(thisAt)) {
                 this.diag(
@@ -973,7 +973,7 @@ fun Analyzer.analyzeExpr(expr: *AstXmlNode): Unit {
                     this.resolveType(type)
                 }
                 this.declareValue(names[i], true, false, type)
-                i = i + 1
+                i++
             }
             if (paramTypes.size() != names.size()) {
                 for (*paramType in paramTypes) {

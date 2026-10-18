@@ -113,7 +113,7 @@ fun JsonNode.get(key: Str): JsonNode {
             val handle: &JsonNode = member.value
             return *handle
         }
-        i = i + 1
+        i++
     }
     return JsonNode()
 }
@@ -128,7 +128,7 @@ fun JsonNode.has(key: Str): Bool {
         if (member.key == key) {
             return true
         }
-        i = i + 1
+        i++
     }
     return false
 }
@@ -171,7 +171,7 @@ fun jsonArray(items: List<JsonNode>): JsonNode {
     while (i < items.size()) {
         var boxed: JsonNode = items[i]
         handles.append(&boxed)
-        i = i + 1
+        i++
     }
     var node: JsonNode = JsonNode()
     node.setItems(handles)
@@ -197,10 +197,10 @@ fun jsonNumberText(value: Float64): Str {
     }
     var end: Int = printed.size()
     while (end > 0 && printed[end - 1] == '0') {
-        end = end - 1
+        end--
     }
     if (end > 0 && printed[end - 1] == '.') {
-        end = end - 1
+        end--
     }
     return printed.substr(0, end)
 }
@@ -229,7 +229,7 @@ fun jsonWriteQuoted(out: *Str, value: Str): Unit {
         } else {
             out.append(ch)
         }
-        i = i + 1
+        i++
     }
     out.append('"')
 }
@@ -268,7 +268,7 @@ data class JsonWriter(var out: Str) {
                     }
                     val handle: &JsonNode = node.Items[i]
                     this.write(*handle)
-                    i = i + 1
+                    i++
                 }
                 this.out.append(']')
             }
@@ -285,7 +285,7 @@ data class JsonWriter(var out: Str) {
                     this.out.append(':')
                     val handle: &JsonNode = member.value
                     this.write(*handle)
-                    i = i + 1
+                    i++
                 }
                 this.out.append('}')
             }
@@ -323,7 +323,7 @@ data class JsonReader(var text: Str, var at: Int) {
             if (!ch.isSpace()) {
                 break
             }
-            this.at = this.at + 1
+            this.at++
         }
     }
 
@@ -380,7 +380,7 @@ data class JsonReader(var text: Str, var at: Int) {
         while (this.at < this.text.size()) {
             val ch: Char = this.text[this.at]
             if (ch.isDigit() || ch == '-' || ch == '+' || ch == '.' || ch == 'e' || ch == 'E') {
-                this.at = this.at + 1
+                this.at++
             } else {
                 break
             }
@@ -398,11 +398,11 @@ data class JsonReader(var text: Str, var at: Int) {
 
     // The cursor is on the opening quote.
     fun parseString(): Res<Str> {
-        this.at = this.at + 1
+        this.at++
         var out: Str = Str()
         while (this.at < this.text.size()) {
             val ch: Char = this.text[this.at]
-            this.at = this.at + 1
+            this.at++
             if (ch == '"') {
                 return Res<Str>.ok(out)
             }
@@ -414,7 +414,7 @@ data class JsonReader(var text: Str, var at: Int) {
                 break
             }
             val esc: Char = this.text[this.at]
-            this.at = this.at + 1
+            this.at++
             if (esc == '"') {
                 out.append('"')
             } else if (esc == '\\') {
@@ -450,13 +450,13 @@ data class JsonReader(var text: Str, var at: Int) {
         var i: Int = 0
         while (i < 4) {
             val ch: Char = this.text[this.at]
-            this.at = this.at + 1
+            this.at++
             val digit: Int = jsonHexValue(ch)
             if (digit < 0) {
                 return this.failChar("bad unicode escape")
             }
             code = code * 16 + digit
-            i = i + 1
+            i++
         }
         // `Char` is one byte: a code point above ASCII becomes `?` (surrogate pairs and
         // non-Latin text need the UTF-8 work the module does not do yet).
@@ -468,11 +468,11 @@ data class JsonReader(var text: Str, var at: Int) {
 
     // The cursor is on `[`.
     fun parseArray(): Res<JsonNode> {
-        this.at = this.at + 1
+        this.at++
         var items: List<&JsonNode> = List<&JsonNode>()
         this.skipSpace()
         if (this.at < this.text.size() && this.text[this.at] == ']') {
-            this.at = this.at + 1
+            this.at++
             return Res<JsonNode>.ok(this.arrayNode(items))
         }
         while (true) {
@@ -484,7 +484,7 @@ data class JsonReader(var text: Str, var at: Int) {
                 return this.fail("unterminated array")
             }
             val ch: Char = this.text[this.at]
-            this.at = this.at + 1
+            this.at++
             if (ch == ']') {
                 return Res<JsonNode>.ok(this.arrayNode(items))
             }
@@ -504,11 +504,11 @@ data class JsonReader(var text: Str, var at: Int) {
 
     // The cursor is on `{`.
     fun parseObject(): Res<JsonNode> {
-        this.at = this.at + 1
+        this.at++
         var members: List<&JsonMember> = List<&JsonMember>()
         this.skipSpace()
         if (this.at < this.text.size() && this.text[this.at] == '}') {
-            this.at = this.at + 1
+            this.at++
             return Res<JsonNode>.ok(jsonObject(members))
         }
         while (true) {
@@ -522,7 +522,7 @@ data class JsonReader(var text: Str, var at: Int) {
             if (this.at >= this.text.size() || this.text[this.at] != ':') {
                 return this.fail("expected ':'")
             }
-            this.at = this.at + 1
+            this.at++
             val parsedValue: Res<JsonNode> = this.parseValue()
             var value: JsonNode = parsedValue!!
             members.append(&JsonMember(key, &value))
@@ -531,7 +531,7 @@ data class JsonReader(var text: Str, var at: Int) {
                 return this.fail("unterminated object")
             }
             val ch: Char = this.text[this.at]
-            this.at = this.at + 1
+            this.at++
             if (ch == '}') {
                 return Res<JsonNode>.ok(jsonObject(members))
             }

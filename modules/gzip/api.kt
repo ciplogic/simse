@@ -58,7 +58,7 @@ fun gzReverseBits(code: Int, count: Int): Int {
     while (i < count) {
         reversed = (reversed << 1) | (value & 1)
         value = value >> 1
-        i = i + 1
+        i++
     }
     return reversed
 }
@@ -98,7 +98,7 @@ fun gzLitBits(symbol: Int): Int {
 fun gzLengthSymbol(length: Int): Int {
     var symbol: Int = 285
     while (symbol > 257 && gzLengthBase(symbol) > length) {
-        symbol = symbol - 1
+        symbol--
     }
     return symbol
 }
@@ -163,7 +163,7 @@ fun gzLengthExtra(symbol: Int): Int {
 fun gzDistanceSymbol(distance: Int): Int {
     var symbol: Int = 29
     while (symbol > 0 && gzDistanceBase(symbol) > distance) {
-        symbol = symbol - 1
+        symbol--
     }
     return symbol
 }
@@ -235,7 +235,7 @@ fun gzFindMatch(bytes: List<Int>, head: List<Int>, prev: List<Int>, at: Int, cha
         }
         var length: Int = 0
         while (length < maxLength && bytes[candidate + length] == bytes[at + length]) {
-            length = length + 1
+            length++
         }
         if (length > best.length) {
             best = GzMatch(length, at - candidate)
@@ -244,7 +244,7 @@ fun gzFindMatch(bytes: List<Int>, head: List<Int>, prev: List<Int>, at: Int, cha
             }
         }
         candidate = prev[candidate]
-        remaining = remaining - 1
+        remaining--
     }
     return best
 }
@@ -276,7 +276,7 @@ fun gzBytes(input: List<Int8>): List<Int> {
     while (i < input.size()) {
         val wide: Int = input[i]
         bytes.append(wide & 255)
-        i = i + 1
+        i++
     }
     return bytes
 }
@@ -292,7 +292,7 @@ fun gzDeflateFixed(bytes: List<Int>, level: Int, writer: *GzBitWriter): Unit {
     var i: Int = 0
     while (i < 65536) {
         head.append(-1)
-        i = i + 1
+        i++
     }
     var prev: List<Int> = List<Int>()
 
@@ -306,14 +306,14 @@ fun gzDeflateFixed(bytes: List<Int>, level: Int, writer: *GzBitWriter): Unit {
             var j: Int = at
             while (j < at + match.length) {
                 gzInsert(*head, *prev, bytes, j)
-                j = j + 1
+                j++
             }
             at = at + match.length
         } else {
             val symbol: Int = bytes[at]
             writer.writeCode(gzLitCode(symbol), gzLitBits(symbol))
             gzInsert(*head, *prev, bytes, at)
-            at = at + 1
+            at++
         }
     }
 
@@ -364,7 +364,7 @@ fun gzCrc32(bytes: List<Int>): UInt32 {
     while (i < bytes.size()) {
         val index: Int = (crc.toInt() ^ bytes[i]) & 255
         crc = table[index].xorWith(crc.shr(8))
-        i = i + 1
+        i++
     }
     return crc.xorWith(UInt32(-1))
 }
@@ -381,10 +381,10 @@ fun gzCrcTable(): List<UInt32> {
             } else {
                 entry = entry.shr(1)
             }
-            bit = bit + 1
+            bit++
         }
         table.append(entry)
-        i = i + 1
+        i++
     }
     return table
 }
@@ -407,7 +407,7 @@ data class GzBitReader(var bytes: List<Int>, var bitPos: Int, var error: Bool) {
             }
             val bit: Int = (this.bytes[byteAt] >> (at & 7)) & 1
             value = value | (bit << i)
-            i = i + 1
+            i++
         }
         this.bitPos = this.bitPos + count
         return value
@@ -454,12 +454,12 @@ fun gzCountCodes(lengths: List<Int>): GzHuffmanCount {
     var i: Int = 0
     while (i < 16) {
         counts.append(0)
-        i = i + 1
+        i++
     }
     i = 0
     while (i < lengths.size()) {
         counts[lengths[i]] = counts[lengths[i]] + 1
-        i = i + 1
+        i++
     }
     var left: Int = 1
     var len: Int = 1
@@ -468,7 +468,7 @@ fun gzCountCodes(lengths: List<Int>): GzHuffmanCount {
         if (left < 0) {
             return GzHuffmanCount(-1, counts)
         }
-        len = len + 1
+        len++
     }
     return GzHuffmanCount(left, counts)
 }
@@ -479,33 +479,33 @@ fun gzHuffmanFromLengths(lengths: List<Int>): GzHuffman {
     var len: Int = 1
     while (len < 16) {
         total = total + counted.counts[len]
-        len = len + 1
+        len++
     }
     var offsets: List<Int> = List<Int>()
     len = 0
     while (len < 16) {
         offsets.append(0)
-        len = len + 1
+        len++
     }
     len = 1
     while (len < 15) {
         offsets[len + 1] = offsets[len] + counted.counts[len]
-        len = len + 1
+        len++
     }
     var symbols: List<Int> = List<Int>()
     var i: Int = 0
     while (i < total) {
         symbols.append(0)
-        i = i + 1
+        i++
     }
     var symbol: Int = 0
     while (symbol < lengths.size()) {
         val width: Int = lengths[symbol]
         if (width != 0) {
             symbols[offsets[width]] = symbol
-            offsets[width] = offsets[width] + 1
+            offsets[width]++
         }
-        symbol = symbol + 1
+        symbol++
     }
     return GzHuffman(counted.counts, symbols)
 }
@@ -530,7 +530,7 @@ fun gzDecode(reader: *GzBitReader, table: GzHuffman): Int {
         index = index + count
         first = (first + count) << 1
         code = code << 1
-        len = len + 1
+        len++
     }
     return -1
 }
@@ -541,7 +541,7 @@ fun gzFixedLitHuffman(): GzHuffman {
     var symbol: Int = 0
     while (symbol < 288) {
         lengths.append(gzLitBits(symbol))
-        symbol = symbol + 1
+        symbol++
     }
     return gzHuffmanFromLengths(lengths)
 }
@@ -552,7 +552,7 @@ fun gzFixedDistHuffman(): GzHuffman {
     var symbol: Int = 0
     while (symbol < 30) {
         lengths.append(5)
-        symbol = symbol + 1
+        symbol++
     }
     return gzHuffmanFromLengths(lengths)
 }
@@ -657,7 +657,7 @@ fun gzInflateBlock(reader: *GzBitReader, out: *List<Int>, lit: GzHuffman, dist: 
         while (copied < length) {
             val byte: Int = out[out.size() - distance]
             out.append(byte)
-            copied = copied + 1
+            copied++
         }
     }
 }
@@ -680,7 +680,7 @@ fun gzInflateStored(reader: *GzBitReader, out: *List<Int>): Str {
             return "gzip: truncated deflate data"
         }
         out.append(byte)
-        i = i + 1
+        i++
     }
     return ""
 }
@@ -701,12 +701,12 @@ fun gzInflateDynamic(reader: *GzBitReader, out: *List<Int>): Str {
     var i: Int = 0
     while (i < 19) {
         codeLengths.append(0)
-        i = i + 1
+        i++
     }
     i = 0
     while (i < codeCount) {
         codeLengths[gzCodeOrder(i)] = reader.readBits(3)
-        i = i + 1
+        i++
     }
     if (reader.error) {
         return "gzip: truncated deflate data"
@@ -754,7 +754,7 @@ fun gzInflateDynamic(reader: *GzBitReader, out: *List<Int>): Str {
         i = 0
         while (i < repeat) {
             lengths.append(value)
-            i = i + 1
+            i++
         }
     }
 
@@ -762,13 +762,13 @@ fun gzInflateDynamic(reader: *GzBitReader, out: *List<Int>): Str {
     i = 0
     while (i < literalCount) {
         litLengths.append(lengths[i])
-        i = i + 1
+        i++
     }
     var distLengths: List<Int> = List<Int>()
     i = 0
     while (i < distanceCount) {
         distLengths.append(lengths[literalCount + i])
-        i = i + 1
+        i++
     }
     if (gzCountCodes(litLengths).left != 0) {
         return "gzip: invalid deflate literal/length code"
@@ -867,14 +867,14 @@ fun decompress(input: List<Int8>): Res<List<Int8>> {
         if (at < 0) {
             return Res<List<Int8>>.err("gzip: the header ends inside the file name")
         }
-        at = at + 1
+        at++
     }
     if (flags & 16 != 0) {
         at = gzSkipZero(bytes, at)
         if (at < 0) {
             return Res<List<Int8>>.err("gzip: the header ends inside the comment")
         }
-        at = at + 1
+        at++
     }
     if (flags & 2 != 0) {
         at = at + 2
@@ -907,7 +907,7 @@ fun decompress(input: List<Int8>): Res<List<Int8>> {
     var i: Int = 0
     while (i < plain.size()) {
         out.append(plain[i])
-        i = i + 1
+        i++
     }
     return Res<List<Int8>>.ok(out)
 }
@@ -917,7 +917,7 @@ fun decompress(input: List<Int8>): Res<List<Int8>> {
 fun gzSkipZero(bytes: List<Int>, at: Int): Int {
     var i: Int = at
     while (i < bytes.size() && bytes[i] != 0) {
-        i = i + 1
+        i++
     }
     if (i >= bytes.size()) {
         return -1

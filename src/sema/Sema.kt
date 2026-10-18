@@ -73,7 +73,7 @@ fun semaIsOwnedViewSource(actual: *AstXmlNode): Bool {
     var base: *AstXmlNode = actual
     var guard: Int = 0
     while (guard < 64) {
-        guard = guard + 1
+        guard++
         val kind: AstNodeCategory = xmlKind(base)
         if (kind == AstNodeCategory.TypePointer || kind == AstNodeCategory.TypeReference) {
             val inner: *AstXmlNode = xmlChildPtr(base, AstNodeKind.Inner)
@@ -156,7 +156,7 @@ fun semaUnifyReceiver(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *Li
                 if (!semaUnifyReceiver(patternArgs[i], actualArgs[i], typeParams)) {
                     return false
                 }
-                i = i + 1
+                i++
             }
             return true
         }
@@ -249,7 +249,7 @@ fun semaTypeTextList(types: *List<AstXmlNode>): Str {
         val text: Str = semaTypeText(types[i])
         len += text.size()
         parts.append(text)
-        i = i + 1
+        i++
     }
     out.reserve(len)
     i = 0
@@ -258,7 +258,7 @@ fun semaTypeTextList(types: *List<AstXmlNode>): Str {
             out.appendStr(", ")
         }
         out.appendStr(parts[i])
-        i = i + 1
+        i++
     }
     return out
 }

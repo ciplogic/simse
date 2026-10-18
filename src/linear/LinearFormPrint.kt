@@ -249,7 +249,7 @@ fun printIlBody(body: *IlBody): Str {
         val ilIntTextText2: Str = ilIntText(i)
         val typesText: Str = body.types[i]
         types.append(`@ilIntTextText2 @typesText`)
-        i = i + 1
+        i++
     }
     ilAppendTable(out, "types:   ", types)
 
@@ -262,7 +262,7 @@ fun printIlBody(body: *IlBody): Str {
         val typeIndexText: Str = ilIntText(slot.typeIndex)
         val kindText: Str = ilVarKindText(slot.kind)
         vars.append(`@indexText @slotNameText:@typeIndexText:@kindText`)
-        i = i + 1
+        i++
     }
     ilAppendTable(out, "vars:    ", vars)
 
@@ -272,7 +272,7 @@ fun printIlBody(body: *IlBody): Str {
         val ilIntTextText3: Str = ilIntText(i)
         val ilPoolAsTextText: Str = ilPoolAsText(body.pool[i])
         pool.append(`@ilIntTextText3 @ilPoolAsTextText`)
-        i = i + 1
+        i++
     }
     ilAppendTable(out, "pool:    ", pool)
 
@@ -292,7 +292,7 @@ fun printIlBody(body: *IlBody): Str {
             text = text + ":ret=" + ilTypeName(body, method.returnType)
         }
         methods.append(text)
-        i = i + 1
+        i++
     }
     ilAppendTable(out, "methods: ", methods)
 
@@ -302,7 +302,7 @@ fun printIlBody(body: *IlBody): Str {
         val ilIntTextText6: Str = ilIntText(i)
         val labelsText: Str = body.labels[i]
         labels.append(`@ilIntTextText6 @labelsText`)
-        i = i + 1
+        i++
     }
     ilAppendTable(out, "labels:  ", labels)
 
@@ -320,7 +320,7 @@ fun printIlBody(body: *IlBody): Str {
         var j: Int = 0
         while (j < op.operands.size()) {
             rendered.append(ilRenderOperand(body, ilOperandKindAt(tokens, j), op.operands[j]))
-            j = j + 1
+            j++
         }
 
         val ilPadRightText: Str = ilPadRight(ilIntText(i), 4)
@@ -340,7 +340,7 @@ fun printIlBody(body: *IlBody): Str {
             text = text + "  (line " + ilIntText(sourceLine) + ")"
         }
         out = out + text + "\n"
-        i = i + 1
+        i++
     }
     return out
 }
@@ -427,7 +427,7 @@ fun ilCollectStmtNamesIn(
     var body: List<AstXmlNode> = List<AstXmlNode>()
     while (i < children.count()) {
         body.append(children[i])
-        i = i + 1
+        i++
     }
     ilCollectStmtNames(body, declared, order, seen)
 }

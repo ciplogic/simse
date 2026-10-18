@@ -40,9 +40,9 @@ fun xmlPeek(c: *XmlCursor): Char {
 // Step over one character, counting the lines it ends.
 fun xmlStep(c: *XmlCursor): Unit {
     if (xmlPeek(c) == '\n') {
-        c.line = c.line + 1
+        c.line++
     }
-    c.at = c.at + 1
+    c.at++
 }
 
 fun xmlSkipSpace(c: *XmlCursor): Unit {
@@ -219,7 +219,7 @@ fun xmlElement(c: *XmlCursor): Res<XmlNode> {
             if (attributes[seen].name == key) {
                 return xmlFail<XmlNode>(attrLine, "attribute " + key + " written twice")
             }
-            seen = seen + 1
+            seen++
         }
         attributes.append(Attribute(key, value))
     }
@@ -258,7 +258,7 @@ fun xmlElement(c: *XmlCursor): Res<XmlNode> {
                         if (attributes[i].name == "text") {
                             hasText = true
                         }
-                        i = i + 1
+                        i++
                     }
                     if (hasText) {
                         return xmlFail<XmlNode>(open, "<" + tag + "> has content and a text attribute")

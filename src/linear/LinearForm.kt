@@ -232,11 +232,11 @@ fun ilSplitParams(text: Str): List<Str> {
         if (text[i] == ',') {
             out.append(current)
             current = Str()
-            i = i + 1
+            i++
             continue
         }
         current = current + text[i]
-        i = i + 1
+        i++
     }
     out.append(current)
     return out
@@ -275,7 +275,7 @@ fun ilLambdaLower(body: *List<AstXmlNode>, unitResult: Bool): List<AstXmlNode> {
         var i: Int = 0
         while (i < tail) {
             out.append(body[i])
-            i = i + 1
+            i++
         }
         out.append(ret)
         return linLowerForEmission(out)
@@ -283,7 +283,7 @@ fun ilLambdaLower(body: *List<AstXmlNode>, unitResult: Bool): List<AstXmlNode> {
     var i: Int = 0
     while (i < body.size()) {
         out.append(body[i])
-        i = i + 1
+        i++
     }
     return linLowerForEmission(out)
 }

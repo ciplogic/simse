@@ -174,7 +174,7 @@ fun ilPromoteStackName(il: *IlBody, c: Int): Str {
     var name: Str = base
     var n: Int = 0
     while (ilPromoteNameTaken(il, name)) {
-        n = n + 1
+        n++
         name = base + "_" + n.toString()
     }
     return name
@@ -186,7 +186,7 @@ fun ilPromoteNameTaken(il: *IlBody, name: Str): Bool {
         if (il.vars[i].name == name) {
             return true
         }
-        i = i + 1
+        i++
     }
     return false
 }
@@ -280,7 +280,7 @@ fun ilPromoteFind(
                 }
             }
         }
-        c = c + 1
+        c++
     }
     return -1
 }
@@ -343,26 +343,26 @@ fun ilPromoteApply(il: *IlBody, c: Int, at: Int): Unit {
                 var j: Int = 2
                 while (j < op.operands.size()) {
                     built.append(op.operands[j])
-                    j = j + 1
+                    j++
                 }
                 ops.append(IlOp(IlOpKind.CallCtor, built))
                 lines.append(il.lines[i])
                 ops.append(IlOp(IlOpKind.Deref, ilOps2(c, stack)))
                 lines.append(il.lines[i])
             }
-            i = i + 1
+            i++
             continue
         }
         // `d = *c` was `.get()`; `c` is the pointer itself now, so it is `d = c`.
         if (op.kind == IlOpKind.Deref && op.operands.size() >= 2 && op.operands[1] == c) {
             ops.append(IlOp(IlOpKind.SetVar, ilOps2(op.operands[0], c)))
             lines.append(il.lines[i])
-            i = i + 1
+            i++
             continue
         }
         ops.append(IlOp(op.kind, op.operands))
         lines.append(il.lines[i])
-        i = i + 1
+        i++
     }
     if (!declared && !box) {
         ops.insert(0, IlOp(IlOpKind.Declare, ilOps1(stack)))
@@ -410,11 +410,11 @@ fun ilPromoteRefs(il: *IlBody, facts: *SemFacts): Bool {
                         ) {
                             argEscape[slot] = true
                         }
-                        j = j + 1
+                        j++
                     }
                 }
             }
-            ai = ai + 1
+            ai++
         }
         var i: Int = 0
         while (i < il.ops.size()) {
@@ -422,12 +422,12 @@ fun ilPromoteRefs(il: *IlBody, facts: *SemFacts): Bool {
             // A declaration names the slot's *storage*, not a read or a write of it - `ilReuseDst`
             // answers -1 for it - so it must not mark the slot observed.
             if (op.kind == IlOpKind.Declare || op.kind == IlOpKind.DeclareInit) {
-                i = i + 1
+                i++
                 continue
             }
             val built: Int = ilPromoteInitReceiver(op, il)
             if (built >= 0 && built < slots) {
-                initCount[built] = initCount[built] + 1
+                initCount[built]++
                 initOp[built] = i
             }
             val writes: Bool = ilWritesDestination(op.kind)
@@ -437,13 +437,13 @@ fun ilPromoteRefs(il: *IlBody, facts: *SemFacts): Bool {
                     && operand >= 0 && operand < slots
                 ) {
                     if (j == 0 && writes) {
-                        defCount[operand] = defCount[operand] + 1
+                        defCount[operand]++
                         defOp[operand] = i
                         // The `?`-typed placeholder a null test reads: set by `SetVar_Null`, and
                         // unset by any other writer (the local merge reuses slots).
                         nullSlots[operand] = op.kind == IlOpKind.SetVar_Null
                     } else {
-                        useCount[operand] = useCount[operand] + 1
+                        useCount[operand]++
                         if (!ilPromoteUseSafe(il, op, j, *argEscape)
                             && !ilPromoteNullTest(op, j, *nullSlots)
                         ) {
@@ -454,7 +454,7 @@ fun ilPromoteRefs(il: *IlBody, facts: *SemFacts): Bool {
                     }
                 }
             }
-            i = i + 1
+            i++
         }
         val c: Int = ilPromoteFind(
             il, *bad, *defCount, *defOp, *useCount, *initCount, *initOp, facts

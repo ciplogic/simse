@@ -53,7 +53,7 @@ fun driverAppendNamed(target: *AstXmlNode, source: *AstXmlNode, role: AstNodeKin
         if (source.Children[i].name == role) {
             picked.append(source.Children[i])
         }
-        i = i + 1
+        i++
     }
     xmlAddChildren(target, picked)
 }
@@ -113,14 +113,14 @@ fun driverGatherFiles(
             if (moduleIsTree[r] || !driverIsGeneratorSource(rootFiles[f])) {
                 candidates.append(rootFiles[f])
             }
-            f = f + 1
+            f++
         }
-        r = r + 1
+        r++
     }
     var i: Int = 0
     while (i < inputs.size()) {
         candidates.append(inputs[i])
-        i = i + 1
+        i++
     }
 
     var chosen: List<Str> = List<Str>()
@@ -150,7 +150,7 @@ fun manifestValues(text: *Str, key: *Str): List<Str> {
         if (colon > 0 && line.substr(0, colon).trim() == key) {
             out.append(line.substr(colon + 1, line.size() - colon - 1).trim())
         }
-        i = i + 1
+        i++
     }
     return out
 }
@@ -175,7 +175,7 @@ fun driverDedupRoots(
             outRoots.append(roots[i])
             outTree.append(isTree[i])
         }
-        i = i + 1
+        i++
     }
 }
 
@@ -204,7 +204,7 @@ fun driverExpandRoot(root: *Str, isTree: Bool, out: *List<Str>, outTree: *List<B
         val modulesText: Str = modules[i]
         out.append(`@root/@modulesText`)
         outTree.append(false)
-        i = i + 1
+        i++
     }
     return Res<Str>.ok("")
 }
@@ -231,7 +231,7 @@ fun main(args: List<Str>): Int {
                     eprintln("simse: -o requires a path")
                     return 2
                 }
-                i = i + 1
+                i++
                 output = args[i]
             }
 
@@ -240,7 +240,7 @@ fun main(args: List<Str>): Int {
                     eprintln("simse: --prelude requires a path")
                     return 2
                 }
-                i = i + 1
+                i++
                 preludePath = args[i]
                 preludeExplicit = true
             }
@@ -250,7 +250,7 @@ fun main(args: List<Str>): Int {
                     eprintln("simse: --root requires a path")
                     return 2
                 }
-                i = i + 1
+                i++
                 extraRoots.append(args[i])
                 extraTrees.append(true)
             }
@@ -260,7 +260,7 @@ fun main(args: List<Str>): Int {
                     eprintln("simse: --module requires a path")
                     return 2
                 }
-                i = i + 1
+                i++
                 extraRoots.append(args[i])
                 extraTrees.append(false)
             }
@@ -328,7 +328,7 @@ fun main(args: List<Str>): Int {
                     eprintln("simse: --profile-file requires a path")
                     return 2
                 }
-                i = i + 1
+                i++
                 profSetFile(args[i])
             }
 
@@ -354,7 +354,7 @@ fun main(args: List<Str>): Int {
                 inputs.append(arg)
             }
         }
-        i = i + 1
+        i++
     }
 
     if (inputs.size() == 0 && extraRoots.size() == 0) {
@@ -373,7 +373,7 @@ fun main(args: List<Str>): Int {
     while (e < extraRoots.size()) {
         roots.append(extraRoots[e])
         rootTrees.append(extraTrees[e])
-        e = e + 1
+        e++
     }
     var moduleRoots: List<Str> = List<Str>()
     var moduleTrees: List<Bool> = List<Bool>()
@@ -384,7 +384,7 @@ fun main(args: List<Str>): Int {
             eprintln("simse: " + expanded.Error)
             return 2
         }
-        r = r + 1
+        r++
     }
     var dedupedRoots: List<Str> = List<Str>()
     var dedupedTrees: List<Bool> = List<Bool>()
@@ -425,7 +425,7 @@ fun main(args: List<Str>): Int {
         preludeModules.append(parsedPrelude.Value)
         driverAppendNamed(mergedPrelude, parsedPrelude.Value, AstNodeKind.Import)
         driverAppendDecls(mergedPrelude, parsedPrelude.Value)
-        p = p + 1
+        p++
     }
     val hasPrelude: Bool = preludeFiles.size() > 0
 
@@ -457,7 +457,7 @@ fun main(args: List<Str>): Int {
         }
         fileNames.append(files[f])
         modules.append(parsed.Value)
-        f = f + 1
+        f++
     }
 
     // The generators' state (`src/compiler/SourceGen.kt`), filled here because the reparse
@@ -522,7 +522,7 @@ fun main(args: List<Str>): Int {
             eprintln(error)
             return 1
         }
-        pmod = pmod + 1
+        pmod++
     }
     var rmod: Int = 0
     while (rmod < modules.size()) {
@@ -532,7 +532,7 @@ fun main(args: List<Str>): Int {
             eprintln(error)
             return 1
         }
-        rmod = rmod + 1
+        rmod++
     }
 
     // Constant parameters (impl_specs/const-params.md): a whole-program specialization, run with
@@ -593,19 +593,19 @@ fun main(args: List<Str>): Int {
     var s: Int = 0
     while (s < preludeModules.size()) {
         semaInputs.append(SemaInput(preludeNames[s], preludeModules[s], true))
-        s = s + 1
+        s++
     }
     var m: Int = 0
     while (m < modules.size()) {
         semaInputs.append(SemaInput(fileNames[m], modules[m], false))
-        m = m + 1
+        m++
     }
     val diagnostics: List<Str> = analyze(semaInputs)
     if (diagnostics.size() > 0) {
         var d: Int = 0
         while (d < diagnostics.size()) {
             eprintln(diagnostics[d])
-            d = d + 1
+            d++
         }
         return 1
     }
@@ -617,7 +617,7 @@ fun main(args: List<Str>): Int {
     var g: Int = 0
     while (g < modules.size()) {
         cgInputs.append(CgInput(fileNames[g], modules[g], false))
-        g = g + 1
+        g++
     }
 
     val emitted: Res<Str> = emitProgram(cgInputs, resourceStored)

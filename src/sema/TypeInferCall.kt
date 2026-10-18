@@ -52,7 +52,7 @@ fun SemInfer.functionReturn(
                 if (bound) {
                     bound = semBindOne(bindings, fn.templateParams[a], typeArgs[a])
                 }
-                a = a + 1
+                a++
             }
             if (!bound) {
                 continue
@@ -63,7 +63,7 @@ fun SemInfer.functionReturn(
             var a: Int = 0
             while (a < argNodes.size()) {
                 argTypes.append(this.infer(argNodes[a]))
-                a = a + 1
+                a++
             }
             semBindCallArgs(fn.decl, xmlEmptyNode(), *argTypes, *fn.templateParams, *bindings)
         }
@@ -126,7 +126,7 @@ fun semBindCallArgs(
         }
         val paramType: *AstXmlNode = xmlChildPtr(params[at], AstNodeKind.Type)
         val argType: AstXmlNode = argTypes[i]
-        i = i + 1
+        i++
         if (xmlIsEmpty(paramType) || xmlIsEmpty(argType)) {
             continue
         }
@@ -150,7 +150,7 @@ fun semBindBestEffort(
     var i: Int = 0
     while (i < names.size()) {
         val name: Str = names[i]
-        i = i + 1
+        i++
         val bound: *AstXmlNode = found.getPtr(name)
         if (bound != null) {
             semBindOne(bindings, name, *bound)
@@ -166,7 +166,7 @@ fun SemInfer.resolveAlias(typeNode: *AstXmlNode): AstXmlNode {
     var current: AstXmlNode = typeNode
     var guard: Int = 0
     while (!xmlIsEmpty(current) && guard < 16) {
-        guard = guard + 1
+        guard++
         if (xmlKind(current) != AstNodeCategory.TypeNamed) {
             return current
         }
@@ -306,7 +306,7 @@ fun SemInfer.memberReturn(callee: *AstXmlNode, argNodes: *List<AstXmlNode>): Ast
                 var a: Int = 0
                 while (a < argNodes.size()) {
                     argTypes.append(this.infer(argNodes[a]))
-                    a = a + 1
+                    a++
                 }
                 semBindCallArgs(fn.decl, xmlEmptyNode(), *argTypes, *fn.templateParams, *bindings)
             }
@@ -331,7 +331,7 @@ fun SemInfer.memberReturn(callee: *AstXmlNode, argNodes: *List<AstXmlNode>): Ast
         var e: Int = 0
         while (e < extensions.size()) {
             val ext: *SemExtFact = *extensions[e]
-            e = e + 1
+            e++
             if (xmlIsEmpty(ext.receiver) || xmlIsEmpty(ext.returnType)) {
                 continue
             }
@@ -429,7 +429,7 @@ fun SemInfer.callArgsReach(fn: *SemFnFact, argNodes: *List<AstXmlNode>): Bool {
         if (xmlIsEmpty(actual) || !this.argReachesParam(pattern, actual, fn.templateParams)) {
             return false
         }
-        i = i + 1
+        i++
     }
     return true
 }
@@ -449,7 +449,7 @@ fun SemInfer.paramIsView(pattern: *AstXmlNode): Bool {
     var current: AstXmlNode = *pattern
     var guard: Int = 0
     while (guard < 32) {
-        guard = guard + 1
+        guard++
         if (semaIsSpanType(current)) {
             return true
         }
@@ -496,13 +496,13 @@ fun SemInfer.classMemberReturn(recv: *AstXmlNode, calleeName: *Str): AstXmlNode 
     var typeArgs: List<AstXmlNode> = xmlChildren(recv, AstNodeKind.TypeArg)
     var guard: Int = 0
     while (classDecl != null && guard < 64) {
-        guard = guard + 1
+        guard++
         if (classParams.size() == typeArgs.size()) {
             var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
             var i: Int = 0
             while (i < classParams.size()) {
                 bindings.insert(classParams[i], typeArgs[i])
-                i = i + 1
+                i++
             }
             val methods: List<AstXmlNode> = xmlChildren(*classDecl, AstNodeKind.Function)
             for (*method in methods) {
@@ -532,7 +532,7 @@ fun SemInfer.callableReturn(typeNode: *AstXmlNode): AstXmlNode {
     var current: AstXmlNode = semPointee(typeNode)
     var guard: Int = 0
     while (!xmlIsEmpty(current) && guard < 16) {
-        guard = guard + 1
+        guard++
         if (xmlKind(current) == AstNodeCategory.TypeFunction) {
             return xmlChild(current, AstNodeKind.ReturnType)
         }
@@ -718,7 +718,7 @@ fun SemInfer.infer(e: *AstXmlNode): AstXmlNode {
             var i: Int = 0
             while (i < paramNames.size() && i < paramTypes.size()) {
                 this.scopes[this.scopes.size() - 1].insert(paramNames[i], paramTypes[i])
-                i = i + 1
+                i++
             }
             var result: AstXmlNode = xmlEmptyNode()
             for (*stmt in xmlChildren(xmlChildPtr(e, AstNodeKind.Body), AstNodeKind.Stmt)) {

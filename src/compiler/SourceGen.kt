@@ -51,7 +51,7 @@ fun sourceGenFind(name: *Str): Int {
         if (gens[i].name == name) {
             return i
         }
-        i = i + 1
+        i++
     }
     return -1
 }
@@ -225,7 +225,7 @@ fun sourceGenEmit(sections: *Sections, reachedNames: *Dictionary<Str, Bool>): Re
         if (program.error.size() > 0) {
             return Res<Str>.err(program.error)
         }
-        g = g + 1
+        g++
     }
     return Res<Str>.ok("")
 }
@@ -241,7 +241,7 @@ fun sourceGenReparseSource(): Res<Str> {
         if (!collected.isOk()) {
             return collected
         }
-        m = m + 1
+        m++
     }
     if (blocks.size() == 0) {
         return Res<Str>.ok("")
@@ -252,7 +252,7 @@ fun sourceGenReparseSource(): Res<Str> {
     var i: Int = 0
     while (i < blocks.size()) {
         text.appendStr(blocks[i])
-        i = i + 1
+        i++
     }
     return Res<Str>.ok(text)
 }
@@ -276,7 +276,7 @@ fun sourceGenReparseNode(node: *AstXmlNode, blocks: *List<Str>): Res<Str> {
         if (!child.isOk()) {
             return child
         }
-        i = i + 1
+        i++
     }
     return Res<Str>.ok("")
 }

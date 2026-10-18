@@ -23,7 +23,7 @@ fun linDeadLocalsOptimization(stmts: *List<AstXmlNode>, cache: &LinUseDefs): Boo
     while (i < stmts.size()) {
         linUseDefCount(useDefs.usesAt(i), *named)
         linUseDefCount(useDefs.defsAt(i), *named)
-        i = i + 1
+        i++
     }
     linUseDefMarkEach(useDefs.captures.keys(), *named)
 
@@ -34,7 +34,7 @@ fun linDeadLocalsOptimization(stmts: *List<AstXmlNode>, cache: &LinUseDefs): Boo
         if (linUseDefAt(*named, names[i], 0) == 0) {
             drop.insert(names[i], true)
         }
-        i = i + 1
+        i++
     }
     if (drop.size() == 0) {
         return false
@@ -53,7 +53,7 @@ fun linDeadLocalsOptimization(stmts: *List<AstXmlNode>, cache: &LinUseDefs): Boo
         } else {
             out.append(stmt)
         }
-        i = i + 1
+        i++
     }
     if (!removed) {
         return false

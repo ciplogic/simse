@@ -78,7 +78,7 @@ fun bpMutatesMark(decl: *AstXmlNode): Bool {
         if (parts[i].trim() == "mutates") {
             return true
         }
-        i = i + 1
+        i++
     }
     return false
 }
@@ -400,7 +400,7 @@ fun bpContainsRef(node: *AstXmlNode): Bool {
         if (bpContainsRef(node.Children[i])) {
             return true
         }
-        i = i + 1
+        i++
     }
     return false
 }
@@ -649,7 +649,7 @@ fun bpClassDeep(
     var current: *AstXmlNode = decl
     var guard: Int = 0
     while (current != null && guard < 64) {
-        guard = guard + 1
+        guard++
         for (*field in xmlChildren(*current, AstNodeKind.Field)) {
             val fieldType: *AstXmlNode = xmlChildPtr(field, AstNodeKind.Type)
             if (xmlKind(fieldType) != AstNodeCategory.TypeNamed) {
@@ -727,7 +727,7 @@ fun bpCppCalled(texts: *List<Str>): Dictionary<Str, Bool> {
                     if (!part.isAlphaOrDigit() && part != '_') {
                         break
                     }
-                    i = i + 1
+                    i++
                 }
                 var after: Int = i
                 while (after < len) {
@@ -735,13 +735,13 @@ fun bpCppCalled(texts: *List<Str>): Dictionary<Str, Bool> {
                     if (gap != ' ' && gap != '\t') {
                         break
                     }
-                    after = after + 1
+                    after++
                 }
                 if (after < len && text[after] == '(') {
                     out.insert(text.substr(start, i - start), true)
                 }
             } else {
-                i = i + 1
+                i++
             }
         }
     }

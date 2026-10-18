@@ -30,7 +30,7 @@ fun linUseDefCount(names: List<Str>, counts: *Dictionary<Str, Int>): Unit {
     var i: Int = 0
     while (i < names.size()) {
         counts.insert(names[i], linUseDefAt(counts, names[i], 0) + 1)
-        i = i + 1
+        i++
     }
 }
 
@@ -39,7 +39,7 @@ fun linUseDefMarkEach(names: List<Str>, marks: *Dictionary<Str, Int>): Unit {
     var i: Int = 0
     while (i < names.size()) {
         marks.insert(names[i], 1)
-        i = i + 1
+        i++
     }
 }
 
@@ -93,7 +93,7 @@ fun linUseDefMarkEscapes(node: *AstXmlNode, unsafe: *Dictionary<Str, Bool>): Uni
         var i: Int = 0
         while (i < place.size()) {
             unsafe.insert(place[i], true)
-            i = i + 1
+            i++
         }
     }
     if (kind == AstNodeCategory.ExprCall) {
@@ -172,7 +172,7 @@ data class LinUseDefs(
         var i: Int = 0
         while (i < this.stmts.size()) {
             this.stmts[i] = renamer.rewrite(*this.stmts[i], true)
-            i = i + 1
+            i++
         }
     }
 }
@@ -210,7 +210,7 @@ fun linUseDefWalk(
         var i: Int = 0
         while (i < place.size()) {
             escapes.insert(place[i], true)
-            i = i + 1
+            i++
         }
     }
     if (kind == AstNodeCategory.ExprCall) {
@@ -319,7 +319,7 @@ fun linUseDefsOf(stmts: *List<AstXmlNode>, cache: &LinUseDefs): &LinUseDefs {
     for (*stmt in stmts) {
         val boundary: Bool = linUseDefIsBoundary(stmt)
         if (boundary) {
-            block = block + 1
+            block++
         }
         var uses: List<Str> = List<Str>()
         var defs: List<Str> = List<Str>()

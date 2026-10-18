@@ -61,7 +61,7 @@ fun cgRunLengthEncode(values: *List<Int>): List<Int> {
         var literals: List<Int> = List<Int>()
         while (i < count && !(i + 1 < count && values[i] == values[i + 1])) {
             literals.append(values[i])
-            i = i + 1
+            i++
         }
         stream.append(literals.size())
         for (literal in literals) {
@@ -74,7 +74,7 @@ fun cgRunLengthEncode(values: *List<Int>): List<Int> {
         while (i + 1 < count && values[i] == values[i + 1]) {
             var j: Int = i
             while (j < count && values[j] == values[i]) {
-                j = j + 1
+                j++
             }
             runs.append(j - i)
             runs.append(values[i])
@@ -124,7 +124,7 @@ data class StringTable(
         var i: Int = 0
         while (i < this.entries.size()) {
             this.indexAt.insert(this.entries[i], i)
-            i = i + 1
+            i++
         }
     }
 

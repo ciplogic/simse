@@ -118,7 +118,7 @@ fun semProtocolMatches(protocolDecl: *AstXmlNode, fn: *AstXmlNode, receiverPatte
         if (!semBindTypes(pattern, actual, protocolParams, bindings)) {
             return false
         }
-        i = i + 1
+        i++
     }
     val protocolRet: *AstXmlNode = xmlChildPtr(protocolDecl, AstNodeKind.ReturnType)
     val fnRet: *AstXmlNode = xmlChildPtr(fn, AstNodeKind.ReturnType)
@@ -149,7 +149,7 @@ fun semProtocolSignatureText(protocolDecl: *AstXmlNode): Str {
         val name: Str = xmlAttr(params[i], AstNodeAttributeKind.Name)
         val typeText: Str = semaTypeText(xmlChildPtr(params[i], AstNodeKind.Type))
         out = out + name + ": " + typeText
-        i = i + 1
+        i++
     }
     out = out + ")"
     val ret: *AstXmlNode = xmlChildPtr(protocolDecl, AstNodeKind.ReturnType)

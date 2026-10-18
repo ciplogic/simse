@@ -318,7 +318,7 @@ fun Parser.tryParseCtorReturn(pos: SourcePos): AstXmlNode {
         this.pendingClosers = savedClosers
         return this.emptyNode()
     }
-    this.ctorCounter = this.ctorCounter + 1
+    this.ctorCounter++
     val ctorCounterText: Str = this.ctorCounter.toString()
     val temp: Str = `_sm_ctor@ctorCounterText`
     val tempExpr: ExprNode = this.nameExprAt(temp, pos)
@@ -334,7 +334,7 @@ fun Parser.tryParseCtorReturn(pos: SourcePos): AstXmlNode {
     var i: Int = 0
     while (i < args.size()) {
         kids.append(this.roleOf(args[i].node, AstNodeKind.Arg))
-        i = i + 1
+        i++
     }
     var callAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
     var call: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, callAttrs, kids.toArray())
@@ -439,7 +439,7 @@ fun Parser.parseFor(out: *List<AstXmlNode>): Bool {
     }
 
     val id: Int = this.nextTemplateId
-    this.nextTemplateId = this.nextTemplateId + 1
+    this.nextTemplateId++
     val machineName: Str = "_sm_for" + id.toString()
     val counterName: Str = "_sm_index" + id.toString()
 
@@ -472,7 +472,7 @@ fun Parser.parseFor(out: *List<AstXmlNode>): Bool {
     var bi: Int = 0
     while (bi < body.size()) {
         loop.append(body[bi])
-        bi = bi + 1
+        bi++
     }
     out.append(this.whileNode(this.methodCallAt(machineName, "advance", pos), loop, pos))
     return true

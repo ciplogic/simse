@@ -27,7 +27,7 @@ fun Emitter.emitClosureClasses(unit: *IlUnit): IlText {
     var i: Int = 0
     while (i < unit.closures.size()) {
         val closure: *IlClosure = *unit.closures[i]
-        i = i + 1
+        i++
         if (this.emittedClosures.has(closure.symbol)) {
             continue
         }
@@ -44,7 +44,7 @@ fun Emitter.emitClosureClasses(unit: *IlUnit): IlText {
     i = 0
     while (i < unit.closures.size()) {
         val closure: *IlClosure = *unit.closures[i]
-        i = i + 1
+        i++
         val methodKey: Str = closure.symbol + "_invoke"
         if (this.emittedClosures.has(methodKey)) {
             continue

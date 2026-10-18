@@ -364,11 +364,11 @@ fun ilOperandTokens(signature: *IlSignature): List<Str> {
         if (spec[i] == ',') {
             tokens.append(current)
             current = Str()
-            i = i + 1
+            i++
             continue
         }
         current = current + spec[i]
-        i = i + 1
+        i++
     }
     if (!current.isEmpty()) {
         tokens.append(current)
@@ -537,7 +537,7 @@ fun ilArgList(body: *IlBody, operands: *List<Int>, first: Int): Str {
     var i: Int = first
     while (i < operands.size()) {
         args.append(ilVarName(body, operands[i]))
-        i = i + 1
+        i++
     }
     return joinStrs(args, ", ")
 }

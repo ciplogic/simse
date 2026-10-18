@@ -161,7 +161,7 @@ data class TskMachinery(
         }
         this.fieldTypes.insert(name, typeNode)
         this.fieldIds.insert(name, this.nextField)
-        this.nextField = this.nextField + 1
+        this.nextField++
         this.fieldOrder.append(name)
     }
 
@@ -194,7 +194,7 @@ data class TskMachinery(
             }
             val fieldType: *AstXmlNode = this.fieldTypes.getPtr(this.fieldOrder[f])
             task.fields.append(TskField(this.fieldOrder[f], this.member(this.fieldOrder[f]), *fieldType))
-            f = f + 1
+            f++
         }
         return task
     }
@@ -302,7 +302,7 @@ data class TskMachinery(
             out.append(
                 yldJumpWhen(yldBinary("==", tskBranchCall(), yldIntLiteral(branch)), tskLabel(branch))
             )
-            branch = branch + 1
+            branch++
         }
         for (*stmt in rest) {
             out.append(*stmt)
@@ -335,7 +335,7 @@ data class TskMachinery(
             this.fail("suspend: a suspension's callee must be a plain function name")
             return
         }
-        this.suspensions = this.suspensions + 1
+        this.suspensions++
         val at: Int = this.suspensions
         val handleName: Str = tskHandleField(at)
         // The child handle is a `RawPtr` (`void*`): the task type is not a name this lowering
@@ -551,7 +551,7 @@ data class TskMachinery(
             var child: AstXmlNode = this.exprAt(copyNode.Children[i], bases)
             child.name = copyNode.Children[i].name
             xmlAddChild(rebuilt, child)
-            i = i + 1
+            i++
         }
         return rebuilt
     }

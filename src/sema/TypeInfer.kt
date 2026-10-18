@@ -129,14 +129,14 @@ fun semReplaceRole(like: *AstXmlNode, role: AstNodeKind, replacements: *List<Ast
             if (seen < replacements.size()) {
                 kids.append(replacements[seen])
             }
-            seen = seen + 1
+            seen++
         } else {
             kids.append(child)
         }
     }
     while (seen < replacements.size()) {
         kids.append(replacements[seen])
-        seen = seen + 1
+        seen++
     }
     return AstXmlNode(like.name, like.kind, copy(like.attributes), kids.toArray())
 }
@@ -325,7 +325,7 @@ fun semSameTypeList(left: *List<AstXmlNode>, right: *List<AstXmlNode>): Bool {
         if (!semSameType(left[i], right[i])) {
             return false
         }
-        i = i + 1
+        i++
     }
     return true
 }
@@ -406,7 +406,7 @@ fun semUnifyType(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<St
                 if (!semUnifyType(patternArgs[i], actualArgs[i], typeParams)) {
                     return false
                 }
-                i = i + 1
+                i++
             }
             return true
         }
@@ -467,7 +467,7 @@ fun semUnifyType(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<St
                 if (!semUnifyType(patternParams[i], actualParams[i], typeParams)) {
                     return false
                 }
-                i = i + 1
+                i++
             }
             val patternReturn: *AstXmlNode = xmlChildPtr(pattern, AstNodeKind.ReturnType)
             val actualReturn: *AstXmlNode = xmlChildPtr(actualPtr, AstNodeKind.ReturnType)
@@ -557,7 +557,7 @@ fun semBindTypes(
                 if (!semBindTypes(patternArgs[i], actualArgs[i], typeParams, bindings)) {
                     return false
                 }
-                i = i + 1
+                i++
             }
             return true
         }
@@ -621,7 +621,7 @@ fun semBindTypes(
                 if (!semBindTypes(patternParams[i], actualParams[i], typeParams, bindings)) {
                     return false
                 }
-                i = i + 1
+                i++
             }
             val patternReturn: *AstXmlNode = xmlChildPtr(pattern, AstNodeKind.ReturnType)
             val actualReturn: *AstXmlNode = xmlChildPtr(actualPtr, AstNodeKind.ReturnType)
@@ -808,7 +808,7 @@ fun semMachineType(
             return ret
         }
         args.append(semReRole(*bound, AstNodeKind.TypeArg))
-        i = i + 1
+        i++
     }
     if (semMachineReceiver(fn.receiver)) {
         if (xmlIsEmpty(receiver)) {
@@ -999,13 +999,13 @@ fun semInferTypes(
         if (i < ctx.paramTypes.size() && !xmlIsEmpty(ctx.paramTypes[i])) {
             infer.mark(ctx.paramNames[i], ctx.paramTypes[i])
         }
-        i = i + 1
+        i++
     }
     val captureNames: List<Str> = ctx.captures.keys()
     i = 0
     while (i < captureNames.size()) {
         infer.mark(captureNames[i], ctx.captures.getPtr(captureNames[i]))
-        i = i + 1
+        i++
     }
     val out: List<AstXmlNode> = infer.stmts(body)
     infer.popScope()
@@ -1014,7 +1014,7 @@ fun semInferTypes(
     while (i < proven.size()) {
         val provenType: *AstXmlNode = infer.types.getPtr(proven[i])
         inferred.insert(proven[i], *provenType)
-        i = i + 1
+        i++
     }
     return out
 }
@@ -1046,13 +1046,13 @@ fun semTypeOfExpr(
         if (i < ctx.paramTypes.size() && !xmlIsEmpty(ctx.paramTypes[i])) {
             infer.mark(ctx.paramNames[i], ctx.paramTypes[i])
         }
-        i = i + 1
+        i++
     }
     val captureNames: List<Str> = ctx.captures.keys()
     i = 0
     while (i < captureNames.size()) {
         infer.mark(captureNames[i], ctx.captures.getPtr(captureNames[i]))
-        i = i + 1
+        i++
     }
     return infer.typeOf(expr, names)
 }

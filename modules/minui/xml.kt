@@ -48,7 +48,7 @@ fun xmlAttrOf(node: *XmlNode, name: Str): Str {
         if (attribute.name == name) {
             return attribute.value
         }
-        i = i + 1
+        i++
     }
     return ""
 }
@@ -81,7 +81,7 @@ fun xmlCheckAttrs(node: *XmlNode, allowed: Str): Res<Int> {
                 "<" + xmlElementName(node) + "> has no attribute " + attribute.name
             )
         }
-        i = i + 1
+        i++
     }
     return Res<Int>.ok(0)
 }
@@ -143,7 +143,7 @@ fun xmlRectAttr(node: *XmlNode, name: Str): Res<Rect> {
             )
         }
         numbers.append(parsed.value())
-        i = i + 1
+        i++
     }
     if (numbers[2] <= 0 || numbers[3] <= 0) {
         return xmlFail<Rect>(line, name + " needs a positive width and height")
@@ -475,7 +475,7 @@ fun xmlMapElement(f: *Frame, parent: Int, node: XmlNode): Res<Int> {
         if (!mapped.isOk()) {
             return mapped
         }
-        i = i + 1
+        i++
     }
     return Res<Int>.ok(index)
 }
@@ -539,7 +539,7 @@ fun loadScreen(text: Str): Res<Frame> {
         if (!mapped.isOk()) {
             return Res<Frame>.err(mapped.error())
         }
-        index = index + 1
+        index++
     }
     layoutFrame(*f)
     return Res<Frame>.ok(f)

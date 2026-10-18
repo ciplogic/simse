@@ -76,7 +76,7 @@ fun stackPaintBase(stack: *ScreenStack): Int {
         if (stack.layers[level].opaque) {
             base = level
         }
-        level = level + 1
+        level++
     }
     return base
 }
@@ -95,7 +95,7 @@ fun stackPaint(stack: *ScreenStack, theme: *UiTheme, ui: *Ui, custom: (Str, Int)
             custom(name, node)
         }
         paintFrame(*box, *theme, ui, perNode)
-        level = level + 1
+        level++
     }
 }
 

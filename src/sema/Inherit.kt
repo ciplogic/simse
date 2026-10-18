@@ -36,7 +36,7 @@ fun semDerivesFrom(types: *Dictionary<Str, AstXmlNode>, derived: *AstXmlNode, ba
     var current: *AstXmlNode = derived
     var guard: Int = 0
     while (current != null && guard < 64) {
-        guard = guard + 1
+        guard++
         if (xmlAttr(*current, AstNodeAttributeKind.Name) == *baseName) {
             return true
         }
@@ -83,7 +83,7 @@ fun semFindField(types: *Dictionary<Str, AstXmlNode>, decl: *AstXmlNode, member:
     var current: *AstXmlNode = decl
     var guard: Int = 0
     while (current != null && guard < 64) {
-        guard = guard + 1
+        guard++
         for (*field in xmlChildren(*current, AstNodeKind.Field)) {
             if (xmlAttr(field, AstNodeAttributeKind.Name) == *member) {
                 return *field
@@ -102,7 +102,7 @@ fun semClassTypeName(types: *Dictionary<Str, AstXmlNode>, typeNode: *AstXmlNode)
     var current: AstXmlNode = typeNode
     var guard: Int = 0
     while (!xmlIsEmpty(current) && guard < 64) {
-        guard = guard + 1
+        guard++
         val kind: AstNodeCategory = xmlKind(current)
         if (kind == AstNodeCategory.TypeReference || kind == AstNodeCategory.TypePointer) {
             current = xmlChild(current, AstNodeKind.Inner)
@@ -191,7 +191,7 @@ fun Analyzer.checkInheritance(decl: *AstXmlNode): Unit {
     var current: Str = baseName
     var guard: Int = 0
     while (current != "" && guard < 64) {
-        guard = guard + 1
+        guard++
         if (chain.contains(current)) {
             this.diag(
                 line, column,
@@ -231,7 +231,7 @@ fun Analyzer.checkInheritance(decl: *AstXmlNode): Unit {
         var above: *AstXmlNode = semaBaseDecl(*this.types, decl)
         var methodGuard: Int = 0
         while (above != null && methodGuard < 64) {
-            methodGuard = methodGuard + 1
+            methodGuard++
             for (*baseMethod in xmlChildren(*above, AstNodeKind.Function)) {
                 if (xmlAttr(baseMethod, AstNodeAttributeKind.Name) == methodName
                     && xmlCount(baseMethod, AstNodeKind.Param) == arity

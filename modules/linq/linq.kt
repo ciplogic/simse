@@ -30,7 +30,7 @@ fun List<T>.iter<T>(): ..*T {
     val len = this.size()
     while (i < len) {
         yield * this[i]
-        i = i + 1
+        i++
     }
 }
 
@@ -63,7 +63,7 @@ fun ..*T.take<T>(count: Int): ..*T {
             break
         }
         yield this.current
-        taken = taken + 1
+        taken++
     }
 }
 
@@ -72,7 +72,7 @@ fun ..*T.skip<T>(count: Int): ..*T {
     var skipped: Int = 0
     while (this.advance()) {
         if (skipped < count) {
-            skipped = skipped + 1
+            skipped++
         } else {
             yield this.current
         }
@@ -140,7 +140,7 @@ fun Str.splitIter(separator: Char): ..*StrView {
     while (true) {
         var end: Int = pos
         while (end < len && source[end] != separator) {
-            end = end + 1
+            end++
         }
         var part: StrView = source.slice(pos, end - pos)
         if (end >= len) {

@@ -91,7 +91,7 @@ fun Parser.whenCondition(
     while (i < labels.size()) {
         val same: ExprNode = this.whenLabelCondition(subject, lengthName, labels[i], pos, dispatch)
         cond = this.binaryExprAt("||", cond, same, pos)
-        i = i + 1
+        i++
     }
     return cond
 }
@@ -157,7 +157,7 @@ fun Parser.whenLabelsAreLiterals(labels: *List<AstXmlNode>): Bool {
         if (xmlKind(*labels[i]) != AstNodeCategory.ExprStrLit) {
             return false
         }
-        i = i + 1
+        i++
     }
     return true
 }
@@ -237,7 +237,7 @@ fun Parser.parseWhenSubjectless(out: *List<AstXmlNode>, pos: SourcePos): Bool {
         var next: List<AstXmlNode> = List<AstXmlNode>()
         next.append(arms[i])
         xmlAddChild(arms[i - 1], this.container(AstNodeKind.Else, next))
-        i = i - 1
+        i--
     }
     if (arms.size() > 0) {
         out.append(arms[0])
@@ -245,7 +245,7 @@ fun Parser.parseWhenSubjectless(out: *List<AstXmlNode>, pos: SourcePos): Bool {
         var e: Int = 0
         while (e < tail.size()) {
             out.append(tail[e])
-            e = e + 1
+            e++
         }
     }
     return true
@@ -398,7 +398,7 @@ fun Parser.parseWhen(out: *List<AstXmlNode>): Bool {
         var next: List<AstXmlNode> = List<AstXmlNode>()
         next.append(arms[i])
         xmlAddChild(arms[i - 1], this.container(AstNodeKind.Else, next))
-        i = i - 1
+        i--
     }
     if (!place) {
         out.append(this.varDeclNode(subjectName, true, this.emptyNode(), subject, pos))
@@ -422,7 +422,7 @@ fun Parser.parseWhen(out: *List<AstXmlNode>): Bool {
         var e: Int = 0
         while (e < tail.size()) {
             out.append(tail[e])
-            e = e + 1
+            e++
         }
     }
     return true

@@ -85,7 +85,7 @@ fun linDeadStoresOptimization(stmts: *List<AstXmlNode>, cache: &LinUseDefs): Boo
     var changed: Bool = false
     var guard: Int = 0
     while (guard < 32) {
-        guard = guard + 1
+        guard++
         val useDefs: &LinUseDefs = linUseDefsOf(stmts, cache)
         var declared: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
         var reads: Dictionary<Str, Int> = Dictionary<Str, Int>()
@@ -93,7 +93,7 @@ fun linDeadStoresOptimization(stmts: *List<AstXmlNode>, cache: &LinUseDefs): Boo
         var i: Int = 0
         while (i < stmts.size()) {
             linUseDefCount(useDefs.usesAt(i), *reads)
-            i = i + 1
+            i++
         }
         // A name a lambda reads is read: the lambda may run long after the store.
         linUseDefMarkEach(useDefs.captures.keys(), *reads)
@@ -116,7 +116,7 @@ fun linDeadStoresOptimization(stmts: *List<AstXmlNode>, cache: &LinUseDefs): Boo
             } else {
                 out.append(stmt)
             }
-            i = i + 1
+            i++
         }
         if (!removed) {
             return changed

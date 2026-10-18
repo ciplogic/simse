@@ -300,7 +300,7 @@ fun IlExtractor.assignCompound(target: *AstXmlNode, op: Str, value: *AstXmlNode)
                     }
                     break
                 }
-                handleAt = handleAt + 1
+                handleAt++
             }
             // A local slot *is* the place: `i = i + 1` is one instruction.
             val slot: Int = this.varIndex(name)
@@ -670,7 +670,7 @@ fun ilAliasTarget(facts: *SemFacts, typeNode: AstXmlNode): AstXmlNode {
     var current: AstXmlNode = typeNode
     var guard: Int = 0
     while (xmlKind(current) == AstNodeCategory.TypeNamed) {
-        guard = guard + 1
+        guard++
         if (guard >= 100) {
             break
         }

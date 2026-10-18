@@ -57,7 +57,7 @@ fun paintNode(f: *Frame, theme: *UiTheme, ui: *Ui, node: Int, custom: (Int) -> U
     var i: Int = 0
     while (i < f.nodes[node].children.size()) {
         paintNode(f, theme, ui, f.nodes[node].children[i], custom)
-        i = i + 1
+        i++
     }
 }
 

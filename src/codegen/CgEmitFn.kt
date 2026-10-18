@@ -131,7 +131,7 @@ fun Emitter.collectTypeNames(node: *AstXmlNode): Unit {
     var i: Int = 0
     while (i < node.Children.count()) {
         this.collectTypeNames(node.Children[i])
-        i = i + 1
+        i++
     }
 }
 
@@ -468,7 +468,7 @@ fun Emitter.emitDeducedCallableOverload(
         }
         taken.append(cbName)
         cbNames.append(cbName)
-        i = i + 1
+        i++
     }
     var params: List<Str> = List<Str>()
     var args: List<Str> = List<Str>()
@@ -490,7 +490,7 @@ fun Emitter.emitDeducedCallableOverload(
             if (callables[c].name == name) {
                 callableAt = c
             }
-            c = c + 1
+            c++
         }
         if (callableAt >= 0) {
             val cbName2: Str = cbNames[callableAt]

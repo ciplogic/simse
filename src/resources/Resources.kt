@@ -55,7 +55,7 @@ fun resMarkedName(raw: *Str): ResMarked {
         } else {
             break
         }
-        i = i + 1
+        i++
     }
     return ResMarked(raw.substr(i, raw.size() - i).trim(), compileOnly, binary)
 }
@@ -82,7 +82,7 @@ fun resHexToBytes(hex: Str): Str {
     while (i < hex.size()) {
         val ch: Char = hex[i]
         if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
-            i = i + 1
+            i++
             continue
         }
         var digit: Int = 0 - 1
@@ -101,7 +101,7 @@ fun resHexToBytes(hex: Str): Str {
             out.append(byte)
             high = 0 - 1
         }
-        i = i + 1
+        i++
     }
     return out
 }
@@ -141,7 +141,7 @@ fun resQuoteBinary(bytes: Str): Str {
             out.append(mid)
             out.append(low)
         }
-        i = i + 1
+        i++
     }
     out.append('"')
     return out
@@ -158,7 +158,7 @@ fun resIsUnderline(line: *Str): Bool {
         if (text[i] != '=') {
             return false
         }
-        i = i + 1
+        i++
     }
     return true
 }
@@ -220,7 +220,7 @@ fun resParseText(text: *Str): List<ResourceItem> {
         val line: Str = lines[i].trim()
         val colon: Int = line.indexOf(":")
         if (colon <= 0) {
-            i = i + 1
+            i++
             continue
         }
         // The key's own markers add to the section's: either marks the entry, combined with `||`.
@@ -233,7 +233,7 @@ fun resParseText(text: *Str): List<ResourceItem> {
             entries.append(
                 ResourceItem(key, resValueText(resUnquote(rest), entryBinary), entryCompileOnly, entryBinary)
             )
-            i = i + 1
+            i++
             continue
         }
 
@@ -243,13 +243,13 @@ fun resParseText(text: *Str): List<ResourceItem> {
         var value: Str = ""
         var j: Int = i + 1
         while (j < lines.size() && lines[j].trim().size() == 0) {
-            j = j + 1
+            j++
         }
         if (j < lines.size() && resIsFenceStart(lines[j])) {
-            j = j + 1
+            j++
             while (j < lines.size()) {
                 if (resIsFenceEnd(lines[j])) {
-                    j = j + 1
+                    j++
                     break
                 }
                 var body: Str = lines[j]
@@ -260,11 +260,11 @@ fun resParseText(text: *Str): List<ResourceItem> {
                 }
                 value.appendStr(body)
                 value.append('\n')
-                j = j + 1
+                j++
             }
             i = j
         } else {
-            i = i + 1
+            i++
         }
         entries.append(ResourceItem(key, resValueText(value, entryBinary), entryCompileOnly, entryBinary))
     }
@@ -288,7 +288,7 @@ fun resDedup(entries: *List<ResourceItem>): List<ResourceItem> {
     var i: Int = 0
     while (i < entries.size()) {
         last.insert(entries[i].key, entries[i])
-        i = i + 1
+        i++
     }
     var out: List<ResourceItem> = List<ResourceItem>()
     var seen: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
@@ -302,7 +302,7 @@ fun resDedup(entries: *List<ResourceItem>): List<ResourceItem> {
             val won: *ResourceItem = last.getPtr(key)
             out.append(ResourceItem(key, won.value, won.compileOnly, won.binary))
         }
-        i = i + 1
+        i++
     }
     return out
 }
@@ -319,9 +319,9 @@ fun resResourceFiles(moduleRoots: *List<Str>): List<Str> {
             if (found[f].endsWith("_res.md")) {
                 candidates.append(found[f])
             }
-            f = f + 1
+            f++
         }
-        r = r + 1
+        r++
     }
     var chosen: List<Str> = List<Str>()
     var seen: List<Str> = List<Str>()
@@ -332,7 +332,7 @@ fun resResourceFiles(moduleRoots: *List<Str>): List<Str> {
             seen.append(canon)
             chosen.append(candidates[c])
         }
-        c = c + 1
+        c++
     }
     // After dedup the canonical keys are unique, so this sort is total.
     chosen.sort((left: *Str, right: *Str) -> pathCanonical(left) < pathCanonical(right))
@@ -348,9 +348,9 @@ fun resLoadFiles(files: *List<Str>): List<ResourceItem> {
         var p: Int = 0
         while (p < parsed.size()) {
             all.append(parsed[p])
-            p = p + 1
+            p++
         }
-        f = f + 1
+        f++
     }
     return resDedup(all)
 }
@@ -375,7 +375,7 @@ fun resStoredLiterals(entries: *List<ResourceItem>): List<Str> {
                 out.append(resQuoteLiteral(entries[i].value))
             }
         }
-        i = i + 1
+        i++
     }
     return out
 }
@@ -388,7 +388,7 @@ fun resValueOf(entries: *List<ResourceItem>, key: *Str): Str {
         if (entries[i].key == key) {
             return entries[i].value
         }
-        i = i + 1
+        i++
     }
     return ""
 }
@@ -402,7 +402,7 @@ fun resHas(entries: *List<ResourceItem>, key: *Str): Bool {
         if (entries[i].key == key) {
             return true
         }
-        i = i + 1
+        i++
     }
     return false
 }
@@ -428,7 +428,7 @@ fun resQuoteLiteral(text: *Str): Str {
         } else {
             out.append(ch)
         }
-        i = i + 1
+        i++
     }
     out.append('\"')
     return out

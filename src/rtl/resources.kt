@@ -35,7 +35,7 @@ fun resourcesInstall(table: *StrView, tableCount: Int, index: *Int, count: Int):
     while (i < count) {
         var entry: ResourceEntry = ResourceEntry(views[index[i * 2]], views[index[i * 2 + 1]])
         resourceStore.append(entry)
-        i = i + 1
+        i++
     }
 }
 

@@ -51,7 +51,7 @@ fun interpHasItem(raw: *Str): Bool {
         if (raw[i] == '@' && raw[i + 1] == '(' && i + 2 < end && lexIsAlpha(raw[i + 2])) {
             return true
         }
-        i = i + 1
+        i++
     }
     return false
 }
@@ -76,7 +76,7 @@ fun interpHasDollarItem(raw: *Str): Bool {
                 return true
             }
         }
-        i = i + 1
+        i++
     }
     return false
 }
@@ -93,13 +93,13 @@ fun Parser.parseInterpolatedRaw(raw: *Str, pos: SourcePos): ExprNode {
         val ch: Char = raw[i]
         if (ch != '@') {
             templateText.append(ch)
-            i = i + 1
+            i++
             continue
         }
         if (i + 1 < end && raw[i + 1] == '(') {
             var close: Int = i + 2
             while (close < end && lexIsAlphaOrDigit(raw[close])) {
-                close = close + 1
+                close++
             }
             val closed: Bool = close < end && raw[close] == ')'
             val named: Bool = close > i + 2 && lexIsAlpha(raw[i + 2])
@@ -125,7 +125,7 @@ fun Parser.parseInterpolatedRaw(raw: *Str, pos: SourcePos): ExprNode {
         }
         var j: Int = i + 1
         while (j < end && lexIsAlphaOrDigit(raw[j])) {
-            j = j + 1
+            j++
         }
         templateText.append('@')
         val name: Str = raw.substr(i + 1, j - i - 1)
@@ -138,7 +138,7 @@ fun Parser.parseInterpolatedRaw(raw: *Str, pos: SourcePos): ExprNode {
     var k: Int = 0
     while (k < items.size()) {
         args.append(items[k])
-        k = k + 1
+        k++
     }
     return this.interpCallAt("fmtStrWith", args, pos)
 }
@@ -154,17 +154,17 @@ fun interpPosAt(raw: *Str, index: Int, pos: SourcePos): SourcePos {
         val ch: Char = raw[i]
         if (ch == '\r') {
             if (i + 1 < raw.size() && raw[i + 1] == '\n') {
-                i = i + 1
+                i++
             }
-            line = line + 1
+            line++
             column = 1
         } else if (ch == '\n') {
-            line = line + 1
+            line++
             column = 1
         } else {
-            column = column + 1
+            column++
         }
-        i = i + 1
+        i++
     }
     return SourcePos(pos.offset + index, line, column)
 }
@@ -205,7 +205,7 @@ fun Parser.interpCallAt(callee: *Str, args: *List<AstXmlNode>, pos: SourcePos): 
     var i: Int = 0
     while (i < args.size()) {
         kids.append(this.roleOf(*args[i], AstNodeKind.Arg))
-        i = i + 1
+        i++
     }
     var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
     var call: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, attrs, kids.toArray())
@@ -247,13 +247,13 @@ fun Parser.parseInterpolatedQuoted(raw: *Str, pos: SourcePos): ExprNode {
         }
         if (ch != '$') {
             text.append(ch)
-            i = i + 1
+            i++
             continue
         }
         if (i + 1 < end && lexIsAlpha(raw[i + 1])) {
             var j: Int = i + 1
             while (j < end && lexIsAlphaOrDigit(raw[j])) {
-                j = j + 1
+                j++
             }
             segments.append(text)
             items.append(this.nameExprAt(raw.substr(i + 1, j - i - 1), pos).node)
@@ -266,12 +266,12 @@ fun Parser.parseInterpolatedQuoted(raw: *Str, pos: SourcePos): ExprNode {
             var depth: Int = 1
             while (close < end && depth > 0) {
                 if (raw[close] == '{') {
-                    depth = depth + 1
+                    depth++
                 } else if (raw[close] == '}') {
-                    depth = depth - 1
+                    depth--
                 }
                 if (depth > 0) {
-                    close = close + 1
+                    close++
                 }
             }
             if (depth != 0) {
@@ -295,7 +295,7 @@ fun Parser.parseInterpolatedQuoted(raw: *Str, pos: SourcePos): ExprNode {
         }
         // A `$` that starts no item is a literal dollar.
         text.append(ch)
-        i = i + 1
+        i++
     }
     segments.append(text)
 
@@ -314,15 +314,15 @@ fun Parser.parseInterpolatedQuoted(raw: *Str, pos: SourcePos): ExprNode {
                 if (seg[b] == candidate) {
                     present = true
                 }
-                b = b + 1
+                b++
             }
-            s = s + 1
+            s++
         }
         if (!present) {
             separator = candidate
             found = true
         }
-        c = c + 1
+        c++
     }
     if (!found) {
         this.setError(pos, "invalid interpolation string: no separator byte is free in the template")
@@ -336,7 +336,7 @@ fun Parser.parseInterpolatedQuoted(raw: *Str, pos: SourcePos): ExprNode {
             templateText.append(separator)
         }
         templateText.appendStrPtr(segments[k])
-        k = k + 1
+        k++
     }
 
     var args: List<AstXmlNode> = List<AstXmlNode>()
@@ -345,7 +345,7 @@ fun Parser.parseInterpolatedQuoted(raw: *Str, pos: SourcePos): ExprNode {
     var a: Int = 0
     while (a < items.size()) {
         args.append(items[a])
-        a = a + 1
+        a++
     }
     return this.interpCallAt("fmtStrWith", args, pos)
 }

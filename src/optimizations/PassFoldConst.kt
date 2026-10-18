@@ -131,7 +131,7 @@ fun linFoldConstBody(stmts: *List<AstXmlNode>, useDefs: &LinUseDefs): Bool {
     while (i < stmts.size()) {
         foldConstCountWrites(*stmts[i], *counts)
         linUseDefMarkEscapes(*stmts[i], *unsafe)
-        i = i + 1
+        i++
     }
     // The names written exactly once, at the top level, with a literal, and not escaping.
     var singles: Dictionary<Str, FoldGlobalConst> = Dictionary<Str, FoldGlobalConst>()
@@ -144,7 +144,7 @@ fun linFoldConstBody(stmts: *List<AstXmlNode>, useDefs: &LinUseDefs): Bool {
                 singles.insert(write.value().name, FoldGlobalConst(write.value().kind, write.value().text))
             }
         }
-        i = i + 1
+        i++
     }
     if (singles.size() == 0) {
         return false
@@ -173,7 +173,7 @@ fun linFoldConstBody(stmts: *List<AstXmlNode>, useDefs: &LinUseDefs): Bool {
                 linFoldConstAvailable.insert(write.value().name, *single)
             }
         }
-        i = i + 1
+        i++
     }
     return changed
 }

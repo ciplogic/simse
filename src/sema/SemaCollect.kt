@@ -25,7 +25,7 @@ fun Analyzer.run(): Unit {
             this.analyzeDecl(decl)
         }
         this.popScope()
-        n = n + 1
+        n++
     }
 }
 
@@ -48,7 +48,7 @@ fun Analyzer.checkOperators(): Unit {
                 }
             }
         }
-        n = n + 1
+        n++
     }
 }
 
@@ -270,7 +270,7 @@ fun Analyzer.collectUninitTypes(): Unit {
                 }
             }
         }
-        n = n + 1
+        n++
     }
 }
 
@@ -358,7 +358,7 @@ fun Analyzer.checkUninitHolder(typeNode: *AstXmlNode, line: Int, column: Int): U
     var i: Int = 0
     while (i < typeNode.Children.count()) {
         this.checkUninitHolder(typeNode.Children[i], line, column)
-        i = i + 1
+        i++
     }
 }
 
@@ -488,7 +488,7 @@ fun Analyzer.collectGlobal(): Unit {
                 } else {
                     this.globalProtocols.insert(protocolName, decl)
                 }
-                i = i + 1
+                i++
                 continue
             }
             val isFunction: Bool = kind == AstNodeCategory.Function
@@ -524,9 +524,9 @@ fun Analyzer.collectGlobal(): Unit {
                 }
             }
             this.appendPackageDecl(pkg, decl)
-            i = i + 1
+            i++
         }
-        n = n + 1
+        n++
     }
 }
 
@@ -557,7 +557,7 @@ fun Analyzer.buildVisible(module: *AstXmlNode): Unit {
     var importAt: Int = imports.size() - 1
     while (importAt >= 0) {
         packages.append(xmlAttr(imports[importAt], AstNodeAttributeKind.Path))
-        importAt = importAt - 1
+        importAt--
     }
     packages.append("rtl")
 
@@ -627,7 +627,7 @@ fun Analyzer.lookupValue(name: *Str): Opt<ValueBinding> {
         if (this.scopes[i].has(name)) {
             return this.scopes[i].get(name)
         }
-        i = i - 1
+        i--
     }
     return ()
 }
@@ -639,7 +639,7 @@ fun Analyzer.typeParamVisible(name: *Str): Bool {
             if (scope[j] == name) {
                 return true
             }
-            j = j + 1
+            j++
         }
     }
     return false

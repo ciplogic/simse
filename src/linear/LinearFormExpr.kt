@@ -250,18 +250,18 @@ fun IlExtractor.callTarget(callee: *AstXmlNode, receiver: *AstXmlNode, argCount:
     var k: Int = 0
     while (k < candidates.size()) {
         val fact: *SemFnFact = *this.fn.facts.functions[candidates[k]]
-        k = k + 1
+        k++
         // The count and the pack test are the fact's own, so a candidate that does not match by
         // arity needs no parameter list.
         val paramCount: Int = fact.paramCount
         if (paramCount == argCount) {
             exact = fact.decl
-            exactCount = exactCount + 1
+            exactCount++
             continue
         }
         if (fact.packTarget && argCount >= paramCount - 1) {
             pack = fact.decl
-            packCount = packCount + 1
+            packCount++
         }
     }
     if (exactCount > 0) {
@@ -401,7 +401,7 @@ fun IlExtractor.packArguments(target: AstXmlNode, args: List<AstXmlNode>, from: 
     var i: Int = from
     while (i < args.size()) {
         operands.append(this.convertArgument(target, element, args[i]))
-        i = i + 1
+        i++
     }
     this.emit(IlOpKind.Pack, operands)
     if (xmlIsEmpty(wanted) || xmlKind(wanted) == AstNodeCategory.TypeGeneric) {

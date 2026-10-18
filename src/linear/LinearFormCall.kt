@@ -147,7 +147,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
             var p: Int = packFrom
             while (p < argNodes.size()) {
                 packing.append(this.convertArgument(target, element, argNodes[p]))
-                p = p + 1
+                p++
             }
             this.emit(IlOpKind.Pack, packing)
             return
@@ -231,7 +231,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
             var t: Int = 0
             while (t < typeArgs.size() && t < genericParams.size()) {
                 semBindOne(*genericBindings, genericParams[t], typeArgs[t])
-                t = t + 1
+                t++
             }
             var recvType: AstXmlNode = xmlEmptyNode()
             if (receiverCall && recvSlot >= 0) {
@@ -241,7 +241,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
             var g: Int = 0
             while (g < argNodes.size()) {
                 argTypes.append(this.exprType(argNodes[g]))
-                g = g + 1
+                g++
             }
             semBindCallArgs(target, recvType, *argTypes, *genericParams, *genericBindings)
             // A lambda's own annotations bind what no argument could (`peek((x: Int) -> x + 1)`),
@@ -255,7 +255,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
                 } else if (g2 < argTypes.size() && !xmlIsEmpty(argTypes[g2])) {
                     this.ilBindCallableArg(pattern, argTypes[g2], *genericParams, *genericBindings)
                 }
-                g2 = g2 + 1
+                g2++
             }
             // What *C++* can deduce is less: MSVC deduces no template parameter through a
             // `std::function` shape, so a parameter only a callable names has nothing to
@@ -290,7 +290,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
                     if (!deducible.has(genericParams[m])) {
                         needed = m
                     }
-                    m = m + 1
+                    m++
                 }
                 if (needed >= 0) {
                     var haveAll: Bool = typeArgs.size() == 0
@@ -299,7 +299,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
                         if (!genericBindings.has(genericParams[k])) {
                             haveAll = false
                         }
-                        k = k + 1
+                        k++
                     }
                     if (haveAll && hasDst && plain == argNodes.size() && !receiverCall) {
                         explicitNeeded = needed
@@ -309,13 +309,13 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
                         m = 0
                         while (m < genericParams.size()) {
                             if (!deducible.has(genericParams[m])) {
-                                missingCount = missingCount + 1
+                                missingCount++
                                 if (missing != "") {
                                     missing = missing + ", "
                                 }
                                 missing = missing + "'" + genericParams[m] + "'"
                             }
-                            m = m + 1
+                            m++
                         }
                         var what: Str = "type parameter "
                         var them: Str = "it"
@@ -359,7 +359,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
         val slot: Int = this.convertArgument(paramOwner, paramType, argNodes[i])
         args.append(slot)
         argTypes.append(this.operandType(slot, argNodes[i]))
-        i = i + 1
+        i++
     }
     if (packFrom >= 0 && !xmlIsEmpty(target)) {
         val slot: Int = this.packArguments(target, argNodes, packFrom)
@@ -373,7 +373,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
     i = 0
     while (i < argTypes.size()) {
         fullTypes.append(argTypes[i])
-        i = i + 1
+        i++
     }
 
     var operands: List<Int> = List<Int>()
@@ -389,7 +389,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
         i = 0
         while (i < args.size()) {
             operands.append(args[i])
-            i = i + 1
+            i++
         }
         this.emitCall(hasDst, operands)
         return
@@ -406,7 +406,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
         i = 0
         while (i < args.size()) {
             operands.append(args[i])
-            i = i + 1
+            i++
         }
         this.emitCall(hasDst, operands)
         return
@@ -426,13 +426,13 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
             if (bound != null) {
                 xmlAddChild(explicitType, semReRole(*bound, AstNodeKind.TypeArg))
             }
-            k = k + 1
+            k++
         }
         operands.append(this.typeIndex(calleeName, explicitType))
         i = 0
         while (i < args.size()) {
             operands.append(args[i])
-            i = i + 1
+            i++
         }
         this.emit(IlOpKind.CallCtor, operands)
         return
@@ -450,7 +450,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
         i = 0
         while (i < args.size()) {
             operands.append(args[i])
-            i = i + 1
+            i++
         }
         this.emit(IlOpKind.CallCtor, operands)
         return
@@ -461,7 +461,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
     i = 0
     while (i < args.size()) {
         operands.append(args[i])
-        i = i + 1
+        i++
     }
     this.emitCall(hasDst, operands)
 }
@@ -502,7 +502,7 @@ fun IlExtractor.ilCppDeducible(
     var t: Int = 0
     while (t < explicitArgs.size() && t < params.size()) {
         semBindOne(*found, params[t], explicitArgs[t])
-        t = t + 1
+        t++
     }
     if (!xmlIsEmpty(recvType)) {
         var pattern: AstXmlNode = xmlChild(target, AstNodeKind.Receiver)
@@ -523,7 +523,7 @@ fun IlExtractor.ilCppDeducible(
         }
         val pattern: *AstXmlNode = xmlChildPtr(declParams[at], AstNodeKind.Type)
         val actual: AstXmlNode = argTypes[i]
-        i = i + 1
+        i++
         if (xmlIsEmpty(pattern) || xmlIsEmpty(actual)) {
             continue
         }
@@ -562,7 +562,7 @@ fun IlExtractor.ilBindLambdaParams(
     var i: Int = 0
     while (i < expectedParams.size() && i < annotated.size()) {
         semBindBestEffort(expectedParams[i], annotated[i], params, bindings)
-        i = i + 1
+        i++
     }
 }
 
@@ -617,7 +617,7 @@ fun IlExtractor.ilBindCallableArg(
     var i: Int = 0
     while (i < patternParams.size() && i < actualParams.size()) {
         semBindBestEffort(patternParams[i], actualParams[i], params, bindings)
-        i = i + 1
+        i++
     }
     val patternReturn: *AstXmlNode = xmlChildPtr(patternCallable, AstNodeKind.ReturnType)
     val actualReturn: *AstXmlNode = xmlChildPtr(actualCallable, AstNodeKind.ReturnType)
@@ -677,13 +677,13 @@ fun IlExtractor.ilConfusingLambdaOverload(
                     }
                 }
             }
-            a = a + 1
+            a++
         }
         if (takesCallable && !takesValue) {
-            callableCandidates = callableCandidates + 1
+            callableCandidates++
         }
         if (takesValue) {
-            valueCandidates = valueCandidates + 1
+            valueCandidates++
         }
     }
     if (callableCandidates > 0 && valueCandidates > 0) {
@@ -719,14 +719,14 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
     var p: Int = 0
     while (p < paramNames.size()) {
         declared.insert(paramNames[p], true)
-        p = p + 1
+        p++
     }
     val bodyContainer: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Body)
     var bodyList: List<AstXmlNode> = List<AstXmlNode>()
     var bi: Int = 0
     while (bi < bodyContainer.Children.count()) {
         bodyList.append(bodyContainer.Children[bi])
-        bi = bi + 1
+        bi++
     }
     ilCollectStmtNames(bodyList, declared, read, readSeen)
 
@@ -793,7 +793,7 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
         if (!xmlIsEmpty(slotType)) {
             info.captureTypes.insert(name, slotType)
         }
-        ci = ci + 1
+        ci++
     }
 
     // The lambda's body has a frame of its own, so it is lowered and *typed* here, with that
@@ -854,7 +854,7 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
         } else {
             closure.captureTypes.append(xmlEmptyNode())
         }
-        ci = ci + 1
+        ci++
     }
     for (*slot in innerBody.vars) {
         if (slot.kind == IlVarKind.Argument && slot.name != "self") {
@@ -868,7 +868,7 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
         } else {
             closure.paramTypes.append(xmlEmptyNode())
         }
-        ci = ci + 1
+        ci++
     }
     var paramTexts: List<Str> = List<Str>()
     for (*slot in innerBody.vars) {
@@ -907,7 +907,7 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
     while (ci < captured.size()) {
         // The capture is a slot of *this* frame, so the construction passes it by index.
         operands.append(this.varIndex(captured[ci]))
-        ci = ci + 1
+        ci++
     }
     this.emit(IlOpKind.CallCtor, operands)
     return target
@@ -959,7 +959,7 @@ fun IlExtractor.ilCallableOf(expected: AstXmlNode): AstXmlNode {
     var current: AstXmlNode = expected
     var guard: Int = 0
     while (!xmlIsEmpty(current) && guard < 16) {
-        guard = guard + 1
+        guard++
         if (xmlKind(current) == AstNodeCategory.TypeFunction) {
             return current
         }
@@ -999,7 +999,7 @@ fun IlExtractor.lambdaReturnOf(
     var i: Int = 0
     while (i < body.ops.size()) {
         val op: *IlOp = *body.ops[i]
-        i = i + 1
+        i++
         if (op.kind != IlOpKind.Return || op.operands.size() == 0) {
             continue
         }

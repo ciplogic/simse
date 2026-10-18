@@ -63,7 +63,7 @@ fun Emitter.ilSeedFrameTypes(il: *IlBody): Unit {
         val typeNode: *AstXmlNode = il.inferredTypes.getPtr(proven[i])
         this.localTypes.insert(proven[i], *typeNode)
         this.nameKinds.insert(proven[i], this.kindOf(typeNode))
-        i = i + 1
+        i++
     }
     i = 0
     while (i < il.vars.size()) {
@@ -72,7 +72,7 @@ fun Emitter.ilSeedFrameTypes(il: *IlBody): Unit {
             this.localTypes.insert(il.vars[i].name, slotType)
             this.nameKinds.insert(il.vars[i].name, this.kindOf(slotType))
         }
-        i = i + 1
+        i++
     }
 }
 
@@ -107,7 +107,7 @@ fun Emitter.ilAnalyze(il: *IlBody, frame: *IlFrame): Unit {
                         this.ilBump(*frame.useCount, operand)
                     }
                 }
-                j = j + 1
+                j++
             }
         }
     }
@@ -250,7 +250,7 @@ fun ilDeclLines(typeText: Str, names: *List<Str>): List<Str> {
             line.appendStr(", ")
             line.appendStrPtr(piece)
         }
-        i = i + 1
+        i++
     }
     line.append(';')
     out.append(line)
@@ -268,7 +268,7 @@ fun Emitter.ilDeclGroups(
     var i: Int = 0
     while (i < il.ops.size()) {
         if (il.ops[i].kind != IlOpKind.Declare || blockEnd.has(i)) {
-            i = i + 1
+            i++
             continue
         }
         var types: List<Str> = List<Str>()
@@ -291,7 +291,7 @@ fun Emitter.ilDeclGroups(
                 if (types[t] == typeText) {
                     index = t
                 }
-                t = t + 1
+                t++
             }
             if (index < 0) {
                 types.append(typeText)
@@ -299,23 +299,23 @@ fun Emitter.ilDeclGroups(
                 index = types.size() - 1
             }
             groups[index].append(il.vars[slot].name)
-            at = at + 1
+            at++
         }
         if (at - i < 2) {
             // One declaration: nothing to group.
-            i = i + 1
+            i++
             continue
         }
         var printed: Int = i
         var t: Int = 0
         while (t < types.size()) {
             lines.insert(printed, ilDeclLines(types[t], *groups[t]))
-            printed = printed + 1
-            t = t + 1
+            printed++
+            t++
         }
         while (printed < at) {
             lines.insert(printed, List<Str>())
-            printed = printed + 1
+            printed++
         }
         i = at
     }
@@ -334,7 +334,7 @@ fun Emitter.ilLiteralNode(text: *Str): AstXmlNode {
         if (text[i] == '.') {
             dot = true
         }
-        i = i + 1
+        i++
     }
     if (text.isEmpty() || text[0] == '\"') {
         node.kind = AstNodeCategory.ExprStrLit
@@ -425,7 +425,7 @@ fun Emitter.ilLastDot(text: *Str): Int {
         if (text[i] == '.') {
             dot = i
         }
-        i = i + 1
+        i++
     }
     return dot
 }
@@ -517,7 +517,7 @@ fun Emitter.ilCallNode(il: *IlBody, frame: *IlFrame, op: *IlOp): AstXmlNode {
             recv = deref
         }
         callee = this.ilMemberNode(recv, method.name)
-        first = first + 1
+        first++
     } else if (method.staticBase >= 0) {
         val base: AstXmlNode = this.ilTypeBaseNode(il, method.staticBase, false)
         if (xmlIsEmpty(base)) {
@@ -557,7 +557,7 @@ fun Emitter.ilCallNode(il: *IlBody, frame: *IlFrame, op: *IlOp): AstXmlNode {
             return xmlEmptyNode()
         }
         xmlAddChild(call, this.renameRole(arg, AstNodeKind.Arg))
-        i = i + 1
+        i++
     }
     return call
 }
@@ -601,7 +601,7 @@ fun Emitter.attachMachineCallArgs(
         var i: Int = 0
         while (i < fn.templateParams.size()) {
             wanted.append(dstArgs[i])
-            i = i + 1
+            i++
         }
     } else if (!this.machineCallArgsFromReceiver(fn, recvType, wanted)) {
         // The result names no parameter (a `Unit` terminal) and the receiver does not yield
@@ -611,7 +611,7 @@ fun Emitter.attachMachineCallArgs(
     var i: Int = 0
     while (i < wanted.size()) {
         xmlAddChild(callee, this.renameRole(wanted[i], AstNodeKind.TypeArg))
-        i = i + 1
+        i++
     }
     xmlAddChild(callee, this.renameRole(recvType, AstNodeKind.TypeArg))
 }
@@ -751,7 +751,7 @@ fun Emitter.ilOpValueNode(il: *IlBody, frame: *IlFrame, opIndex: Int, depth: Int
                     return xmlEmptyNode()
                 }
                 xmlAddChild(call, this.renameRole(arg, AstNodeKind.Arg))
-                i = i + 1
+                i++
             }
             return call
         }
@@ -768,7 +768,7 @@ fun Emitter.ilLabelPositions(il: *IlBody): List<Int> {
     var i: Int = 0
     while (i < il.labels.size()) {
         positions.append(-1)
-        i = i + 1
+        i++
     }
     i = 0
     while (i < il.ops.size()) {
@@ -779,7 +779,7 @@ fun Emitter.ilLabelPositions(il: *IlBody): List<Int> {
                 positions[label] = i
             }
         }
-        i = i + 1
+        i++
     }
     return positions
 }
@@ -809,7 +809,7 @@ fun Emitter.ilJumpCrossing(il: *IlBody, labelPos: *List<Int>, position: Int): Il
                 }
             }
         }
-        i = i + 1
+        i++
     }
     return crossing
 }

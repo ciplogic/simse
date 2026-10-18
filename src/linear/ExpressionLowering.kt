@@ -92,14 +92,14 @@ fun exprReplaceRole(like: *AstXmlNode, role: AstNodeKind, replacements: *List<As
             if (seen < replacements.size()) {
                 kids.append(replacements[seen])
             }
-            seen = seen + 1
+            seen++
         } else {
             kids.append(child)
         }
     }
     while (seen < replacements.size()) {
         kids.append(replacements[seen])
-        seen = seen + 1
+        seen++
     }
     return exprLike(like, kids)
 }
@@ -130,13 +130,13 @@ data class ExprFlattener(
 ) {
     fun freshTemp(): Str {
         val id: Int = this.next
-        this.next = this.next + 1
+        this.next++
         return "_sm_expr" + id.toString()
     }
 
     fun freshLabel(): Str {
         val id: Int = this.nextLabel
-        this.nextLabel = this.nextLabel + 1
+        this.nextLabel++
         return "_sm_sc" + id.toString()
     }
 
@@ -188,7 +188,7 @@ data class ExprFlattener(
                     temps.append(linCondJump(AstNodeCategory.StmtIfFalse, test, end, line, column))
                 }
             }
-            i = i + 1
+            i++
         }
         temps.append(linLabel(end, line, column))
         this.changed = true
@@ -373,7 +373,7 @@ data class ExprFlattener(
                 var i: Int = 0
                 while (i < temps.size()) {
                     out.append(temps[i])
-                    i = i + 1
+                    i++
                 }
                 out.append(exprReplaceRole(stmt, AstNodeKind.Init, init))
                 return

@@ -73,7 +73,7 @@ fun yldWithChildren(like: *AstXmlNode, children: *List<AstXmlNode>): AstXmlNode 
     while (i < children.size()) {
         var child: AstXmlNode = copy(children[i])
         xmlAddChild(node, child)
-        i = i + 1
+        i++
     }
     return node
 }
@@ -132,7 +132,7 @@ fun yldCall(callee: AstXmlNode, args: *List<AstXmlNode>): AstXmlNode {
         var arg: AstXmlNode = copy(args[i])
         arg.name = AstNodeKind.Arg
         xmlAddChild(node, arg)
-        i = i + 1
+        i++
     }
     return node
 }
@@ -348,7 +348,7 @@ data class YldMachinery(
         while (i < params.size()) {
             val param: *AstXmlNode = *params[i]
             val name: Str = xmlAttr(param, AstNodeAttributeKind.Name)
-            i = i + 1
+            i++
             if (name == "this") {
                 // A `this` parameter cannot be a field; the receiver-form spelling
                 // (`fun T.name`) is the one that can yield.
@@ -374,7 +374,7 @@ data class YldMachinery(
         while (f < this.fieldOrder.size()) {
             val fieldType: *AstXmlNode = this.fieldTypes.getPtr(this.fieldOrder[f])
             yielded.fields.append(YldField(this.fieldOrder[f], *fieldType))
-            f = f + 1
+            f++
         }
     }
 
@@ -382,7 +382,7 @@ data class YldMachinery(
         var i: Int = 0
         while (i < body.size()) {
             val stmt: *AstXmlNode = *body[i]
-            i = i + 1
+            i++
             if (!this.error.isEmpty()) {
                 return
             }
@@ -423,7 +423,7 @@ data class YldMachinery(
         var i: Int = 0
         while (i < body.size()) {
             this.statements(body[i], rewritten)
-            i = i + 1
+            i++
         }
         var methodBody: List<AstXmlNode> = List<AstXmlNode>()
         // The hoisted storage first: a jump that skips a declaration is what C++ refuses
@@ -431,7 +431,7 @@ data class YldMachinery(
         var first: Int = 0
         while (first < rewritten.size() && yldIsLocalDeclaration(rewritten[first])) {
             methodBody.append(rewritten[first])
-            first = first + 1
+            first++
         }
         methodBody.append(
             yldJumpWhen(
@@ -451,12 +451,12 @@ data class YldMachinery(
                     ), yldLabel(branch)
                 )
             )
-            branch = branch + 1
+            branch++
         }
         i = first
         while (i < rewritten.size()) {
             yldExpandSuspend(rewritten[i], methodBody)
-            i = i + 1
+            i++
         }
         methodBody.append(linLabel(yldEndLabel(), 0, 0))
         methodBody.append(yldAssign(yldThisMember(yldBranchField()), yldIntLiteral(-1)))
@@ -471,7 +471,7 @@ data class YldMachinery(
         val kind: AstNodeCategory = xmlKind(stmt)
         when (kind) {
             AstNodeCategory.StmtYield -> {
-                this.yields = this.yields + 1
+                this.yields++
                 val branch: Int = this.yields
                 val value: AstXmlNode = this.expr(xmlChildPtr(stmt, AstNodeKind.Value))
                 // A named suspend point; `method` expands it into the machine's mechanics.
@@ -608,7 +608,7 @@ data class YldMachinery(
             var child: AstXmlNode = this.exprAt(copyNode.Children[i], bases)
             child.name = copyNode.Children[i].name
             xmlAddChild(rebuilt, child)
-            i = i + 1
+            i++
         }
         return rebuilt
     }

@@ -54,7 +54,7 @@ fun Range.iterValues(): ..Int {
     var i: Int = this.from
     while (i <= this.to) {
         yield i
-        i = i + 1
+        i++
     }
 }
 

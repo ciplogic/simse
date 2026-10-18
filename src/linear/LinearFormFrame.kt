@@ -81,7 +81,7 @@ fun IlExtractor.methodIndex(
     var i: Int = 0
     while (i < argTypes.size()) {
         key = key + "|" + ilIntText(argTypes[i])
-        i = i + 1
+        i++
     }
     val found: *Int = this.methodAt.getPtr(key)
     if (found != null) {
@@ -111,7 +111,7 @@ fun IlExtractor.freshSlot(typeText: *Str, typeNode: *AstXmlNode): Int {
         "_sm_base" + ilIntText(this.nextBase), typeText,
         IlVarKind.Temp, typeNode
     )
-    this.nextBase = this.nextBase + 1
+    this.nextBase++
     if (!xmlIsEmpty(typeNode)) {
         this.hoisted.append(slot)
         this.hoistedLines.append(this.line)
@@ -173,7 +173,7 @@ fun IlExtractor.frameTypes(): *Dictionary<Str, AstXmlNode> {
             if (!xmlIsEmpty(typeNode)) {
                 this.frameNames.insert(this.out.vars[i].name, typeNode)
             }
-            i = i + 1
+            i++
         }
         this.frameNamesStale = false
     }
@@ -232,7 +232,7 @@ fun IlExtractor.begin(file: *Str): Unit {
         this.out.inferredTypes.insert(
             declaredTypes[ti], *this.fn.inferredTypes.getPtr(declaredTypes[ti])
         )
-        ti = ti + 1
+        ti++
     }
     this.buildFrame()
     this.out.signature = this.signatureText()
@@ -251,17 +251,17 @@ fun IlExtractor.run(body: *List<AstXmlNode>): IlBody {
         while (i < this.hoisted.size()) {
             ops.append(IlOp(IlOpKind.Declare, ilOps1(this.hoisted[i])))
             lines.append(this.hoistedLines[i])
-            i = i + 1
+            i++
         }
         i = 0
         while (i < this.out.ops.size()) {
             ops.append(this.out.ops[i])
-            i = i + 1
+            i++
         }
         i = 0
         while (i < this.out.lines.size()) {
             lines.append(this.out.lines[i])
-            i = i + 1
+            i++
         }
         this.out.ops = ops
         this.out.lines = lines
@@ -298,7 +298,7 @@ fun IlExtractor.buildFrame(): Unit {
                 text = ilTypeText(paramType)
             }
             this.addVar(this.fn.paramNames[i], text, IlVarKind.Argument, paramType)
-            i = i + 1
+            i++
         }
         return
     }
@@ -323,7 +323,7 @@ fun IlExtractor.buildFrame(): Unit {
             }
             this.addVar("self", selfText, IlVarKind.Argument, ilReceiverTypeNode(typeNode))
             hasSelf = true
-            i = i + 1
+            i++
             continue
         }
         var text: Str = "?"
@@ -331,7 +331,7 @@ fun IlExtractor.buildFrame(): Unit {
             text = ilTypeText(typeNode)
         }
         this.addVar(name, text, IlVarKind.Argument, typeNode)
-        i = i + 1
+        i++
     }
 }
 

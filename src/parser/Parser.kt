@@ -126,7 +126,7 @@ data class Parser(
 
     fun matchGenericCloser(): Bool {
         if (this.pendingClosers > 0) {
-            this.pendingClosers = this.pendingClosers - 1
+            this.pendingClosers--
             return true
         }
         if (this.matchText(">")) {
@@ -243,10 +243,10 @@ fun parseModule(tokens: *List<Token>, fileName: *Str): Res<AstXmlNode> {
     for (token in tokens) {
         if (token.kind == TokenKind.Operator) {
             if (token.text == "(" || token.text == "[") {
-                bracketed = bracketed + 1
+                bracketed++
             } else if (token.text == ")" || token.text == "]") {
                 if (bracketed > 0) {
-                    bracketed = bracketed - 1
+                    bracketed--
                 }
             }
         }

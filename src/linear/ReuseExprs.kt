@@ -39,7 +39,7 @@ fun ilReuseExprHas(il: *IlBody): Bool {
         if (ilReuseExprOp(( * il.ops[i]).kind)) {
             return true
         }
-        i = i + 1
+        i++
     }
     return false
 }
@@ -63,7 +63,7 @@ fun ilReuseExprKey(op: *IlOp, lastWrite: *List<Int>): Str {
         } else {
             key = key + "|=" + operand.toString()
         }
-        j = j + 1
+        j++
     }
     return key
 }
@@ -88,7 +88,7 @@ fun ilReuseExprs(il: *IlBody): Bool {
         for (*op0 in il.ops) {
             val written0: Int = ilReuseDst(op0)
             if (written0 >= 0 && written0 < slots) {
-                defCount[written0] = defCount[written0] + 1
+                defCount[written0]++
             }
         }
         // The tables of the current basic block, dropped at a label or branch (the header's reason).
@@ -129,7 +129,7 @@ fun ilReuseExprs(il: *IlBody): Bool {
             if (written >= 0 && written < slots) {
                 lastWrite[written] = i
             }
-            i = i + 1
+            i++
         }
         if (!progress) {
             break
@@ -142,13 +142,13 @@ fun ilReuseExprs(il: *IlBody): Bool {
         while (i < il.ops.size()) {
             val op: *IlOp = *il.ops[i]
             if (drop.has(i)) {
-                i = i + 1
+                i++
                 continue
             }
             if ((op.kind == IlOpKind.Declare || op.kind == IlOpKind.DeclareInit)
                 && op.operands.size() > 0 && replace.has(op.operands[0])
             ) {
-                i = i + 1
+                i++
                 continue
             }
             var operands: List<Int> = List<Int>()
@@ -163,11 +163,11 @@ fun ilReuseExprs(il: *IlBody): Bool {
                     }
                 }
                 operands.append(value)
-                j = j + 1
+                j++
             }
             ops.append(IlOp(op.kind, operands))
             lines.append(il.lines[i])
-            i = i + 1
+            i++
         }
         il.ops = ops
         il.lines = lines

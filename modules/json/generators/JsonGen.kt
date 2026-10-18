@@ -102,7 +102,7 @@ fun jsonModulePackage(ctx: *SourceGenContext): Str {
                 return xmlAttr(module, AstNodeAttributeKind.Package)
             }
         }
-        m = m + 1
+        m++
     }
     return ""
 }
@@ -125,7 +125,7 @@ fun jsonCollect(ctx: *SourceGenContext): JsonTypes {
         if (jsonWants(*ctx.state.modules[m])) {
             wanted = true
         }
-        m = m + 1
+        m++
     }
     if (!wanted) {
         return JsonTypes(classes, packages, order, declared)
@@ -137,7 +137,7 @@ fun jsonCollect(ctx: *SourceGenContext): JsonTypes {
         val pkg: Str = xmlAttr(module, AstNodeAttributeKind.Package)
         if (pkg == modulePackage) {
             // The generator's own module, not a program's data.
-            m = m + 1
+            m++
             continue
         }
         val decls: List<AstXmlNode> = xmlDecls(module)
@@ -163,7 +163,7 @@ fun jsonCollect(ctx: *SourceGenContext): JsonTypes {
                 }
             }
         }
-        m = m + 1
+        m++
     }
     return JsonTypes(classes, packages, order, declared)
 }
@@ -208,7 +208,7 @@ fun jsonClassBody(name: *Str, fields: *List<AstXmlNode>): Str {
         out.appendStr("    out.appendStr(this.")
         out.appendStr(fieldName)
         out.appendStr(".toJson())\n")
-        i = i + 1
+        i++
     }
     out.appendStr("    out.append('}')\n    return out\n}\n")
     return out
@@ -257,7 +257,7 @@ fun jsonEnsure(
         if (ctx.error.size() > 0) {
             return
         }
-        i = i + 1
+        i++
     }
 }
 
@@ -277,7 +277,7 @@ fun jsonBuildSource(ctx: *SourceGenContext): Str {
         if (ctx.error.size() > 0) {
             return ""
         }
-        i = i + 1
+        i++
     }
     if (bodies.size() == 0) {
         return ""
@@ -295,7 +295,7 @@ fun jsonBuildSource(ctx: *SourceGenContext): Str {
                 imports.append(*pkg)
             }
         }
-        i = i + 1
+        i++
     }
 
     var out = Str()
@@ -304,7 +304,7 @@ fun jsonBuildSource(ctx: *SourceGenContext): Str {
         out.appendStr("import ")
         out.appendStr(imports[i])
         out.append('\n')
-        i = i + 1
+        i++
     }
     if (imports.size() > 0) {
         out.append('\n')
@@ -320,7 +320,7 @@ fun jsonBuildSource(ctx: *SourceGenContext): Str {
     i = 0
     while (i < bodies.size()) {
         out.appendStr(bodies[i])
-        i = i + 1
+        i++
     }
     return out
 }

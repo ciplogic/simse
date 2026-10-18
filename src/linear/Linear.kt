@@ -103,7 +103,7 @@ data class LinLowerer(
 ) {
     fun nextId(): Int {
         val id: Int = this.next
-        this.next = this.next + 1
+        this.next++
         return id
     }
 
@@ -352,7 +352,7 @@ fun linLowerForEmission(body: *List<AstXmlNode>): List<AstXmlNode> {
     // A round only removes statements, so the loop terminates; the guard bounds a bug, not
     // the work.
     while (canChange && guard < 256) {
-        guard = guard + 1
+        guard++
         var canExtract: Bool = true
         while (canExtract) {
             canExtract = false

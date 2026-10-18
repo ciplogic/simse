@@ -82,7 +82,7 @@ fun unzip(archivePath: Str, outputDir: Str): Res<Int> {
         }
         val name: Str = zipNormalizedName(zipText(bytes, at + 46, nameLen))
         at = at + 46 + nameLen + extraLen + commentLen
-        entry = entry + 1
+        entry++
 
         if (flags & 1 != 0) {
             return Res<Int>.err("zip: the entry " + name + " is encrypted")
@@ -122,7 +122,7 @@ fun unzip(archivePath: Str, outputDir: Str): Res<Int> {
             var i: Int = 0
             while (i < compressedSize) {
                 plain.append(bytes[dataAt + i])
-                i = i + 1
+                i++
             }
         } else {
             var reader: GzBitReader = GzBitReader(bytes, dataAt * 8, false)
@@ -147,7 +147,7 @@ fun unzip(archivePath: Str, outputDir: Str): Res<Int> {
         if (!writeFile(path, zipDataStr(plain))) {
             return Res<Int>.err("zip: cannot write " + path)
         }
-        written = written + 1
+        written++
     }
     return Res<Int>.ok(written)
 }
@@ -159,7 +159,7 @@ fun zipBytes(content: Str): List<Int> {
     while (i < content.size()) {
         val wide: Int = content[i]
         bytes.append(wide & 255)
-        i = i + 1
+        i++
     }
     return bytes
 }
@@ -179,7 +179,7 @@ fun zipFindEocd(bytes: List<Int>): Int {
         if (zipSignature(bytes, at, 80, 75, 5, 6)) {
             return at
         }
-        at = at - 1
+        at--
     }
     return -1
 }
@@ -205,7 +205,7 @@ fun zipText(bytes: List<Int>, at: Int, count: Int): Str {
     var i: Int = 0
     while (i < count) {
         text.append(bytes[at + i])
-        i = i + 1
+        i++
     }
     return text
 }
@@ -215,7 +215,7 @@ fun zipDataStr(plain: List<Int>): Str {
     var i: Int = 0
     while (i < plain.size()) {
         text.append(plain[i])
-        i = i + 1
+        i++
     }
     return text
 }
@@ -232,7 +232,7 @@ fun zipNormalizedName(name: Str): Str {
         } else {
             out.append(name[i])
         }
-        i = i + 1
+        i++
     }
     return out
 }
@@ -250,7 +250,7 @@ fun zipNameIsSafe(name: Str): Bool {
         if (ch == ':') {
             return false
         }
-        i = i + 1
+        i++
     }
     if (name[0] == '/') {
         return false
@@ -259,7 +259,7 @@ fun zipNameIsSafe(name: Str): Bool {
     while (start < name.size()) {
         var end: Int = start
         while (end < name.size() && name[end] != '/') {
-            end = end + 1
+            end++
         }
         if (end - start == 2 && name[start] == '.' && name[start + 1] == '.') {
             return false
@@ -282,7 +282,7 @@ fun zipParent(dir: Str, name: Str): Str {
         if (name[i] == '/') {
             slash = i
         }
-        i = i + 1
+        i++
     }
     if (slash <= 0) {
         return dir

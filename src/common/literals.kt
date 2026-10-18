@@ -29,28 +29,28 @@ fun litByteLength(text: *Str): Int {
     var i: Int = 1
     while (i < end) {
         if (text[i] != '\\') {
-            count = count + 1
-            i = i + 1
+            count++
+            i++
             continue
         }
-        i = i + 1
+        i++
         if (i >= end) {
             break
         }
         val escape: Char = text[i]
-        i = i + 1
+        i++
         if (escape == 'x') {
             while (i < end && litIsHexDigit(text[i])) {
-                i = i + 1
+                i++
             }
         } else if (escape >= '0' && escape <= '7') {
             var digits: Int = 1
             while (digits < 3 && i < end && text[i] >= '0' && text[i] <= '7') {
-                i = i + 1
-                digits = digits + 1
+                i++
+                digits++
             }
         }
-        count = count + 1
+        count++
     }
     return count
 }
@@ -105,7 +105,7 @@ fun litRawString(text: *Str): Str {
             out.append(ch)
         } else if (ch == '\r') {
             if (i + 1 < end && text[i + 1] == '\n') {
-                i = i + 1
+                i++
             }
             out.append('\\')
             out.append('n')
@@ -115,7 +115,7 @@ fun litRawString(text: *Str): Str {
         } else {
             out.append(ch)
         }
-        i = i + 1
+        i++
     }
     out.append('\"')
     return out

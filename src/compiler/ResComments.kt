@@ -31,12 +31,12 @@ fun resCppStripComments(text: Str): Str {
         }
         if (c == '/' && i + 1 < n && text[i + 1] == '/') {
             while (i < n && text[i] != '\n') {
-                i = i + 1
+                i++
             }
             if (lineOnly) {
                 out.resize(lineStart)
                 if (i < n) {
-                    i = i + 1
+                    i++
                 }
             }
             continue
@@ -49,7 +49,7 @@ fun resCppStripComments(text: Str): Str {
                 while (j < n && (text[j] == ' ' || text[j] == '\t'
                             || text[j] == '\r')
                 ) {
-                    j = j + 1
+                    j++
                 }
                 if (j >= n || text[j] == '\n') {
                     out.resize(lineStart)
@@ -72,7 +72,7 @@ fun resCppStripComments(text: Str): Str {
         } else if (c != ' ' && c != '\t' && c != '\r') {
             lineOnly = false
         }
-        i = i + 1
+        i++
     }
     return out
 }
@@ -88,11 +88,11 @@ fun resCopyQuoted(text: Str, start: Int, out: *Str): Int {
     while (i < n) {
         val c: Char = text[i]
         out.append(c)
-        i = i + 1
+        i++
         if (c == '\\') {
             if (i < n) {
                 out.append(text[i])
-                i = i + 1
+                i++
             }
             continue
         }
@@ -122,7 +122,7 @@ fun resCopyRawString(text: Str, start: Int, out: *Str): Int {
         if (c == '\n' || c == ')' || c == '\\' || c == ' ' || c == '\t' || c == '\"') {
             break
         }
-        i = i + 1
+        i++
     }
     if (open < 0) {
         out.append('R')
@@ -137,7 +137,7 @@ fun resCopyRawString(text: Str, start: Int, out: *Str): Int {
             return j + close.size()
         }
         out.append(text[j])
-        j = j + 1
+        j++
     }
     return j
 }
@@ -150,7 +150,7 @@ fun resSkipBlockComment(text: Str, start: Int): Int {
         if (text[i] == '*' && i + 1 < n && text[i + 1] == '/') {
             return i + 2
         }
-        i = i + 1
+        i++
     }
     return n
 }

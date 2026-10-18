@@ -212,7 +212,7 @@ fun propTypeEqual(a: AstXmlNode, b: AstXmlNode): Bool {
             if (!propTypeEqual(argsA[i], argsB[i])) {
                 return false
             }
-            i = i + 1
+            i++
         }
         return true
     }
@@ -338,7 +338,7 @@ fun propExpand(state: *PropState, stmt: *AstXmlNode, out: *List<AstXmlNode>): Bo
     val column: Int = xmlColumn(holder)
     val nextText: Str = state.next.toString()
     val temp: Str = `_sm_prop@nextText`
-    state.next = state.next + 1
+    state.next++
 
     // The operand first: one evaluation, and both later uses read the temp.
     out.append(propTempDecl(temp, operand, line, column))
@@ -520,7 +520,7 @@ fun propCallLambdas(call: *AstXmlNode, fileName: *Str, declarations: *List<AstXm
             continue
         }
         val position: Int = index
-        index = index + 1
+        index++
         if (xmlKind(arg) != AstNodeCategory.ExprLambda) {
             continue
         }

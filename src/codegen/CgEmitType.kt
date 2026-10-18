@@ -768,7 +768,7 @@ fun Emitter.unionArmManaged(typeNode: *AstXmlNode): Bool {
     var guard: Int = 0
     var current: AstXmlNode = typeNode
     while (guard < 32) {
-        guard = guard + 1
+        guard++
         if (xmlIsEmpty(current)) {
             return true
         }
@@ -1061,7 +1061,7 @@ fun Emitter.collectNames(node: *AstXmlNode, names: *Dictionary<Str, Bool>): Unit
     var i: Int = 0
     while (i < node.Children.count()) {
         this.collectNames(node.Children[i], names)
-        i = i + 1
+        i++
     }
 }
 
@@ -1071,7 +1071,7 @@ fun Emitter.collectResourceLiterals(): Unit {
     var i: Int = 0
     while (i < this.resourceStored.size()) {
         this.literals.add(this.resourceStored[i])
-        i = i + 1
+        i++
     }
 }
 
@@ -1124,7 +1124,7 @@ fun Emitter.emitStringTable(): Unit {
         previousStart = start
         previousLength = length
         total = total + length
-        i = i + 1
+        i++
     }
     val startStream: List<Int> = cgRunLengthEncode(starts)
     val lengthStream: List<Int> = cgRunLengthEncode(lengths)
@@ -1162,7 +1162,7 @@ fun Emitter.emitStringTable(): Unit {
         }
         packed.appendStr(literal)
         packed.append(' ')
-        i = i + 1
+        i++
     }
     this.line(0, packed)
     this.line(0, ";")

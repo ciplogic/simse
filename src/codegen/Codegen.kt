@@ -151,7 +151,7 @@ fun cgIndent(level: Int): Str {
     var i: Int = 0
     while (i < level) {
         out.appendStr("    ")
-        i = i + 1
+        i++
     }
     return out
 }

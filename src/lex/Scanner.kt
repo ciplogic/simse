@@ -93,7 +93,7 @@ fun matchAllOfRule(view: StrView, predicate: CharPredicate): Int {
         if (!predicate(view.at(i))) {
             return i
         }
-        i = i + 1
+        i++
     }
     return view.size()
 }
@@ -110,7 +110,7 @@ fun matchAllOfRules(view: StrView, first: CharPredicate, rest: CharPredicate): I
         if (!rest(view.at(i))) {
             return i
         }
-        i = i + 1
+        i++
     }
     return view.size()
 }
@@ -144,17 +144,17 @@ fun makeTokenStartTable(): List<ScanFunc> {
     var d: Int = '0'
     while (d <= '9') {
         table[d] = matchNumber
-        d = d + 1
+        d++
     }
     var c: Int = 'a'
     while (c <= 'z') {
         table[c] = matchName
-        c = c + 1
+        c++
     }
     c = 'A'
     while (c <= 'Z') {
         table[c] = matchName
-        c = c + 1
+        c++
     }
     return table
 }
@@ -165,7 +165,7 @@ fun markScan(table: *List<ScanFunc>, chars: *Str, scan: ScanFunc): Unit {
     while (i < chars.size()) {
         var code: Int = chars[i]
         table[code] = scan
-        i = i + 1
+        i++
     }
 }
 
@@ -203,7 +203,7 @@ fun tableMatch(view: StrView, table: *List<Str>, exact: Bool): Int {
     while (i < table.size()) {
         val entry: *Str = *table[i]
         val length: Int = entry.size()
-        i = i + 1
+        i++
         if (length == 0 || entry[0] != first) {
             continue
         }
@@ -286,7 +286,7 @@ fun matchAttribute(view: StrView): ScanMatch {
     }
     var i: Int = 2
     while (i < view.size() && lexIsAlphaOrDigit(view.at(i))) {
-        i = i + 1
+        i++
     }
     return ScanMatch(i, TokenKind.Attribute)
 }
@@ -294,15 +294,15 @@ fun matchAttribute(view: StrView): ScanMatch {
 fun matchNumber(view: StrView): ScanMatch {
     var i = 0
     while (i < view.size() && lexIsDigit(view.at(i))) {
-        i = i + 1
+        i++
     }
     if (i == 0) {
         return ScanMatch(0, TokenKind.None)
     }
     if (i + 1 < view.size() && view.at(i) == '.' && lexIsDigit(view.at(i + 1))) {
-        i = i + 1
+        i++
         while (i < view.size() && lexIsDigit(view.at(i))) {
-            i = i + 1
+            i++
         }
     }
     return ScanMatch(i, TokenKind.Number)
@@ -315,7 +315,7 @@ fun matchComment(view: StrView): ScanMatch {
     if (view.at(1) == '/') {
         var i = 2
         while (i < view.size() && view.at(i) != '\n' && view.at(i) != '\r') {
-            i = i + 1
+            i++
         }
         return ScanMatch(i, TokenKind.Comment)
     }
@@ -325,7 +325,7 @@ fun matchComment(view: StrView): ScanMatch {
             if (view.at(i) == '*' && view.at(i + 1) == '/') {
                 return ScanMatch(i + 2, TokenKind.Comment)
             }
-            i = i + 1
+            i++
         }
     }
     return ScanMatch(0, TokenKind.None)
@@ -358,7 +358,7 @@ fun matchStringLiteral(view: StrView): ScanMatch {
                 return ScanMatch(i + 1, TokenKind.String)
             }
         }
-        i = i + 1
+        i++
     }
     return ScanMatch(0, TokenKind.None)
 }
@@ -378,7 +378,7 @@ fun matchRawStringLiteral(view: StrView): ScanMatch {
         if (view.at(i) == '`') {
             return ScanMatch(i + 1, TokenKind.String)
         }
-        i = i + 1
+        i++
     }
     return ScanMatch(0, TokenKind.None)
 }
@@ -404,7 +404,7 @@ fun matchCharLiteral(view: StrView): ScanMatch {
                 return ScanMatch(0, TokenKind.None)
             }
         }
-        i = i + 1
+        i++
     }
     return ScanMatch(0, TokenKind.None)
 }
@@ -463,7 +463,7 @@ fun escapedSnippet(view: StrView, maxLen: Int): Str {
             snippet.append(hexDigits[byte / 16])
             snippet.append(hexDigits[byte % 16])
         }
-        i = i + 1
+        i++
     }
     return snippet
 }
@@ -493,13 +493,13 @@ data class Scanner(
             val ch: Char = this.source[this.pos]
             val followedByLf: Bool = this.pos + 1 < this.source.size() && this.source[this.pos + 1] == '\n'
             if (ch == '\n' || (ch == '\r' && !followedByLf)) {
-                this.line = this.line + 1
+                this.line++
                 this.column = 1
             } else {
-                this.column = this.column + 1
+                this.column++
             }
-            this.pos = this.pos + 1
-            i = i + 1
+            this.pos++
+            i++
         }
     }
 

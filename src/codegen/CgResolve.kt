@@ -74,7 +74,7 @@ fun Emitter.findMachineCreator(recvType: AstXmlNode): *CgFn {
     var i: Int = 0
     while (i < this.functions.size()) {
         val fn: *CgFn = *this.functions[i]
-        i = i + 1
+        i++
         if (fn.isNative || xmlIsEmpty(fn.receiver)) {
             continue
         }
@@ -112,7 +112,7 @@ fun Emitter.machineCallArgsFromReceiver(fn: *CgFn, recvType: AstXmlNode, out: *L
         if (creator.templateParams[e] == creatorElement) {
             elementAt = e
         }
-        e = e + 1
+        e++
     }
     val recvArgs: List<AstXmlNode> = xmlChildren(recvType, AstNodeKind.TypeArg)
     if (elementAt < 0 || elementAt >= recvArgs.size()) {
@@ -125,7 +125,7 @@ fun Emitter.machineCallArgsFromReceiver(fn: *CgFn, recvType: AstXmlNode, out: *L
             return false
         }
         out.append(element)
-        i = i + 1
+        i++
     }
     return true
 }
@@ -569,7 +569,7 @@ fun Emitter.resolveAlias(typeNode: *AstXmlNode): AstXmlNode {
     var current: AstXmlNode = typeNode
     var guard: Int = 0
     while (!xmlIsEmpty(current) && xmlKind(current) == AstNodeCategory.TypeNamed) {
-        guard = guard + 1
+        guard++
         if (guard >= 100) {
             break
         }

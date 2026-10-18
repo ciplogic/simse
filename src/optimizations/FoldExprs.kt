@@ -172,13 +172,13 @@ fun foldExprsUnder(node: *AstXmlNode, rules: *List<FoldRule>, state: *FoldState)
                 var j: Int = 0
                 while (j < i) {
                     kids.append(node.Children[j])
-                    j = j + 1
+                    j++
                 }
                 rebuilt = true
             }
             kids.append(rewritten)
         }
-        i = i + 1
+        i++
     }
     var here: AstXmlNode = node
     if (state.changed != before) {
@@ -192,7 +192,7 @@ fun foldExprsUnder(node: *AstXmlNode, rules: *List<FoldRule>, state: *FoldState)
             state.changed = true
             here = after
         }
-        i = i + 1
+        i++
     }
     return here
 }
@@ -209,7 +209,7 @@ fun foldExprsInList(stmts: *List<AstXmlNode>, rules: *List<FoldRule>): Bool {
         if (state.changed != before) {
             stmts[i] = stmt
         }
-        i = i + 1
+        i++
     }
     return state.changed
 }

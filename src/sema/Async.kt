@@ -84,7 +84,7 @@ fun asyncColor(functions: List<AstXmlNode>, reasons: *List<Str>): List<Str> {
     var changed: Bool = true
     var guard: Int = 0
     while (changed && guard < 256) {
-        guard = guard + 1
+        guard++
         changed = false
         for (*fn in functions) {
             val name: Str = asyncName(fn)
@@ -121,7 +121,7 @@ fun asyncDump(functions: List<AstXmlNode>, asyncNames: List<Str>, reasons: List<
             line = `async  @nameText   <- @reasonText`
         }
         lines.append(line)
-        i = i + 1
+        i++
     }
     lines.sort(compareLessThan)
     for (*line in lines) {
@@ -130,7 +130,7 @@ fun asyncDump(functions: List<AstXmlNode>, asyncNames: List<Str>, reasons: List<
     var sync: Int = 0
     for (*fn in functions) {
         if (!asyncNames.contains(asyncName(fn))) {
-            sync = sync + 1
+            sync++
         }
     }
     eprintln(`sync @sync declarations reach no suspension`)

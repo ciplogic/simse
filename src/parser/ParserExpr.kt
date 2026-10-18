@@ -18,7 +18,7 @@ fun Parser.parseExpr(minBindingPower: Int): ExprNode {
     while (true) {
         var newlines: Int = 0
         while (this.peek(newlines).kind == TokenKind.EndOfLine) {
-            newlines = newlines + 1
+            newlines++
         }
         if (newlines > 0) {
             val lookaheadBP: Int = binaryBindingPower(this.peek(newlines).text)
@@ -28,7 +28,7 @@ fun Parser.parseExpr(minBindingPower: Int): ExprNode {
             var k: Int = 0
             while (k < newlines) {
                 this.advance()
-                k = k + 1
+                k++
             }
         }
         // The range words are *identifier* operators (`a until b`), so they meet the Pratt
@@ -201,7 +201,7 @@ fun Parser.parsePostfix(): ExprNode {
             var a: Int = 0
             while (a < args.size()) {
                 kids.append(this.roleOf(*args[a], AstNodeKind.Arg))
-                a = a + 1
+                a++
             }
             var attrs: List<AstNodeAttribute> = this.posAttrs(expr.line, expr.column)
             var node: AstXmlNode =
@@ -603,7 +603,7 @@ fun braceBodyUsesIt(stmts: *List<AstXmlNode>): Bool {
         if (nodeNamesIt(stmts[i])) {
             return true
         }
-        i = i + 1
+        i++
     }
     return false
 }
@@ -622,7 +622,7 @@ fun nodeNamesIt(node: AstXmlNode): Bool {
         if (nodeNamesIt(node.Children[i])) {
             return true
         }
-        i = i + 1
+        i++
     }
     return false
 }

@@ -84,7 +84,7 @@ fun profEscape(text: Str): Str {
             out.append('\\')
         }
         out.append(ch)
-        i = i + 1
+        i++
     }
     return out
 }
@@ -359,7 +359,7 @@ fun profDots(name: *Str): Str {
             i = i + 2
         } else {
             out.append(name[i])
-            i = i + 1
+            i++
         }
     }
     return out

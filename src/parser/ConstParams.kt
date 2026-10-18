@@ -211,7 +211,7 @@ fun cpUniformLiteral(group: *List<ConstCallSite>, index: Int): Opt<Str> {
         if (cpLiteralKey(*group[k].args[index]) != first) {
             return ()
         }
-        k = k + 1
+        k++
     }
     return (first)
 }
@@ -242,7 +242,7 @@ fun cpDecide(
         if (group[k].args.size() != params.size()) {
             return ()
         }
-        k = k + 1
+        k++
     }
     var i: Int = 0
     while (i < params.size()) {
@@ -256,7 +256,7 @@ fun cpDecide(
                 return (ConstFold(name, i, local))
             }
         }
-        i = i + 1
+        i++
     }
     return ()
 }
@@ -292,7 +292,7 @@ fun cpDropArg(children: Array<AstXmlNode>, argIndex: Int): Array<AstXmlNode> {
     for (*child in children) {
         if (child.name == AstNodeKind.Arg) {
             val ordinal: Int = seen
-            seen = seen + 1
+            seen++
             if (ordinal == argIndex) {
                 continue
             }
@@ -369,7 +369,7 @@ fun cpRewriteFoldDecl(
     for (*child in decl.Children) {
         if (child.name == AstNodeKind.Param) {
             val ordinal: Int = p
-            p = p + 1
+            p++
             if (ordinal == paramIndex) {
                 continue
             }

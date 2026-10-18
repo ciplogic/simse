@@ -81,7 +81,7 @@ fun Emitter.classReceiver(decl: *AstXmlNode): AstXmlNode {
         var arg: AstXmlNode = this.namedTypeExpr(typeParams[i])
         arg.name = AstNodeKind.TypeArg
         args.append(arg)
-        i = i + 1
+        i++
     }
     return this.genericTypeExpr(xmlAttr(decl, AstNodeAttributeKind.Name), args)
 }
@@ -190,8 +190,8 @@ fun Emitter.collectPackages(): Unit {
     i = 0
     while (i < names.size()) {
         this.nsPrefixes.insert(names[i], `ns@(next)_`)
-        next = next + 1
-        i = i + 1
+        next++
+        i++
     }
 }
 
@@ -331,13 +331,13 @@ fun Emitter.collect(): Unit {
                 var p: Int = 0
                 while (p < classParams.size()) {
                     methodParams.append(classParams[p])
-                    p = p + 1
+                    p++
                 }
                 val methodTypeParams: List<Str> = xmlTypeParamNames(method)
                 var q: Int = 0
                 while (q < methodTypeParams.size()) {
                     methodParams.append(methodTypeParams[q])
-                    q = q + 1
+                    q++
                 }
                 this.addFunction(method, receiver, input.fileName, methodParams, input.prelude, pkg, true)
             }
@@ -378,7 +378,7 @@ fun Emitter.computeMachineSuffixes(): Unit {
             if (semMachineYielder(candidate.decl)
                 && semOuterTypeName(candidate.receiver) == outer
             ) {
-                count = count + 1
+                count++
             }
         }
         if (count > 1) {
@@ -393,13 +393,13 @@ fun Emitter.fillFacts(facts: *SemFacts): Unit {
     while (t < typeNames.size()) {
         val node: *AstXmlNode = this.types.getPtr(typeNames[t])
         facts.types.insert(typeNames[t], node)
-        t = t + 1
+        t++
     }
     val enumTypeNames: List<Str> = this.enumNames.keys()
     var e: Int = 0
     while (e < enumTypeNames.size()) {
         facts.enumNames.insert(enumTypeNames[e], true)
-        e = e + 1
+        e++
     }
     for (*fn in this.functions) {
         val index: Int = facts.functions.size()
@@ -428,14 +428,14 @@ fun Emitter.fillFacts(facts: *SemFacts): Unit {
             mapped.append(SemExtFact(copy(ext.receiver), copy(ext.returnType), ext.typeParams))
         }
         facts.nativeExtensions.insert(extensionNames[x], mapped)
-        x = x + 1
+        x++
     }
     val staticNames: List<Str> = this.staticsByName.keys()
     var s: Int = 0
     while (s < staticNames.size()) {
         val entry: *CgStatic = this.staticsByName.getPtr(staticNames[s])
         facts.statics.insert(staticNames[s], xmlChild(entry.decl, AstNodeKind.Type))
-        s = s + 1
+        s++
     }
 }
 
@@ -444,7 +444,7 @@ fun Emitter.setActiveTypeParams(params: *List<Str>): Unit {
     var i: Int = 0
     while (i < params.size()) {
         this.activeTypeParams.insert(params[i], true)
-        i = i + 1
+        i++
     }
 }
 
@@ -456,7 +456,7 @@ fun Emitter.templateClause(params: *List<Str>): Str {
     var i: Int = 0
     while (i < params.size()) {
         parts.append("class " + params[i])
-        i = i + 1
+        i++
     }
     val cgJoinText: Str = cgJoin(parts, ", ")
     return `template <@cgJoinText>`
@@ -476,7 +476,7 @@ fun Emitter.fnTemplateParams(fn: *CgFn): List<Str> {
     var i: Int = 0
     while (i < fn.templateParams.size()) {
         params.append(fn.templateParams[i])
-        i = i + 1
+        i++
     }
     if (this.machineIter) {
         params.append(smMachineIterName())
@@ -538,7 +538,7 @@ fun Emitter.typeAliasTarget(typeNode: *AstXmlNode): AstXmlNode {
     var resolved: Bool = false
     var guard: Int = 0
     while (guard < 64 && xmlKind(current) == AstNodeCategory.TypeNamed) {
-        guard = guard + 1
+        guard++
         val name: Str = xmlAttr(current, AstNodeAttributeKind.Name)
         val decl: *AstXmlNode = this.types.getPtr(name)
         if (decl == null || decl.name != AstNodeKind.TypeAlias

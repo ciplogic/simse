@@ -44,7 +44,7 @@ fun linMergeCount(
     var i: Int = 0
     while (i < names.size()) {
         at.insert(names[i], index)
-        i = i + 1
+        i++
     }
 }
 
@@ -58,7 +58,7 @@ fun linMergeCandidates(stmts: *List<AstXmlNode>, useDefs: &LinUseDefs): List<Mer
     while (i < stmts.size()) {
         linMergeCount(useDefs.defsAt(i), *writes, *writeAt, i)
         linMergeCount(useDefs.usesAt(i), *reads, *readAt, i)
-        i = i + 1
+        i++
     }
 
     var candidates: List<MergeLocal> = List<MergeLocal>()
@@ -84,7 +84,7 @@ fun linMergeCandidates(stmts: *List<AstXmlNode>, useDefs: &LinUseDefs): List<Mer
                 }
             }
         }
-        i = i + 1
+        i++
     }
     return candidates
 }
@@ -158,7 +158,7 @@ fun linMergeLocalsOptimization(stmts: *List<AstXmlNode>, cache: &LinUseDefs): Bo
         ) {
             declAt.insert(xmlAttr(stmt, AstNodeAttributeKind.Name), i)
         }
-        i = i + 1
+        i++
     }
 
     var merge: Dictionary<Str, Str> = Dictionary<Str, Str>()
@@ -182,7 +182,7 @@ fun linMergeLocalsOptimization(stmts: *List<AstXmlNode>, cache: &LinUseDefs): Bo
         if (keeps) {
             out.append(stmt)
         }
-        i = i + 1
+        i++
     }
     stmts.clear()
     for (*stmt in out) {

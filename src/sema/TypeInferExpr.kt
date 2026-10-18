@@ -42,7 +42,7 @@ fun SemInfer.lookup(name: *Str): AstXmlNode {
         if (declared != null) {
             return * declared
         }
-        i = i - 1
+        i--
     }
     val base: *AstXmlNode = this.baseScope.getPtr(name)
     if (base != null) {
@@ -254,7 +254,7 @@ fun SemInfer.markCtorFallback(list: *List<AstXmlNode>, i: Int, drop: *List<Bool>
             retIndex = j
             break
         }
-        j = j + 1
+        j++
     }
     if (callIndex < 0 || retIndex < 0) {
         return
@@ -280,12 +280,12 @@ fun SemInfer.stmts(list: *List<AstXmlNode>): List<AstXmlNode> {
     while (i < list.size()) {
         drop.append(false)
         rewrite.append(xmlEmptyNode())
-        i = i + 1
+        i++
     }
     i = 0
     while (i < list.size()) {
         this.markCtorFallback(list, i, drop, rewrite)
-        i = i + 1
+        i++
     }
     var out: List<AstXmlNode> = List<AstXmlNode>()
     i = 0
@@ -297,7 +297,7 @@ fun SemInfer.stmts(list: *List<AstXmlNode>): List<AstXmlNode> {
                 out.append(rewrite[i])
             }
         }
-        i = i + 1
+        i++
     }
     return out
 }
@@ -384,7 +384,7 @@ fun SemInfer.instantiate(decl: *AstXmlNode, base: *AstXmlNode, memberType: AstXm
     var i: Int = 0
     while (i < classParams.size()) {
         bindings.insert(classParams[i], args[i])
-        i = i + 1
+        i++
     }
     return semSubstitute(memberType, bindings, classParams)
 }

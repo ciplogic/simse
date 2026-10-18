@@ -127,7 +127,7 @@ fun resGenAddSection(ctx: *SourceGenContext, section: *Str): Bool {
             ctx.sections.add(names[i], item, resCppStripComments(sourceGenResText(ctx.state, key)))
             added = true
         }
-        i = i + 1
+        i++
     }
     return added
 }

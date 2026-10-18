@@ -667,7 +667,7 @@ fun Emitter.cgLiteralBorrowFix(
             }
         }
         fixed.append(text)
-        i = i + 1
+        i++
     }
     return fixed
 }
@@ -704,7 +704,7 @@ fun Emitter.cgMethodStrArgs(
             }
         }
         fixed.append(text)
-        i = i + 1
+        i++
     }
     return fixed
 }

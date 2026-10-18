@@ -17,7 +17,7 @@ fun generatorArgsText(args: *List<Str>): Str {
     var i: Int = 1
     while (i < args.size()) {
         parts.append(attrLiteralText(args[i]))
-        i = i + 1
+        i++
     }
     return joinStrs(parts, ",")
 }

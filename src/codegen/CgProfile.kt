@@ -63,7 +63,7 @@ fun Emitter.prettySymbol(name: *Str): Str {
                 break
             }
             digits.append(ch)
-            d = d + 1
+            d++
         }
         if (digits.size() > 0) {
             val packageNameText: Str = this.packageName(name.substr(0, closureAt))
@@ -83,7 +83,7 @@ fun Emitter.packageName(name: *Str): Str {
         if (prefix.size() > 0 && name.startsWith(prefix)) {
             return packages[i] + "." + name.substr(prefix.size(), name.size() - prefix.size())
         }
-        i = i + 1
+        i++
     }
     return *name
 }

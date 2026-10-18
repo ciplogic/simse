@@ -73,10 +73,10 @@ fun linJumpCrosses(
                 if (at < decls[d] && decls[d] <= labelAt[l]) {
                     return true
                 }
-                d = d + 1
+                d++
             }
         }
-        l = l + 1
+        l++
     }
     return false
 }
@@ -164,7 +164,7 @@ fun linSpliceIsSafe(
         if (xmlKind(body[k]) == AstNodeCategory.StmtVarDecl) {
             decls.append(i + k)
         }
-        k = k + 1
+        k++
     }
     if (decls.size() == 0) {
         return true
@@ -179,7 +179,7 @@ fun linSpliceIsSafe(
             labelNames.append(xmlAttr(stmts[p], AstNodeAttributeKind.Name))
             labelAt.append(linMergedIndex(p, i, len))
         }
-        p = p + 1
+        p++
     }
     k = 0
     while (k < len) {
@@ -187,7 +187,7 @@ fun linSpliceIsSafe(
             labelNames.append(xmlAttr(body[k], AstNodeAttributeKind.Name))
             labelAt.append(i + k)
         }
-        k = k + 1
+        k++
     }
 
     // ... and every jump that stays in it. Only an item *before* the block can cross a
@@ -201,16 +201,16 @@ fun linSpliceIsSafe(
             if (linJumpCrosses(*names[j], p, decls, labelNames, labelAt)) {
                 return false
             }
-            j = j + 1
+            j++
         }
-        p = p + 1
+        p++
     }
     k = 0
     while (k < len) {
         if (linStmtCrosses(body[k], i + k, decls, labelNames, labelAt)) {
             return false
         }
-        k = k + 1
+        k++
     }
     return true
 }
@@ -223,7 +223,7 @@ fun linJumpTargets(stmts: *List<AstXmlNode>): Dictionary<Str, Bool> {
     var i: Int = 0
     while (i < stmts.size()) {
         linCollectJumpTargets(*stmts[i], targets)
-        i = i + 1
+        i++
     }
     return targets
 }
@@ -259,16 +259,16 @@ data class LinSimplifier(
                 && xmlAttr(stmts[i + 1], AstNodeAttributeKind.Name) == xmlAttr(stmt, AstNodeAttributeKind.Name)
             ) {
                 this.changed = true
-                i = i + 1
+                i++
             } else {
                 out.append(stmt)
                 if (linIsTerminator(stmt)) {
                     while (i + 1 < stmts.size() && !linIsLabel(stmts[i + 1])) {
                         this.changed = true
-                        i = i + 1
+                        i++
                     }
                 }
-                i = i + 1
+                i++
             }
         }
         return out
@@ -287,7 +287,7 @@ data class LinSimplifier(
             } else {
                 out.append(stmt)
             }
-            i = i + 1
+            i++
         }
         return out
     }
@@ -306,7 +306,7 @@ data class LinSimplifier(
                 bodyList = linBlockStmts(stmts[i])
                 bodies[i] = this.flattenPass(bodyList)
             }
-            i = i + 1
+            i++
         }
 
         // The jump names each item contributes, collected once: the safety test below would
@@ -315,7 +315,7 @@ data class LinSimplifier(
         i = 0
         while (i < count) {
             itemJumps[i] = linItemJumpNames(stmts, bodies, i)
-            i = i + 1
+            i++
         }
 
         var splicing: List<Bool> = List<Bool>(count, false)
@@ -325,7 +325,7 @@ data class LinSimplifier(
                 splicing[i] = true
                 this.changed = true
             }
-            i = i + 1
+            i++
         }
 
         var out: List<AstXmlNode> = List<AstXmlNode>()
@@ -335,7 +335,7 @@ data class LinSimplifier(
                 var k: Int = 0
                 while (k < bodies[i].size()) {
                     out.append(bodies[i][k])
-                    k = k + 1
+                    k++
                 }
             } else if (linIsBlock(stmts[i])) {
                 // The block stays: a declaration must not be spliced across a jump; this is
@@ -346,7 +346,7 @@ data class LinSimplifier(
             } else {
                 out.append(copy(stmts[i]))
             }
-            i = i + 1
+            i++
         }
         return out
     }
@@ -357,7 +357,7 @@ data class LinSimplifier(
         this.changed = true
         var guard: Int = 0
         while (this.changed && guard < 16) {
-            guard = guard + 1
+            guard++
             this.changed = false
             current = this.prunePass(current)
             current = this.labelPass(current)
