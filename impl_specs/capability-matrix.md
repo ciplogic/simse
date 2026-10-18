@@ -5325,3 +5325,16 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `stress/interp-dollar` covers names, expressions, a literal `@`/`|` forcing the separator
   down the list, `\$`, a lone `$`, an escape that decodes to a separator byte, and a
   template with a tab fusing with an `Int` item.
+
+- **Expression bodies: `fun f(): T = expr`.** The parser desugars the form to the block
+  `return expr` (`parseFunction`), so every downstream stage sees the function it already
+  knew - modifiers, attributes, class-body methods and extensions unchanged. The return
+  type must be spelled (`an expression body needs the return type spelled`), because a
+  named function's type is its declaration and only a lambda's result is inferred; the
+  diagnostic says the spelling. A `Unit` answer is the expression as it stands
+  (`fun announce(): Unit = println(...)`, the `return` branch's `isUnitValue` shape).
+  Cost: one branch in `parseFunction`; `=` after a signature was a parse error before, so
+  no existing program changes meaning.
+  Verified: `bun tools/iterate.js --full` - **111/111** and both fixed points; the new case
+  `stress/expr-body` covers a plain body, parameters, an interpolation in the expression,
+  the `data` mark, a class-body method, an extension, and a `Unit` answer.

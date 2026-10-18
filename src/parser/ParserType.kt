@@ -138,7 +138,26 @@ fun Parser.parseFunction(
 
     var body: List<AstXmlNode> = List<AstXmlNode>()
     var hasBody: Bool = false
-    if (this.checkText("{")) {
+    if (this.checkText("=")) {
+        // `fun f(): Int = expr` (Kotlin's expression body): the block `return expr` is. The
+        // return type must be spelled - a named function's type is its declaration, and the
+        // language infers a lambda's result only.
+        if (returnType.name == AstNodeKind.None) {
+            this.setError(pos, "an expression body needs the return type spelled (`fun f(): T = expr`)")
+            return this.emptyNode()
+        }
+        this.advance()
+        this.skipNewlines()
+        val value: ExprNode = this.parseExpr(0)
+        if (this.failed) {
+            return this.emptyNode()
+        }
+        var retAttrs: List<AstNodeAttribute> = this.posAttrs(value.line, value.column)
+        var ret: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtReturn, retAttrs, Array<AstXmlNode>())
+        this.attach(ret, AstNodeKind.Value, value.node)
+        body.append(ret)
+        hasBody = true
+    } else if (this.checkText("{")) {
         // The body's returns construct this function's return type (the `return (x)`
         // convention), so the type travels with the parse.
         val savedReturnType: AstXmlNode = this.returnTypeCtx

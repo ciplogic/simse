@@ -91,7 +91,8 @@ buffer (prefer it to a chain of `+`).
 ## Functions, extensions, lambdas
 
 Receiver syntax is an explicit `this` parameter: `fun Str.shout(): Str`. `data fun` marks a
-pure function the compiler may reuse. A lambda is `(x: Int) -> x + 1` or a block body starting
+pure function the compiler may reuse. A one-expression body may stand as the body
+(`fun double(n: Int): Int = n * 2`, the return type spelled). A lambda is `(x: Int) -> x + 1` or a block body starting
 on the arrow's line; a call's final argument may be a **trailing brace lambda** — `apply(5) { x -> x + 1 }`,
 `twice { 41 }` — whose body spans lines, and whose last statement is the lambda's value. A
 brace lambda with no declared parameter that names `it` gets it as the single implicit

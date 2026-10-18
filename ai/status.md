@@ -11,7 +11,8 @@ Language: values and locals (`val`/`var`, inferred or declared), file-level stat
 `List`/`Array`/`Span` and machines (`..T`, both value and pointer forms), ranges (`a..b`,
 `until`/`downTo`/`step`, and `x in c` membership — sugar over prelude `rangeTo`/`contains`
 extensions), `break`/`continue`,
-`yield` (a state machine — `impl_specs/yield.md`), functions, extension methods, `data` pure
+`yield` (a state machine — `impl_specs/yield.md`), functions (block or expression body),
+extension methods, `data` pure
 functions, lambdas (block bodies, by-value capture, the trailing brace form with `it` -
 `f(x) { ... }` - and the prelude's `repeat`/`forEach` consumers), reified generics with call inference,
 protocols (`protocol` signatures and `when T: P` constraints, checked at instantiation;

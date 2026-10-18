@@ -25,6 +25,12 @@ For a function that returns no useful value, omit the return type or write `Unit
 forms mean the same thing. A non-`Unit` function must return a value on every reachable
 path. A `Unit` function may use `return` without a value or reach the closing brace.
 
+A function whose body is one expression may write it as the body (Kotlin's expression
+body): `fun double(n: Int): Int = n * 2` is the block form with `return n * 2` as its only
+statement, desugared in the parser. The return type must be spelled - a named function's
+type is its declaration, and only a lambda's result is inferred - and the modifiers
+(`data`, an attribute, a method in a class body) are unchanged by the form.
+
 Functions use ordinary value semantics for parameters, so passing a `List<T>`, `Str`, or
 data-class value copies it according to that type's value semantics. Use `&T` or `*T`
 explicitly when sharing or borrowing is intended: `&T` keeps its box alive through the

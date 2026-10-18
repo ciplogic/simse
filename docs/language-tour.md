@@ -245,7 +245,9 @@ parser splits, so `>>` closes any depth of nesting.
 ## Functions, extensions, lambdas
 
 Functions are top-level or methods; the receiver may be declared as an
-extension, which is how the standard library is written. Generics are reified:
+extension, which is how the standard library is written. A one-expression body may stand
+as the body, the return type spelled (`fun double(n: Int): Int = n * 2`, Kotlin's
+expression body). Generics are reified:
 `identity<Int>(7)` calls a function specialized for `Int`.
 
 ```kt
