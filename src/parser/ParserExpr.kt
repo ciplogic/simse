@@ -31,15 +31,51 @@ fun Parser.parseExpr(minBindingPower: Int): ExprNode {
                 k = k + 1
             }
         }
-        val bp: Int = binaryBindingPower(this.peek(0).text)
+        // The range words are *identifier* operators (`a until b`), so they meet the Pratt
+        // loop as names with no binding power of their own; they bind at the `..` level and
+        // only on their own line, the way Kotlin's infix calls do. `!in` scans as `!` plus
+        // `in`, so it is recognized here, in operator position, before `!` could read as a
+        // unary - which it never is after a complete left operand.
+        val opPos: SourcePos = this.peek(0).pos
+        var op: Str = this.peek(0).text
+        val sugarCallee: Str = rangeSugarCallee(op)
+        var bp: Int = binaryBindingPower(op)
+        var infixSugar: Bool = false
+        if (bp < 0 && sugarCallee != "" && this.checkKind(TokenKind.Identifier)) {
+            bp = binaryBindingPower("..")
+            infixSugar = true
+        }
+        if (bp < 0 && op == "!" && this.peek(1).text == "in") {
+            op = "!in"
+            bp = binaryBindingPower("in")
+        }
         if (bp < 0 || bp < minBindingPower) {
             break
         }
-        val op: Str = this.advance().text
+        this.advance()
+        if (op == "!in") {
+            this.advance()
+        }
         this.skipNewlines()
         val right: ExprNode = this.parseExpr(bp + 1)
         if (this.failed) {
             return this.emptyExpr()
+        }
+        // `a..b` and its words are the prelude's range methods (src/rtl/Range.kt), called on
+        // the left operand; `x in c` / `x !in c` are `c.contains(x)` (negated). Both are
+        // desugared here, so no stage downstream - sema, the linear pass, the emitters -
+        // sees the operator.
+        if (op == ".." || infixSugar) {
+            left = this.receiverCall1At(left, sugarCallee, right, opPos)
+            continue
+        }
+        if (op == "in" || op == "!in") {
+            var test: ExprNode = this.receiverCall1At(right, "contains", left, opPos)
+            if (op == "!in") {
+                test = this.unaryExprAt("!", test, opPos)
+            }
+            left = test
+            continue
         }
         // One side of a comparison against a string literal is wrapped in `spanOfStr`: the
         // test reads a view of the place instead of copying it into a `Str` temporary, and

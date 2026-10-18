@@ -87,6 +87,47 @@ fun removeRange<T>(this: List<T>, start: Int, end: Int): Unit
 @SmGen("res", "dictops", "simse_list_contains")
 borrow fun contains<T>(this: List<T>, value: T): Bool
 
+// The `in` operator's other receivers (`x in c` is `c.contains(x)`, the parser's sugar):
+// a byte walk for the `Char` test (no temporary built), the view search for a `Str` inside
+// a `Str`, and the span walk a `Span`/`StrView` and (through it) an `Array` take.
+fun Str.contains(value: Char): Bool {
+    var i: Int = 0
+    val len: Int = this.size()
+    while (i < len) {
+        if (this[i] == value) {
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}
+
+fun Str.contains(value: Str): Bool {
+    return this.indexOf(value) != -1
+}
+
+fun Span<T>.contains<T>(value: T): Bool {
+    var i: Int = 0
+    val len: Int = this.size()
+    while (i < len) {
+        if (this[i] == value) {
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}
+
+fun Array<T>.contains<T>(value: T): Bool {
+    return spanOfArray(this).contains(value)
+}
+
+// A dictionary tests its keys: `k in dict` is key membership, the Kotlin reading of `in`
+// on a map.
+fun Dictionary<K, V>.contains<K, V>(key: K): Bool {
+    return this.has(key)
+}
+
 // In-place sort. The comparator takes its two elements *by pointer* (`(*T, *T) -> Bool`):
 // `std::sort` hands each element as a `T&`, so a pointer reads it where it lives - a by-value
 // comparator copies both elements per comparison, a heap copy per compare for a `Str`.

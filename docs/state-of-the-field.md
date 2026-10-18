@@ -100,9 +100,9 @@ these):
 
 1. **More iterables** - `for` iterates anything with an `iter`: a container has one
    per container type (the prelude writes `List<T>`, `Array<T>` and `Span<T>` ones in
-   Simse), and a state machine is its own identity. A `Dictionary` and ranges
-   (`for (i in (2 .. 5))`) are next; walking a `Dictionary` still means `keys()` and an
-   index.
+   Simse), a state machine is its own identity, and ranges (`for (i in 1..5)`, with
+   `a until b`, `a downTo b`, `r step n`) carry theirs (`src/rtl/Range.kt`). A
+   `Dictionary` is next; walking one still means `for (k in d.keys())`.
 2. **String formatting** - `fmtStr`/`fmtStrWith` and `@name`/`@(name)` interpolation in a
    backtick string cover the template case, and a protocol (`Printable`) is now the way to
    write your own type's rendering - but the prelude protocols and a `println` that goes

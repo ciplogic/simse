@@ -98,10 +98,10 @@ The binary operators, loosest first (each row binds tighter than the one above i
 | --- | --- |
 | `\|\|` | logical or, short-circuit |
 | `&&` | logical and, short-circuit |
-| `==` `!=` | equality, on any comparable pair |
+| `==` `!=` `in` | equality, on any comparable pair; `in` is membership - `x in c` is `c.contains(x)`, `x !in c` its negation |
 | `<` `>` `<=` `>=` | ordering |
 | `\|` `^` `&` | bitwise or, xor, and - integers (and `Bool`, where they are the non-short-circuit forms) |
-| `<<` `>>` | shifts - integers |
+| `<<` `>>` `..` | shifts - integers; `..` builds a range - `a..b` is `a.rangeTo(b)` |
 | `+` `-` | additive; `+` also concatenates `Str` |
 | `*` `/` `%` | multiplicative |
 
@@ -109,7 +109,38 @@ All of them are left-associative and none is an assignment. `!` negates a `Bool`
 (bitwise not) and the unsigned shifts are not implemented.
 
 The bitwise pair binds tighter than a comparison (Python's and Rust's order, not C's),
-and the shifts sit between `+` and `&`.
+and the shifts sit between `+` and `&`. `..` shares the shift level and `in` the equality
+level, so `x in 1..n + 1` reads as Kotlin does - `x` tested against the range
+`1..(n + 1)`; neither reaches the emitter as an operator, because the parser turns both
+into the member call named beside them. That call resolves like any other, so a type with
+its own `rangeTo`/`contains` extension takes the syntax over for that type
+(`specs/functions.md`, "Operator functions").
+
+## Ranges
+
+Status: implemented; sugar over prelude extension methods (`src/rtl/Range.kt`).
+
+`a..b` is an inclusive ascending range of `Int` - `1..5` is 1, 2, 3, 4, 5 - and the three
+Kotlin range words spell the variations:
+
+| Sugar | Call | Meaning |
+| --- | --- | --- |
+| `a..b` | `a.rangeTo(b)` | ascending, both ends inclusive (`Range`) |
+| `a until b` | `a.until(b)` | ascending, `b` excluded (`Range`) |
+| `a downTo b` | `a.downTo(b)` | descending, both ends inclusive (`SteppedRange`) |
+| `r step n` | `r.step(n)` | the same bounds, `n` at a time (`SteppedRange`) |
+
+`step` keeps the direction it is given, so `5 downTo 1 step 2` walks 5, 3, 1. The words
+are *identifier* operators, contextual like `borrow`: they bind at the `..` level, only in
+operator position and on their own line, and the names stay usable as ordinary names.
+
+A range is a value: `Range(from, to)` and `SteppedRange(from, to, step)` are plain data
+classes with those fields, so `val r = 1..4` binds one, `r.from`/`r.to` read it, and it
+passes like any value. Both types carry an `iterValues`, so a range is iterable by the
+`for` convention (`impl_specs/for.md`): `for (i in 1..5)` and the indexed
+`for ((v, i) in 1..5)` walk it. `x in 1..5` is the membership test - `contains` on the
+range (`in` above). Only `Int` bounds are sugar; `Char` and `Int64` ranges are not spelled
+yet.
 
 ### Compound assignment and the step operators
 

@@ -155,12 +155,15 @@ receiver through the outer variable.
 - **A machine**, which is already what `for` wants: `x.iterValues()` on a `..T` receiver is
   the *identity* (no wrapper object, no extra step); the pointer wrap has no machine form.
   `..T` is not a spellable type, so the identity is the compiler's rather than a function's.
-- **A range, later**: `for (i in (2 .. 5))` becomes an iterator over the two bounds, i.e.
-  one more `iterValues` whose machine holds `2` and `5` as its parameters.
+- **A range**: landed. `a..b` is sugar for `a.rangeTo(b)` (`specs/built-in-types.md`,
+  "Ranges"), a prelude extension returning a `Range` (or `SteppedRange` for the
+  `until`/`downTo`/`step` words), and both types declare their own `iterValues` in
+  `src/rtl/Range.kt` - one more `iterValues` whose machine holds the two bounds, the shape
+  this list proposed. No compiler stage beyond the sugar knows a range: the loop is the
+  ordinary `iterValues` convention over the value.
 
 What remains: an iterator for `Dictionary<K, V>` (a `while` over `keys()` walks it; what a
-dictionary's element should be - its keys, or a key/value pair - is the open question), and the
-range above.
+dictionary's element should be - its keys, or a key/value pair - is the open question).
 
 ## `iter`: iterating without copying
 
@@ -317,6 +320,5 @@ Still open:
 
 - **other containers**: `Dictionary<K, V>` has no `iterValues` yet (a `while` over `keys()`
   walks it); it is also the one common container with no span view to fall back on.
-- **ranges**: `for (i in (2 .. 5))` - one more `iterValues` whose machine holds the two bounds.
 - **a `for` inside a yielding body**: the machine would have to be a *field*, and a field needs
   a nameable type (`impl_specs/yield.md`).

@@ -151,3 +151,19 @@ fun Parser.methodCallAt(target: *Str, method: *Str, pos: SourcePos): ExprNode {
     this.attach(call, AstNodeKind.Callee, member)
     return ExprNode(call, pos.line, pos.column)
 }
+
+// `<receiver>.<method>(<arg>)`, for a receiver that is an expression rather than a name
+// (`x in c` is `c.contains(x)`, `a..b` is `a.rangeTo(b)`).
+fun Parser.receiverCall1At(receiver: *ExprNode, method: *Str, arg: *ExprNode, pos: SourcePos): ExprNode {
+    var memberAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+    memberAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, method))
+    var member: AstXmlNode =
+        AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, memberAttrs, Array<AstXmlNode>())
+    this.attach(member, AstNodeKind.Receiver, receiver.node)
+    var kids: List<AstXmlNode> = List<AstXmlNode>()
+    kids.append(this.roleOf(member, AstNodeKind.Callee))
+    kids.append(this.roleOf(arg.node, AstNodeKind.Arg))
+    var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+    var call: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, attrs, kids.toArray())
+    return ExprNode(call, pos.line, pos.column)
+}

@@ -10,6 +10,11 @@ package common
 // `op` is not a binary operator. The order is the language's (specs/built-in-types.md):
 // bitwise binds tighter than a comparison but looser than a shift, as in Python and Rust,
 // so `a & b == c` is `(a & b) == c`; C's opposite order silently means `a & (b == c)`.
+//
+// `in` shares the equality level and `..` the shift level, so `x in 1..n + 1` reads as
+// Kotlin does - `x` tested against the range `1..(n + 1)` - without a level of its own.
+// Neither reaches the emitter as an operator: the parser turns both into calls
+// (`rangeOf`, `contains`), which is why sharing a rank costs nothing downstream.
 fun opPrecedenceRank(op: *Str): Int {
     when (op) {
         "||" -> {
@@ -20,7 +25,7 @@ fun opPrecedenceRank(op: *Str): Int {
             return 2
         }
 
-        "==", "!=" -> {
+        "==", "!=", "in" -> {
             return 3
         }
 
@@ -40,7 +45,7 @@ fun opPrecedenceRank(op: *Str): Int {
             return 7
         }
 
-        "<<", ">>" -> {
+        "<<", ">>", ".." -> {
             return 8
         }
 

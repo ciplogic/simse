@@ -7,6 +7,7 @@ template <class T>
 void simse_strTableExpand(const T* stream, Int* out, Int count);
 void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, Span<Char>* table, Int count);
 
+struct Range;
 template <class T>
 struct Span;
 template <class T>
@@ -14,6 +15,13 @@ struct Opt;
 template <class T>
 struct Res;
 struct ns1_Tag;
+// src/rtl
+SIMSE_PACK_PUSH
+struct Range {
+    Int from;
+    Int to;
+};
+SIMSE_PACK_POP
 // src/rtl
 SIMSE_PACK_PUSH
 template <class T>
@@ -479,6 +487,47 @@ inline void simse_println(const T& value, FILE* out) {
     std::fputc('\n', out);
 }
 
+struct Range_iterValues_yieldable {
+    Int branch{};
+    Int current{};
+    Range* _sm_self{};
+    Int i{};
+};
+
+Bool advance(Range_iterValues_yieldable* self) {
+    Bool _sm_base1, _sm_base3, _sm_expr2;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base8, _sm_base9, _sm_base10, _sm_base11, _sm_expr1;
+    Range* _sm_base6, * _sm_base7;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto L2;
+    _sm_base4 = self->branch;
+    _sm_base3 = _sm_base4 == 1;
+    if (_sm_base3) goto LY1;
+    _sm_base6 = self->_sm_self;
+    _sm_base5 = _sm_base6->from;
+    self->i = _sm_base5;
+    L1:;
+    _sm_base7 = self->_sm_self;
+    _sm_expr1 = _sm_base7->to;
+    _sm_base8 = self->i;
+    _sm_expr2 = _sm_base8 <= _sm_expr1;
+    if (!(_sm_expr2)) goto L2;
+    _sm_base9 = self->i;
+    self->current = _sm_base9;
+    self->branch = 1;
+    return true;
+    LY1:;
+    _sm_base11 = self->i;
+    _sm_base10 = _sm_base11 + 1;
+    self->i = _sm_base10;
+    goto L1;
+    L2:;
+    self->branch = -1;
+    return false;
+}
+
+Range_iterValues_yieldable iterValues(Range* self);
 template <class T>
 Int size(Span<T>* self);
 template <class T>
@@ -603,6 +652,12 @@ Str ns1_viewKind(Span<Char> v);
 Str ns1_fixed(Str* op);
 Int ns1_partWhenStrings();
 
+Range_iterValues_yieldable iterValues(Range* self) {
+    Range_iterValues_yieldable machine{};
+    machine._sm_self = self;
+    machine.branch = 0;
+    return machine;
+}
 template <class T>
 Int size(Span<T>* self) {
     Int _sm_expr1;

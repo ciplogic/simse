@@ -528,6 +528,7 @@ template <class T>
 void set(Span<T>* self, Int index, T value);
 Bool startsWith(Span<Char>* self, Str text);
 Int find(Span<Char>* self, Str sub);
+Int indexOf(Span<Char>* self, Str sub);
 Str substr(Span<Char>* self, Int from, Int count);
 Str toString(Span<Char>* self);
 Int compareTo(Span<Char>* self, Span<Char> other);
@@ -647,6 +648,14 @@ Bool advance(Span_iter_yieldable<T>* self) {
 
 template <class T>
 Span_iter_yieldable<T> iter(Span<T>* self);
+Bool contains(Str* self, Char value);
+Bool contains(Str* self, Str value);
+template <class T>
+Bool contains(Span<T>* self, T value);
+template <class T>
+Bool contains(Array<T>* self, T value);
+template <class K, class V>
+Bool contains(Dictionary<K, V>* self, K key);
 Bool compareLessThan(Str* left, Str* right);
 template <class T>
 Array<T> arrayEmpty();
@@ -660,6 +669,7 @@ void strAddInt(Char* target, Int64 value, Int count);
 Span<Char> strBoolView(Bool value);
 Int findFrom(Str* self, Str sub, Int from);
 Int find(Str* self, Str sub);
+Int indexOf(Str* self, Str sub);
 Str substr(Str* self, Int start, Int len);
 void set(Str* self, Int index, Char value);
 Bool startsWith(Str* self, Str prefix);
@@ -1003,6 +1013,11 @@ Int find(Span<Char>* self, Str sub) {
     _sm_expr3 = -1;
     return _sm_expr3;
 }
+Int indexOf(Span<Char>* self, Str sub) {
+    Int _sm_expr1;
+    _sm_expr1 = find(self, sub);
+    return _sm_expr1;
+}
 Str substr(Span<Char>* self, Int from, Int count) {
     Int len, begin, take;
     Bool _sm_expr1;
@@ -1198,6 +1213,73 @@ Span_iter_yieldable<T> iter(Span<T>* self) {
     machine._sm_self = self;
     machine.branch = 0;
     return machine;
+}
+Bool contains(Str* self, Char value) {
+    Int i, len;
+    Bool _sm_expr1;
+    Char _sm_expr2;
+    i = 0;
+    len = simse_lenOf((*self));
+    L1:;
+    _sm_expr1 = i < len;
+    if (!(_sm_expr1)) goto L2;
+    _sm_expr2 = (*self)[i];
+    _sm_expr1 = _sm_expr2 == value;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    return true;
+    L4:;
+    i = i + 1;
+    goto L1;
+    L2:;
+    return false;
+}
+Bool contains(Str* self, Str value) {
+    Int _sm_expr1, _sm_expr2;
+    Bool _sm_expr3;
+    _sm_expr1 = indexOf(self, value);
+    _sm_expr2 = -1;
+    _sm_expr3 = _sm_expr1 != _sm_expr2;
+    return _sm_expr3;
+}
+template <class T>
+Bool contains(Span<T>* self, T value) {
+    Int i, len;
+    Bool _sm_expr1;
+    T _sm_expr2;
+    i = 0;
+    len = size(self);
+    L1:;
+    _sm_expr1 = i < len;
+    if (!(_sm_expr1)) goto L2;
+    _sm_expr2 = get(self, i);
+    _sm_expr1 = _sm_expr2 == value;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    return true;
+    L4:;
+    i = i + 1;
+    goto L1;
+    L2:;
+    return false;
+}
+template <class T>
+Bool contains(Array<T>* self, T value) {
+    Array<T>* _sm_base1;
+    Span<T> _sm_expr1;
+    Bool _sm_expr2;
+    _sm_base1 = self;
+    _sm_expr1 = simse_spanOf(_sm_base1);
+    _sm_expr2 = contains(simse_addressOf(_sm_expr1), value);
+    return _sm_expr2;
+}
+template <class K, class V>
+Bool contains(Dictionary<K, V>* self, K key) {
+    Bool _sm_expr1;
+    _sm_expr1 = simse_dict_has((*self), key);
+    return _sm_expr1;
 }
 Bool compareLessThan(Str* left, Str* right) {
     Span<Char> _sm_expr1, _sm_expr2;
@@ -1423,6 +1505,11 @@ Int findFrom(Str* self, Str sub, Int from) {
     return _sm_expr5;
 }
 Int find(Str* self, Str sub) {
+    Int _sm_expr1;
+    _sm_expr1 = findFrom(self, sub, 0);
+    return _sm_expr1;
+}
+Int indexOf(Str* self, Str sub) {
     Int _sm_expr1;
     _sm_expr1 = findFrom(self, sub, 0);
     return _sm_expr1;

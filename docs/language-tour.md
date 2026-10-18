@@ -149,9 +149,24 @@ fun main(): Int {
     for (w in words) {                     // a container, in its own order
         println(w)
     }
+
+    for (i in 1..5) {                      // a range: 1, 2, 3, 4, 5 (inclusive)
+        println(i.toString())
+    }
+    for (i in 0 until words.size()) {      // `until` excludes its upper bound
+        println(i.toString() + ": " + words[i])
+    }
+    for (i in 5 downTo 1 step 2) {         // descending, every 2nd: 5, 3, 1
+        println(i.toString())
+    }
     return 0
 }
 ```
+
+A range is a value (`val r = 1..4` binds one, `r.from`/`r.to` read it), and `x in c` /
+`x !in c` is the membership test (`if (i in 1..5)`, `if (w !in words)`). Both the `..` and
+the `in` are sugar for extension calls - `a.rangeTo(b)`, `c.contains(x)` - so the words are
+Kotlin's and the resolution is Simse's own (`specs/built-in-types.md`, "Ranges").
 
 The loop variable is a fresh `val` per iteration, typed by the element type (`v` is an
 `Int` above, `w` a `Str`); `index` is a counter the compiler declares, starting at `0`,

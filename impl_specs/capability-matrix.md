@@ -5226,3 +5226,27 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `stress/inheritance` (value copy, pointer view and mutation through it, base method on a
   derived receiver, snapshot handle, value independence) and the three declaration diagnostics
   (`diagnostic-inherit-base`, `-cycle`, `-field`).
+
+- **Ranges and the `in` operator: `a..b`, `until`/`downTo`/`step`, `x in c`.** Ranges landed
+  as the parse-time sugar `for.md` had proposed: `a..b` is the member call `a.rangeTo(b)`,
+  and the three Kotlin range words are the same shape as *identifier* operators at the `..`
+  level (`a until b`, `a downTo b`, `r step n`), recognized only in operator position and on
+  their own line, so the names stay usable as ordinary names (`ParserExpr`'s Pratt loop,
+  `rangeSugarCallee` in `ParserOps`). The prelude owns the types (`src/rtl/Range.kt`):
+  `Range(from, to)` inclusive-ascending and `SteppedRange(from, to, step)` with a sign that
+  `step` preserves, each with an `iterValues` machine, so `for (i in 1..5)` needs no compiler
+  stage beyond the sugar - it is the ordinary `iterValues` convention over a value, and the
+  indexed `for ((v, i) in 1..5)` works by the same template. `in`/`!in` join the precedence
+  table at the equality level (`x in c` is `c.contains(x)`, negated for `!in`, scanned as
+  `!` + `in` and recognized in operator position), so a membership test resolves against
+  whatever `contains` is in scope - the prelude's `List<T>` one, or a user extension. A
+  user type gains both syntaxes the same way: write the extension. Cost: two table entries
+  (`in` beside `==`, `..` beside the shifts - both desugared before emission, so `cgPrecedence`
+  never sees them) and one branch in the Pratt loop; a program that spells no range or `in`
+  parses identically. One emission note: prelude bodies are reached *by name*, so a program
+  that iterates anything now also carries the two range machines (the goldens of `machines`
+  and `strings` were refreshed for that, additive plus order).
+  Verified: `bun tools/iterate.js --full` - **107/107** and both fixed points; the new case
+  `stress/ranges` covers every word, empty and single-bound ranges, ranges as values
+  (`from`/`to`/`step` fields), the indexed form, and a range built from an expression
+  (`1..n + 1` binding as `1..(n + 1)`).

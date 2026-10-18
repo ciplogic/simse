@@ -61,6 +61,33 @@ fun isStepOp(op: *Str): Bool {
     return op == "++" || op == "--"
 }
 
+// The extension method a range-sugar operator stands for (src/rtl/Range.kt): `a..b` is
+// `a.rangeTo(b)`, and the three Kotlin range words are the same shape as *identifier*
+// operators - `a until b`, `a downTo b`, `r step n` - so a copied Kotlin `for` header needs
+// no rewriting. The method is on the *left* operand, the way Kotlin's own infix range
+// functions are. "" for anything else. `in`/`!in` are not here: their call takes its
+// arguments the other way round (the container is the receiver).
+fun rangeSugarCallee(op: *Str): Str {
+    when (op) {
+        ".." -> {
+            return "rangeTo"
+        }
+
+        "until" -> {
+            return "until"
+        }
+
+        "downTo" -> {
+            return "downTo"
+        }
+
+        "step" -> {
+            return "step"
+        }
+    }
+    return ""
+}
+
 fun stepAssignOp(op: *Str): Str {
     if (op == "++") {
         return "+="

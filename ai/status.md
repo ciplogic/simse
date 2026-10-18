@@ -8,7 +8,9 @@ Keep this file short; the record of what moved and what it cost is
 
 Language: values and locals (`val`/`var`, inferred or declared), file-level statics,
 `if`/`else` (expression), `when` (subject once, string dispatch), `while`, `for` over
-`List`/`Array`/`Span` and machines (`..T`, both value and pointer forms), `break`/`continue`,
+`List`/`Array`/`Span` and machines (`..T`, both value and pointer forms), ranges (`a..b`,
+`until`/`downTo`/`step`, and `x in c` membership — sugar over prelude `rangeTo`/`contains`
+extensions), `break`/`continue`,
 `yield` (a state machine — `impl_specs/yield.md`), functions, extension methods, `data` pure
 functions, lambdas (block bodies, by-value capture), reified generics with call inference,
 protocols (`protocol` signatures and `when T: P` constraints, checked at instantiation;
@@ -36,7 +38,8 @@ before committing).
   `impl_specs/statics.md`). This is what the RTL needs to move per-type statics out of C++.
 - **Async task machinery**: `suspend` is parsed and colored, but a suspending body is not yet
   lowered to a task (`impl_specs/async.md`).
-- **Range and `Dictionary` iteration**; `for` is over `List`/`Array`/`Span`/machines today.
+- **`Dictionary` iteration** (a `for` over `d.keys()` works today); `for` is over
+  `List`/`Array`/`Span`/machines/ranges today.
 - **Reference captures, explicit capture lists, `unsafe`/raw-pointer escape rules.**
 - **Attributes on types/fields/parameters/statements, stacked attributes, per-instantiation
   generators** (`impl_specs/generators.md`'s "Deferred": `@Json`, enum-to-string, ...).

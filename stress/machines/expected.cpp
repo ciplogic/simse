@@ -7,12 +7,20 @@ template <class T>
 void simse_strTableExpand(const T* stream, Int* out, Int count);
 void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, Span<Char>* table, Int count);
 
+struct Range;
 template <class T>
 struct Span;
 template <class T>
 struct Opt;
 template <class T>
 struct Res;
+// src/rtl
+SIMSE_PACK_PUSH
+struct Range {
+    Int from;
+    Int to;
+};
+SIMSE_PACK_POP
 // src/rtl
 SIMSE_PACK_PUSH
 template <class T>
@@ -463,12 +471,49 @@ inline void simse_println(const T& value, FILE* out) {
     std::fputc('\n', out);
 }
 
+struct Range_iterValues_yieldable {
+    Int branch{};
+    Int current{};
+    Range* _sm_self{};
+    Int i{};
+};
+
+Bool advance(Range_iterValues_yieldable* self) {
+    Bool _sm_base1, _sm_base3, _sm_expr2;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base8, _sm_base9, _sm_base10, _sm_base11, _sm_expr1;
+    Range* _sm_base6, * _sm_base7;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto L2;
+    _sm_base4 = self->branch;
+    _sm_base3 = _sm_base4 == 1;
+    if (_sm_base3) goto LY1;
+    _sm_base6 = self->_sm_self;
+    _sm_base5 = _sm_base6->from;
+    self->i = _sm_base5;
+    L1:;
+    _sm_base7 = self->_sm_self;
+    _sm_expr1 = _sm_base7->to;
+    _sm_base8 = self->i;
+    _sm_expr2 = _sm_base8 <= _sm_expr1;
+    if (!(_sm_expr2)) goto L2;
+    _sm_base9 = self->i;
+    self->current = _sm_base9;
+    self->branch = 1;
+    return true;
+    LY1:;
+    _sm_base11 = self->i;
+    _sm_base10 = _sm_base11 + 1;
+    self->i = _sm_base10;
+    goto L1;
+    L2:;
+    self->branch = -1;
+    return false;
+}
+
+Range_iterValues_yieldable iterValues(Range* self);
 template <class T>
 Int size(Span<T>* self);
-template <class T>
-T get(Span<T>* self, Int index);
-template <class T>
-void set(Span<T>* self, Int index, T value);
 template <class T>
 Bool simse_optHasValue(Opt<T>* self);
 template <class T>
@@ -487,54 +532,6 @@ template <class T>
 Res<T> simse_resOk(T value);
 template <class T>
 Res<T> simse_resErr(Str message);
-template <class T>
-struct Span_iterValues_yieldable {
-    Int branch{};
-    T current{};
-    Span<T>* _sm_self{};
-    Int i{};
-    Int len{};
-};
-
-template <class T>
-Bool advance(Span_iterValues_yieldable<T>* self) {
-    Bool _sm_base1, _sm_base3, _sm_expr1;
-    Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base10, _sm_base11, _sm_base12;
-    Span<T>* _sm_base6, * _sm_base9;
-    T _sm_expr2;
-    _sm_base2 = self->branch;
-    _sm_base1 = _sm_base2 == -1;
-    if (_sm_base1) goto L2;
-    _sm_base4 = self->branch;
-    _sm_base3 = _sm_base4 == 1;
-    if (_sm_base3) goto LY1;
-    self->i = 0;
-    _sm_base6 = self->_sm_self;
-    _sm_base5 = size(_sm_base6);
-    self->len = _sm_base5;
-    L1:;
-    _sm_base7 = self->i;
-    _sm_base8 = self->len;
-    _sm_expr1 = _sm_base7 < _sm_base8;
-    if (!(_sm_expr1)) goto L2;
-    _sm_base9 = self->_sm_self;
-    _sm_base10 = self->i;
-    _sm_expr2 = get(_sm_base9, _sm_base10);
-    self->current = _sm_expr2;
-    self->branch = 1;
-    return true;
-    LY1:;
-    _sm_base12 = self->i;
-    _sm_base11 = _sm_base12 + 1;
-    self->i = _sm_base11;
-    goto L1;
-    L2:;
-    self->branch = -1;
-    return false;
-}
-
-template <class T>
-Span_iterValues_yieldable<T> iterValues(Span<T>* self);
 void initByValue(Str* self);
 Int strCountDigits(Int64 value);
 void strAddInt(Char* target, Int64 value, Int count);
@@ -733,24 +730,17 @@ Bool advance(ns1_shadowing_yieldable* self) {
 ns1_shadowing_yieldable ns1_shadowing();
 Int ns1_partYield();
 
+Range_iterValues_yieldable iterValues(Range* self) {
+    Range_iterValues_yieldable machine{};
+    machine._sm_self = self;
+    machine.branch = 0;
+    return machine;
+}
 template <class T>
 Int size(Span<T>* self) {
     Int _sm_expr1;
     _sm_expr1 = self->len;
     return _sm_expr1;
-}
-template <class T>
-T get(Span<T>* self, Int index) {
-    T* _sm_base1;
-    _sm_base1 = self->ptr;
-    auto _sm_expr1 = _sm_base1[index];
-    return _sm_expr1;
-}
-template <class T>
-void set(Span<T>* self, Int index, T value) {
-    T* _sm_base1;
-    _sm_base1 = self->ptr;
-    _sm_base1[index] = value;
 }
 template <class T>
 Bool simse_optHasValue(Opt<T>* self) {
@@ -812,13 +802,6 @@ Res<T> simse_resErr(Str message) {
     initByValue(simse_addressOf(result));
     setError(simse_addressOf(result), message);
     return result;
-}
-template <class T>
-Span_iterValues_yieldable<T> iterValues(Span<T>* self) {
-    Span_iterValues_yieldable<T> machine{};
-    machine._sm_self = self;
-    machine.branch = 0;
-    return machine;
 }
 void initByValue(Str* self) {
 }

@@ -75,8 +75,11 @@ enum class Color { Red, Green = 5 }
 `if`/`else` is an expression; `while`; `when` evaluates its subject once (the subject must be
 a plain local no arm assigns to) and has a string-dispatch lowering. `for (x in c)` works over
 `List`/`Array`/`Span` (and machines — `..T`); `for ((x, i) in c)` adds the index and
-`for (*x in c)` binds the place instead of a copy. **Not implemented**: ranges
-(`for (i in 2..5)`), `Dictionary` iteration, `break`/`continue` labels, `switch`.
+`for (*x in c)` binds the place instead of a copy. Ranges are `a..b` (inclusive), `a until b`,
+`a downTo b`, and `r step n` — `for (i in 1..5)` iterates one (`Range`/`SteppedRange` are
+prelude values with `iterValues`; `specs/built-in-types.md`, "Ranges"), and `x in c` /
+`x !in c` is the membership test (`c.contains(x)`). **Not implemented**: `Dictionary`
+iteration (walk `keys()`), `break`/`continue` labels, `switch`.
 
 String interpolation is a backtick string: `` `n=@n` `` and `` `@(a+b)` ``; a literal `@` in an
 interpolating string is a diagnostic. `+` concatenates `Str`; `fmtStr("|.|", a, b)` builds one

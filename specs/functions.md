@@ -246,8 +246,11 @@ operators are `get`, `set`, `compareTo`, `equals` and `plus`), as are a wrong pa
 an operator with no receiver, and a `compareTo`/`equals` whose answer is not the `Int`/`Bool`
 the syntax derives from. When a type declares no operator for a syntax, that syntax keeps its
 built-in meaning (a container's element, a `Str`'s `Char`, `Int` arithmetic, the runtime
-types' own `==`/`<`/`+`). Kotlin's other operators (`minus`, `times`, `div`, `rem`, unary
-`minus`, `not`, `contains`, `invoke`, `rangeTo`) have no lowering yet.
+types' own `==`/`<`/`+`). Two more of Kotlin's operators lower the same way, as sugar the
+parser spells into a member call: `a..b` is `a.rangeTo(b)` and `x in c` is `c.contains(x)`
+(`!in` the negation), so a type's own `rangeTo`/`contains` extension is what the syntax
+resolves against (`specs/built-in-types.md`, "Ranges"). Kotlin's remaining operators
+(`minus`, `times`, `div`, `rem`, unary `minus`, `not`, `invoke`) have no lowering yet.
 
 An index read through `operator get` is a **value**: the getter answers a fresh `T`, so
 `x[i]` is not a place into `x` - it cannot be assigned to through an alias and it may be
@@ -447,7 +450,10 @@ Status: implemented; lowered to `while` in the parser (`impl_specs/for.md`).
 state machine (`..T` in its signature, `impl_specs/yield.md`). The prelude writes one on the
 span (`Span<T>.iterValues`), and a `List`/`Array`/`Str` receiver is viewed as its span first
 (`spanOf`/`spanOfArray`/`spanOfStr`, `impl_specs/for.md`), so every container shares the one
-machine; `Dictionary<K, V>` and ranges are not iterable yet. A state machine is its own
+machine; a range carries its own (`Range`/`SteppedRange`, `specs/built-in-types.md`), so
+`for (i in 1..5)` is the same convention over the range. A `Dictionary<K, V>` is not
+iterable itself yet - walk its `keys()` (a `List`) - until its element shape is decided. A
+state machine is its own
 identity, so both of these work:
 
 ```text
