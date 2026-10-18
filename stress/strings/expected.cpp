@@ -1550,17 +1550,22 @@ Str toUpper(Str* self) {
     return out;
 }
 Str toLower(Str* self) {
-    Int _sm_expr1, i;
+    Str* _sm_base1;
+    Int _sm_expr1, _sm_expr6;
+    Span<Char> _sm_expr2;
+    Span_iterValues_yieldable<Char> _sm_for2;
     Bool _sm_expr3;
     Char ch;
     Str out;
     _sm_expr1 = simse_lenOf((*self));
     simse_str_reserve(out, _sm_expr1);
-    i = 0;
+    _sm_base1 = self;
+    _sm_expr2 = simse_spanOfStr(_sm_base1);
+    _sm_for2 = iterValues(simse_addressOf(_sm_expr2));
     L1:;
-    _sm_expr3 = i < _sm_expr1;
+    _sm_expr3 = advance(&_sm_for2);
     if (!(_sm_expr3)) goto L2;
-    ch = (*self)[i];
+    ch = _sm_for2.current;
     _sm_expr3 = ch >= 'A';
     if (_sm_expr3) goto L5;
     goto L4;
@@ -1569,10 +1574,11 @@ Str toLower(Str* self) {
     if (_sm_expr3) goto L3;
     goto L4;
     L3:;
-    ch = ch + 32;
+    _sm_expr6 = ch + 32;
+    simse_str_append(out, _sm_expr6);
+    goto L1;
     L4:;
     simse_str_append(out, ch);
-    i = i + 1;
     goto L1;
     L2:;
     return out;

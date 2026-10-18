@@ -285,7 +285,7 @@ fun jsonBuildSource(ctx: *SourceGenContext): Str {
     for (name in types.order) {
         if (keys.has(name)) {
             val pkg: *Str = types.packages.getPtr(name)
-            if (pkg != null && * pkg != "" && * pkg != "rtl" && !imports.contains(* pkg)) {
+            if (pkg != null && * pkg != "" && * pkg != "rtl" && * pkg !in imports) {
                 imports.append(*pkg)
             }
         }

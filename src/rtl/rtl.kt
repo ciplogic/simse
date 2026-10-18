@@ -711,14 +711,12 @@ fun Str.toUpper(): Str {
 fun Str.toLower(): Str {
     var out: Str
     out.reserve(this.size())
-    var i = 0
-    while (i < this.size()) {
-        var ch = this[i]
+    for (ch in this) {
         if (ch >= 'A' && ch <= 'Z') {
-            ch = ch + 32
+            out.append(ch + 32)
+        } else {
+            out.append(ch)
         }
-        out.append(ch)
-        i++
     }
     return out
 }

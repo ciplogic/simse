@@ -461,7 +461,7 @@ fun Emitter.emitDeducedCallableOverload(
     var i: Int = 0
     while (i < callables.size()) {
         var cbName: Str = "_sm_cb" + (i + 1).toString()
-        while (taken.contains(cbName)) {
+        while (cbName in taken) {
             cbName = cbName + "_"
         }
         taken.append(cbName)
@@ -569,7 +569,7 @@ fun cgTypeMentions(node: *AstXmlNode, names: *List<Str>): Bool {
     }
     val kind: AstNodeCategory = xmlKind(node)
     if (kind == AstNodeCategory.TypeNamed || kind == AstNodeCategory.TypeGeneric) {
-        if (names.contains(xmlAttr(node, AstNodeAttributeKind.Name))) {
+        if (xmlAttr(node, AstNodeAttributeKind.Name) in names) {
             return true
         }
     }

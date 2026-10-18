@@ -88,13 +88,13 @@ fun asyncColor(functions: List<AstXmlNode>, reasons: *List<Str>): List<Str> {
         changed = false
         for (*fn in functions) {
             val name: Str = asyncName(fn)
-            if (asyncNames.contains(name)) {
+            if (name in asyncNames) {
                 continue
             }
             var callees: List<Str> = List<Str>()
             asyncCallees(xmlChild(fn, AstNodeKind.Body), callees)
             for (*callee in callees) {
-            if (asyncNames.contains(callee)) {
+            if (callee in asyncNames) {
                 asyncNames.append(name)
                 reasons.append(callee)
                 changed = true
@@ -129,7 +129,7 @@ fun asyncDump(functions: List<AstXmlNode>, asyncNames: List<Str>, reasons: List<
     }
     var sync: Int = 0
     for (*fn in functions) {
-        if (!asyncNames.contains(asyncName(fn))) {
+        if (asyncName(fn) !in asyncNames) {
             sync++
         }
     }

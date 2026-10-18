@@ -371,7 +371,7 @@ fun Parser.parseProtocol(): AstXmlNode {
             return this.emptyNode()
         }
         for (*name in extra) {
-            if (!typeParams.contains(*name)) {
+            if (*name !in typeParams) {
                 typeParams.append(*name)
             }
         }

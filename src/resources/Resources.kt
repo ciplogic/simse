@@ -314,7 +314,7 @@ fun resResourceFiles(moduleRoots: *List<Str>): List<Str> {
     var seen: List<Str> = List<Str>()
     for (candidate in candidates) {
         val canon: Str = pathCanonical(candidate)
-        if (!seen.contains(canon)) {
+        if (canon !in seen) {
             seen.append(canon)
             chosen.append(candidate)
         }

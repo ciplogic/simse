@@ -179,7 +179,7 @@ fun Emitter.collectPackages(): Unit {
         val pkg: Str = this.inputPackage(input)
         // `rtl` is the built-in namespace and an empty package a programmatically
         // built module; neither is indexed, so neither is ever prefixed.
-        if (pkg != "rtl" && pkg != "" && !names.contains(pkg)) {
+        if (pkg != "rtl" && pkg != "" && pkg !in names) {
             names.append(pkg)
         }
     }

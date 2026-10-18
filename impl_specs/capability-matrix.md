@@ -5338,3 +5338,26 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Verified: `bun tools/iterate.js --full` - **111/111** and both fixed points; the new case
   `stress/expr-body` covers a plain body, parameters, an interpolation in the expression,
   the `data` mark, a class-body method, an extension, and a `Unit` answer.
+
+- **The compiler's own sources take the language's loop and membership shapes.** Two
+  sweeps, both validated by the loop alone. First, the 693 self-increment and
+  self-decrement statements (`i = i + 1`) became the step forms (`i++`), which the parser
+  had always turned them into - and the emitter's compound fold arm, which knew only `+=`,
+  learned to fold every compound op through its binary (a local `-=` used to print as the
+  valid-but-wrong `at = at -= 1;`). Second, the 128 while-index walks that fit the
+  `for` convention (the counter declared above, bounded by the container's size, stepped
+  last, used only to read that one container) became `for` loops - the element binding
+  replacing the read, the body's own first `val v = xs[i]` becoming the loop variable
+  where there was one, the index kept through the indexed form where it was used beyond
+  the indexing, and the walks that write back through the index or reuse one counter
+  across loops left as `while`s on purpose. The same pass adopted the membership operator
+  where a test read as one (`canon !in seen` for `!seen.contains(canon)`), and the
+  prelude's `Str.toUpper`/`toLower` walks became `for (ch in this)`. Both sweeps were
+  mechanical transforms over the strict shapes with every hunk reviewed; the hazards the
+  transforms cannot see (a counter shared by reset-style loops, a body that writes through
+  the index) surfaced as C++ errors and were resolved by hand - the reset loops that were
+  themselves index walks became `for`s, and the two write-through walks kept their
+  `while` with a comment saying why. Net 300 lines lighter, and every golden held byte
+  for byte through the loop sweep (the `toUpper` machine shape moved one golden).
+  Verified: `bun tools/iterate.js --full` after each sweep - **111/111** and both fixed
+  points.

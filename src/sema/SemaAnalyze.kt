@@ -492,7 +492,7 @@ fun Analyzer.checkProtocolConstraints(decl: *AstXmlNode): Unit {
     for (*constraint in constraints) {
         val paramName: Str = constraint.param
         val protocolName: Str = constraint.protocol
-        if (!typeParams.contains(paramName)) {
+        if (paramName !in typeParams) {
             this.diag(
                 line, column,
                 `'@paramName' is not a type parameter of this declaration; a protocol constraint names one of its own`
@@ -549,7 +549,7 @@ fun Analyzer.typeSatisfiesProtocol(actual: AstXmlNode, protocolName: Str): Bool 
     val outerName: Str = xmlAttr(outer, AstNodeAttributeKind.Name)
     if (this.typeParamVisible(outerName)) {
         val covered: *List<Str> = this.currentConstraints.getPtr(outerName)
-        if (covered != null && covered.contains(protocolName)) {
+        if (covered != null && protocolName in *covered) {
             return true
         }
         return false
