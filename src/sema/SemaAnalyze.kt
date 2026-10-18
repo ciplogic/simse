@@ -36,10 +36,8 @@ fun Analyzer.analyzeDecl(decl: *AstXmlNode): Unit {
             }
             this.pushTypeScope()
             val typeParams: List<Str> = xmlTypeParamNames(decl)
-            var i: Int = 0
-            while (i < typeParams.size()) {
-                this.declareType(typeParams[i])
-                i++
+            for (typeParam in typeParams) {
+                this.declareType(typeParam)
             }
             this.pushScope()
             this.declareValue("this", true, false, xmlEmptyNode())
@@ -69,10 +67,8 @@ fun Analyzer.analyzeDecl(decl: *AstXmlNode): Unit {
         AstNodeCategory.TypeAlias -> {
             this.pushTypeScope()
             val typeParams: List<Str> = xmlTypeParamNames(decl)
-            var i: Int = 0
-            while (i < typeParams.size()) {
-                this.declareType(typeParams[i])
-                i++
+            for (paramName in typeParams) {
+                this.declareType(paramName)
             }
             val target: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.TargetType)
             if (!xmlIsEmpty(target)) {
@@ -379,10 +375,8 @@ fun unionEnumMemberAccess(tagName: *Str, member: *Str, at: *AstXmlNode): AstXmlN
 fun Analyzer.analyzeFunction(decl: *AstXmlNode): Unit {
     this.pushTypeScope()
     val typeParams: List<Str> = xmlTypeParamNames(decl)
-    var i: Int = 0
-    while (i < typeParams.size()) {
-        this.declareType(typeParams[i])
-        i++
+    for (typeParam in typeParams) {
+        this.declareType(typeParam)
     }
     this.checkProtocolConstraints(decl)
     this.collectCurrentConstraints(decl)
@@ -947,12 +941,10 @@ fun Analyzer.analyzeExpr(expr: *AstXmlNode): Unit {
             // name the wrong object, so report it here.
             val bodyContainer: *AstXmlNode = xmlChildPtr(expr, AstNodeKind.Body)
             var thisAt: AstXmlNode = xmlEmptyNode()
-            var b: Int = 0
-            while (b < bodyContainer.Children.count()) {
+            for (child in bodyContainer.Children) {
                 if (xmlIsEmpty(thisAt)) {
-                    thisAt = semLambdaThisNode(bodyContainer.Children[b])
+                    thisAt = semLambdaThisNode(child)
                 }
-                b++
             }
             if (!xmlIsEmpty(thisAt)) {
                 this.diag(

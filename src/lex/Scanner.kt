@@ -161,11 +161,8 @@ fun makeTokenStartTable(): List<ScanFunc> {
 
 // Every byte of `chars` assigned `scan`.
 fun markScan(table: *List<ScanFunc>, chars: *Str, scan: ScanFunc): Unit {
-    var i: Int = 0
-    while (i < chars.size()) {
-        var code: Int = chars[i]
+    for (code in chars) {
         table[code] = scan
-        i++
     }
 }
 

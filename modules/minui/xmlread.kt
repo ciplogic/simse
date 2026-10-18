@@ -214,12 +214,10 @@ fun xmlElement(c: *XmlCursor): Res<XmlNode> {
         if (key == "line") {
             return xmlFail<XmlNode>(attrLine, "`line` is the reader's own attribute")
         }
-        var seen: Int = 0
-        while (seen < attributes.size()) {
-            if (attributes[seen].name == key) {
+        for (attr in attributes) {
+            if (attr.name == key) {
                 return xmlFail<XmlNode>(attrLine, "attribute " + key + " written twice")
             }
-            seen++
         }
         attributes.append(Attribute(key, value))
     }
@@ -253,12 +251,10 @@ fun xmlElement(c: *XmlCursor): Res<XmlNode> {
                 val trimmed: Str = content.trim()
                 if (trimmed.size() > 0) {
                     var hasText: Bool = false
-                    var i: Int = 0
-                    while (i < attributes.size()) {
-                        if (attributes[i].name == "text") {
+                    for (seenAttr2 in attributes) {
+                        if (seenAttr2.name == "text") {
                             hasText = true
                         }
-                        i++
                     }
                     if (hasText) {
                         return xmlFail<XmlNode>(open, "<" + tag + "> has content and a text attribute")

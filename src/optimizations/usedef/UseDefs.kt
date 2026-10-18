@@ -27,19 +27,15 @@ fun linUseDefAt(counts: *Dictionary<Str, Int>, name: Str, missing: Int): Int {
 
 // Every name counted once per occurrence.
 fun linUseDefCount(names: List<Str>, counts: *Dictionary<Str, Int>): Unit {
-    var i: Int = 0
-    while (i < names.size()) {
-        counts.insert(names[i], linUseDefAt(counts, names[i], 0) + 1)
-        i++
+    for (name in names) {
+        counts.insert(name, linUseDefAt(counts, name, 0) + 1)
     }
 }
 
 // Every name `names` marks, as a presence (the count is incidental), for the body-level sets.
 fun linUseDefMarkEach(names: List<Str>, marks: *Dictionary<Str, Int>): Unit {
-    var i: Int = 0
-    while (i < names.size()) {
-        marks.insert(names[i], 1)
-        i++
+    for (name in names) {
+        marks.insert(name, 1)
     }
 }
 
@@ -90,10 +86,8 @@ fun linUseDefMarkEscapes(node: *AstXmlNode, unsafe: *Dictionary<Str, Bool>): Uni
     if (kind == AstNodeCategory.ExprRef || kind == AstNodeCategory.ExprDeref) {
         var place: List<Str> = List<Str>()
         linUseDefNames(node, *place)
-        var i: Int = 0
-        while (i < place.size()) {
-            unsafe.insert(place[i], true)
-            i++
+        for (placeName in place) {
+            unsafe.insert(placeName, true)
         }
     }
     if (kind == AstNodeCategory.ExprCall) {
@@ -207,10 +201,8 @@ fun linUseDefWalk(
     if (kind == AstNodeCategory.ExprRef || kind == AstNodeCategory.ExprDeref) {
         var place: List<Str> = List<Str>()
         linUseDefNames(node, *place)
-        var i: Int = 0
-        while (i < place.size()) {
-            escapes.insert(place[i], true)
-            i++
+        for (placeName in place) {
+            escapes.insert(placeName, true)
         }
     }
     if (kind == AstNodeCategory.ExprCall) {

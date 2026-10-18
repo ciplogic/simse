@@ -1058,20 +1058,16 @@ fun Emitter.collectNames(node: *AstXmlNode, names: *Dictionary<Str, Bool>): Unit
         }
     }
     this.collectTypeNames(node)
-    var i: Int = 0
-    while (i < node.Children.count()) {
-        this.collectNames(node.Children[i], names)
-        i++
+    for (child in node.Children) {
+        this.collectNames(child, names)
     }
 }
 
 // The resources pool with the program's literals (`specs/resources.md`): the list already
 // arrives spelled as C++ literals (`resources.resStoredLiterals`), so pooling is an append.
 fun Emitter.collectResourceLiterals(): Unit {
-    var i: Int = 0
-    while (i < this.resourceStored.size()) {
-        this.literals.add(this.resourceStored[i])
-        i++
+    for (key in this.resourceStored) {
+        this.literals.add(key)
     }
 }
 

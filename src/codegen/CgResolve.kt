@@ -119,13 +119,11 @@ fun Emitter.machineCallArgsFromReceiver(fn: *CgFn, recvType: AstXmlNode, out: *L
         return false
     }
     val element: AstXmlNode = recvArgs[elementAt]
-    var i: Int = 0
-    while (i < fn.templateParams.size()) {
-        if (fn.templateParams[i] != calleeElement) {
+    for (templateParam in fn.templateParams) {
+        if (templateParam != calleeElement) {
             return false
         }
         out.append(element)
-        i++
     }
     return true
 }

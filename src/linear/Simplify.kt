@@ -68,12 +68,10 @@ fun linJumpCrosses(
     var l: Int = 0
     while (l < labelNames.size()) {
         if (labelNames[l] == jumpName) {
-            var d: Int = 0
-            while (d < decls.size()) {
-                if (at < decls[d] && decls[d] <= labelAt[l]) {
+            for (decl in decls) {
+                if (at < decl && decl <= labelAt[l]) {
                     return true
                 }
-                d++
             }
         }
         l++
@@ -196,12 +194,10 @@ fun linSpliceIsSafe(
     p = 0
     while (p < i) {
         val names: *List<Str> = *itemJumps[p]
-        var j: Int = 0
-        while (j < names.size()) {
-            if (linJumpCrosses(*names[j], p, decls, labelNames, labelAt)) {
+        for (name in names) {
+            if (linJumpCrosses(*name, p, decls, labelNames, labelAt)) {
                 return false
             }
-            j++
         }
         p++
     }
@@ -220,10 +216,8 @@ fun linSpliceIsSafe(
 // (`linJumpTargets`).
 fun linJumpTargets(stmts: *List<AstXmlNode>): Dictionary<Str, Bool> {
     var targets: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
-    var i: Int = 0
-    while (i < stmts.size()) {
-        linCollectJumpTargets(*stmts[i], targets)
-        i++
+    for (stmt in stmts) {
+        linCollectJumpTargets(*stmt, targets)
     }
     return targets
 }
@@ -279,15 +273,13 @@ data class LinSimplifier(
         // sequence (`linJumpTargets`).
         val targets: Dictionary<Str, Bool> = linJumpTargets(stmts)
         var out: List<AstXmlNode> = List<AstXmlNode>()
-        var i: Int = 0
-        while (i < stmts.size()) {
-            val stmt: *AstXmlNode = *stmts[i]
+        for (bodyStmt in stmts) {
+            val stmt: *AstXmlNode = *bodyStmt
             if (linIsLabel(stmt) && !targets.has(xmlAttr(stmt, AstNodeAttributeKind.Name))) {
                 this.changed = true
             } else {
                 out.append(stmt)
             }
-            i++
         }
         return out
     }

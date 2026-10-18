@@ -77,12 +77,10 @@ fun ilConcatCapable(node: *AstXmlNode): Bool {
             }
         }
     }
-    var i: Int = 0
-    while (i < node.Children.count()) {
-        if (ilConcatCapable(node.Children[i])) {
+    for (child in node.Children) {
+        if (ilConcatCapable(child)) {
             return true
         }
-        i++
     }
     return false
 }
@@ -101,10 +99,8 @@ fun Emitter.ilConcatPoolLiterals(node: *AstXmlNode): Unit {
     if (xmlKind(node) == AstNodeCategory.ExprStrLit) {
         this.literals.add(xmlAttr(node, AstNodeAttributeKind.Text))
     }
-    var i: Int = 0
-    while (i < node.Children.count()) {
-        this.ilConcatPoolLiterals(node.Children[i])
-        i++
+    for (child in node.Children) {
+        this.ilConcatPoolLiterals(child)
     }
 }
 
@@ -289,15 +285,13 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
     if (fixed > 0 || sums.size() == 0) {
         rest = ilIntText(fixed)
     }
-    var s: Int = 0
-    while (s < sums.size()) {
+    for (sum in sums) {
         if (rest == "") {
-            rest = sums[s]
+            rest = sum
         } else {
-            val sumsText: Str = sums[s]
+            val sumsText: Str = sum
             rest = `@rest + @sumsText`
         }
-        s++
     }
     // Every part is expressible, so the buffer is written where the instruction stands: a slot
     // with no type node has no declaration of its own (its `Declare` prints nothing).
@@ -312,10 +306,8 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
     if (writes.size() > 0) {
         writes.removeAt(writes.size() - 1)
     }
-    var p: Int = 0
-    while (p < prelude.size()) {
-        this.ilLine(out, level, prelude[p])
-        p++
+    for (file in prelude) {
+        this.ilLine(out, level, file)
     }
     // `at` reads the destination's size *before* the one `resize` moves it, and the counts read
     // only the parts, so the order is: the counts, `at`, the resize, the pointer, the writes.
@@ -331,10 +323,8 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
             this.ilLine(out, level, `@pName = simse_str_data(&@name);`)
         }
     }
-    p = 0
-    while (p < writes.size()) {
-        this.ilLine(out, level, writes[p])
-        p++
+    for (write in writes) {
+        this.ilLine(out, level, write)
     }
     return true
 }

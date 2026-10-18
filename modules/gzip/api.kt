@@ -272,11 +272,8 @@ fun gzWriteDistance(writer: *GzBitWriter, distance: Int): Unit {
 // The input as the 0..255 byte reads the encoder works on.
 fun gzBytes(input: List<Int8>): List<Int> {
     var bytes: List<Int> = List<Int>()
-    var i: Int = 0
-    while (i < input.size()) {
-        val wide: Int = input[i]
+    for (wide in input) {
         bytes.append(wide & 255)
-        i++
     }
     return bytes
 }
@@ -360,11 +357,9 @@ fun gzTrailer(bytes: List<Int>, writer: *GzBitWriter): Unit {
 fun gzCrc32(bytes: List<Int>): UInt32 {
     val table: List<UInt32> = gzCrcTable()
     var crc: UInt32 = UInt32(-1)
-    var i: Int = 0
-    while (i < bytes.size()) {
-        val index: Int = (crc.toInt() ^ bytes[i]) & 255
+    for (byte in bytes) {
+        val index: Int = (crc.toInt() ^ byte) & 255
         crc = table[index].xorWith(crc.shr(8))
-        i++
     }
     return crc.xorWith(UInt32(-1))
 }
@@ -904,10 +899,8 @@ fun decompress(input: List<Int8>): Res<List<Int8>> {
     }
 
     var out: List<Int8> = List<Int8>()
-    var i: Int = 0
-    while (i < plain.size()) {
-        out.append(plain[i])
-        i++
+    for (byte in plain) {
+        out.append(byte)
     }
     return Res<List<Int8>>.ok(out)
 }

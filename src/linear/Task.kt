@@ -185,16 +185,14 @@ data class TskMachinery(
             task.error = this.error
             return task
         }
-        var f: Int = 0
-        while (f < this.fieldOrder.size()) {
-            if (!this.fieldTypes.has(this.fieldOrder[f])) {
-                val fieldOrderText: Str = this.fieldOrder[f]
+        for (fieldName in this.fieldOrder) {
+            if (!this.fieldTypes.has(fieldName)) {
+                val fieldOrderText: Str = fieldName
                 task.error = `internal: task field '@fieldOrderText' has no type`
                 return task
             }
-            val fieldType: *AstXmlNode = this.fieldTypes.getPtr(this.fieldOrder[f])
-            task.fields.append(TskField(this.fieldOrder[f], this.member(this.fieldOrder[f]), *fieldType))
-            f++
+            val fieldType: *AstXmlNode = this.fieldTypes.getPtr(fieldName)
+            task.fields.append(TskField(fieldName, this.member(fieldName), *fieldType))
         }
         return task
     }
@@ -546,12 +544,10 @@ data class TskMachinery(
             Array<AstXmlNode>()
         )
         val bases: Bool = xmlKind(node) == AstNodeCategory.ExprMember || xmlKind(node) == AstNodeCategory.ExprIndex
-        var i: Int = 0
-        while (i < copyNode.Children.count()) {
-            var child: AstXmlNode = this.exprAt(copyNode.Children[i], bases)
-            child.name = copyNode.Children[i].name
+        for (childNode in copyNode.Children) {
+            var child: AstXmlNode = this.exprAt(childNode, bases)
+            child.name = childNode.name
             xmlAddChild(rebuilt, child)
-            i++
         }
         return rebuilt
     }

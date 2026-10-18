@@ -45,14 +45,12 @@ fun linOptimizeBody(stmts: *List<AstXmlNode>, useDefs: &LinUseDefs): Bool {
         guard++
         round = false
         val passes: *List<LinOptPass> = getLinOptPasses()
-        var i: Int = 0
-        while (i < passes.size()) {
-            if (passes[i].run(stmts, useDefs)) {
+        for (optPass in passes) {
+            if (optPass.run(stmts, useDefs)) {
                 round = true
                 changed = true
                 linUseDefsInvalidate(useDefs)
             }
-            i++
         }
     }
     return changed

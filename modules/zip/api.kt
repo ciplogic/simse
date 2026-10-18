@@ -155,11 +155,8 @@ fun unzip(archivePath: Str, outputDir: Str): Res<Int> {
 // The archive's bytes, read as the 0..255 the format's fields are.
 fun zipBytes(content: Str): List<Int> {
     var bytes: List<Int> = List<Int>()
-    var i: Int = 0
-    while (i < content.size()) {
-        val wide: Int = content[i]
+    for (wide in content) {
         bytes.append(wide & 255)
-        i++
     }
     return bytes
 }
@@ -212,10 +209,8 @@ fun zipText(bytes: List<Int>, at: Int, count: Int): Str {
 
 fun zipDataStr(plain: List<Int>): Str {
     var text: Str = Str()
-    var i: Int = 0
-    while (i < plain.size()) {
-        text.append(plain[i])
-        i++
+    for (byte in plain) {
+        text.append(byte)
     }
     return text
 }
@@ -244,13 +239,10 @@ fun zipNameIsSafe(name: Str): Bool {
     if (name.size() == 0) {
         return false
     }
-    var i: Int = 0
-    while (i < name.size()) {
-        val ch: Char = name[i]
+    for (ch in name) {
         if (ch == ':') {
             return false
         }
-        i++
     }
     if (name[0] == '/') {
         return false

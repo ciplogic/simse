@@ -243,10 +243,9 @@ fun jsonEnsure(
     }
     val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
     bodies.append(jsonClassBody(name, *fields))
-    var i: Int = 0
-    while (i < fields.size()) {
-        val fieldName: Str = xmlAttr(*fields[i], AstNodeAttributeKind.Name)
-        val typeNode: *AstXmlNode = xmlChildPtr(*fields[i], AstNodeKind.Type)
+    for (field in fields) {
+        val fieldName: Str = xmlAttr(*field, AstNodeAttributeKind.Name)
+        val typeNode: *AstXmlNode = xmlChildPtr(*field, AstNodeKind.Type)
         if (xmlIsEmpty(typeNode) || xmlKind(typeNode) != AstNodeCategory.TypeNamed) {
             // A `List<T>`, a `*T` field or a type alias: the closure needs a serializer for a
             // shape that has no name of its own yet.
@@ -257,7 +256,6 @@ fun jsonEnsure(
         if (ctx.error.size() > 0) {
             return
         }
-        i++
     }
 }
 
@@ -271,13 +269,11 @@ fun jsonBuildSource(ctx: *SourceGenContext): Str {
     var keys: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var bodies: List<Str> = List<Str>()
     var flags: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
-    var i: Int = 0
-    while (i < types.order.size()) {
-        jsonEnsure(types.order[i], ctx, *types, *keys, *bodies, *flags)
+    for (typeName in types.order) {
+        jsonEnsure(typeName, ctx, *types, *keys, *bodies, *flags)
         if (ctx.error.size() > 0) {
             return ""
         }
-        i++
     }
     if (bodies.size() == 0) {
         return ""
@@ -286,25 +282,20 @@ fun jsonBuildSource(ctx: *SourceGenContext): Str {
     // `import` per package a *serialized* class lives in (a scalar is `rtl`'s own, already in
     // scope). Deduped, in declaration order.
     var imports: List<Str> = List<Str>()
-    i = 0
-    while (i < types.order.size()) {
-        val name: Str = types.order[i]
+    for (name in types.order) {
         if (keys.has(name)) {
             val pkg: *Str = types.packages.getPtr(name)
             if (pkg != null && * pkg != "" && * pkg != "rtl" && !imports.contains(* pkg)) {
                 imports.append(*pkg)
             }
         }
-        i++
     }
 
     var out = Str()
-    i = 0
-    while (i < imports.size()) {
+    for (imp in imports) {
         out.appendStr("import ")
-        out.appendStr(imports[i])
+        out.appendStr(imp)
         out.append('\n')
-        i++
     }
     if (imports.size() > 0) {
         out.append('\n')
@@ -317,10 +308,8 @@ fun jsonBuildSource(ctx: *SourceGenContext): Str {
         }
         out.appendStr(helper)
     }
-    i = 0
-    while (i < bodies.size()) {
-        out.appendStr(bodies[i])
-        i++
+    for (body in bodies) {
+        out.appendStr(body)
     }
     return out
 }

@@ -58,21 +58,17 @@ fun Emitter.ilDst(op: *IlOp): Int {
 // machine's type survives only here, its declaration never written (impl_specs/for.md).
 fun Emitter.ilSeedFrameTypes(il: *IlBody): Unit {
     val proven: List<Str> = il.inferredTypes.keys()
-    var i: Int = 0
-    while (i < proven.size()) {
-        val typeNode: *AstXmlNode = il.inferredTypes.getPtr(proven[i])
-        this.localTypes.insert(proven[i], *typeNode)
-        this.nameKinds.insert(proven[i], this.kindOf(typeNode))
-        i++
+    for (typeName in proven) {
+        val typeNode: *AstXmlNode = il.inferredTypes.getPtr(typeName)
+        this.localTypes.insert(typeName, *typeNode)
+        this.nameKinds.insert(typeName, this.kindOf(typeNode))
     }
-    i = 0
-    while (i < il.vars.size()) {
+    for ((slot, i) in il.vars) {
         val slotType: AstXmlNode = ilVarType(il, i)
         if (!xmlIsEmpty(slotType)) {
-            this.localTypes.insert(il.vars[i].name, slotType)
-            this.nameKinds.insert(il.vars[i].name, this.kindOf(slotType))
+            this.localTypes.insert(slot.name, slotType)
+            this.nameKinds.insert(slot.name, this.kindOf(slotType))
         }
-        i++
     }
 }
 
@@ -232,14 +228,13 @@ fun ilDeclLines(typeText: Str, names: *List<Str>): List<Str> {
     var out: List<Str> = List<Str>()
     var line = Str()
     var open: Bool = false
-    var i: Int = 0
-    while (i < names.size()) {
-        val piece: Str = ilDeclarator(ptr, names[i])
+    for (name in names) {
+        val piece: Str = ilDeclarator(ptr, name)
         if (!open) {
             line.appendStrPtr(base)
             line.appendStrPtr(ptr)
             line.append(' ')
-            line.appendStrPtr(names[i])
+            line.appendStrPtr(name)
             open = true
         } else if (line.size() + 2 + piece.size() > kIlDeclWidth) {
             line.append(',')
@@ -250,7 +245,6 @@ fun ilDeclLines(typeText: Str, names: *List<Str>): List<Str> {
             line.appendStr(", ")
             line.appendStrPtr(piece)
         }
-        i++
     }
     line.append(';')
     out.append(line)
@@ -608,10 +602,8 @@ fun Emitter.attachMachineCallArgs(
         // the element: leave the call as C++ sees it, the way it was before.
         return
     }
-    var i: Int = 0
-    while (i < wanted.size()) {
-        xmlAddChild(callee, this.renameRole(wanted[i], AstNodeKind.TypeArg))
-        i++
+    for (typeArg in wanted) {
+        xmlAddChild(callee, this.renameRole(typeArg, AstNodeKind.TypeArg))
     }
     xmlAddChild(callee, this.renameRole(recvType, AstNodeKind.TypeArg))
 }

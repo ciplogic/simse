@@ -90,12 +90,10 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             val end: Int = crossing.end
             val lastJump: Int = crossing.lastJump
             var covered: Bool = false
-            var s: Int = 0
-            while (s < scopes.size()) {
-                if (scopes[s].start > lastJump && scopes[s].end >= end) {
+            for (scope in scopes) {
+                if (scope.start > lastJump && scope.end >= end) {
                     covered = true
                 }
-                s++
             }
             if (!covered) {
                 this.ilLine(text, lvl, "{")

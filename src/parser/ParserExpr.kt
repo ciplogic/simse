@@ -198,10 +198,8 @@ fun Parser.parsePostfix(): ExprNode {
             }
             var kids: List<AstXmlNode> = List<AstXmlNode>()
             kids.append(this.roleOf(expr.node, AstNodeKind.Callee))
-            var a: Int = 0
-            while (a < args.size()) {
-                kids.append(this.roleOf(*args[a], AstNodeKind.Arg))
-                a++
+            for (arg in args) {
+                kids.append(this.roleOf(*arg, AstNodeKind.Arg))
             }
             var attrs: List<AstNodeAttribute> = this.posAttrs(expr.line, expr.column)
             var node: AstXmlNode =
@@ -598,12 +596,10 @@ fun Parser.parseBraceLambda(): ExprNode {
 // Whether a brace lambda's body names `it`, so the implicit single parameter exists. The
 // walk stops at a nested lambda (its `it` is its own) and never crosses into one.
 fun braceBodyUsesIt(stmts: *List<AstXmlNode>): Bool {
-    var i: Int = 0
-    while (i < stmts.size()) {
-        if (nodeNamesIt(stmts[i])) {
+    for (stmt in stmts) {
+        if (nodeNamesIt(stmt)) {
             return true
         }
-        i++
     }
     return false
 }
@@ -617,12 +613,10 @@ fun nodeNamesIt(node: AstXmlNode): Bool {
     ) {
         return true
     }
-    var i: Int = 0
-    while (i < node.Children.count()) {
-        if (nodeNamesIt(node.Children[i])) {
+    for (child in node.Children) {
+        if (nodeNamesIt(child)) {
             return true
         }
-        i++
     }
     return false
 }

@@ -375,10 +375,8 @@ fun layoutNode(f: *Frame, node: Int): Unit {
         layoutChildren(f, node, layout)
     }
     val kids: List<Int> = f.nodes[node].children
-    var i: Int = 0
-    while (i < kids.size()) {
-        layoutNode(f, kids[i])
-        i++
+    for (kid in kids) {
+        layoutNode(f, kid)
     }
 }
 
@@ -499,10 +497,8 @@ fun moveNode(f: *Frame, node: Int, dx: Int, dy: Int): Unit {
     f.nodes[node].rect.x = f.nodes[node].rect.x + dx
     f.nodes[node].rect.y = f.nodes[node].rect.y + dy
     val kids: List<Int> = f.nodes[node].children
-    var i: Int = 0
-    while (i < kids.size()) {
-        moveNode(f, kids[i], dx, dy)
-        i++
+    for (kid in kids) {
+        moveNode(f, kid, dx, dy)
     }
 }
 

@@ -204,10 +204,9 @@ fun sourceGenEmit(sections: *Sections, reachedNames: *Dictionary<Str, Bool>): Re
         }
     }
     val gens: *List<SourceGenerator> = getSourceGens()
-    var g: Int = 0
-    while (g < gens.size()) {
+    for (gen in gens) {
         var program: SourceGenContext = SourceGenContext(
-            gens[g].name,
+            gen.name,
             SourceGenPhase.Emit,
             xmlEmptyNode(),
             "",
@@ -225,7 +224,6 @@ fun sourceGenEmit(sections: *Sections, reachedNames: *Dictionary<Str, Bool>): Re
         if (program.error.size() > 0) {
             return Res<Str>.err(program.error)
         }
-        g++
     }
     return Res<Str>.ok("")
 }
@@ -249,10 +247,8 @@ fun sourceGenReparseSource(): Res<Str> {
     // One module in package `rtl`: a bare name there is the symbol a call reaches, which lets a
     // generated function carry the declaration's own name.
     var text: Str = "package rtl\n"
-    var i: Int = 0
-    while (i < blocks.size()) {
-        text.appendStr(blocks[i])
-        i++
+    for (block in blocks) {
+        text.appendStr(block)
     }
     return Res<Str>.ok(text)
 }
@@ -270,13 +266,11 @@ fun sourceGenReparseNode(node: *AstXmlNode, blocks: *List<Str>): Res<Str> {
             blocks.append(block.Value)
         }
     }
-    var i: Int = 0
-    while (i < node.Children.count()) {
-        val child: Res<Str> = sourceGenReparseNode(node.Children[i], blocks)
+    for (childNode in node.Children) {
+        val child: Res<Str> = sourceGenReparseNode(childNode, blocks)
         if (!child.isOk()) {
             return child
         }
-        i++
     }
     return Res<Str>.ok("")
 }

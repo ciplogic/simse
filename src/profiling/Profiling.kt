@@ -77,14 +77,11 @@ fun profUnit(): Str {
 // A C++ string literal's body: `\` and `"` escaped. A path needs it, a mangled symbol does not.
 fun profEscape(text: Str): Str {
     var out: Str
-    var i: Int = 0
-    while (i < text.size()) {
-        val ch: Char = text[i]
+    for (ch in text) {
         if (ch == '\\' || ch == '"') {
             out.append('\\')
         }
         out.append(ch)
-        i++
     }
     return out
 }

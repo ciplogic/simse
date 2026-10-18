@@ -34,12 +34,10 @@ fun ilReuseExprOp(kind: IlOpKind): Bool {
 
 // Whether the body has an op this pass could reuse at all: the cheap gate in front of the scans.
 fun ilReuseExprHas(il: *IlBody): Bool {
-    var i: Int = 0
-    while (i < il.ops.size()) {
-        if (ilReuseExprOp(( * il.ops[i]).kind)) {
+    for (op in il.ops) {
+        if (ilReuseExprOp(( * op).kind)) {
             return true
         }
-        i++
     }
     return false
 }

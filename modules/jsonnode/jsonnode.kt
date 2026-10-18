@@ -106,14 +106,11 @@ fun JsonNode.get(key: Str): JsonNode {
     if (!this.isOfType(SmJsonNodeTypes.Members)) {
         return JsonNode()
     }
-    var i: Int = 0
-    while (i < this.Members.size()) {
-        val member: &JsonMember = this.Members[i]
+    for (member in this.Members) {
         if (member.key == key) {
             val handle: &JsonNode = member.value
             return *handle
         }
-        i++
     }
     return JsonNode()
 }
@@ -122,13 +119,10 @@ fun JsonNode.has(key: Str): Bool {
     if (!this.isOfType(SmJsonNodeTypes.Members)) {
         return false
     }
-    var i: Int = 0
-    while (i < this.Members.size()) {
-        val member: &JsonMember = this.Members[i]
+    for (member in this.Members) {
         if (member.key == key) {
             return true
         }
-        i++
     }
     return false
 }
@@ -167,11 +161,8 @@ fun jsonField(key: Str, value: JsonNode): &JsonMember {
 // An array: each element is boxed into a handle, so the call site passes plain `JsonNode`s.
 fun jsonArray(items: List<JsonNode>): JsonNode {
     var handles: List<&JsonNode> = List<&JsonNode>()
-    var i: Int = 0
-    while (i < items.size()) {
-        var boxed: JsonNode = items[i]
+    for (boxed in items) {
         handles.append(&boxed)
-        i++
     }
     var node: JsonNode = JsonNode()
     node.setItems(handles)
@@ -208,9 +199,7 @@ fun jsonNumberText(value: Float64): Str {
 // One JSON string, quoted and escaped, appended to `out`.
 fun jsonWriteQuoted(out: *Str, value: Str): Unit {
     out.append('"')
-    var i: Int = 0
-    while (i < value.size()) {
-        val ch: Char = value[i]
+    for (ch in value) {
         if (ch == '"') {
             out.append('\\')
             out.append('"')
@@ -229,7 +218,6 @@ fun jsonWriteQuoted(out: *Str, value: Str): Unit {
         } else {
             out.append(ch)
         }
-        i++
     }
     out.append('"')
 }

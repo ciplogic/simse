@@ -280,10 +280,8 @@ fun ilLambdaLower(body: *List<AstXmlNode>, unitResult: Bool): List<AstXmlNode> {
         out.append(ret)
         return linLowerForEmission(out)
     }
-    var i: Int = 0
-    while (i < body.size()) {
-        out.append(body[i])
-        i++
+    for (stmt in body) {
+        out.append(stmt)
     }
     return linLowerForEmission(out)
 }

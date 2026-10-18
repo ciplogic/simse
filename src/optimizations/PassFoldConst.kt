@@ -127,31 +127,29 @@ fun foldConstReadRule(e: *AstXmlNode): AstXmlNode {
 fun linFoldConstBody(stmts: *List<AstXmlNode>, useDefs: &LinUseDefs): Bool {
     var counts: Dictionary<Str, Int> = Dictionary<Str, Int>()
     var unsafe: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
-    var i: Int = 0
-    while (i < stmts.size()) {
-        foldConstCountWrites(*stmts[i], *counts)
-        linUseDefMarkEscapes(*stmts[i], *unsafe)
-        i++
+    for (bodyStmt in stmts) {
+        foldConstCountWrites(*bodyStmt, *counts)
+        linUseDefMarkEscapes(*bodyStmt, *unsafe)
     }
     // The names written exactly once, at the top level, with a literal, and not escaping.
     var singles: Dictionary<Str, FoldGlobalConst> = Dictionary<Str, FoldGlobalConst>()
-    i = 0
-    while (i < stmts.size()) {
-        val write: Opt<FoldConstSlot> = foldConstWrite(*stmts[i])
+    for (stmt in stmts) {
+        val write: Opt<FoldConstSlot> = foldConstWrite(*stmt)
         if (write.hasValue()) {
             val count: *Int = counts.getPtr(write.value().name)
             if ( * count == 1 && !unsafe.has(write.value().name)) {
                 singles.insert(write.value().name, FoldGlobalConst(write.value().kind, write.value().text))
             }
         }
-        i++
     }
     if (singles.size() == 0) {
         return false
     }
     var changed: Bool = false
     linFoldConstAvailable = Dictionary<Str, FoldGlobalConst>()
-    i = 0
+    // A `while`, not a `for`: the body writes back through the index when a fold lands
+    // (`stmts[i] = rewritten`), so the walk needs the place and not a copy.
+    var i: Int = 0
     while (i < stmts.size()) {
         val stmt: *AstXmlNode = *stmts[i]
         if (linIsLabel(stmt) || linIsGoto(stmt)) {

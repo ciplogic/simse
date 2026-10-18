@@ -152,12 +152,10 @@ fun Parser.whenLabelCondition(
 // Whether every one of an arm's labels is a string literal: what the guarded tests need,
 // since a length is a compile-time property only for a literal.
 fun Parser.whenLabelsAreLiterals(labels: *List<AstXmlNode>): Bool {
-    var i: Int = 0
-    while (i < labels.size()) {
-        if (xmlKind(*labels[i]) != AstNodeCategory.ExprStrLit) {
+    for (label in labels) {
+        if (xmlKind(*label) != AstNodeCategory.ExprStrLit) {
             return false
         }
-        i++
     }
     return true
 }
@@ -242,10 +240,8 @@ fun Parser.parseWhenSubjectless(out: *List<AstXmlNode>, pos: SourcePos): Bool {
     if (arms.size() > 0) {
         out.append(arms[0])
     } else {
-        var e: Int = 0
-        while (e < tail.size()) {
-            out.append(tail[e])
-            e++
+        for (stmt in tail) {
+            out.append(stmt)
         }
     }
     return true
@@ -419,10 +415,8 @@ fun Parser.parseWhen(out: *List<AstXmlNode>): Bool {
         out.append(arms[0])
     } else {
         // `else` was the only arm, so its statements are the whole construct.
-        var e: Int = 0
-        while (e < tail.size()) {
-            out.append(tail[e])
-            e++
+        for (stmt in tail) {
+            out.append(stmt)
         }
     }
     return true

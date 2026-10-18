@@ -69,11 +69,9 @@ fun yldBoolLiteral(value: Bool): AstXmlNode {
 // position.
 fun yldWithChildren(like: *AstXmlNode, children: *List<AstXmlNode>): AstXmlNode {
     var node: AstXmlNode = AstXmlNode(like.name, like.kind, like.attributes, Array<AstXmlNode>())
-    var i: Int = 0
-    while (i < children.size()) {
-        var child: AstXmlNode = copy(children[i])
+    for (childNode in children) {
+        var child: AstXmlNode = copy(childNode)
         xmlAddChild(node, child)
-        i++
     }
     return node
 }
@@ -127,12 +125,10 @@ fun yldCall(callee: AstXmlNode, args: *List<AstXmlNode>): AstXmlNode {
     var target: AstXmlNode = callee
     target.name = AstNodeKind.Callee
     xmlAddChild(node, target)
-    var i: Int = 0
-    while (i < args.size()) {
-        var arg: AstXmlNode = copy(args[i])
+    for (argNode in args) {
+        var arg: AstXmlNode = copy(argNode)
         arg.name = AstNodeKind.Arg
         xmlAddChild(node, arg)
-        i++
     }
     return node
 }
@@ -370,11 +366,9 @@ data class YldMachinery(
         if (!this.error.isEmpty()) {
             return
         }
-        var f: Int = 0
-        while (f < this.fieldOrder.size()) {
-            val fieldType: *AstXmlNode = this.fieldTypes.getPtr(this.fieldOrder[f])
-            yielded.fields.append(YldField(this.fieldOrder[f], *fieldType))
-            f++
+        for (fieldName in this.fieldOrder) {
+            val fieldType: *AstXmlNode = this.fieldTypes.getPtr(fieldName)
+            yielded.fields.append(YldField(fieldName, *fieldType))
         }
     }
 
@@ -420,10 +414,8 @@ data class YldMachinery(
         var params: List<YldParam> = List<YldParam>()
         this.yields = 0
         var rewritten: List<AstXmlNode> = List<AstXmlNode>()
-        var i: Int = 0
-        while (i < body.size()) {
-            this.statements(body[i], rewritten)
-            i++
+        for (bodyStmt in body) {
+            this.statements(bodyStmt, rewritten)
         }
         var methodBody: List<AstXmlNode> = List<AstXmlNode>()
         // The hoisted storage first: a jump that skips a declaration is what C++ refuses
@@ -453,7 +445,7 @@ data class YldMachinery(
             )
             branch++
         }
-        i = first
+        var i: Int = first
         while (i < rewritten.size()) {
             yldExpandSuspend(rewritten[i], methodBody)
             i++
@@ -603,12 +595,10 @@ data class YldMachinery(
         // A member's or an index's receiver is a *place*, not a value: `this` there stays
         // the field.
         val bases: Bool = xmlKind(node) == AstNodeCategory.ExprMember || xmlKind(node) == AstNodeCategory.ExprIndex
-        var i: Int = 0
-        while (i < copyNode.Children.count()) {
-            var child: AstXmlNode = this.exprAt(copyNode.Children[i], bases)
-            child.name = copyNode.Children[i].name
+        for (childNode in copyNode.Children) {
+            var child: AstXmlNode = this.exprAt(childNode, bases)
+            child.name = childNode.name
             xmlAddChild(rebuilt, child)
-            i++
         }
         return rebuilt
     }

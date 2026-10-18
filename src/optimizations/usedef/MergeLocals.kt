@@ -41,10 +41,8 @@ fun linMergeCount(
     names: List<Str>, counts: *Dictionary<Str, Int>, at: *Dictionary<Str, Int>, index: Int
 ): Unit {
     linUseDefCount(names, counts)
-    var i: Int = 0
-    while (i < names.size()) {
-        at.insert(names[i], index)
-        i++
+    for (name in names) {
+        at.insert(name, index)
     }
 }
 

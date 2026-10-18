@@ -42,13 +42,10 @@ import xml
 // The attribute's value, or "" when it is not there. The first match wins.
 fun xmlAttrOf(node: *XmlNode, name: Str): Str {
     val list: List<Attribute> = node.attributes
-    var i: Int = 0
-    while (i < list.size()) {
-        val attribute: Attribute = list[i]
+    for (attribute in list) {
         if (attribute.name == name) {
             return attribute.value
         }
-        i++
     }
     return ""
 }
@@ -72,16 +69,13 @@ fun xmlElementName(node: *XmlNode): Str {
 fun xmlCheckAttrs(node: *XmlNode, allowed: Str): Res<Int> {
     val list: List<Attribute> = node.attributes
     val pattern: Str = " " + allowed + " "
-    var i: Int = 0
-    while (i < list.size()) {
-        val attribute: Attribute = list[i]
+    for (attribute in list) {
         if (attribute.name != "line" && pattern.find(" " + attribute.name + " ") < 0) {
             return xmlFail<Int>(
                 xmlLine(node),
                 "<" + xmlElementName(node) + "> has no attribute " + attribute.name
             )
         }
-        i++
     }
     return Res<Int>.ok(0)
 }
@@ -469,13 +463,11 @@ fun xmlMapElement(f: *Frame, parent: Int, node: XmlNode): Res<Int> {
     val children: Array<XmlNode> = node.Children
     // `count()`, not `size()`: an `Array<T>` is a counted block and its length operation is
     // `count` (specs/built-in-types.md); a `List` is what answers `size()`.
-    var i: Int = 0
-    while (i < children.count()) {
-        val mapped: Res<Int> = xmlMapElement(f, index, children[i])
+    for (child in children) {
+        val mapped: Res<Int> = xmlMapElement(f, index, child)
         if (!mapped.isOk()) {
             return mapped
         }
-        i++
     }
     return Res<Int>.ok(index)
 }

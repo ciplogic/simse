@@ -14,9 +14,7 @@ fun Analyzer.run(): Unit {
     this.collectGlobal()
     this.checkOperators()
     this.collectUninitTypes()
-    var n: Int = 0
-    while (n < this.inputs.size()) {
-        val input: SemaInput = this.inputs[n]
+    for (input in this.inputs) {
         this.file = input.fileName
         this.validateImports(input.module)
         this.buildVisible(input.module)
@@ -25,7 +23,6 @@ fun Analyzer.run(): Unit {
             this.analyzeDecl(decl)
         }
         this.popScope()
-        n++
     }
 }
 
@@ -34,9 +31,7 @@ fun Analyzer.run(): Unit {
 // value - and only the names with a lowering are let through. A top-level one must have a
 // receiver (a class-body method has its class), because the syntax needs a value to index.
 fun Analyzer.checkOperators(): Unit {
-    var n: Int = 0
-    while (n < this.inputs.size()) {
-        val input: SemaInput = this.inputs[n]
+    for (input in this.inputs) {
         this.file = input.fileName
         for (*decl in xmlDecls(input.module)) {
             if (decl.name == AstNodeKind.Function) {
@@ -48,7 +43,6 @@ fun Analyzer.checkOperators(): Unit {
                 }
             }
         }
-        n++
     }
 }
 
@@ -355,10 +349,8 @@ fun Analyzer.checkUninitHolder(typeNode: *AstXmlNode, line: Int, column: Int): U
             return
         }
     }
-    var i: Int = 0
-    while (i < typeNode.Children.count()) {
-        this.checkUninitHolder(typeNode.Children[i], line, column)
-        i++
+    for (child in typeNode.Children) {
+        this.checkUninitHolder(child, line, column)
     }
 }
 

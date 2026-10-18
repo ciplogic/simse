@@ -361,12 +361,9 @@ fun Parser.parseType(role: AstNodeKind): AstXmlNode {
             var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
             var node: AstXmlNode = AstXmlNode(role, AstNodeCategory.TypeFunction, attrs, Array<AstXmlNode>())
             var renamed: List<AstXmlNode> = List<AstXmlNode>()
-            var i: Int = 0
-            while (i < params.size()) {
-                var param: AstXmlNode = params[i]
+            for (param in params) {
                 param.name = AstNodeKind.ParamType
                 renamed.append(param)
-                i++
             }
             xmlAddChildren(node, renamed)
             val ret: AstXmlNode = this.parseType(AstNodeKind.ReturnType)

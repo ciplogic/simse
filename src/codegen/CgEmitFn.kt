@@ -128,10 +128,8 @@ fun Emitter.collectTypeNames(node: *AstXmlNode): Unit {
             }
         }
     }
-    var i: Int = 0
-    while (i < node.Children.count()) {
-        this.collectTypeNames(node.Children[i])
-        i++
+    for (child in node.Children) {
+        this.collectTypeNames(child)
     }
 }
 

@@ -78,10 +78,8 @@ fun IlExtractor.methodIndex(
     argTypes: *List<Int>, recvIsValue: Bool
 ): Int {
     var key: Str = name + "|" + ilMethodKindText(kind) + "|" + ilIntText(staticBase)
-    var i: Int = 0
-    while (i < argTypes.size()) {
-        key = key + "|" + ilIntText(argTypes[i])
-        i++
+    for (argType in argTypes) {
+        key = key + "|" + ilIntText(argType)
     }
     val found: *Int = this.methodAt.getPtr(key)
     if (found != null) {
@@ -227,12 +225,10 @@ fun IlExtractor.begin(file: *Str): Unit {
     // The types the enclosing pass proved, so the frame carries slots a declaration could
     // not name (a `..T` machine). Both are keyed by name.
     val declaredTypes: List<Str> = this.fn.inferredTypes.keys()
-    var ti: Int = 0
-    while (ti < declaredTypes.size()) {
+    for (declaredType in declaredTypes) {
         this.out.inferredTypes.insert(
-            declaredTypes[ti], *this.fn.inferredTypes.getPtr(declaredTypes[ti])
+            declaredType, *this.fn.inferredTypes.getPtr(declaredType)
         )
-        ti++
     }
     this.buildFrame()
     this.out.signature = this.signatureText()

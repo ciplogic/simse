@@ -237,12 +237,10 @@ fun cpDecide(
     // a parameter (a trailing-argument pack, or an overload).
     val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
     val typeParams: List<Str> = xmlTypeParamNames(decl)
-    var k: Int = 0
-    while (k < group.size()) {
-        if (group[k].args.size() != params.size()) {
+    for (overload in group) {
+        if (overload.args.size() != params.size()) {
             return ()
         }
-        k++
     }
     var i: Int = 0
     while (i < params.size()) {

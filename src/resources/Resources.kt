@@ -115,9 +115,7 @@ fun resHexToBytes(hex: Str): Str {
 fun resQuoteBinary(bytes: Str): Str {
     var out: Str = "\""
     out.reserve(bytes.size() + 2)
-    var i: Int = 0
-    while (i < bytes.size()) {
-        val ch: Char = bytes[i]
+    for (ch in bytes) {
         // The byte as the *unsigned* value the C++ spelled (`(unsigned char) ch`): a `Char`
         // reads back signed, so 0xFF is -56 until it is put back in range.
         var byte: Int = ch
@@ -141,7 +139,6 @@ fun resQuoteBinary(bytes: Str): Str {
             out.append(mid)
             out.append(low)
         }
-        i++
     }
     out.append('"')
     return out
@@ -153,12 +150,10 @@ fun resIsUnderline(line: *Str): Bool {
     if (text.size() == 0) {
         return false
     }
-    var i: Int = 0
-    while (i < text.size()) {
-        if (text[i] != '=') {
+    for (ch in text) {
+        if (ch != '=') {
             return false
         }
-        i++
     }
     return true
 }
@@ -285,16 +280,13 @@ fun resValueText(value: Str, binary: Bool): Str {
 // since the key already carries the prefix (specs/resources.md, "Discovery").
 fun resDedup(entries: *List<ResourceItem>): List<ResourceItem> {
     var last: Dictionary<Str, ResourceItem> = Dictionary<Str, ResourceItem>()
-    var i: Int = 0
-    while (i < entries.size()) {
-        last.insert(entries[i].key, entries[i])
-        i++
+    for (entry in entries) {
+        last.insert(entry.key, entry)
     }
     var out: List<ResourceItem> = List<ResourceItem>()
     var seen: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
-    i = 0
-    while (i < entries.size()) {
-        val key: Str = entries[i].key
+    for (entry in entries) {
+        val key: Str = entry.key
         if (!seen.has(key)) {
             seen.insert(key, true)
             // The winner's own text *and* marker: a key written in a marked section and again
@@ -302,7 +294,6 @@ fun resDedup(entries: *List<ResourceItem>): List<ResourceItem> {
             val won: *ResourceItem = last.getPtr(key)
             out.append(ResourceItem(key, won.value, won.compileOnly, won.binary))
         }
-        i++
     }
     return out
 }
@@ -311,28 +302,22 @@ fun resDedup(entries: *List<ResourceItem>): List<ResourceItem> {
 // canonical-path order (the rule `driverGatherFiles` applies to the `*.kt` files).
 fun resResourceFiles(moduleRoots: *List<Str>): List<Str> {
     var candidates: List<Str> = List<Str>()
-    var r: Int = 0
-    while (r < moduleRoots.size()) {
-        val found: List<Str> = listFiles(moduleRoots[r], ".md")
-        var f: Int = 0
-        while (f < found.size()) {
-            if (found[f].endsWith("_res.md")) {
-                candidates.append(found[f])
+    for (root in moduleRoots) {
+        val found: List<Str> = listFiles(root, ".md")
+        for (file in found) {
+            if (file.endsWith("_res.md")) {
+                candidates.append(file)
             }
-            f++
         }
-        r++
     }
     var chosen: List<Str> = List<Str>()
     var seen: List<Str> = List<Str>()
-    var c: Int = 0
-    while (c < candidates.size()) {
-        val canon: Str = pathCanonical(candidates[c])
+    for (candidate in candidates) {
+        val canon: Str = pathCanonical(candidate)
         if (!seen.contains(canon)) {
             seen.append(canon)
-            chosen.append(candidates[c])
+            chosen.append(candidate)
         }
-        c++
     }
     // After dedup the canonical keys are unique, so this sort is total.
     chosen.sort((left: *Str, right: *Str) -> pathCanonical(left) < pathCanonical(right))
@@ -342,15 +327,11 @@ fun resResourceFiles(moduleRoots: *List<Str>): List<Str> {
 // Reads and parses every resource file in order and joins them into the one flat list.
 fun resLoadFiles(files: *List<Str>): List<ResourceItem> {
     var all: List<ResourceItem> = List<ResourceItem>()
-    var f: Int = 0
-    while (f < files.size()) {
-        val parsed: List<ResourceItem> = resParseText(readFile(files[f]))
-        var p: Int = 0
-        while (p < parsed.size()) {
-            all.append(parsed[p])
-            p++
+    for (file in files) {
+        val parsed: List<ResourceItem> = resParseText(readFile(file))
+        for (item in parsed) {
+            all.append(item)
         }
-        f++
     }
     return resDedup(all)
 }
@@ -365,17 +346,15 @@ fun resLoad(moduleRoots: *List<Str>): List<ResourceItem> {
 // different escape rule `resQuoteBinary` uses.
 fun resStoredLiterals(entries: *List<ResourceItem>): List<Str> {
     var out: List<Str> = List<Str>()
-    var i: Int = 0
-    while (i < entries.size()) {
-        if (!entries[i].compileOnly) {
-            out.append(resQuoteLiteral(entries[i].key))
-            if (entries[i].binary) {
-                out.append(resQuoteBinary(entries[i].value))
+    for (entry in entries) {
+        if (!entry.compileOnly) {
+            out.append(resQuoteLiteral(entry.key))
+            if (entry.binary) {
+                out.append(resQuoteBinary(entry.value))
             } else {
-                out.append(resQuoteLiteral(entries[i].value))
+                out.append(resQuoteLiteral(entry.value))
             }
         }
-        i++
     }
     return out
 }
@@ -383,12 +362,10 @@ fun resStoredLiterals(entries: *List<ResourceItem>): List<Str> {
 // The text `entries` holds for `key`, or "" when absent. The compiler's own lookup, for the
 // places that run before the program can call `Resources.get`; keys are already unique.
 fun resValueOf(entries: *List<ResourceItem>, key: *Str): Str {
-    var i: Int = 0
-    while (i < entries.size()) {
-        if (entries[i].key == key) {
-            return entries[i].value
+    for (entry in entries) {
+        if (entry.key == key) {
+            return entry.value
         }
-        i++
     }
     return ""
 }
@@ -397,12 +374,10 @@ fun resValueOf(entries: *List<ResourceItem>, key: *Str): Str {
 // absent key both read as "", so a caller that must tell them apart asks this first
 // (src/compiler/ResGen.kt).
 fun resHas(entries: *List<ResourceItem>, key: *Str): Bool {
-    var i: Int = 0
-    while (i < entries.size()) {
-        if (entries[i].key == key) {
+    for (entry in entries) {
+        if (entry.key == key) {
             return true
         }
-        i++
     }
     return false
 }
@@ -412,9 +387,7 @@ fun resHas(entries: *List<ResourceItem>, key: *Str): Bool {
 // program's view of the text are built from this same spelling.
 fun resQuoteLiteral(text: *Str): Str {
     var out: Str = "\""
-    var i: Int = 0
-    while (i < text.size()) {
-        val ch: Char = text[i]
+    for (ch in text) {
         if (ch == '\\') {
             out.appendStr("\\\\")
         } else if (ch == '\"') {
@@ -428,7 +401,6 @@ fun resQuoteLiteral(text: *Str): Str {
         } else {
             out.append(ch)
         }
-        i++
     }
     out.append('\"')
     return out

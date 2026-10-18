@@ -238,10 +238,8 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
                 recvType = ilVarType(this.out, recvSlot)
             }
             var argTypes: List<AstXmlNode> = List<AstXmlNode>()
-            var g: Int = 0
-            while (g < argNodes.size()) {
-                argTypes.append(this.exprType(argNodes[g]))
-                g++
+            for (argNode in argNodes) {
+                argTypes.append(this.exprType(argNode))
             }
             semBindCallArgs(target, recvType, *argTypes, *genericParams, *genericBindings)
             // A lambda's own annotations bind what no argument could (`peek((x: Int) -> x + 1)`),
@@ -716,17 +714,13 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
     var readSeen: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var declared: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     val paramNames: List<Str> = ilSplitParams(xmlAttr(e, AstNodeAttributeKind.Params))
-    var p: Int = 0
-    while (p < paramNames.size()) {
-        declared.insert(paramNames[p], true)
-        p++
+    for (paramName in paramNames) {
+        declared.insert(paramName, true)
     }
     val bodyContainer: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Body)
     var bodyList: List<AstXmlNode> = List<AstXmlNode>()
-    var bi: Int = 0
-    while (bi < bodyContainer.Children.count()) {
-        bodyList.append(bodyContainer.Children[bi])
-        bi++
+    for (child in bodyContainer.Children) {
+        bodyList.append(child)
     }
     ilCollectStmtNames(bodyList, declared, read, readSeen)
 
@@ -784,16 +778,14 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
         this.fn.facts, this.fn.typeParams, *lambdaTypes,
         this.fn.plusAssignParams
     )
-    var ci: Int = 0
-    while (ci < captured.size()) {
-        val name: Str = captured[ci]
+    for (capturedName in captured) {
+        val name: Str = capturedName
         info.captures.insert(name, true)
         // The field's type is the enclosing slot's, so a read in the body is typed without inference.
         val slotType: AstXmlNode = ilVarTypeNode(this.out, this.varIndex(name))
         if (!xmlIsEmpty(slotType)) {
             info.captureTypes.insert(name, slotType)
         }
-        ci++
     }
 
     // The lambda's body has a frame of its own, so it is lowered and *typed* here, with that
@@ -846,29 +838,25 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
         List<IlVar>(), List<AstXmlNode>(), returnType, this.fn.typeParams,
         xmlLine(e), xmlColumn(e), this.unit.lambdas.size()
     )
-    ci = 0
-    while (ci < captured.size()) {
-        val capturedType: *AstXmlNode = info.captureTypes.getPtr(captured[ci])
+    for (capturedName in captured) {
+        val capturedType: *AstXmlNode = info.captureTypes.getPtr(capturedName)
         if (capturedType != null) {
             closure.captureTypes.append(*capturedType)
         } else {
             closure.captureTypes.append(xmlEmptyNode())
         }
-        ci++
     }
     for (*slot in innerBody.vars) {
         if (slot.kind == IlVarKind.Argument && slot.name != "self") {
             closure.params.append(slot)
         }
     }
-    ci = 0
-    while (ci < paramNames.size()) {
+    for ((paramName, ci) in paramNames) {
         if (ci < paramTypes.size()) {
             closure.paramTypes.append(paramTypes[ci])
         } else {
             closure.paramTypes.append(xmlEmptyNode())
         }
-        ci++
     }
     var paramTexts: List<Str> = List<Str>()
     for (*slot in innerBody.vars) {
@@ -903,11 +891,9 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
         this.setSlotType(dst, classType)
     }
     var operands: List<Int> = listOf<Int>(target, this.typeIndex(symbol, classType))
-    ci = 0
-    while (ci < captured.size()) {
+    for (capturedName in captured) {
         // The capture is a slot of *this* frame, so the construction passes it by index.
-        operands.append(this.varIndex(captured[ci]))
-        ci++
+        operands.append(this.varIndex(capturedName))
     }
     this.emit(IlOpKind.CallCtor, operands)
     return target

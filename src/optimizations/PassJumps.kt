@@ -101,10 +101,8 @@ fun linThreadJumps(stmts: *List<AstXmlNode>, useDefs: &LinUseDefs): Bool {
     }
     var threads: Dictionary<Str, Str> = Dictionary<Str, Str>()
     val names: List<Str> = next.keys()
-    var i: Int = 0
-    while (i < names.size()) {
-        threads.insert(names[i], linResolveJumpTarget(names[i], *next))
-        i++
+    for (name in names) {
+        threads.insert(name, linResolveJumpTarget(name, *next))
     }
     return linThreadJumpsIn(stmts, *threads)
 }

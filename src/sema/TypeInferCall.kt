@@ -60,10 +60,8 @@ fun SemInfer.functionReturn(
         }
         if (fn.templateParams.size() > 0) {
             var argTypes: List<AstXmlNode> = List<AstXmlNode>()
-            var a: Int = 0
-            while (a < argNodes.size()) {
-                argTypes.append(this.infer(argNodes[a]))
-                a++
+            for (argNode in argNodes) {
+                argTypes.append(this.infer(argNode))
             }
             semBindCallArgs(fn.decl, xmlEmptyNode(), *argTypes, *fn.templateParams, *bindings)
         }
@@ -303,10 +301,8 @@ fun SemInfer.memberReturn(callee: *AstXmlNode, argNodes: *List<AstXmlNode>): Ast
             }
             if (fn.templateParams.size() > 0) {
                 var argTypes: List<AstXmlNode> = List<AstXmlNode>()
-                var a: Int = 0
-                while (a < argNodes.size()) {
-                    argTypes.append(this.infer(argNodes[a]))
-                    a++
+                for (argNode in argNodes) {
+                    argTypes.append(this.infer(argNode))
                 }
                 semBindCallArgs(fn.decl, xmlEmptyNode(), *argTypes, *fn.templateParams, *bindings)
             }

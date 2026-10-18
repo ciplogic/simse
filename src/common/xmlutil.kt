@@ -30,10 +30,8 @@ fun xmlAddChild(node: *AstXmlNode, child: AstXmlNode): Unit {
 // The same, for a whole batch: one new block instead of one per child.
 fun xmlAddChildren(node: *AstXmlNode, children: *List<AstXmlNode>): Unit {
     var all: List<AstXmlNode> = node.Children.toList()
-    var i: Int = 0
-    while (i < children.size()) {
-        all.append(children[i])
-        i++
+    for (child in children) {
+        all.append(child)
     }
     node.Children = all.toArray()
 }

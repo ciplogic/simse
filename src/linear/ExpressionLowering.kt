@@ -370,10 +370,8 @@ data class ExprFlattener(
                     out.append(stmt)
                     return
                 }
-                var i: Int = 0
-                while (i < temps.size()) {
-                    out.append(temps[i])
-                    i++
+                for (temp in temps) {
+                    out.append(temp)
                 }
                 out.append(exprReplaceRole(stmt, AstNodeKind.Init, init))
                 return

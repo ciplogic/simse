@@ -181,12 +181,10 @@ fun ilPromoteStackName(il: *IlBody, c: Int): Str {
 }
 
 fun ilPromoteNameTaken(il: *IlBody, name: Str): Bool {
-    var i: Int = 0
-    while (i < il.vars.size()) {
-        if (il.vars[i].name == name) {
+    for (slot in il.vars) {
+        if (slot.name == name) {
             return true
         }
-        i++
     }
     return false
 }
@@ -395,9 +393,8 @@ fun ilPromoteRefs(il: *IlBody, facts: *SemFacts): Bool {
         // parameter may retain what it receives (`epKindAt`), the pointer's own slot is marked,
         // so the `Deref` that took its address is not a safe use (`ilPromoteUseSafe`).
         var argEscape: List<Bool> = List<Bool>(slots, false)
-        var ai: Int = 0
-        while (ai < il.ops.size()) {
-            val aop: *IlOp = *il.ops[ai]
+        for (oneOp in il.ops) {
+            val aop: *IlOp = *oneOp
             if (aop.kind == IlOpKind.Call || aop.kind == IlOpKind.CallVoid) {
                 val at: Int = ilReuseMethodIndex(aop)
                 if (at >= 0 && at < il.methods.size()) {
@@ -414,7 +411,6 @@ fun ilPromoteRefs(il: *IlBody, facts: *SemFacts): Bool {
                     }
                 }
             }
-            ai++
         }
         var i: Int = 0
         while (i < il.ops.size()) {

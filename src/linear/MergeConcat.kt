@@ -259,10 +259,8 @@ data class IlConcatFuser(
     fun emitConcat(dst: Int, parts: *List<Int>, line: Int): Unit {
         var operands: List<Int> = List<Int>()
         operands.append(dst)
-        var i: Int = 0
-        while (i < parts.size()) {
-            operands.append(parts[i])
-            i++
+        for (part in parts) {
+            operands.append(part)
         }
         this.ops.append(IlOp(IlOpKind.Concat, operands))
         this.lines.append(line)

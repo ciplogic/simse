@@ -56,14 +56,11 @@ fun Emitter.prettySymbol(name: *Str): Str {
     if (closureAt > 0) {
         val rest: Str = name.substr(closureAt + 8, name.size() - closureAt - 8)
         var digits: Str
-        var d: Int = 0
-        while (d < rest.size()) {
-            val ch: Char = rest[d]
+        for (ch in rest) {
             if (ch < '0' || ch > '9') {
                 break
             }
             digits.append(ch)
-            d++
         }
         if (digits.size() > 0) {
             val packageNameText: Str = this.packageName(name.substr(0, closureAt))
@@ -77,13 +74,11 @@ fun Emitter.prettySymbol(name: *Str): Str {
 // `codegen.emitFunction`); an unprefixed symbol (`main`, an `rtl` native) passes through.
 fun Emitter.packageName(name: *Str): Str {
     val packages: List<Str> = this.nsPrefixes.keys()
-    var i: Int = 0
-    while (i < packages.size()) {
-        val prefix: Str = this.nsPrefix(packages[i])
+    for (pkg in packages) {
+        val prefix: Str = this.nsPrefix(pkg)
         if (prefix.size() > 0 && name.startsWith(prefix)) {
-            return packages[i] + "." + name.substr(prefix.size(), name.size() - prefix.size())
+            return pkg + "." + name.substr(prefix.size(), name.size() - prefix.size())
         }
-        i++
     }
     return *name
 }

@@ -135,10 +135,8 @@ fun Parser.parseInterpolatedRaw(raw: *Str, pos: SourcePos): ExprNode {
     var args: List<AstXmlNode> = List<AstXmlNode>()
     args.append(this.interpCharLitAt('@', pos).node)
     args.append(this.interpTemplateNode(templateText, pos).node)
-    var k: Int = 0
-    while (k < items.size()) {
-        args.append(items[k])
-        k++
+    for (item in items) {
+        args.append(item)
     }
     return this.interpCallAt("fmtStrWith", args, pos)
 }
@@ -202,10 +200,8 @@ fun Parser.interpCharLitAt(ch: Char, pos: SourcePos): ExprNode {
 fun Parser.interpCallAt(callee: *Str, args: *List<AstXmlNode>, pos: SourcePos): ExprNode {
     var kids: List<AstXmlNode> = List<AstXmlNode>()
     kids.append(this.roleOf(this.nameExprAt(callee, pos).node, AstNodeKind.Callee))
-    var i: Int = 0
-    while (i < args.size()) {
-        kids.append(this.roleOf(*args[i], AstNodeKind.Arg))
-        i++
+    for (arg in args) {
+        kids.append(this.roleOf(*arg, AstNodeKind.Arg))
     }
     var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
     var call: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, attrs, kids.toArray())
@@ -342,10 +338,8 @@ fun Parser.parseInterpolatedQuoted(raw: *Str, pos: SourcePos): ExprNode {
     var args: List<AstXmlNode> = List<AstXmlNode>()
     args.append(this.interpCharLitAt(separator, pos).node)
     args.append(this.interpQuotedTemplateNode(templateText, pos).node)
-    var a: Int = 0
-    while (a < items.size()) {
-        args.append(items[a])
-        a++
+    for (itemNode in items) {
+        args.append(itemNode)
     }
     return this.interpCallAt("fmtStrWith", args, pos)
 }

@@ -801,14 +801,12 @@ fun semMachineType(
     }
     // The class's template arguments: the function's type parameters (`emitFunction`).
     var args: List<AstXmlNode> = List<AstXmlNode>()
-    var i: Int = 0
-    while (i < fn.templateParams.size()) {
-        val bound: *AstXmlNode = bindings.getPtr(fn.templateParams[i])
+    for (templateParam in fn.templateParams) {
+        val bound: *AstXmlNode = bindings.getPtr(templateParam)
         if (bound == null) {
             return ret
         }
         args.append(semReRole(*bound, AstNodeKind.TypeArg))
-        i++
     }
     if (semMachineReceiver(fn.receiver)) {
         if (xmlIsEmpty(receiver)) {

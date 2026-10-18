@@ -124,23 +124,18 @@ data class SimRenamer(
             // the name the scopes decide.
             var inner: SimRenameScope = SimRenameScope(Dictionary<Str, Str>())
             val params: List<Str> = xmlLambdaParams(node)
-            var p: Int = 0
-            while (p < params.size()) {
-                inner.renamed.insert(params[p], params[p])
-                p++
+            for (param in params) {
+                inner.renamed.insert(param, param)
             }
             val names: List<Str> = simBoundNames(xmlChildPtr(node, AstNodeKind.Body), List<Str>())
-            p = 0
-            while (p < names.size()) {
-                inner.renamed.insert(names[p], names[p])
-                p++
+            for (boundName in names) {
+                inner.renamed.insert(boundName, boundName)
             }
             this.scopes.append(inner)
         }
         var kids: List<AstXmlNode> = List<AstXmlNode>()
-        var i: Int = 0
-        while (i < node.Children.count()) {
-            val child: *AstXmlNode = *node.Children[i]
+        for (childNode in node.Children) {
+            val child: *AstXmlNode = *childNode
             if (child.name == AstNodeKind.Body || child.name == AstNodeKind.Then
                 || child.name == AstNodeKind.Else
             ) {
@@ -158,7 +153,6 @@ data class SimRenamer(
             } else {
                 kids.append(this.rewrite(child, nested))
             }
-            i++
         }
         var out: AstXmlNode = exprLike(node, kids)
         if (kind == AstNodeCategory.ExprName) {
@@ -178,10 +172,8 @@ data class SimRenamer(
 // every later one - in any scope of the body - is renamed with its uses.
 fun linRenameShadowed(body: *List<AstXmlNode>, reserved: *List<Str>): List<AstXmlNode> {
     var used: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
-    var i: Int = 0
-    while (i < reserved.size()) {
-        used.insert(reserved[i], true)
-        i++
+    for (word in reserved) {
+        used.insert(word, true)
     }
     var renamer: SimRenamer = SimRenamer(List<SimRenameScope>(), used)
     return renamer.inList(*body)
@@ -207,12 +199,10 @@ fun linIsSpellableType(typeNode: *AstXmlNode): Bool {
                 return false
             }
             val args: List<AstXmlNode> = xmlChildren(typeNode, AstNodeKind.TypeArg)
-            var i: Int = 0
-            while (i < args.size()) {
-                if (!linIsSpellableType(args[i])) {
+            for (arg in args) {
+                if (!linIsSpellableType(arg)) {
                     return false
                 }
-                i++
             }
             return true
         }
@@ -226,12 +216,10 @@ fun linIsSpellableType(typeNode: *AstXmlNode): Bool {
                 return false
             }
             val params: List<AstXmlNode> = xmlChildren(typeNode, AstNodeKind.ParamType)
-            var i: Int = 0
-            while (i < params.size()) {
-                if (!linIsSpellableType(params[i])) {
+            for (param in params) {
+                if (!linIsSpellableType(param)) {
                     return false
                 }
-                i++
             }
             return true
         }
@@ -296,15 +284,11 @@ fun linHoistSlots(body: *List<AstXmlNode>): LinLowered {
         return LinLowered(rewritten, false)
     }
     var hoisted: List<AstXmlNode> = List<AstXmlNode>()
-    var i: Int = 0
-    while (i < decls.size()) {
-        hoisted.append(decls[i])
-        i++
+    for (decl in decls) {
+        hoisted.append(decl)
     }
-    i = 0
-    while (i < rewritten.size()) {
-        hoisted.append(rewritten[i])
-        i++
+    for (stmt in rewritten) {
+        hoisted.append(stmt)
     }
     return LinLowered(hoisted, true)
 }

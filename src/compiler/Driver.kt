@@ -48,12 +48,10 @@ fun driverNewModule(): AstXmlNode {
 
 fun driverAppendNamed(target: *AstXmlNode, source: *AstXmlNode, role: AstNodeKind): Unit {
     var picked: List<AstXmlNode> = List<AstXmlNode>()
-    var i: Int = 0
-    while (i < source.Children.count()) {
-        if (source.Children[i].name == role) {
-            picked.append(source.Children[i])
+    for (child in source.Children) {
+        if (child.name == role) {
+            picked.append(child)
         }
-        i++
     }
     xmlAddChildren(target, picked)
 }
@@ -108,19 +106,15 @@ fun driverGatherFiles(
     var r: Int = 0
     while (r < moduleRoots.size()) {
         val rootFiles: List<Str> = listFiles(moduleRoots[r], ".kt")
-        var f: Int = 0
-        while (f < rootFiles.size()) {
-            if (moduleIsTree[r] || !driverIsGeneratorSource(rootFiles[f])) {
-                candidates.append(rootFiles[f])
+        for (rootFile in rootFiles) {
+            if (moduleIsTree[r] || !driverIsGeneratorSource(rootFile)) {
+                candidates.append(rootFile)
             }
-            f++
         }
         r++
     }
-    var i: Int = 0
-    while (i < inputs.size()) {
-        candidates.append(inputs[i])
-        i++
+    for (input in inputs) {
+        candidates.append(input)
     }
 
     var chosen: List<Str> = List<Str>()
@@ -143,14 +137,12 @@ fun driverGatherFiles(
 fun manifestValues(text: *Str, key: *Str): List<Str> {
     var out: List<Str> = List<Str>()
     val lines: List<Str> = text.split("\n")
-    var i: Int = 0
-    while (i < lines.size()) {
-        val line: Str = lines[i].trim()
+    for (rawLine in lines) {
+        val line: Str = rawLine.trim()
         val colon: Int = line.indexOf(":")
         if (colon > 0 && line.substr(0, colon).trim() == key) {
             out.append(line.substr(colon + 1, line.size() - colon - 1).trim())
         }
-        i++
     }
     return out
 }
@@ -199,12 +191,9 @@ fun driverExpandRoot(root: *Str, isTree: Bool, out: *List<Str>, outTree: *List<B
         outTree.append(isTree)
         return Res<Str>.ok("")
     }
-    var i: Int = 0
-    while (i < modules.size()) {
-        val modulesText: Str = modules[i]
+    for (modulesText in modules) {
         out.append(`@root/@modulesText`)
         outTree.append(false)
-        i++
     }
     return Res<Str>.ok("")
 }
@@ -413,19 +402,17 @@ fun main(args: List<Str>): Int {
     var preludeNames: List<Str> = List<Str>()
     var preludeCanon: List<Str> = List<Str>()
     var mergedPrelude: AstXmlNode = driverNewModule()
-    var p: Int = 0
-    while (p < preludeFiles.size()) {
-        val parsedPrelude: Res<AstXmlNode> = driverParseFile(preludeFiles[p])
+    for (preludeFile in preludeFiles) {
+        val parsedPrelude: Res<AstXmlNode> = driverParseFile(preludeFile)
         if (!parsedPrelude.isOk()) {
             eprintln(parsedPrelude.Error)
             return 1
         }
-        preludeCanon.append(pathCanonical(preludeFiles[p]))
-        preludeNames.append(preludeFiles[p])
+        preludeCanon.append(pathCanonical(preludeFile))
+        preludeNames.append(preludeFile)
         preludeModules.append(parsedPrelude.Value)
         driverAppendNamed(mergedPrelude, parsedPrelude.Value, AstNodeKind.Import)
         driverAppendDecls(mergedPrelude, parsedPrelude.Value)
-        p++
     }
     val hasPrelude: Bool = preludeFiles.size() > 0
 
@@ -448,16 +435,14 @@ fun main(args: List<Str>): Int {
 
     var fileNames: List<Str> = List<Str>()
     var modules: List<AstXmlNode> = List<AstXmlNode>()
-    var f: Int = 0
-    while (f < files.size()) {
-        val parsed: Res<AstXmlNode> = driverParseFile(files[f])
+    for (fileName in files) {
+        val parsed: Res<AstXmlNode> = driverParseFile(fileName)
         if (!parsed.isOk()) {
             eprintln(parsed.Error)
             return 1
         }
-        fileNames.append(files[f])
+        fileNames.append(fileName)
         modules.append(parsed.Value)
-        f++
     }
 
     // The generators' state (`src/compiler/SourceGen.kt`), filled here because the reparse
@@ -602,10 +587,8 @@ fun main(args: List<Str>): Int {
     }
     val diagnostics: List<Str> = analyze(semaInputs)
     if (diagnostics.size() > 0) {
-        var d: Int = 0
-        while (d < diagnostics.size()) {
-            eprintln(diagnostics[d])
-            d++
+        for (diagnostic in diagnostics) {
+            eprintln(diagnostic)
         }
         return 1
     }

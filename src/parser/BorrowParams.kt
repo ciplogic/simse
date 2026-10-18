@@ -73,12 +73,10 @@ fun bpMutatesMark(decl: *AstXmlNode): Bool {
         return false
     }
     val parts: List<Str> = args.split(",")
-    var i: Int = 0
-    while (i < parts.size()) {
-        if (parts[i].trim() == "mutates") {
+    for (part in parts) {
+        if (part.trim() == "mutates") {
             return true
         }
-        i++
     }
     return false
 }
@@ -395,12 +393,10 @@ fun bpContainsRef(node: *AstXmlNode): Bool {
     if (kind == AstNodeCategory.ExprRef || kind == AstNodeCategory.ExprDeref) {
         return true
     }
-    var i: Int = 0
-    while (i < node.Children.count()) {
-        if (bpContainsRef(node.Children[i])) {
+    for (childNode in node.Children) {
+        if (bpContainsRef(childNode)) {
             return true
         }
-        i++
     }
     return false
 }
