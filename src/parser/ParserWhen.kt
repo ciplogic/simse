@@ -174,6 +174,83 @@ fun Parser.charLiteralAt(spelling: *Str, pos: SourcePos): ExprNode {
     )
 }
 
+// `when { cond -> body ... else -> body }`: the subjectless form. Each arm's *condition* is
+// the `if` it stands for - arms run in source order, exactly one body runs, `else` must be
+// last - so the desugar is the `if`/`else` chain the parenthesized `when` builds for its
+// label tests, with no subject and no template to bind. A condition may be any expression,
+// the range and membership sugar included (`when { i in 1..5 -> ... }`).
+fun Parser.parseWhenSubjectless(out: *List<AstXmlNode>, pos: SourcePos): Bool {
+    this.advance()
+    this.skipSeparators()
+
+    var arms: List<AstXmlNode> = List<AstXmlNode>()
+    var tail: List<AstXmlNode> = List<AstXmlNode>()
+    var seenElse: Bool = false
+    while (!this.checkText("}") && !this.atEnd() && !this.failed) {
+        val armPos: SourcePos = this.peek(0).pos
+        if (this.matchText("else")) {
+            if (seenElse) {
+                this.fail("'when' can have only one 'else' arm")
+                return false
+            }
+            seenElse = true
+            this.skipNewlines()
+            if (!this.expectText("->")) {
+                return false
+            }
+            tail = this.parseBlock()
+            if (this.failed) {
+                return false
+            }
+            this.skipSeparators()
+            continue
+        }
+        if (seenElse) {
+            this.fail("'else' must be the last arm of a 'when'")
+            return false
+        }
+        val cond: ExprNode = this.parseExpr(0)
+        if (this.failed) {
+            return false
+        }
+        this.skipNewlines()
+        if (!this.expectText("->")) {
+            return false
+        }
+        val body: List<AstXmlNode> = this.parseBlock()
+        if (this.failed) {
+            return false
+        }
+        arms.append(this.ifNode(cond, *body, armPos))
+        this.skipSeparators()
+    }
+    if (!this.expectText("}")) {
+        return false
+    }
+
+    // The chain is right-nested, the tail linked first: the same shape `parseWhen` builds.
+    if (seenElse && arms.size() > 0 && tail.size() > 0) {
+        xmlAddChild(arms[arms.size() - 1], this.container(AstNodeKind.Else, tail))
+    }
+    var i: Int = arms.size() - 1
+    while (i > 0) {
+        var next: List<AstXmlNode> = List<AstXmlNode>()
+        next.append(arms[i])
+        xmlAddChild(arms[i - 1], this.container(AstNodeKind.Else, next))
+        i = i - 1
+    }
+    if (arms.size() > 0) {
+        out.append(arms[0])
+    } else {
+        var e: Int = 0
+        while (e < tail.size()) {
+            out.append(tail[e])
+            e = e + 1
+        }
+    }
+    return true
+}
+
 // `when` (specs/functions.md): desugared here to the `if`/`else` chain it means, so
 // nothing downstream knows what a `when` is. The subject is bound once in a template, so it
 // is evaluated once; arms do not fall through, so a `break`/`continue` in one is the
@@ -191,6 +268,10 @@ fun Parser.charLiteralAt(spelling: *Str, pos: SourcePos): ExprNode {
 fun Parser.parseWhen(out: *List<AstXmlNode>): Bool {
     val pos: SourcePos = this.peek(0).pos
     this.advance()
+    // `when { cond -> ... }` (no subject): Kotlin's subjectless form, its own shape below.
+    if (this.checkText("{")) {
+        return this.parseWhenSubjectless(out, pos)
+    }
     if (!this.expectText("(")) {
         return false
     }

@@ -451,7 +451,14 @@ off (the plain comparisons on the subject, as before). Every guard is a *necessa
 cannot change.
 
 Not implemented, and reported rather than misparsed: Kotlin's pattern labels
-(`is Type`, `in 1..5`), a subjectless `when { cond -> }`, and `when` as an expression.
+(`is Type`, `in 1..5`), and `when` as an expression.
+
+A `when` may be written with **no subject** (Kotlin's subjectless form): each arm's
+*condition* is the `if` it stands for, so `when { c1 -> b1; c2 -> b2; else -> b3 }` is the
+chain `if (c1) b1 else if (c2) b2 else b3`. Arms run in source order, exactly one body
+runs, `else` must be last, and a condition may be any expression - the range and
+membership sugar included (`when { i in 1..5 -> ... }`). There is no subject to evaluate
+or bind, so no template: the parser (`parseWhenSubjectless`) builds the chain directly.
 
 ## `for`
 

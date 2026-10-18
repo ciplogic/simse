@@ -73,7 +73,8 @@ enum class Color { Red, Green = 5 }
 ## Control flow
 
 `if`/`else` is an expression; `while`; `when` evaluates its subject once (the subject must be
-a plain local no arm assigns to) and has a string-dispatch lowering. `for (x in c)` works over
+a plain local no arm assigns to) and has a string-dispatch lowering; a subjectless
+`when { cond -> ... }` takes conditions as arms. `for (x in c)` works over
 `List`/`Array`/`Span` (and machines — `..T`); `for ((x, i) in c)` adds the index and
 `for (*x in c)` binds the place instead of a copy. Ranges are `a..b` (inclusive), `a until b`,
 `a downTo b`, and `r step n` — `for (i in 1..5)` iterates one (`Range`/`SteppedRange` are

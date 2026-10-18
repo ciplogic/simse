@@ -475,6 +475,88 @@ fun partWhen(): Int {
     return 0
 }
 
+// ---- when-subjectless ----
+// `when { cond -> ... }` (no subject, specs/functions.md): each arm's condition is the
+// `if` it stands for, arms run in source order, `else` is last - the same chain the
+// parenthesized form builds for its label tests, with no subject to bind.
+
+fun partWhenSubjectless(): Int {
+    val x: Int = 7
+    when {
+        x > 10 -> {
+            println("big")
+        }
+
+        x > 5 -> {
+            println("medium")
+        }
+
+        else -> {
+            println("small")
+        }
+    }
+
+    // A condition may be any expression, the range and membership sugar included.
+    when {
+        x in 1..5 -> {
+            println("low")
+        }
+
+        x in 6..10 && x % 2 == 1 -> {
+            println("odd mid")
+        }
+
+        else -> {
+            println("other")
+        }
+    }
+
+    // Arms run in order and exactly one body runs; an arm may write and fall through
+    // to the code after the `when` like any statement.
+    var picked: Str = ""
+    when {
+        x < 0 -> {
+            picked = "negative"
+        }
+
+        x > 0 -> {
+            picked = "positive"
+        }
+    }
+    println(picked)
+
+    // An arm's `break` is the enclosing loop's, and a subjectless `when` nests.
+    var hits: Int = 0
+    var i: Int = 0
+    while (i < 8) {
+        i = i + 1
+        when {
+            i == 4 -> {
+                continue
+            }
+
+            i > 6 -> {
+                break
+            }
+
+            i % 2 == 0 -> {
+                when {
+                    i == 2 -> {
+                        hits = hits + 1
+                    }
+
+                    else -> {
+                        hits = hits + 10
+                    }
+                }
+            }
+        }
+    }
+    println(hits)
+    println(i)
+    return 0
+}
+
 // ---- the category's entry ----
 fun main(): Int {
     partBitwise()
@@ -482,5 +564,6 @@ fun main(): Int {
     partControlFlow()
     partRecursion()
     partWhen()
+    partWhenSubjectless()
     return 0
 }

@@ -7,7 +7,7 @@ Keep this file short; the record of what moved and what it cost is
 ## Implemented
 
 Language: values and locals (`val`/`var`, inferred or declared), file-level statics,
-`if`/`else` (expression), `when` (subject once, string dispatch), `while`, `for` over
+`if`/`else` (expression), `when` (subject once, string dispatch; subjectless conditions), `while`, `for` over
 `List`/`Array`/`Span` and machines (`..T`, both value and pointer forms), ranges (`a..b`,
 `until`/`downTo`/`step`, and `x in c` membership — sugar over prelude `rangeTo`/`contains`
 extensions), `break`/`continue`,

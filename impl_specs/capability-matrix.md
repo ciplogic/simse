@@ -5273,3 +5273,16 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `stress/trailing-lambda` covers both call forms, annotated and implicit parameters, `it`
   shadowing across nesting, the value tail of a multi-statement body, a generic callee's
   explicit instantiation, and `repeat`/`forEach` with `Unit` bodies.
+
+- **Subjectless `when`: `when { cond -> ... }`.** The parenthesized form's arm loop, with a
+  condition where the labels are: `parseWhen` dispatches to `parseWhenSubjectless` when the
+  `when` is followed by `{` instead of `(`, and the desugar is the same right-nested
+  `if`/`else` chain the label tests build - no subject, so no template and no
+  string-dispatch view, and a condition may be any expression (the range and membership
+  sugar included). `else` keeps its one-arm, last-arm rules; a `break`/`continue` in an arm
+  is the enclosing loop's, exactly as in the parenthesized form. Cost: one dispatch in
+  `parseWhen`; a `when` followed by `{` was a parse error before, so no existing program
+  changes meaning.
+  Verified: `bun tools/iterate.js --full` - **108/108** and both fixed points;
+  `stress/flow`'s new `when-subjectless` part covers order and single-body, a compound
+  condition with `in`, a no-`else` fall-through, and `break`/`continue` from inside arms.

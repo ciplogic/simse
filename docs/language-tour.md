@@ -102,6 +102,19 @@ fun main(): Int {
 }
 ```
 
+A `when` with no subject takes **conditions** as arms - each arm is the `if` it stands
+for, and `else` is the chain's tail (`when { c1 -> b1; else -> b2 }` is
+`if (c1) b1 else b2`):
+
+```kt
+val n: Int = 7
+when {
+    n > 10 -> { println("big") }
+    n in 6..10 -> { println("mid") }
+    else -> { println("small") }
+}
+```
+
 The loop keyword is `for`, and it walks a container, a `Span<T>`, or a `yield`ing
 machine (below). When you want to walk storage by hand, a `Span<T>` (`stress/collections`)
 is the borrowed view to reach for - a pointer plus a length, with `size()`, `isEmpty()`,
@@ -817,8 +830,8 @@ These are known rough edges, not design decisions to admire
 - `println` of a float uses the C++ default formatting, and `println` of an enum
   prints its integer value.
 - There is no `foreach` keyword (`for` is it, and a container has an `iterValues` so
-  `for (x in list)` works), no `when` pattern labels (`is Type`, `in 1..5`) and no
-  subjectless `when`, no default parameter values, no capture-by-reference, and no
+  `for (x in list)` works), no `when` pattern labels (`is Type`, `in 1..5`), no default
+  parameter values, no capture-by-reference, and no
   `Set`. Interpolation exists, but only in backtick strings, and only a plain
   name: `@name`, or `@(name)` where the `)` must end a name that runs into an identifier
   byte; an expression (`@(a + b)`) is not there - a member or a longer expression is bound
