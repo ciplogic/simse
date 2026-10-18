@@ -49,6 +49,15 @@ first, so its symbol is the third), and the declaration carries it as
 emitter's tables reads the symbol there (the `listOf<T>` literal, whose call is a `Pack`
 rather than a call, is the one that does).
 
+A trailing argument `"mutates"` (either generator) is the author's word that the callee's
+writes reach **only its receiver** - the three-argument form
+`@SmGen("res", "listops", "simse_str_append", "mutates")`, for instance. The auto-borrow
+proof reads it (`impl_specs/escape-analysis.md`, "The borrowness fixpoint"): a body calling
+such a callee *on a local the body itself built* is not dirtied by the call, because the
+storage the callee writes is the body's own and no caller lent it. It says nothing about
+the callee's purity and nothing about calls whose receiver is borrowed - both stay exactly
+as they were.
+
 ## Repetition
 
 One attribute per declaration in this baseline. Stacking several attributes on one

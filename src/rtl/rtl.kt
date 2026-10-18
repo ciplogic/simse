@@ -69,7 +69,7 @@ fun ..T.toPtrs<T>(): ..*T {
 // A machine is already iterable: `x.iterValues()` on one *is* `x`, so `for (x in m)` and
 // iterating `m` in a `while` see the same values with no wrapper object.
 
-@SmGen("res", "listops", "simse_list_append")
+@SmGen("res", "listops", "simse_list_append", "mutates")
 fun append<T>(this: List<T>, value: T): Unit
 
 // The list literal: `listOf<Str>("a", "b")` builds one `Pack` in that order, with no call
@@ -177,15 +177,15 @@ borrow fun values<K, V>(this: Dictionary<K, V>): List<V>
 fun clear<K, V>(this: Dictionary<K, V>): Unit
 
 // `Str` is a byte string, so `append` takes a Char.
-@SmGen("res", "listops", "simse_str_append")
+@SmGen("res", "listops", "simse_str_append", "mutates")
 fun append(this: Str, value: Char): Unit
 
 // In-place append of a whole `Str`: `out = out + text` copies the accumulated buffer.
-@SmGen("res", "listops", "simse_str_appendStr")
+@SmGen("res", "listops", "simse_str_appendStr", "mutates")
 fun appendStr(this: Str, value: Str): Unit
 
 // The same append for a borrowed text (`*Str`): nothing is copied on the way.
-@SmGen("res", "listops", "simse_str_appendStrPtr")
+@SmGen("res", "listops", "simse_str_appendStrPtr", "mutates")
 fun appendStrPtr(this: Str, value: *Str): Unit
 
 // The format text with each `|` replaced, in order, by one item - `fmtStr("|:|", a, b)`.
@@ -276,7 +276,7 @@ fun strAddInt(target: *Char, value: Int64, count: Int): Unit
 
 // Pre-allocates the buffer for a run of `append`/`appendStr`: a *hint*, not a length - the
 // string keeps its size, and a longer run grows it as usual.
-@SmGen("res", "listops", "simse_str_reserve")
+@SmGen("res", "listops", "simse_str_reserve", "mutates")
 fun reserve(this: Str, count: Int): Unit
 
 // The first index at or after `from` where `sub` occurs, or -1 (the language's spelling of
@@ -398,8 +398,31 @@ fun Str.endsWith(suffix: Str): Bool {
     return true
 }
 
-@SmGen("res", "strops", "simse_str_replace")
-borrow fun replace(this: Str, from: Str, to: Str): Str
+// `Str.replace(from, to)`: every occurrence of `from` becomes `to`; an empty `from` leaves
+// the string alone (there is no position to insert at, which is the C++ answer too). Written
+// in the language now that a body that builds its result can prove borrow-clean: the
+// `append`/`reserve` calls land on strings the body constructed, which the `mutates` mark
+// says write only their receiver (src/parser/BorrowParams.kt) - so the proof holds and the
+// receiver stays borrowed instead of copying per call.
+fun Str.replace(from: Str, to: Str): Str {
+    if (from.size() == 0) {
+        return this
+    }
+    var out: Str = ""
+    out.reserve(this.size() + to.size())
+    var pos: Int = 0
+    while (true) {
+        val found: Int = this.findFrom(from, pos)
+        if (found < 0) {
+            out.appendStr(this.substr(pos, 0 - 1))
+            break
+        }
+        out.appendStr(this.substr(pos, found - pos))
+        out.appendStr(to)
+        pos = found + from.size()
+    }
+    return out
+}
 
 // Leading and trailing space bytes stripped, one block copy of what is left.
 fun Str.trim(): Str {
@@ -426,11 +449,55 @@ fun Str.trim(): Str {
     return out
 }
 
-@SmGen("res", "strops", "simse_str_split")
-borrow fun split(this: Str, separator: Str): List<Str>
+// `Str.split(separator)` splits on every occurrence; an empty separator returns the whole
+// string as a single element. Same proof shape as `replace` above: the mutators write the
+// list the body built, never the receiver.
+fun Str.split(separator: Str): List<Str> {
+    var parts: List<Str> = List<Str>(0)
+    if (separator.size() == 0) {
+        parts.append(this)
+        return parts
+    }
+    var pos: Int = 0
+    while (true) {
+        val found: Int = this.findFrom(separator, pos)
+        if (found < 0) {
+            parts.append(this.substr(pos, 0 - 1))
+            break
+        }
+        parts.append(this.substr(pos, found - pos))
+        pos = found + separator.size()
+    }
+    return parts
+}
 
-@SmGen("res", "strops", "simse_str_split")
-borrow fun split(this: Str, separator: Char): List<Str>
+// The byte-separator form. The part count is known before the walk, so the list reserves
+// once and appends into place - the shape the C++ version had.
+fun Str.split(separator: Char): List<Str> {
+    var parts: List<Str> = List<Str>(0)
+    val bytes: *Char = strBytes(this)
+    val len: Int = this.size()
+    var count: Int = 0
+    var i: Int = 0
+    while (i < len) {
+        if (bytes[i] == separator) {
+            count = count + 1
+        }
+        i = i + 1
+    }
+    parts.reserve(count + 1)
+    var pos: Int = 0
+    while (true) {
+        val found: Int = memFindByte(bytes, pos, len - pos, separator)
+        if (found < 0) {
+            parts.append(this.substr(pos, 0 - 1))
+            break
+        }
+        parts.append(this.substr(pos, found - pos))
+        pos = found + 1
+    }
+    return parts
+}
 
 // ASCII/byte case folding (the string type is a byte string).
 fun Str.toUpper(): Str {

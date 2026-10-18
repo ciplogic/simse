@@ -368,11 +368,6 @@ Int simse_lenOf(const SmallVector<T, N>& self);
 
 Char simse_str_charAt(const Str& self, Int index);
 
-List<Str> simse_str_split(const Str& self, const Str& separator);
-List<Str> simse_str_split(const Str& self, Char separator);
-
-Str simse_str_replace(const Str& self, const Str& from, const Str& to);
-
 Opt<Float64> simse_str_toFloat(const Str& self);
 
 void simse_str_initByValue(Str& self, const Str& value);
@@ -526,7 +521,7 @@ Int ns1_bump(Str* self);
 Int ns1_pureTwice(Str* s);
 Int ns1_impureTwice(Str s);
 Int ns1_viaSum(ns1_Point* p);
-Str ns1_label(ns1_Point p);
+Str ns1_label(ns1_Point* p);
 Str ns1_viaLabel(ns1_Point* p);
 Int ns1_lenTwice(Str* s, List<Int>* xs);
 Int ns1_sum(ns1_Point* p);
@@ -890,21 +885,19 @@ Int ns1_viaSum(ns1_Point* p) {
     return _sm_expr2;
 }
 // stress/pure-function/src/main.kt
-Str ns1_label(ns1_Point p) {
+Str ns1_label(ns1_Point* p) {
     Int* _sm_base1;
     Str out, _sm_expr1;
     out = __sm_stringTable[2];
-    _sm_base1 = simse_addressOf(p.x);
+    _sm_base1 = simse_addressOf(p->x);
     _sm_expr1 = toString(_sm_base1);
     simse_str_appendStr(out, _sm_expr1);
     return out;
 }
 // stress/pure-function/src/main.kt
 Str ns1_viaLabel(ns1_Point* p) {
-    ns1_Point _sm_base1;
     Str _sm_expr1;
-    _sm_base1 = *(p);
-    _sm_expr1 = ns1_label(_sm_base1);
+    _sm_expr1 = ns1_label(p);
     return _sm_expr1;
 }
 // stress/pure-function/src/main.kt
@@ -1078,70 +1071,6 @@ inline Int simse_lenOf(const SmallVector<T, N>& self) {
 
 inline Char simse_str_charAt(const Str& self, Int index) {
     return (Char) self[index];
-}
-
-inline List<Str> simse_str_split(const Str& self, const Str& separator) {
-    List<Str> parts;
-    if (separator.empty()) {
-        parts.push_back(self);
-        return parts;
-    }
-    Int pos = 0;
-    while (true) {
-        Int found = self.find(separator, pos);
-        if (found == Str::npos) {
-            parts.push_back(self.substr(pos));
-            break;
-        }
-        parts.push_back(self.substr(pos, found - pos));
-        pos = found + separator.size();
-    }
-    return parts;
-}
-
-inline Int simse_count_char_in_str(const Str* self, char ch) {
-    Int count = 0;
-    const char* data = self->data();
-    Int len = self->size();
-    for (Int i = 0; i < len; i++) {
-        if (data[i] == ch) {
-            count++;
-        }
-    }
-    return count;
-}
-
-inline List<Str> simse_str_split(const Str& self, Char separator) {
-    List<Str> parts;
-    parts.reserve(simse_count_char_in_str(&self, separator));
-    Int pos = 0;
-    while (true) {
-        Int found = self.find(separator, pos);
-        if (found == Str::npos) {
-            parts.push_back(self.substr(pos));
-            break;
-        }
-        parts.push_back(self.substr(pos, found - pos));
-        pos = found + 1;
-    }
-    return parts;
-}
-
-inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
-    if (from.empty()) return self;
-    Str result;
-    Int pos = 0;
-    while (true) {
-        Int found = self.find(from, pos);
-        if (found == Str::npos) {
-            result.append(self, pos, Str::npos);
-            break;
-        }
-        result.append(self, pos, found - pos);
-        result += to;
-        pos = found + from.size();
-    }
-    return result;
 }
 
 inline Opt<Float64> simse_str_toFloat(const Str& self) {

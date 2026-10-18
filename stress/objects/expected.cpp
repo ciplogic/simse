@@ -441,11 +441,6 @@ Int simse_lenOf(const SmallVector<T, N>& self);
 
 Char simse_str_charAt(const Str& self, Int index);
 
-List<Str> simse_str_split(const Str& self, const Str& separator);
-List<Str> simse_str_split(const Str& self, Char separator);
-
-Str simse_str_replace(const Str& self, const Str& from, const Str& to);
-
 Opt<Float64> simse_str_toFloat(const Str& self);
 
 void simse_str_initByValue(Str& self, const Str& value);
@@ -611,6 +606,7 @@ Int find(Str* self, Str sub);
 Str substr(Str* self, Int start, Int len);
 Bool startsWith(Str* self, Str* prefix);
 Bool endsWith(Str* self, Str* suffix);
+Str replace(Str* self, Str from, Str to);
 Bool isEmpty(Str* self);
 Opt<Int> toInt(Str* self);
 Bool isDigit(Char* self);
@@ -1300,6 +1296,46 @@ Bool endsWith(Str* self, Str* suffix) {
     L4:;
     return true;
 }
+Str replace(Str* self, Str from, Str to) {
+    Str* _sm_base1;
+    Int _sm_expr1, _sm_expr4, _sm_expr5, pos, found, _sm_expr7, _sm_expr9;
+    Bool _sm_expr2;
+    Str out, _sm_expr8, _sm_expr10;
+    _sm_expr1 = simse_lenOf(from);
+    _sm_expr2 = _sm_expr1 == 0;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    return (*self);
+    L2:;
+    out = __sm_stringTable[38];
+    _sm_expr1 = simse_lenOf((*self));
+    _sm_expr4 = simse_lenOf(to);
+    _sm_expr5 = _sm_expr1 + _sm_expr4;
+    simse_str_reserve(out, _sm_expr5);
+    pos = 0;
+    L3:;
+    _sm_base1 = &from;
+    found = findFrom(self, _sm_base1, pos);
+    _sm_expr2 = found < 0;
+    if (_sm_expr2) goto L5;
+    goto L6;
+    L5:;
+    _sm_expr7 = -1;
+    _sm_expr8 = substr(self, pos, _sm_expr7);
+    simse_str_appendStr(out, _sm_expr8);
+    goto L4;
+    L6:;
+    _sm_expr9 = found - pos;
+    _sm_expr10 = substr(self, pos, _sm_expr9);
+    simse_str_appendStr(out, _sm_expr10);
+    simse_str_appendStr(out, to);
+    _sm_expr1 = simse_lenOf(from);
+    pos = found + _sm_expr1;
+    goto L3;
+    L4:;
+    return out;
+}
 Bool isEmpty(Str* self) {
     Int _sm_expr1;
     Bool _sm_expr2;
@@ -1871,7 +1907,7 @@ Int ns1_partLanguageTour() {
     _sm_base13 = &_sm_base14;
     _sm_expr18 = endsWith(simse_addressOf(text), _sm_base13);
     simse_println((_sm_expr18), stdout);
-    _sm_expr19 = simse_str_replace(text, __sm_stringTable[13], __sm_stringTable[12]);
+    _sm_expr19 = replace(simse_addressOf(text), __sm_stringTable[13], __sm_stringTable[12]);
     simse_println((_sm_expr19), stdout);
     _sm_base15 = __sm_stringTable[28];
     number = toInt(simse_addressOf(_sm_base15));
@@ -2458,70 +2494,6 @@ inline Int simse_lenOf(const SmallVector<T, N>& self) {
 
 inline Char simse_str_charAt(const Str& self, Int index) {
     return (Char) self[index];
-}
-
-inline List<Str> simse_str_split(const Str& self, const Str& separator) {
-    List<Str> parts;
-    if (separator.empty()) {
-        parts.push_back(self);
-        return parts;
-    }
-    Int pos = 0;
-    while (true) {
-        Int found = self.find(separator, pos);
-        if (found == Str::npos) {
-            parts.push_back(self.substr(pos));
-            break;
-        }
-        parts.push_back(self.substr(pos, found - pos));
-        pos = found + separator.size();
-    }
-    return parts;
-}
-
-inline Int simse_count_char_in_str(const Str* self, char ch) {
-    Int count = 0;
-    const char* data = self->data();
-    Int len = self->size();
-    for (Int i = 0; i < len; i++) {
-        if (data[i] == ch) {
-            count++;
-        }
-    }
-    return count;
-}
-
-inline List<Str> simse_str_split(const Str& self, Char separator) {
-    List<Str> parts;
-    parts.reserve(simse_count_char_in_str(&self, separator));
-    Int pos = 0;
-    while (true) {
-        Int found = self.find(separator, pos);
-        if (found == Str::npos) {
-            parts.push_back(self.substr(pos));
-            break;
-        }
-        parts.push_back(self.substr(pos, found - pos));
-        pos = found + 1;
-    }
-    return parts;
-}
-
-inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
-    if (from.empty()) return self;
-    Str result;
-    Int pos = 0;
-    while (true) {
-        Int found = self.find(from, pos);
-        if (found == Str::npos) {
-            result.append(self, pos, Str::npos);
-            break;
-        }
-        result.append(self, pos, found - pos);
-        result += to;
-        pos = found + from.size();
-    }
-    return result;
 }
 
 inline Opt<Float64> simse_str_toFloat(const Str& self) {

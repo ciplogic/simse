@@ -55,14 +55,43 @@ fun bpMarked(decl: *AstXmlNode): Bool {
     return xmlAttr(decl, AstNodeAttributeKind.IsBorrow) == "true"
 }
 
+// The third author's mark, beside `data` (pure) and `borrow` (read-only): a trailing
+// `"mutates"` argument on the declaration's `@SmGen` - `@SmGen("res", "listops",
+// "simse_str_append", "mutates")` - is the author's word that this callee's writes reach
+// **only its receiver**. Such a callee cannot break a caller's borrow contract when the
+// receiver at the call site is a local the body itself built (`parts.append(x)` writes
+// `parts`, which no caller lent), so it does not block a body's proof the way an ordinary
+// opaque call does. `data`/`borrow` cannot say this: both promise the receiver is not
+// written at all, which is false for every mutator the RTL owns.
+fun bpMutatesMark(decl: *AstXmlNode): Bool {
+    val generator: Str = xmlAttr(decl, AstNodeAttributeKind.Generator)
+    if (generator != "res" && generator != "cpp") {
+        return false
+    }
+    val args: Str = xmlAttr(decl, AstNodeAttributeKind.GeneratorArgs)
+    if (args.size() == 0) {
+        return false
+    }
+    val parts: List<Str> = args.split(",")
+    var i: Int = 0
+    while (i < parts.size()) {
+        if (parts[i].trim() == "mutates") {
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}
+
 // The same declaration walk the fixpoint needs, plus the sets the rule reads: the names a
 // value may be borrowed *of* (a `data class`), the callees a body may trust to begin with
-// (the `data`/`borrow` marks - the borrow-clean fixpoint grows this set), and the file-level
+// (the `data`/`borrow` marks - the borrow-clean fixpoint grows this set), the callees whose
+// writes reach only their receiver (the `mutates` generator flag), and the file-level
 // `var`s (a write to one is not borrow-clean). `size`/`count` are `data` declarations like
 // any other (src/rtl/rtl.kt), so no name is seeded by hand.
 fun bpCollectDecls(
     module: *AstXmlNode, types: *Dictionary<Str, Bool>, reads: *Dictionary<Str, Bool>,
-    statics: *Dictionary<Str, Bool>
+    statics: *Dictionary<Str, Bool>, mutates: *Dictionary<Str, Bool>
 ): Unit {
     for (*decl in xmlDecls(module)) {
         val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
@@ -79,6 +108,9 @@ fun bpCollectDecls(
         }
         if (decl.name == AstNodeKind.Function && bpMarked(decl)) {
             reads.insert(name, true)
+        }
+        if (decl.name == AstNodeKind.Function && bpMutatesMark(decl)) {
+            mutates.insert(name, true)
         }
     }
 }
@@ -129,16 +161,31 @@ data class BpPure(
     var name: Str,
     var hasWrite: Bool,
     var opaqueCall: Bool,
-    var calls: List<Str>
+    var calls: List<Str>,
+
+    // The locals the body declared with an initializer that borrows nothing: a `mutates`-
+    // marked callee on one of these writes storage no caller lent, so it imposes no
+    // read-only obligation and never joins `calls` (src/parser/BorrowParams.kt, the
+    // `mutates` mark).
+    var fresh: Dictionary<Str, Bool>
 )
 
 // The write/callee facts of one body, written in place through the pointer (a *field* of a pointer
 // passed as an argument would be copied - `agents.md`, the `*this.sections` trap).
 fun bpPureWalk(
     node: *AstXmlNode, out: *BpPure, statics: *Dictionary<Str, Bool>,
-    types: *Dictionary<Str, Bool>
+    types: *Dictionary<Str, Bool>, mutates: *Dictionary<Str, Bool>
 ): Unit {
     val kind: AstNodeCategory = xmlKind(node)
+    if (kind == AstNodeCategory.StmtVarDecl) {
+        // A local the body declares is fresh unless its initializer borrows a *place*
+        // (`var p = &param`): then a mutating call on it may reach the parameter the
+        // address came from, so it never counts as fresh.
+        val declared: Str = xmlAttr(node, AstNodeAttributeKind.Name)
+        if (!statics.has(declared) && !bpContainsRef(xmlChildPtr(node, AstNodeKind.Init))) {
+            out.fresh.insert(declared, true)
+        }
+    }
     if (kind == AstNodeCategory.StmtAssign) {
         val target: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Target)
         if (xmlKind(target) != AstNodeCategory.ExprName) {
@@ -146,6 +193,9 @@ fun bpPureWalk(
         } else if (statics.has(xmlAttr(target, AstNodeAttributeKind.Name))) {
             // A file-level `var` (see the header): a caller may hold a pointer into it.
             out.hasWrite = true
+        } else if (bpContainsRef(xmlChildPtr(node, AstNodeKind.Value))) {
+            // The rebinding taints the local the same way a borrowing initializer would.
+            out.fresh.remove(xmlAttr(target, AstNodeAttributeKind.Name))
         }
     }
     if (kind == AstNodeCategory.ExprCall) {
@@ -155,6 +205,10 @@ fun bpPureWalk(
             // A construction copies what it is given; see `bpIsConstruct`.
         } else if (bpMachineStep(callee)) {
             // The `for` machine's own step; see `bpMachineStep`.
+        } else if (ck == AstNodeCategory.ExprMember && mutates.has(xmlAttr(callee, AstNodeAttributeKind.Name))) {
+            // A `mutates`-marked callee writes only its receiver; on a fresh local that
+            // storage is the body's own, so the call imposes no read-only obligation on
+            // anybody (`bpMutatesMark`).
         } else if (ck == AstNodeCategory.ExprName || ck == AstNodeCategory.ExprMember) {
             out.calls.append(xmlAttr(callee, AstNodeAttributeKind.Name))
         } else {
@@ -162,7 +216,7 @@ fun bpPureWalk(
         }
     }
     for (*child in node.Children) {
-        bpPureWalk(child, out, statics, types)
+        bpPureWalk(child, out, statics, types, mutates)
     }
 }
 
@@ -173,7 +227,7 @@ fun bpPureWalk(
 // them.
 fun bpPurConsider(
     fn: *AstXmlNode, statics: *Dictionary<Str, Bool>,
-    types: *Dictionary<Str, Bool>, out: *List<BpPure>
+    types: *Dictionary<Str, Bool>, mutates: *Dictionary<Str, Bool>, out: *List<BpPure>
 ): Unit {
     if (xmlAttr(fn, AstNodeAttributeKind.HasBody) != "true"
         || xmlAttr(fn, AstNodeAttributeKind.IsNative) == "true"
@@ -186,23 +240,23 @@ fun bpPurConsider(
     if (xmlIsEmpty(body)) {
         return
     }
-    var fact: BpPure = BpPure(name, false, false, List<Str>())
+    var fact: BpPure = BpPure(name, false, false, List<Str>(), Dictionary<Str, Bool>())
     for (*stmt in body.Children) {
-        bpPureWalk(stmt, *fact, statics, types)
+        bpPureWalk(stmt, *fact, statics, types, mutates)
     }
     out.append(fact)
 }
 
 fun bpPurCollect(
     module: *AstXmlNode, statics: *Dictionary<Str, Bool>,
-    types: *Dictionary<Str, Bool>, out: *List<BpPure>
+    types: *Dictionary<Str, Bool>, mutates: *Dictionary<Str, Bool>, out: *List<BpPure>
 ): Unit {
     for (*decl in xmlDecls(module)) {
         if (decl.name == AstNodeKind.Function) {
-            bpPurConsider(decl, statics, types, out)
+            bpPurConsider(decl, statics, types, mutates, out)
         } else if (decl.name == AstNodeKind.DataClass) {
             for (*method in xmlChildren(decl, AstNodeKind.Function)) {
-                bpPurConsider(method, statics, types, out)
+                bpPurConsider(method, statics, types, mutates, out)
             }
         }
     }
@@ -333,6 +387,24 @@ fun bpGatherValueUses(
 
 // ---- the body's facts -------------------------------------------------------
 
+// Whether the expression borrows or reads through a *place* anywhere under it: the shape that
+// makes an assignment's target a suspect local (a mutating call on it may reach the parameter
+// the address came from). An over-approximation is the sound direction.
+fun bpContainsRef(node: *AstXmlNode): Bool {
+    val kind: AstNodeCategory = xmlKind(node)
+    if (kind == AstNodeCategory.ExprRef || kind == AstNodeCategory.ExprDeref) {
+        return true
+    }
+    var i: Int = 0
+    while (i < node.Children.count()) {
+        if (bpContainsRef(node.Children[i])) {
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}
+
 // Every fact the decision reads, written in place through the pointer. The marking helpers are
 // methods rather than free functions taking the set: passing a *field* of a pointer as an argument
 // materializes a copy (`agents.md`, the `*this.sections` trap), so the set must be reached
@@ -345,6 +417,7 @@ data class BpFacts(
     var statics: *Dictionary<Str, Bool>,
     var reads: *Dictionary<Str, Bool>,
     var types: *Dictionary<Str, Bool>,
+    var mutates: *Dictionary<Str, Bool>,
     var taken: Dictionary<Str, Bool>,
     var written: Dictionary<Str, Bool>,
     var inLambda: Dictionary<Str, Bool>,
@@ -376,6 +449,21 @@ data class BpFacts(
     // One statement (or expression) walked, collecting every fact.
     fun walk(node: *AstXmlNode): Unit {
         val kind: AstNodeCategory = xmlKind(node)
+        if (kind == AstNodeCategory.StmtVarDecl) {
+            // A declared local is one the body built - even with no initializer, which
+            // cannot alias anything at all. The mutator relaxation below reads this set,
+            // and so does the parameter rule (`written` parameters are never borrowed,
+            // since the body rebinds them).
+            val declared: Str = xmlAttr(node, AstNodeAttributeKind.Name)
+            if (!this.statics.has(declared)) {
+                this.written.insert(declared, true)
+                if (bpContainsRef(xmlChildPtr(node, AstNodeKind.Init))) {
+                    // Initialized from a borrowed *place* (`var p = &param`): a mutating
+                    // call on it may reach the parameter the address came from.
+                    this.taken.insert(declared, true)
+                }
+            }
+        }
         if (kind == AstNodeCategory.StmtAssign) {
             val target: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Target)
             if (xmlKind(target) != AstNodeCategory.ExprName) {
@@ -388,6 +476,12 @@ data class BpFacts(
                     this.staticWrite = true
                 } else {
                     this.written.insert(targetName, true)
+                    if (bpContainsRef(xmlChildPtr(node, AstNodeKind.Value))) {
+                        // The local is initialized or reassigned from a borrowed *place*
+                        // (`var p = &param`), so a mutating call on it may reach the
+                        // parameter the address came from: the local never counts as fresh.
+                        this.taken.insert(targetName, true)
+                    }
                 }
             }
         }
@@ -404,6 +498,21 @@ data class BpFacts(
             if (!safe && bpMachineStep(callee)) {
                 // The `for` machine's own step; see `bpMachineStep`.
                 safe = true
+            }
+            if (!safe && ck == AstNodeCategory.ExprMember) {
+                // A `mutates`-marked callee writes only its receiver, so on a local this
+                // body built - and that no borrowed address flows into - the call cannot
+                // reach a parameter (`bpMutatesMark`).
+                val calleeName: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+                if (this.mutates.has(calleeName)) {
+                    val receiver: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
+                    if (xmlKind(receiver) == AstNodeCategory.ExprName) {
+                        val receiverName: Str = xmlAttr(receiver, AstNodeAttributeKind.Name)
+                        if (this.written.has(receiverName) && !this.taken.has(receiverName)) {
+                            safe = true
+                        }
+                    }
+                }
             }
             if (!safe) {
                 this.impureCall = true
@@ -495,6 +604,7 @@ var bpDeepTypes: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
 var bpTrustedNames: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
 var bpStaticNames: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
 var bpKnownTypes: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+var bpMutatesNames: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
 
 fun bpDeepClasses(modules: *List<AstXmlNode>): Dictionary<Str, Bool> {
     // The declarations by name, so a class's chain of bases can be walked: inheritance is
@@ -583,7 +693,7 @@ fun bpDeepElement(typeNode: *AstXmlNode): Bool {
 // parameter borrow uses, so a `for` promotion and a parameter borrow agree.
 fun bpLoopReadOnly(body: *List<AstXmlNode>, name: *Str): Bool {
     var facts: BpFacts = BpFacts(
-        false, false, false, *bpStaticNames, *bpTrustedNames, *bpKnownTypes,
+        false, false, false, *bpStaticNames, *bpTrustedNames, *bpKnownTypes, *bpMutatesNames,
         Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), List<Str>()
     )
     for (*stmt in body) {
@@ -685,8 +795,8 @@ fun bpBorrowDecl(
         return decl
     }
     var facts: BpFacts = BpFacts(
-        false, false, false, statics, reads, types, Dictionary<Str, Bool>(), Dictionary<Str, Bool>(),
-        Dictionary<Str, Bool>(), List<Str>()
+        false, false, false, statics, reads, types, *bpMutatesNames, Dictionary<Str, Bool>(),
+        Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), List<Str>()
     )
     for (*stmt in body.Children) {
         facts.walk(stmt)
@@ -817,11 +927,12 @@ fun bpBorrowParams(
     var types: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var reads: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var statics: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    var mutates: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     for (*pre in preludeModules) {
-        bpCollectDecls(pre, *types, *reads, *statics)
+        bpCollectDecls(pre, *types, *reads, *statics, *mutates)
     }
     for (*mod in modules) {
-        bpCollectDecls(mod, *types, *reads, *statics)
+        bpCollectDecls(mod, *types, *reads, *statics, *mutates)
     }
 
     var candidates: List<AstXmlNode> = List<AstXmlNode>()
@@ -844,10 +955,10 @@ fun bpBorrowParams(
     // bodies a name has must prove, and any declaration without a body must be marked.
     var factList: List<BpPure> = List<BpPure>()
     for (*pre in preludeModules) {
-        bpPurCollect(pre, *statics, *types, *factList)
+        bpPurCollect(pre, *statics, *types, *mutates, *factList)
     }
     for (*mod in modules) {
-        bpPurCollect(mod, *statics, *types, *factList)
+        bpPurCollect(mod, *statics, *types, *mutates, *factList)
     }
     var blocked: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     for (*pre in preludeModules) {
@@ -871,6 +982,7 @@ fun bpBorrowParams(
     bpTrustedNames = reads
     bpStaticNames = statics
     bpKnownTypes = types
+    bpMutatesNames = mutates
 
     // Both sides are rewritten: a Simse-bodied prelude declaration borrows exactly like a module
     // one, and only a name C++ may call keeps its authored signature (inside `bpBorrowDecl`).

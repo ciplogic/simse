@@ -385,11 +385,6 @@ Int simse_lenOf(const SmallVector<T, N>& self);
 
 Char simse_str_charAt(const Str& self, Int index);
 
-List<Str> simse_str_split(const Str& self, const Str& separator);
-List<Str> simse_str_split(const Str& self, Char separator);
-
-Str simse_str_replace(const Str& self, const Str& from, const Str& to);
-
 Opt<Float64> simse_str_toFloat(const Str& self);
 
 void simse_str_initByValue(Str& self, const Str& value);
@@ -535,7 +530,7 @@ Str intToStr(Int64 value);
 Str toString(Int* self);
 Str toString(Int64* self);
 Str toString(Char* self);
-Str jsonQuoted(Str value);
+Str jsonQuoted(Str* value);
 Str toJson(ns1_Point* self);
 Str toJson(Int* self);
 Str toJson(ns1_Label* self);
@@ -875,7 +870,7 @@ int main() {
     return 0;
 }
 // <generated>/kt.kt
-Str jsonQuoted(Str value) {
+Str jsonQuoted(Str* value) {
     Str out;
     Int i, _sm_expr1;
     Bool _sm_expr2;
@@ -884,10 +879,10 @@ Str jsonQuoted(Str value) {
     simse_str_append(out, '"');
     i = 0;
     L1:;
-    _sm_expr1 = simse_lenOf(value);
+    _sm_expr1 = simse_lenOf((*value));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    ch = simse_str_charAt(value, i);
+    ch = simse_str_charAt((*value), i);
     _sm_expr2 = ch == '"';
     if (_sm_expr2) goto L3;
     goto L4;
@@ -991,8 +986,10 @@ Str toJson(ns1_Label* self) {
 }
 // <generated>/kt.kt
 Str toJson(Str* self) {
+    Str* _sm_base1;
     Str _sm_expr1;
-    _sm_expr1 = jsonQuoted((*self));
+    _sm_base1 = self;
+    _sm_expr1 = jsonQuoted(_sm_base1);
     return _sm_expr1;
 }
 // <generated>/kt.kt
@@ -1119,70 +1116,6 @@ inline Int simse_lenOf(const SmallVector<T, N>& self) {
 
 inline Char simse_str_charAt(const Str& self, Int index) {
     return (Char) self[index];
-}
-
-inline List<Str> simse_str_split(const Str& self, const Str& separator) {
-    List<Str> parts;
-    if (separator.empty()) {
-        parts.push_back(self);
-        return parts;
-    }
-    Int pos = 0;
-    while (true) {
-        Int found = self.find(separator, pos);
-        if (found == Str::npos) {
-            parts.push_back(self.substr(pos));
-            break;
-        }
-        parts.push_back(self.substr(pos, found - pos));
-        pos = found + separator.size();
-    }
-    return parts;
-}
-
-inline Int simse_count_char_in_str(const Str* self, char ch) {
-    Int count = 0;
-    const char* data = self->data();
-    Int len = self->size();
-    for (Int i = 0; i < len; i++) {
-        if (data[i] == ch) {
-            count++;
-        }
-    }
-    return count;
-}
-
-inline List<Str> simse_str_split(const Str& self, Char separator) {
-    List<Str> parts;
-    parts.reserve(simse_count_char_in_str(&self, separator));
-    Int pos = 0;
-    while (true) {
-        Int found = self.find(separator, pos);
-        if (found == Str::npos) {
-            parts.push_back(self.substr(pos));
-            break;
-        }
-        parts.push_back(self.substr(pos, found - pos));
-        pos = found + 1;
-    }
-    return parts;
-}
-
-inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
-    if (from.empty()) return self;
-    Str result;
-    Int pos = 0;
-    while (true) {
-        Int found = self.find(from, pos);
-        if (found == Str::npos) {
-            result.append(self, pos, Str::npos);
-            break;
-        }
-        result.append(self, pos, found - pos);
-        result += to;
-        pos = found + from.size();
-    }
-    return result;
 }
 
 inline Opt<Float64> simse_str_toFloat(const Str& self) {

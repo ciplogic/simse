@@ -591,25 +591,17 @@ forward:
 // conversions never throw.
 //
 // What is a byte loop is Simse (src/rtl/rtl.kt: `trim`, `substr`, `startsWith`/`endsWith`,
-// case folding, the `Char` predicates, `find`/`lastIndexOf` over the memory intrinsics, and
-// `toInt` with `from_chars`' semantics). What stays is what the borrow prover cannot prove a
-// Simse body clean for - `split`/`replace` call `append`, a mutating name, and a body that
-// calls one is not borrow-clean, so its receiver would copy per call (a native's `borrow`
-// mark is what keeps them by-reference) - what the emitter's reach rule makes hazardous as a
-// body (the `toString` family over scalar receivers, src/rtl/rtl.kt), and what reaches
-// `SmString` internals (`charAt`) or the standard library (`std::strtod`,
-// `std::to_string`).
+// case folding, the `Char` predicates, `find`/`lastIndexOf` and `findFrom` over the memory
+// intrinsics, `split`/`replace` - provable now that the `mutates` generator flag lets a body
+// call a receiver-writing native on a result it built itself - and `toInt` with
+// `from_chars`' semantics). What stays: what the emitter's reach rule makes hazardous as a
+// body (the `toString` family over scalar receivers, src/rtl/rtl.kt), what reaches
+// `SmString` internals (`charAt`), the standard library (`std::strtod`, `std::to_string`
+// for the spellings a body cannot declare), and the emitter's own concat primitives
+// (`strcat`, the slot-writing ABI the generated code is compiled against).
 
 // `Str.charAt(index)`: the byte at `index` (unchecked; no bounds test).
 Char simse_str_charAt(const Str& self, Int index);
-
-// `Str.split(separator)` splits on every occurrence. An empty separator returns the whole
-// string as a single element. Two overloads: a separator string and a separator byte.
-List<Str> simse_str_split(const Str& self, const Str& separator);
-List<Str> simse_str_split(const Str& self, Char separator);
-
-// `Str.replace(from, to)` replaces every occurrence of `from` with `to`.
-Str simse_str_replace(const Str& self, const Str& from, const Str& to);
 
 // `Str.toFloat()` parses the whole string; failure (or a non-empty trailing remainder)
 // yields `Opt.none()`. No exceptions; `std::strtod`, because libstdc++ did not ship
@@ -632,71 +624,6 @@ bodies:
 ```cpp
 inline Char simse_str_charAt(const Str& self, Int index) {
     return (Char) self[index];
-}
-
-inline List<Str> simse_str_split(const Str& self, const Str& separator) {
-    List<Str> parts;
-    if (separator.empty()) {
-        parts.push_back(self);
-        return parts;
-    }
-    Int pos = 0;
-    while (true) {
-        Int found = self.find(separator, pos);
-        if (found == Str::npos) {
-            parts.push_back(self.substr(pos));
-            break;
-        }
-        parts.push_back(self.substr(pos, found - pos));
-        pos = found + separator.size();
-    }
-    return parts;
-}
-
-// How many bytes of `self` are `ch`: what the byte-separator split reserves up front.
-inline Int simse_count_char_in_str(const Str* self, char ch) {
-    Int count = 0;
-    const char* data = self->data();
-    Int len = self->size();
-    for (Int i = 0; i < len; i++) {
-        if (data[i] == ch) {
-            count++;
-        }
-    }
-    return count;
-}
-
-inline List<Str> simse_str_split(const Str& self, Char separator) {
-    List<Str> parts;
-    parts.reserve(simse_count_char_in_str(&self, separator));
-    Int pos = 0;
-    while (true) {
-        Int found = self.find(separator, pos);
-        if (found == Str::npos) {
-            parts.push_back(self.substr(pos));
-            break;
-        }
-        parts.push_back(self.substr(pos, found - pos));
-        pos = found + 1;
-    }
-    return parts;
-}
-
-inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
-    if (from.empty()) return self;
-    Str result;
-    Int pos = 0;
-    while (true) {
-        Int found = self.find(from, pos);
-        if (found == Str::npos) {
-            result.append(self, pos, Str::npos);
-            break;
-        }
-        result.append(self, pos, found - pos);
-        result += to;
-        pos = found + from.size();
-    }
-    return result;
 }
 
 inline Opt<Float64> simse_str_toFloat(const Str& self) {

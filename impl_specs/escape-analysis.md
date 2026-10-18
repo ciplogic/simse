@@ -239,6 +239,15 @@ longer rests on the author remembering a mark:
   store, no file-level `var`) and every call it makes is to a name already in the set;
 - a declaration *without* a body (a `@SmGen` native) is trusted only by a mark - `data` (pure) or
   `borrow` (read-only, the weaker promise) - because its C++ is elsewhere and cannot be checked;
+- a third mark, a trailing `"mutates"` argument on the `@SmGen`
+  (`@SmGen("res", "listops", "simse_str_append", "mutates")`), is the author's word that the
+  callee's writes reach **only its receiver**. It never joins the trusted set (it writes!), but a
+  body that calls one *on a local the body itself built* - declared with an initializer that
+  borrows no `&`/`*`, and never rebound from one - is not dirtied by the call: the storage the
+  callee writes is the body's own, which no caller lent. `parts.append(x)` in a body that
+  declared `parts` proves; `writer.out.append(x)` does not (the receiver is a field of a
+  borrowed pointer, and the write reaches the caller). This is what let `split`/`replace` leave
+  the RTL's C++: the append/reserve calls land on the list the body constructed;
 - a name joins only once **every** declaration with that name is trusted or proved, and the fixpoint
   starts from the marks and iterates to the least fixed point. Growing from below is the sound
   direction: a name left out is simply not trusted, and a recursive cycle is never assumed clean.

@@ -390,6 +390,17 @@ fun Emitter.call(e: *AstXmlNode): Str {
                     ) {
                         argText = `Str(@argText)`
                     }
+                    // A string literal where the parameter was *borrowed* (`Str*`, the
+                    // auto-borrow rewrite): the pool entry is a `Span<Char>`, and the owned
+                    // `Str` the pointer needs is materialized here, its address taken - the
+                    // temporary lives to the end of the call, which is the whole of the
+                    // borrow's promise.
+                    if (xmlKind(arg) == AstNodeCategory.ExprStrLit
+                        && !xmlIsEmpty(expectedArg)
+                        && xmlKind(expectedArg) == AstNodeCategory.TypePointer
+                    ) {
+                        argText = `simse_addressOf(Str(@argText))`
+                    }
                     args.append(argText)
                 }
             }
@@ -547,7 +558,9 @@ fun Emitter.call(e: *AstXmlNode): Str {
                 val fnIndex: Int = this.findExtensionFn(calleeText, receiverExpr, args.size())
                 if (fnIndex >= 0) {
                     val fn: *CgFn = *this.functions[fnIndex]
-                    val fixedArgs: List<Str> = this.cgMethodStrArgs(fn, argNodes, args)
+                    val fixedArgs: List<Str> = this.cgLiteralBorrowFix(
+                        fn, argNodes, this.cgMethodStrArgs(fn, argNodes, args)
+                    )
                     val all: Str = cgReceiverArgs(this.receiverArg(fn.receiver, receiverExpr), fixedArgs)
                     val qualifyText5: Str = this.qualify(fn.packageName, fn.name)
                     // A machine-receiver callee's explicit template arguments, attached by
@@ -629,6 +642,34 @@ fun Emitter.call(e: *AstXmlNode): Str {
     }
     this.fail(e, "unsupported: call target")
     return "/*unsupported*/"
+}
+
+// The literal fix for a *borrowed* parameter (`Str*`, the auto-borrow rewrite's spelling):
+// a string literal spells as the pool's `Span<Char>` entry, which binds to a `Str` value or
+// a `const Str&` through the conversion constructor but not to the pointer - so the owned
+// `Str` is materialized at the call and its address taken. The temporary lives to the end of
+// the call, which is the whole of the borrow's promise.
+fun Emitter.cgLiteralBorrowFix(
+    fn: *CgFn, argNodes: *List<AstXmlNode>, args: *List<Str>
+): List<Str> {
+    val params: List<AstXmlNode> = xmlChildren(fn.decl, AstNodeKind.Param)
+    val offset: Int = semReceiverParams(fn.decl)
+    var fixed: List<Str> = List<Str>()
+    var i: Int = 0
+    while (i < args.size()) {
+        var text: Str = args[i]
+        if (i < argNodes.size() && xmlKind(argNodes[i]) == AstNodeCategory.ExprStrLit
+            && i + offset < params.size()
+        ) {
+            val paramType: *AstXmlNode = xmlChildPtr(params[i + offset], AstNodeKind.Type)
+            if (!xmlIsEmpty(paramType) && xmlKind(paramType) == AstNodeCategory.TypePointer) {
+                text = `simse_addressOf(Str(@text))`
+            }
+        }
+        fixed.append(text)
+        i = i + 1
+    }
+    return fixed
 }
 
 // A method call's arguments with the literal fix a plain call already gets: where a generic
