@@ -184,6 +184,18 @@ fun Parser.parsePostfix(): ExprNode {
             if (!this.expectText(")")) {
                 return this.emptyExpr()
             }
+            // A trailing `{ ... }` is the call's last argument (Kotlin's trailing lambda):
+            // `f(x) { body }` is `f(x, { body })`, and the brace form is where a multi-line
+            // lambda body is spelled - a parenthesized lambda's body must start on the
+            // arrow's line. Only on the call's own line, so a `{` opening a block after a
+            // *statement* (`f(x)` then a block) is not swallowed.
+            if (this.checkText("{")) {
+                val trailing: ExprNode = this.parseBraceLambda()
+                if (this.failed) {
+                    return this.emptyExpr()
+                }
+                args.append(trailing.node)
+            }
             var kids: List<AstXmlNode> = List<AstXmlNode>()
             kids.append(this.roleOf(expr.node, AstNodeKind.Callee))
             var a: Int = 0
@@ -191,6 +203,22 @@ fun Parser.parsePostfix(): ExprNode {
                 kids.append(this.roleOf(*args[a], AstNodeKind.Arg))
                 a = a + 1
             }
+            var attrs: List<AstNodeAttribute> = this.posAttrs(expr.line, expr.column)
+            var node: AstXmlNode =
+                AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, attrs, kids.toArray())
+            expr = ExprNode(node, expr.line, expr.column)
+        } else if (this.checkText("{")) {
+            // The paren-less trailing lambda (`twice { 41 }`): the brace opens the call
+            // itself, the callee standing alone. A `{` never follows a complete expression
+            // otherwise - blocks belong to the statement forms that consume them - so this
+            // cannot take a block away from anything.
+            val trailing: ExprNode = this.parseBraceLambda()
+            if (this.failed) {
+                return this.emptyExpr()
+            }
+            var kids: List<AstXmlNode> = List<AstXmlNode>()
+            kids.append(this.roleOf(expr.node, AstNodeKind.Callee))
+            kids.append(this.roleOf(trailing.node, AstNodeKind.Arg))
             var attrs: List<AstNodeAttribute> = this.posAttrs(expr.line, expr.column)
             var node: AstXmlNode =
                 AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, attrs, kids.toArray())
@@ -481,4 +509,116 @@ fun Parser.tryParseLambda(): ExprNode {
     xmlAddChildren(node, paramTypes)
     xmlAddChild(node, this.container(AstNodeKind.Body, body))
     return ExprNode(node, pos.line, pos.column)
+}
+
+// `{ x -> ... }`, `{ x: Int -> ... }`, `{ ... }`: the brace lambda a call's *trailing*
+// argument takes (the only place a `{` follows a complete expression). The parameter list
+// is tentative - names, then `->` - because `{ f(a) }` and `{ x }` are bodies, so a list
+// that does not end in `->` is rewound and the block has no parameters. With no declared
+// parameter, a body that names `it` gets one: `it` is the single implicit parameter the
+// way it is in Kotlin, and a nested lambda's `it` is its own (the scan stops at a lambda).
+//
+// The node is the same shape `tryParseLambda` builds, so every downstream stage - the
+// checker's scope, the closure class, the call's inference - reads one lambda form.
+fun Parser.parseBraceLambda(): ExprNode {
+    val pos: SourcePos = this.peek(0).pos
+    this.advance()
+    this.skipSeparators()
+
+    var names: List<Str> = List<Str>()
+    var paramTypes: List<AstXmlNode> = List<AstXmlNode>()
+    if (!this.checkText("}")) {
+        val savedCursor: Span<Token> = this.cursor
+        val savedFailed: Bool = this.failed
+        val savedError: Str = this.error
+        val savedClosers: Int = this.pendingClosers
+        var ok: Bool = true
+        while (true) {
+            if (!this.checkKind(TokenKind.Identifier)) {
+                ok = false
+                break
+            }
+            names.append(this.advance().text)
+            if (this.matchText(":")) {
+                val paramType: AstXmlNode = this.parseType(AstNodeKind.ParamType)
+                if (this.failed) {
+                    ok = false
+                    break
+                }
+                paramTypes.append(paramType)
+            }
+            if (!this.matchText(",")) {
+                break
+            }
+            this.skipSeparators()
+        }
+        if (ok && !this.matchText("->")) {
+            ok = false
+        }
+        if (!ok) {
+            this.cursor = savedCursor
+            this.failed = savedFailed
+            this.error = savedError
+            this.pendingClosers = savedClosers
+            names = List<Str>()
+            paramTypes = List<AstXmlNode>()
+        }
+    }
+    var body: List<AstXmlNode> = List<AstXmlNode>()
+    val savedReturnType: AstXmlNode = this.returnTypeCtx
+    this.returnTypeCtx = this.emptyNode()
+    this.skipSeparators()
+    while (!this.checkText("}") && !this.atEnd() && !this.failed) {
+        if (!this.parseStmtInto(body)) {
+            this.returnTypeCtx = savedReturnType
+            return this.emptyExpr()
+        }
+        this.skipSeparators()
+    }
+    this.returnTypeCtx = savedReturnType
+    if (!this.expectText("}")) {
+        return this.emptyExpr()
+    }
+    if (names.size() == 0 && braceBodyUsesIt(body)) {
+        names.append("it")
+    }
+
+    var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Params, joinStrs(names, ",")))
+    var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprLambda, attrs, Array<AstXmlNode>())
+    xmlAddChildren(node, paramTypes)
+    xmlAddChild(node, this.container(AstNodeKind.Body, body))
+    return ExprNode(node, pos.line, pos.column)
+}
+
+// Whether a brace lambda's body names `it`, so the implicit single parameter exists. The
+// walk stops at a nested lambda (its `it` is its own) and never crosses into one.
+fun braceBodyUsesIt(stmts: *List<AstXmlNode>): Bool {
+    var i: Int = 0
+    while (i < stmts.size()) {
+        if (nodeNamesIt(stmts[i])) {
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}
+
+fun nodeNamesIt(node: AstXmlNode): Bool {
+    if (xmlKind(node) == AstNodeCategory.ExprLambda) {
+        return false
+    }
+    if (xmlKind(node) == AstNodeCategory.ExprName
+        && xmlAttr(node, AstNodeAttributeKind.Name) == "it"
+    ) {
+        return true
+    }
+    var i: Int = 0
+    while (i < node.Children.count()) {
+        if (nodeNamesIt(node.Children[i])) {
+            return true
+        }
+        i = i + 1
+    }
+    return false
 }

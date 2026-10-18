@@ -89,8 +89,13 @@ buffer (prefer it to a chain of `+`).
 
 Receiver syntax is an explicit `this` parameter: `fun Str.shout(): Str`. `data fun` marks a
 pure function the compiler may reuse. A lambda is `(x: Int) -> x + 1` or a block body starting
-on the arrow's line. Lambdas **capture by value**, and `this` inside a lambda is a diagnostic;
-to mutate the enclosing object, capture a raw pointer (`var p: *T = *this`). A lambda is a
+on the arrow's line; a call's final argument may be a **trailing brace lambda** — `apply(5) { x -> x + 1 }`,
+`twice { 41 }` — whose body spans lines, and whose last statement is the lambda's value. A
+brace lambda with no declared parameter that names `it` gets it as the single implicit
+parameter (`xs.forEach { println(it) }`; the prelude's `repeat(n) { }` and `List`/`Array`
+`forEach` are the canonical consumers). Lambdas **capture by value**, and `this` inside a
+lambda is a diagnostic; to mutate the enclosing object, capture a raw pointer
+(`var p: *T = *this`). A lambda is a
 data class with a free `<sym>_invoke` method (`ai/contributing.md` has the codegen rules).
 
 ## Generics and call inference
@@ -156,8 +161,9 @@ state machine and is what powers `for` over `..T` (`impl_specs/yield.md`, `impl_
 
 ## Day-one gotchas
 
-- A lambda body must start on the arrow's line (or open a block there), and a `when` subject
-  must be a local.
+- A parenthesized lambda's body must start on the arrow's line (or open a block there); a
+  multi-line body is the trailing brace form, `f(x) { ... }`. A `when` subject must be a
+  local.
 - A method on a temporary (`"a b".split(" ")`) fails: bind it to a `val` first.
 - A method on a bare type-parameter receiver (`fun <T> f(x: T) { x.toString() }`) needs a
   protocol: constrain the parameter (`when T: Printable`) or the call has nothing to

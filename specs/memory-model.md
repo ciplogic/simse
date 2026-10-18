@@ -275,7 +275,8 @@ pointee must still be alive when the closure runs).
 A lambda's parameter types come from the explicit annotations, or from the
 expected callable type when the lambda is assigned to a callable-typed variable
 or passed to a callable-typed parameter. Its return type comes from the expected
-callable type, or is inferred from a single trailing expression or a `return`.
+callable type, or is inferred from a trailing expression - the last statement of
+the body, single- or multi-statement - or a `return`.
 
 Type aliases create no new runtime type, ownership mode, or layout. Generic aliases are
 permitted when all referenced type parameters are declared. A counted reference is the

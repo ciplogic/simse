@@ -5250,3 +5250,26 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `stress/ranges` covers every word, empty and single-bound ranges, ranges as values
   (`from`/`to`/`step` fields), the indexed form, and a range built from an expression
   (`1..n + 1` binding as `1..(n + 1)`).
+
+- **Trailing brace lambdas, `it`, and the value tail of a block body.** A call's final
+  argument may be `{ ... }` (`f(x) { body }` is `f(x, { body })`), and with no other argument
+  the brace opens the call itself (`twice { 41 }`); the brace never follows a complete
+  expression otherwise, because blocks belong to the statement forms that consume them. The
+  brace body is the multi-line lambda body - a parenthesized lambda's body must start on the
+  arrow's line - with a tentative parameter list (`names ->`, annotatable, rewound when the
+  `->` does not come) and the implicit `it`: a body with no declared parameter that names
+  `it` gets it as its single parameter, decided by a body scan that stops at nested lambdas
+  (`parseBraceLambda`, `nodeNamesIt`). The node is the same shape `tryParseLambda` builds, so
+  the checker, the closure class and call inference read one lambda form; a `{` after a
+  postfix expression or a `)` cannot take a block from anything, so existing parses are
+  untouched. Two enablers landed with it: `ilLambdaLower` now rewrites the *last* statement
+  of a value-returning body to the `return` it stands for (a single-expression body always
+  did; a multi-statement body needed an explicit `return`, so Kotlin's `{ ...; result }` tail
+  was a C++ error), and the prelude gained the canonical consumers `repeat(n) { it }` plus
+  `List`/`Array` `forEach { it }` (`Unit`-callable bodies, whose last statement is a write or
+  a call). Captures stay by value: a block that writes a captured local writes the closure's
+  copy, and the stress case pins that reading.
+  Verified: `bun tools/iterate.js --full` - **108/108** and both fixed points; the new case
+  `stress/trailing-lambda` covers both call forms, annotated and implicit parameters, `it`
+  shadowing across nesting, the value tail of a multi-statement body, a generic callee's
+  explicit instantiation, and `repeat`/`forEach` with `Unit` bodies.

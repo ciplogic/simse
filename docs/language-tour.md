@@ -307,6 +307,34 @@ val big: Mapper = (v: Int) -> {
 }
 ```
 
+A call's final argument may instead be a **trailing brace lambda**, whose body spans
+lines - the multi-line form, and the one `it` belongs to:
+
+```kt
+fun apply(n: Int, f: (Int) -> Int): Int { return f(n) }
+
+apply(5) { x -> x + 1 }              // `f(x) { ... }` is `f(x, { ... })`
+apply(5) { it * 2 }                   // no declared parameter: `it` is the one it gets
+apply(5) {                            // several statements; the last is the value
+    val doubled: Int = it + it
+    doubled
+}
+
+repeat(3) { println(it) }             // 0, 1, 2 - the prelude's count loop
+
+val names: List<Str> = listOf<Str>("a", "bb")
+names.forEach { println(it) }         // each element in order
+```
+
+`f(x) { ... }` is `f(x, { ... })`, and with no other argument the brace opens the call
+itself (`twice { 41 }`). The parameter list inside the braces is optional and annotatable
+(`{ x: Int -> ... }`); with none declared, a body naming `it` gets it as the single
+implicit parameter, and a nested lambda's `it` is its own. When the callable returns a
+value, the body's last statement is the lambda's value; a `Unit` callable takes a block
+whose last statement is a write or a call (`repeat` above). Captures are by value as
+always: `repeat(3) { total = total + it }` writes the closure's copy - keep the loop
+shape (`var i` + `while`) or a raw pointer when a body must accumulate into a local.
+
 A block body is a body like any other: it has its own scope, its own locals, and its
 own control flow, so it can loop over what it captured. Two lambdas may even each
 declare a local of the same name, because neither is naming the other's:
@@ -783,9 +811,9 @@ These are known rough edges, not design decisions to admire
 - **A method call chained onto a generic call loses its type.**
   `counts.get(k).value().toString()` does not compile; assign the middle step to a
   typed `val` first.
-- **A lambda body must start on the arrow's line.** `(x: Int) ->` followed by a
-  newline and the expression is a syntax error; keep the body on the same line or
-  open a block there.
+- **A parenthesized lambda's body must start on the arrow's line.** `(x: Int) ->` followed
+  by a newline and the expression is a syntax error; keep the body on the same line, open a
+  block there, or use the trailing brace form (`f(x) { ... }`), whose body spans lines.
 - `println` of a float uses the C++ default formatting, and `println` of an enum
   prints its integer value.
 - There is no `foreach` keyword (`for` is it, and a container has an `iterValues` so

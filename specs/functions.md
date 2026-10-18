@@ -337,6 +337,17 @@ explicit instantiation (`pick<Int>(lambda)`) chooses the callable one.
 A `Str` literal passed where the parameter is a bare type parameter is a `Str`; it is not
 narrowed to its view (`StrView`).
 
+A call's final argument may be a **trailing brace lambda** (Kotlin's trailing lambda):
+`f(x) { body }` is `f(x, { body })`, and with no other argument the brace opens the call
+itself (`twice { 41 }`). Inside the braces the parameter list is `names ->`, optional and
+annotatable (`{ x: Int -> ... }`), and the body spans lines - it is the multi-line lambda
+body, where a parenthesized lambda's body must start on the arrow's line. With no declared
+parameter, a body that names `it` takes it as the single implicit parameter, the way
+Kotlin's does; a nested lambda's `it` is its own. When the expected callable returns a
+value, the body's **last statement** is the lambda's value; a `Unit` callable takes the
+block whose last statement is a statement (a write, a call). The prelude's `repeat(n) { }`
+and the `List`/`Array` `forEach` are the form's canonical calls.
+
 ## Class-body limitations
 
 Class bodies are parsed as balanced regions. Method declarations inside them are compiled

@@ -58,6 +58,33 @@ fun ..*T.toValues<T>(): ..T {
     }
 }
 
+// `repeat(n) { it }`: the count loop with the iteration index as `it`, the canonical
+// trailing-lambda call. `body` is a `(Int) -> Unit` callable: a block whose last statement
+// is not a value (a write, a call returning nothing) is the shape a `Unit` result takes.
+fun repeat(n: Int, body: (Int) -> Unit): Unit {
+    var i: Int = 0
+    while (i < n) {
+        body(i)
+        i = i + 1
+    }
+}
+
+// `xs.forEach { it }`: each element in order, the value form of `for (x in xs)` as a call.
+fun List<T>.forEach<T>(f: (T) -> Unit): Unit {
+    for (x in this) {
+        f(x)
+    }
+}
+
+fun Array<T>.forEach<T>(f: (T) -> Unit): Unit {
+    var i: Int = 0
+    val len: Int = this.count()
+    while (i < len) {
+        f(this[i])
+        i = i + 1
+    }
+}
+
 // And back: the place of what a value machine yielded (`this.current`), so a chain that
 // needs `..*T` again (`select`, `where`) takes it without a `toList` round trip.
 fun ..T.toPtrs<T>(): ..*T {

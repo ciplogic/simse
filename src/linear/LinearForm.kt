@@ -243,25 +243,42 @@ fun ilSplitParams(text: Str): List<Str> {
 }
 
 // A lambda's body, lowered the way the emitter lowers it (impl_specs/linear-lowering.md),
-// with a single-expression body rewritten to the `return` it stands for. A lambda the
-// expected callable types as answering `Unit` keeps its single expression as a *statement*:
-// a `return <void call>` is not a value the emitter can declare (`isUnitValue` sees the
+// with a trailing expression rewritten to the `return` it stands for - the single-expression
+// body, and the last statement of a multi-statement one (Kotlin's `{ ...; result }` tail; a
+// bare name or an operation is not a statement the extractor could keep, and a call the
+// extractor could keep would leave the closure without its result). A lambda the expected
+// callable types as answering `Unit` keeps its single expression as a *statement*: a
+// `return <void call>` is not a value the emitter can declare (`isUnitValue` sees the
 // print/println shape, not an arbitrary void member call).
 fun ilLambdaLower(body: *List<AstXmlNode>, unitResult: Bool): List<AstXmlNode> {
     var out: List<AstXmlNode> = List<AstXmlNode>()
-    if (!unitResult && body.size() == 1 && xmlKind(body[0]) == AstNodeCategory.StmtExprStmt) {
-        val expr: *AstXmlNode = xmlChildPtr(body[0], AstNodeKind.Expr)
-        if (!xmlIsEmpty(expr)) {
-            var ret: AstXmlNode = linStmt(
-                AstNodeCategory.StmtReturn, xmlLine(body[0]),
-                xmlColumn(body[0])
-            )
-            var value: AstXmlNode = expr
-            value.name = AstNodeKind.Value
-            xmlAddChild(ret, value)
-            out.append(ret)
-            return linLowerForEmission(out)
+    var tail: Int = -1
+    if (!unitResult && body.size() > 0) {
+        val last: AstXmlNode = body[body.size() - 1]
+        if (xmlKind(last) == AstNodeCategory.StmtExprStmt) {
+            val expr: *AstXmlNode = xmlChildPtr(last, AstNodeKind.Expr)
+            if (!xmlIsEmpty(expr)) {
+                tail = body.size() - 1
+            }
         }
+    }
+    if (tail >= 0) {
+        val last: AstXmlNode = body[tail]
+        val expr: *AstXmlNode = xmlChildPtr(last, AstNodeKind.Expr)
+        var ret: AstXmlNode = linStmt(
+            AstNodeCategory.StmtReturn, xmlLine(last),
+            xmlColumn(last)
+        )
+        var value: AstXmlNode = expr
+        value.name = AstNodeKind.Value
+        xmlAddChild(ret, value)
+        var i: Int = 0
+        while (i < tail) {
+            out.append(body[i])
+            i = i + 1
+        }
+        out.append(ret)
+        return linLowerForEmission(out)
     }
     var i: Int = 0
     while (i < body.size()) {
