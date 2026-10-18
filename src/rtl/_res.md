@@ -106,7 +106,7 @@ inline void simse_strTableDecode(const char* pool, const Int* starts, const Int*
 
 !timeops
 ====
-emit: always
+emit: reached
 support:
 ```cpp
 #include <chrono>
@@ -119,10 +119,10 @@ support:
 // src/rtl/timeops.hpp, and its definitions were the last
 // thing left in src/rtl/native.cpp - they are this section's now, so the clock is
 // emitted into the program like any other prelude body and there is nothing to link.
-// `emit: always`
-// because the profiler's runtime is emitted by the *compiler* rather than named by
-// the program: a `--profile` build needs these declarations whether or not the program
-// ever asks for the time.
+// `emit: reached`: a program that reads the clock reaches these by name like any call,
+// and a `--profile` build - whose runtime is emitted by the *compiler* rather than named
+// by the program - has the clock's name seeded into the reached set for it
+// (src/codegen/CgEmitType.kt, `collectProgramNames`).
 Int64 simse_nowMillis();
 Int64 simse_nowMicros();
 Int64 simse_nowNanos();
@@ -1292,7 +1292,7 @@ List<Int> simse_tasksChainTrace() {
 
 !print
 ====
-emit: always
+emit: reached
 forward:
 ```cpp
 #include <cstdio>

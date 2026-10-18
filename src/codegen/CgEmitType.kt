@@ -1306,6 +1306,16 @@ fun Emitter.collectProgramNames(): Unit {
     if (this.resourceStored.size() > 0) {
         this.referencedNames.insert("resourcesInstall", true)
     }
+    // The profiler's clock is the same shape: a `--profile` build's emitted timers call
+    // `simse_nowMicros`/`simse_nowNanos` (and the report reads `simse_nowMillis`), spelled
+    // by generated text with no call node for the walk above to see. All three are seeded
+    // under the flag, so the clocks a program never asks for cost it nothing
+    // (src/rtl/_res.md, `timeops`).
+    if (profEnabled()) {
+        this.referencedNames.insert("simse_nowMillis", true)
+        this.referencedNames.insert("simse_nowMicros", true)
+        this.referencedNames.insert("simse_nowNanos", true)
+    }
     var changed: Bool = true
     var reachedSections: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     while (changed) {

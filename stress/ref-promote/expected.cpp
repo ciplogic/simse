@@ -7,12 +7,6 @@ template <class T>
 void simse_strTableExpand(const T* stream, Int* out, Int count);
 void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, Span<Char>* table, Int count);
 
-#include <chrono>
-
-Int64 simse_nowMillis();
-Int64 simse_nowMicros();
-Int64 simse_nowNanos();
-
 template <class T>
 struct Span;
 template <class T>
@@ -1020,21 +1014,6 @@ inline void simse_strTableDecode(const char* pool, const Int* starts, const Int*
         at += delta;
         table[i] = Span<Char>{bytes + at, length};
     }
-}
-
-Int64 simse_nowMillis() {
-    const auto now = std::chrono::steady_clock::now().time_since_epoch();
-    return (Int64) std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
-}
-
-Int64 simse_nowMicros() {
-    const auto now = std::chrono::steady_clock::now().time_since_epoch();
-    return (Int64) std::chrono::duration_cast<std::chrono::microseconds>(now).count();
-}
-
-Int64 simse_nowNanos() {
-    const auto now = std::chrono::steady_clock::now().time_since_epoch();
-    return (Int64) std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
 }
 
 inline SmString::SmString(const Span<Char>& view)

@@ -79,6 +79,19 @@ fun resGenAlways(ctx: *SourceGenContext): SourceGenTransform {
             added = true
         }
     }
+    // `print` has no declaration to reach it - the emitter writes `simse_println` itself
+    // (CgCall.kt's println special case), and the checker is permissive about plain calls,
+    // so an anchor declaration would be a spelling the language does not have. The section
+    // rides the program's own calls instead: placed when the reached names say the program
+    // prints, skipped for one that does not (src/rtl/_res.md, `print`).
+    if (ctx.reachedNames != null
+        && !ctx.state.definitions.has("print")
+        && (ctx.reachedNames.has("println") || ctx.reachedNames.has("print"))
+    ) {
+        resGenAddSection(ctx, "print")
+        ctx.state.definitions.insert("print", ctx.name)
+        added = true
+    }
     if (!added) {
         return SourceGenTransform(SourceTransformation.AlreadyExisting, "")
     }
