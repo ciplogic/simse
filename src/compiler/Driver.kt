@@ -555,21 +555,12 @@ fun main(args: List<Str>): Int {
     for (*resource in compilerResources) {
         cppTexts.append(resource.value)
     }
-    if (resolvedPrelude != "") {
-        for (*resourceRoot in driverResourceRoots(resolvedPrelude)) {
-            for (*header in listFiles(resourceRoot, ".hpp")) {
-                cppTexts.append(readFile(header))
-            }
-        }
-    }
-    // A module's headers are compiled against its declarations the same way the RTL's are
-    // (`streams`' filestream.hpp is the first), so they join the scan; a root the prelude
-    // already covers is read twice, which the scan's dictionary absorbs.
-    for (*moduleRoot in moduleRoots) {
-        for (*header in listFiles(moduleRoot, ".hpp")) {
-            cppTexts.append(readFile(header))
-        }
-    }
+    // The headers are deliberately *not* scanned: in the amalgamation a header is included
+    // before every emitted declaration, so a name it mentions can only be a C++ member of a
+    // C++ type (`SmString::find`, `SmallVector::size`) and never a prelude function - while
+    // counting those members refused borrows for names that merely shared a spelling
+    // (`find`, blocked for years by SmString's own member). The resource bodies above are
+    // the real contract: those are compiled against the declarations this program emits.
     val borrowed: BpRewrite = bpBorrowParams(preludeModules, modules, *cppTexts)
     preludeModules = borrowed.prelude
     modules = borrowed.modules

@@ -256,12 +256,14 @@ longer rests on the author remembering a mark:
 
 Both sides are rewritten - the prelude's Simse bodies borrow like a module's. The one exception is
 **a prelude name hand-written C++ may call** (`bpCppCalled`): the resource bodies the emitted
-program carries (the `_res.md` sections) and the runtime headers are scanned for `<name>(`, and a
-name the scan finds keeps its authored signature, because that C++ is compiled against it. The scan
-is coarse on purpose (a member call on another type counts), so it can only cost a borrow, never
-make a wrong one: `startsWith`/`endsWith`/`indexOf` borrow, `find` does not - the `strops` section
-calls `self.find(` (src/rtl/_res.md), and `--showBorrow` prints the refusal as
-`borrow- find C++ calls it (prelude)`.
+program carries (the `_res.md` sections) are scanned for `<name>(`, and a name the scan finds
+keeps its authored signature, because that C++ is compiled against it. The scan is coarse on
+purpose (a member call on another type counts), so it can only cost a borrow, never make a wrong
+one. The runtime headers were part of the scan once, but in the amalgamation a header precedes
+every emitted declaration, so a name it mentions can only be a C++ member (`SmString::find`) and
+never a prelude function - counting those members refused borrows for names that merely shared a
+spelling, which is how `find` stayed un-borrowed for years after its own C++ caller
+(`strops`' `self.find(`) was deleted.
 
 The same proof covers a `for` variable: `SemaCall.promoteForLoops` promotes the value form of a
 `for` over a deep element (`bpDeepElement`) to the pointer wrap when `bpLoopReadOnly` (the

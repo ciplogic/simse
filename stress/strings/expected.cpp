@@ -487,7 +487,7 @@ template <class T>
 void set(Span<T>* self, Int index, T value);
 Char charAt(Span<Char>* self, Int index);
 Bool startsWith(Span<Char>* self, Str* text);
-Int find(Span<Char>* self, Str sub);
+Int find(Span<Char>* self, Str* sub);
 Int indexOf(Span<Char>* self, Str* sub);
 Str substr(Span<Char>* self, Int from, Int count);
 Str toString(Span<Char>* self);
@@ -568,13 +568,13 @@ Int strCountDigits(Int64 value);
 void strAddInt(Char* target, Int64 value, Int count);
 Span<Char> strBoolView(Bool value);
 Int findFrom(Str* self, Str* sub, Int from);
-Int find(Str* self, Str sub);
+Int find(Str* self, Str* sub);
 Int indexOf(Str* self, Str* sub);
 Int lastIndexOf(Str* self, Str* sub);
 Str substr(Str* self, Int start, Int len);
 Bool startsWith(Str* self, Str* prefix);
 Bool endsWith(Str* self, Str* suffix);
-Str replace(Str* self, Str from, Str to);
+Str replace(Str* self, Str* from, Str* to);
 Str trim(Str* self);
 List<Str> split(Str* self, Str* separator);
 List<Str> split(Str* self, Char separator);
@@ -655,12 +655,11 @@ Bool startsWith(Span<Char>* self, Str* text) {
     _sm_expr1 = compareResult == 0;
     return _sm_expr1;
 }
-Int find(Span<Char>* self, Str sub) {
-    Str* _sm_base1;
+Int find(Span<Char>* self, Str* sub) {
     Int needle, len, _sm_expr3, i, _sm_expr10, _sm_expr12;
     Bool _sm_expr1;
     Char* subBytes;
-    needle = simse_lenOf(sub);
+    needle = simse_lenOf((*sub));
     _sm_expr1 = needle == 0;
     if (_sm_expr1) goto L1;
     goto L2;
@@ -675,8 +674,7 @@ Int find(Span<Char>* self, Str sub) {
     _sm_expr3 = -1;
     return _sm_expr3;
     L4:;
-    _sm_base1 = &sub;
-    subBytes = simse_str_data(_sm_base1);
+    subBytes = simse_str_data(sub);
     i = simse_mem_findByte(self->ptr, 0, len, subBytes[0]);
     L5:;
     _sm_expr1 = i >= 0;
@@ -707,10 +705,8 @@ Int find(Span<Char>* self, Str sub) {
     return _sm_expr3;
 }
 Int indexOf(Span<Char>* self, Str* sub) {
-    Str _sm_base1;
     Int _sm_expr1;
-    _sm_base1 = *(sub);
-    _sm_expr1 = find(self, _sm_base1);
+    _sm_expr1 = find(self, sub);
     return _sm_expr1;
 }
 Str substr(Span<Char>* self, Int from, Int count) {
@@ -1193,11 +1189,9 @@ Int findFrom(Str* self, Str* sub, Int from) {
     _sm_expr5 = -1;
     return _sm_expr5;
 }
-Int find(Str* self, Str sub) {
-    Str* _sm_base1;
+Int find(Str* self, Str* sub) {
     Int _sm_expr1;
-    _sm_base1 = &sub;
-    _sm_expr1 = findFrom(self, _sm_base1, 0);
+    _sm_expr1 = findFrom(self, sub, 0);
     return _sm_expr1;
 }
 Int indexOf(Str* self, Str* sub) {
@@ -1356,12 +1350,11 @@ Bool endsWith(Str* self, Str* suffix) {
     L4:;
     return true;
 }
-Str replace(Str* self, Str from, Str to) {
-    Str* _sm_base1;
+Str replace(Str* self, Str* from, Str* to) {
+    Str _sm_base1, out, _sm_expr8, _sm_expr10;
     Int _sm_expr1, _sm_expr4, _sm_expr5, pos, found, _sm_expr7, _sm_expr9;
     Bool _sm_expr2;
-    Str out, _sm_expr8, _sm_expr10;
-    _sm_expr1 = simse_lenOf(from);
+    _sm_expr1 = simse_lenOf((*from));
     _sm_expr2 = _sm_expr1 == 0;
     if (_sm_expr2) goto L1;
     goto L2;
@@ -1370,13 +1363,12 @@ Str replace(Str* self, Str from, Str to) {
     L2:;
     out = __sm_stringTable[98];
     _sm_expr1 = simse_lenOf((*self));
-    _sm_expr4 = simse_lenOf(to);
+    _sm_expr4 = simse_lenOf((*to));
     _sm_expr5 = _sm_expr1 + _sm_expr4;
     simse_str_reserve(out, _sm_expr5);
     pos = 0;
     L3:;
-    _sm_base1 = &from;
-    found = findFrom(self, _sm_base1, pos);
+    found = findFrom(self, from, pos);
     _sm_expr2 = found < 0;
     if (_sm_expr2) goto L5;
     goto L6;
@@ -1389,8 +1381,9 @@ Str replace(Str* self, Str from, Str to) {
     _sm_expr9 = found - pos;
     _sm_expr10 = substr(self, pos, _sm_expr9);
     simse_str_appendStr(out, _sm_expr10);
-    simse_str_appendStr(out, to);
-    _sm_expr1 = simse_lenOf(from);
+    _sm_base1 = *(to);
+    simse_str_appendStr(out, _sm_base1);
+    _sm_expr1 = simse_lenOf((*from));
     pos = found + _sm_expr1;
     goto L3;
     L4:;
@@ -1726,9 +1719,9 @@ Int ns1_partStringEscapes() {
 }
 // stress/strings/src/main.kt
 Int ns1_partStrings() {
-    Str _sm_base1, _sm_base2, _sm_base4, _sm_base6, _sm_base8, _sm_base10, raw, text, _sm_expr1,
-        _sm_expr2, _sm_expr12, _sm_expr15;
-    Str* _sm_base3, * _sm_base5, * _sm_base7, * _sm_base9;
+    Str _sm_base1, _sm_base2, _sm_base4, _sm_base6, _sm_base8, _sm_base10, _sm_base12, _sm_base14,
+        _sm_base16, raw, text, _sm_expr1, _sm_expr2, _sm_expr12, _sm_expr15;
+    Str* _sm_base3, * _sm_base5, * _sm_base7, * _sm_base9, * _sm_base11, * _sm_base13, * _sm_base15;
     Bool _sm_expr3, _sm_expr5, _sm_expr13, _sm_expr14;
     Int _sm_expr6, _sm_expr7, _sm_expr9, _sm_expr10, _sm_expr11;
     List<Str> parts;
@@ -1761,30 +1754,36 @@ Int ns1_partStrings() {
     _sm_base3 = &_sm_base4;
     _sm_expr9 = indexOf(simse_addressOf(text), _sm_base3);
     simse_println((_sm_expr9), stdout);
-    _sm_expr10 = find(simse_addressOf(text), __sm_stringTable[60]);
-    simse_println((_sm_expr10), stdout);
-    _sm_base6 = __sm_stringTable[92];
+    _sm_base6 = __sm_stringTable[60];
     _sm_base5 = &_sm_base6;
-    _sm_expr11 = lastIndexOf(simse_addressOf(text), _sm_base5);
+    _sm_expr10 = find(simse_addressOf(text), _sm_base5);
+    simse_println((_sm_expr10), stdout);
+    _sm_base8 = __sm_stringTable[92];
+    _sm_base7 = &_sm_base8;
+    _sm_expr11 = lastIndexOf(simse_addressOf(text), _sm_base7);
     simse_println((_sm_expr11), stdout);
     _sm_expr12 = substr(simse_addressOf(text), 6, 5);
     simse_println((_sm_expr12), stdout);
-    _sm_base8 = __sm_stringTable[22];
-    _sm_base7 = &_sm_base8;
-    _sm_expr13 = startsWith(simse_addressOf(text), _sm_base7);
-    simse_println((_sm_expr13), stdout);
-    _sm_base10 = __sm_stringTable[24];
+    _sm_base10 = __sm_stringTable[22];
     _sm_base9 = &_sm_base10;
-    _sm_expr14 = endsWith(simse_addressOf(text), _sm_base9);
+    _sm_expr13 = startsWith(simse_addressOf(text), _sm_base9);
+    simse_println((_sm_expr13), stdout);
+    _sm_base12 = __sm_stringTable[24];
+    _sm_base11 = &_sm_base12;
+    _sm_expr14 = endsWith(simse_addressOf(text), _sm_base11);
     simse_println((_sm_expr14), stdout);
-    _sm_expr15 = replace(simse_addressOf(text), __sm_stringTable[24], __sm_stringTable[23]);
+    _sm_base14 = __sm_stringTable[24];
+    _sm_base13 = &_sm_base14;
+    _sm_base16 = __sm_stringTable[23];
+    _sm_base15 = &_sm_base16;
+    _sm_expr15 = replace(simse_addressOf(text), _sm_base13, _sm_base15);
     simse_println((_sm_expr15), stdout);
     return 0;
 }
 // stress/strings/src/main.kt
 Int ns1_partTextProcessing() {
-    Str* _sm_base2, * _sm_base3, * _sm_base5;
-    Str _sm_base4, _sm_base6, text, word, longest, shout, _sm_expr19;
+    Str* _sm_base2, * _sm_base3, * _sm_base5, * _sm_base7, * _sm_base9;
+    Str _sm_base4, _sm_base6, _sm_base8, _sm_base10, text, word, longest, shout, _sm_expr19;
     List<Str> words, keys;
     Dictionary<Str, Int> counts;
     Int i, _sm_expr1, _sm_expr5, _sm_expr6, _sm_expr7, _sm_expr9, _sm_expr11, k, _sm_expr16;
@@ -1852,10 +1851,14 @@ Int ns1_partTextProcessing() {
     _sm_base3 = &_sm_base4;
     _sm_expr18 = startsWith(simse_addressOf(shout), _sm_base3);
     simse_println((_sm_expr18), stdout);
-    _sm_expr19 = replace(simse_addressOf(text), __sm_stringTable[51], __sm_stringTable[50]);
-    _sm_base6 = __sm_stringTable[50];
+    _sm_base6 = __sm_stringTable[51];
     _sm_base5 = &_sm_base6;
-    _sm_expr20 = endsWith(simse_addressOf(_sm_expr19), _sm_base5);
+    _sm_base8 = __sm_stringTable[50];
+    _sm_base7 = &_sm_base8;
+    _sm_expr19 = replace(simse_addressOf(text), _sm_base5, _sm_base7);
+    _sm_base10 = __sm_stringTable[50];
+    _sm_base9 = &_sm_base10;
+    _sm_expr20 = endsWith(simse_addressOf(_sm_expr19), _sm_base9);
     simse_println((_sm_expr20), stdout);
     return 0;
 }
