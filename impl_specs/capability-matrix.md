@@ -5361,3 +5361,35 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   for byte through the loop sweep (the `toUpper` machine shape moved one golden).
   Verified: `bun tools/iterate.js --full` after each sweep - **111/111** and both fixed
   points.
+
+- **The `glob` module, and the operator reach a program's comparisons owe.** `modules/glob`
+  is a `*`-only glob matcher built exactly on the shape the pattern gives it (no regex, no
+  backtracking): `globCompile` splits the pattern at its `*`s into an exact word (no `*` at
+  all - the match is one `==`), an anchored prefix and/or suffix (`Opt<Str>` each, absent
+  when the pattern is `*`-open on that side), and the middle segments - each matched once,
+  left to right, by `Str.findFrom` (`memchr` to the segment's first byte, one `memcmp`),
+  bounded by the suffix's wall so the greedy walk is complete without backtracking
+  (each leftmost fit lands at or before any placement's, inductively, and the end-anchored
+  suffix closes the last gap). `minLen` - the segments' total - rejects before any byte is
+  compared, and empty segments collapse (`a**b` is `a*b`). A match allocates nothing;
+  compile once, match many (`globMatches` is the one-shot spelling). `?` and `[...]` are
+  deliberately out: they would break the segment split, and a glob rich enough to want
+  them is a regex.
+  Landing it surfaced a latent emitter bug: a program whose only string `==` is between
+  two variables emitted a call to the view's `equals` nothing reached - `collectNames`
+  sees call nodes, and a binary's operator call is synthesized at emission
+  (`operatorBinaryFn`). The fix follows the indexers' rule: `collectNames` now records the
+  operator name when a comparison's operand may be a string, typed from the walk's own
+  map (`reachLocalTypes`: var declarations, parameters and class fields - `localTypes` is
+  seeded per body at emission, after the walk) and `inferType` (frame-free) for anything
+  else. The string-operand test is what keeps a scalar `==` from pulling the view
+  operators, which are the only prelude bodies named `equals`/`compareTo`/`plus`; four
+  goldens (fold-const-params, machines, uninit, unions) gained the bodies additively -
+  they compare strings and reach nothing else that names `Span`. One crash lesson en
+  route: `getPtr` answers *null* for a missing key, and `xmlIsEmpty` reads through the
+  pointer - the null test comes first.
+  Verified: `bun tools/iterate.js --full` - **112/112** and both fixed points; the new case
+  `stress/glob` (compiler-args `--module modules/glob`) covers exact, each anchor, both
+  anchors, the middle walk with its wall (`a*bc*bc` on `abcbc` matching with the first
+  `bc` flush against the suffix), the collapse, the length rejects, case sensitivity, and
+  compile-once-match-many.

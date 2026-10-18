@@ -280,6 +280,11 @@ data class Emitter(
     var activeTypeParams: Dictionary<Str, Bool>,
     var nameKinds: Dictionary<Str, NameKind>,
     var localTypes: Dictionary<Str, AstXmlNode>,
+    // The locals the reach walk has seen declared (`collectNames`): `localTypes` is
+    // seeded per body at emission, after the walk has run, so a comparison's operand
+    // type is answered from here (`CgEmitType.kt`'s binary rule). Over-approximation is
+    // the safe direction - the walk decides whether a prelude operator may be needed.
+    var reachLocalTypes: Dictionary<Str, AstXmlNode>,
     var selfKind: NameKind,
     var selfType: AstXmlNode,
     var curReturnType: AstXmlNode,
@@ -381,6 +386,7 @@ fun newEmitter(inputs: *List<CgInput>, resourceStored: *List<Str>): Emitter {
         Dictionary<Str, List<CgNativeExt>>(),
         Dictionary<Str, Bool>(),
         Dictionary<Str, NameKind>(),
+        Dictionary<Str, AstXmlNode>(),
         Dictionary<Str, AstXmlNode>(),
         NameKind.Value,
         xmlEmptyNode(),

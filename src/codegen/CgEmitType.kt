@@ -1005,6 +1005,43 @@ fun Emitter.staticCallSymbol(receiverName: *Str, calleeName: *Str): Str {
 // Every call name in a node's subtree; a call also records the symbol it reaches,
 // because that symbol may name C++ emitted elsewhere (a `res` declaration's text is
 // emitted only when its section is reached).
+// Whether a reach-walk operand may be a `Str`: a literal is, a local is what its
+// declaration said (`reachLocalTypes`, the walk's own map), and anything else answers
+// `inferType`, which reads no frame. Over-approximating is the safe direction here - the
+// answer only decides whether a prelude operator body is emitted.
+fun Emitter.reachOperandStringy(expr: *AstXmlNode): Bool {
+    if (xmlKind(expr) == AstNodeCategory.ExprStrLit) {
+        return true
+    }
+    if (xmlKind(expr) == AstNodeCategory.ExprName) {
+        return this.reachNameIsStr(xmlAttr(expr, AstNodeAttributeKind.Name))
+    }
+    if (xmlKind(expr) == AstNodeCategory.ExprMember) {
+        val recv: *AstXmlNode = xmlChildPtr(expr, AstNodeKind.Receiver)
+        if (!xmlIsEmpty(recv) && xmlKind(recv) == AstNodeCategory.ExprName
+            && xmlAttr(recv, AstNodeAttributeKind.Name) == "this"
+        ) {
+            return this.reachNameIsStr(xmlAttr(expr, AstNodeAttributeKind.Name))
+        }
+    }
+    val answer: Bool = this.isViewableStringOperand(expr)
+    return answer
+}
+
+// The map lookup behind both spellings of a walk operand: a local's or a parameter's
+// name, or a field read off `this`.
+fun Emitter.reachNameIsStr(name: *Str): Bool {
+    val declared: *AstXmlNode = this.reachLocalTypes.getPtr(name)
+    if (declared == null || xmlIsEmpty(declared)) {
+        return false
+    }
+    val resolved: AstXmlNode = this.resolveAlias(this.pointee(declared))
+    if (xmlIsEmpty(resolved) || xmlKind(resolved) != AstNodeCategory.TypeNamed) {
+        return false
+    }
+    return xmlAttr(resolved, AstNodeAttributeKind.Name) == "Str"
+}
+
 fun Emitter.collectNames(node: *AstXmlNode, names: *Dictionary<Str, Bool>): Unit {
     // The string literals ride the same walk, the emitter's one pass over the whole
     // program; a literal the *lowering* invents keeps its own spelling.
@@ -1018,6 +1055,54 @@ fun Emitter.collectNames(node: *AstXmlNode, names: *Dictionary<Str, Bool>): Unit
         val baseName: Str = semaBaseName(node)
         if (baseName != "") {
             this.referencedTypes.insert(baseName, true)
+        }
+    }
+    if (node.name == AstNodeKind.Param || node.name == AstNodeKind.Field) {
+        // The same map, for parameters and class fields: a method body compares its
+        // parameters (`text == ...`) and its fields the way a function's locals are
+        // compared, and the declarations are where the walk sees their types. Names
+        // across functions collide into one map - the safe direction, the answer only
+        // decides whether an operator body is emitted.
+        val memberName: Str = xmlAttr(node, AstNodeAttributeKind.Name)
+        val memberType: AstXmlNode = xmlChild(node, AstNodeKind.Type)
+        if (memberName != "" && !xmlIsEmpty(memberType)) {
+            this.reachLocalTypes.insert(memberName, memberType)
+        }
+    }
+    if (xmlKind(node) == AstNodeCategory.StmtVarDecl) {
+        // The walk's own local types: a comparison's operands are typed from here, since
+        // `localTypes` is seeded per body at emission - after this pass has run. An
+        // inferred initializer answers `inferType`, which reads no frame.
+        val declName: Str = xmlAttr(node, AstNodeAttributeKind.Name)
+        if (declName != "") {
+            var declType: AstXmlNode = xmlChild(node, AstNodeKind.Type)
+            if (xmlIsEmpty(declType)) {
+                val init: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Init)
+                if (!xmlIsEmpty(init)) {
+                    declType = this.inferType(init)
+                }
+            }
+            if (!xmlIsEmpty(declType)) {
+                this.reachLocalTypes.insert(declName, declType)
+            }
+        }
+    }
+    if (xmlKind(node) == AstNodeCategory.ExprBinary) {
+        // A comparison or concatenation a declared operator implements (`a == b` on a
+        // string is the view's `equals`, specs/functions.md): the call is synthesized at
+        // emission, so no call node exists for this walk to see - the same gap the
+        // indexers and the `spanOfStr` conversion follow (`operatorBinaryFn` resolves it
+        // with the same predicate). The string-operand test is what keeps a scalar `==`
+        // from reaching the view operators: they are the only prelude bodies these names
+        // have, and integer arithmetic spells its C++ directly.
+        val op: Str = xmlAttr(node, AstNodeAttributeKind.Op)
+        val binaryName: Str = semBinaryOperatorName(op)
+        if (binaryName != "") {
+                val lhs: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Lhs)
+            val rhs: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Rhs)
+            if (this.reachOperandStringy(lhs) || this.reachOperandStringy(rhs)) {
+                names.insert(binaryName, true)
+            }
         }
     }
     if (xmlKind(node) == AstNodeCategory.ExprCall) {
