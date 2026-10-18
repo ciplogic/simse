@@ -49,6 +49,20 @@ first**, which subsumes the sweep's purpose: `+=` resolving to the in-place nati
 (`simse_str_appendStr`, `simse_list_append`) is both the optimal string path and
 the one that covers lists, leaving nothing to migrate for spelling's sake.
 
+## The handle rule (landed)
+
+**An operator on a handle applies to its pointee** - the rule every value position
+already gives a handle (`print(x)` on a `&Str` prints the text), now stated for
+compound assignment: `counter += 1` on a `counter: *Int` reads and writes through the
+pointer (`LinearFormStmt`'s `assignCompound`, the params' declared types from
+`ilFunctionFor`), because the statement position cannot even parse the explicit
+`*p += x` spelling. Never pointer arithmetic - the language has none. Pinned by
+`stress/compound-pointer`. **Known next**: the `Str` case (`out: *Str; out += x`)
+additionally needs the unfused `plus` to be emitted for programs that reach it through
+this path (the fused `a += b` on a value never names `plus`, so its program reach is
+untested there) - the `plusAssign` native alias fixes it and covers lists in the same
+step.
+
 ## Phase C — what would complete the set (deferred, with reasons)
 
 - **`plusAssign` (in-place `+=` for containers)**: a `List<T>.plusAssign(value)`

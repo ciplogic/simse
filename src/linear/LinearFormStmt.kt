@@ -236,6 +236,37 @@ fun IlExtractor.assignCompound(target: *AstXmlNode, op: Str, value: *AstXmlNode)
                 )
                 return
             }
+            // A parameter of handle type is its *pointee* for a compound assignment:
+            // `out += x` on an `out: *Str` reads and writes through the pointer - the
+            // short spelling of `*out += x`, the same read-through every value position
+            // gives a handle, and the one that keeps `+` meaning the pointee's operator
+            // rather than pointer arithmetic the language does not have.
+            var handleAt: Int = 0
+            while (handleAt < this.fn.paramNames.size()) {
+                if (this.fn.paramNames[handleAt] == name) {
+                    val paramType: AstXmlNode = this.fn.paramTypes[handleAt]
+                    val paramKind: AstNodeCategory = xmlKind(paramType)
+                    if (paramKind == AstNodeCategory.TypePointer
+                        || paramKind == AstNodeCategory.TypeReference
+                    ) {
+                        // The temp and the fold type as the *pointee*: a deref-shaped node
+                        // of the target is what infers that (`*p`'s type), the same node
+                        // form the explicit deref path builds.
+                        var pointee: AstXmlNode = AstXmlNode(
+                            AstNodeKind.Expr, AstNodeCategory.ExprDeref,
+                            List<AstNodeAttribute>(), Array<AstXmlNode>()
+                        )
+                        xmlAddChild(pointee, *target)
+                        val pointer: Int = this.operandOf(target)
+                        val current: Int = this.freshValueSlot(*pointee)
+                        this.emit(IlOpKind.Deref, ilOps2(current, pointer))
+                        this.emit(IlOpKind.Store, ilOps2(pointer, this.fold(current, op, value, *pointee)))
+                        return
+                    }
+                    break
+                }
+                handleAt = handleAt + 1
+            }
             // A local slot *is* the place: `i = i + 1` is one instruction.
             val slot: Int = this.varIndex(name)
             if (slot >= 0) {

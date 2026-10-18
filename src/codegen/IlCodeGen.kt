@@ -81,6 +81,18 @@ fun Emitter.ilFunctionFor(
         "", Dictionary<Str, Bool>(), Dictionary<Str, AstXmlNode>(),
         facts, fn.templateParams, inferred
     )
+    // The declared parameters, named and typed: the extractor's read-through rules read
+    // them (a handle-typed one is its pointee for a compound assignment, the short
+    // spelling of `*p += x` - `assignCompound`).
+    val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
+    for (*param in params) {
+        val paramType: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
+        if (xmlIsEmpty(paramType)) {
+            continue
+        }
+        info.paramNames.append(xmlAttr(param, AstNodeAttributeKind.Name))
+        info.paramTypes.append(*paramType)
+    }
     for (*entry in this.statics) {
         val typeNode: *AstXmlNode = xmlChildPtr(entry.decl, AstNodeKind.Type)
         if (!xmlIsEmpty(typeNode)) {
