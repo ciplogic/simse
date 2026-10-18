@@ -353,7 +353,8 @@ fun Emitter.ilMachineMethod(
         `@className::@methodNameText2`, Dictionary<Str, Str>(),
         selfDecl, List<Str>(), List<AstXmlNode>(), className,
         Dictionary<Str, Bool>(), Dictionary<Str, AstXmlNode>(),
-        facts, List<Str>(), inferred
+        facts, List<Str>(), inferred,
+        Dictionary<Str, Bool>()
     )
     var i: Int = 0
     for (*param in method.params) {
@@ -387,7 +388,8 @@ fun Emitter.ilTaskMethod(
         `@className::run`, Dictionary<Str, Str>(),
         selfDecl, List<Str>(), List<AstXmlNode>(), className,
         Dictionary<Str, Bool>(), Dictionary<Str, AstXmlNode>(),
-        facts, List<Str>(), task.inferred
+        facts, List<Str>(), task.inferred,
+        Dictionary<Str, Bool>()
     )
     for (*entry in this.statics) {
         val typeNode: *AstXmlNode = xmlChildPtr(entry.decl, AstNodeKind.Type)

@@ -142,7 +142,12 @@ data class IlFunction(
     var captureTypes: Dictionary<Str, AstXmlNode>,
     var facts: *SemFacts,
     var typeParams: List<Str>,
-    var inferredTypes: *Dictionary<Str, AstXmlNode>
+    var inferredTypes: *Dictionary<Str, AstXmlNode>,
+
+    // The handle-typed parameters a `plusAssign` declaration matches (keyed by name):
+    // `p += x` on one lowers to the in-place call rather than the fold (`assignCompound`).
+    // Filled where the natives table lives (`ilFunctionFor`), read where the types are.
+    var plusAssignParams: Dictionary<Str, Bool>
 )
 
 // A lambda: a data class with one field per captured variable, and a free method

@@ -254,6 +254,36 @@ fun IlExtractor.assignCompound(target: *AstXmlNode, op: Str, value: *AstXmlNode)
                     if (paramKind == AstNodeCategory.TypePointer
                         || paramKind == AstNodeCategory.TypeReference
                     ) {
+                        // `p += x` with a matching `plusAssign` for the pointee: the
+                        // in-place call, spelled as the member call `p.plusAssign(x)` so
+                        // the emitter's own native resolution adapts the pointer receiver
+                        // (the `out.append(ch)` precedent) and C++ binds the reference.
+                        if (op == "+=" && this.fn.plusAssignParams.has(name)) {
+                            // The synthetic `p.plusAssign(x)`: children carry their roles by
+                            // name (`attach`'s rename idiom), because `call` reads them by
+                            // role - Callee, Receiver, Arg.
+                            var recvPA: AstXmlNode = *target
+                            recvPA.name = AstNodeKind.Receiver
+                            var calleePA: AstXmlNode = AstXmlNode(
+                                AstNodeKind.Expr, AstNodeCategory.ExprMember,
+                                List<AstNodeAttribute>(), Array<AstXmlNode>()
+                            )
+                            calleePA.attributes.append(
+                                AstNodeAttribute(AstNodeAttributeKind.Name, "plusAssign")
+                            )
+                            xmlAddChild(calleePA, recvPA)
+                            var callPA: AstXmlNode = AstXmlNode(
+                                AstNodeKind.Expr, AstNodeCategory.ExprCall,
+                                List<AstNodeAttribute>(), Array<AstXmlNode>()
+                            )
+                            calleePA.name = AstNodeKind.Callee
+                            xmlAddChild(callPA, calleePA)
+                            var argPA: AstXmlNode = *value
+                            argPA.name = AstNodeKind.Arg
+                            xmlAddChild(callPA, argPA)
+                            this.call(-1, *callPA)
+                            return
+                        }
                         // The temp and the fold type as the *pointee*: a deref-shaped node
                         // of the target is what infers that (`*p`'s type), the same node
                         // form the explicit deref path builds.

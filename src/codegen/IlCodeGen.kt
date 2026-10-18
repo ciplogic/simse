@@ -79,7 +79,8 @@ fun Emitter.ilFunctionFor(
         decl, fn.receiver, symbol,
         Dictionary<Str, Str>(), xmlEmptyNode(), List<Str>(), List<AstXmlNode>(),
         "", Dictionary<Str, Bool>(), Dictionary<Str, AstXmlNode>(),
-        facts, fn.templateParams, inferred
+        facts, fn.templateParams, inferred,
+        Dictionary<Str, Bool>()
     )
     // The declared parameters, named and typed: the extractor's read-through rules read
     // them (a handle-typed one is its pointee for a compound assignment, the short
@@ -92,6 +93,29 @@ fun Emitter.ilFunctionFor(
         }
         info.paramNames.append(xmlAttr(param, AstNodeAttributeKind.Name))
         info.paramTypes.append(*paramType)
+        // A handle-typed parameter whose *pointee* matches a `plusAssign` declaration:
+        // `p += x` on it lowers to that in-place call (`assignCompound`'s handle arm),
+        // so the decision is made here, where the natives table lives.
+        val paramKind: AstNodeCategory = xmlKind(paramType)
+        if (paramKind == AstNodeCategory.TypePointer || paramKind == AstNodeCategory.TypeReference) {
+            val pointee: *AstXmlNode = xmlChildPtr(paramType, AstNodeKind.Inner)
+            if (xmlIsEmpty(pointee)) {
+                continue
+            }
+            val extsPA: *List<CgNativeExt> = this.nativeExtensions.getPtr("plusAssign")
+            if (extsPA == null) {
+                continue
+            }
+            for ((*ext, extAt) in extsPA) {
+                if (xmlIsEmpty(ext.receiver) || ext.argCount != 1) {
+                    continue
+                }
+                if (this.unifyType(this.resolveAlias(*ext.receiver), *pointee, ext.typeParams)) {
+                    info.plusAssignParams.insert(xmlAttr(param, AstNodeAttributeKind.Name), true)
+                    break
+                }
+            }
+        }
     }
     for (*entry in this.statics) {
         val typeNode: *AstXmlNode = xmlChildPtr(entry.decl, AstNodeKind.Type)
@@ -116,7 +140,8 @@ fun Emitter.ilDestructorFor(
         decl, xmlEmptyNode(), symbol,
         Dictionary<Str, Str>(), classDecl, List<Str>(), List<AstXmlNode>(),
         className, Dictionary<Str, Bool>(), Dictionary<Str, AstXmlNode>(),
-        facts, fn.templateParams, inferred
+        facts, fn.templateParams, inferred,
+        Dictionary<Str, Bool>()
     )
     for (*entry in this.statics) {
         val typeNode: *AstXmlNode = xmlChildPtr(entry.decl, AstNodeKind.Type)

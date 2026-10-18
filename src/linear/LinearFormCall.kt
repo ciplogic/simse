@@ -781,7 +781,8 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
         xmlEmptyNode(), xmlEmptyNode(), symbol, this.fn.statics, xmlEmptyNode(),
         paramNames, paramTypes, symbol,
         Dictionary<Str, Bool>(), Dictionary<Str, AstXmlNode>(),
-        this.fn.facts, this.fn.typeParams, *lambdaTypes
+        this.fn.facts, this.fn.typeParams, *lambdaTypes,
+        this.fn.plusAssignParams
     )
     var ci: Int = 0
     while (ci < captured.size()) {

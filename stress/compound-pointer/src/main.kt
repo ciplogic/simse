@@ -30,5 +30,31 @@ fun main(): Int {
     println(big)
     bump(*n)
     println(n)
+    part2()
+    return 0
+}
+
+// The same rule through a matching `plusAssign`: `out += x` on an `out: *Str` is the
+// in-place append *through* the pointer (the emitter's native resolution adapts the
+// receiver, exactly as `out.append(ch)` always has), and a `*List` appends the same way.
+// A `*Int` keeps the fold - no `plusAssign` matches it, which is the fallback's point.
+fun appendLine(out: *Str, text: Str): Unit {
+    out += text
+    out += '\n'
+}
+
+fun addAll(parts: *List<Int>, item: Int): Unit {
+    parts += item
+}
+
+fun part2(): Int {
+    var text: Str = "hello"
+    appendLine(*text, "world")
+    print(text)
+    var nums: List<Int> = List<Int>(0)
+    addAll(*nums, 7)
+    addAll(*nums, 8)
+    println(nums.size())
+    println(nums[1])
     return 0
 }
