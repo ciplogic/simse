@@ -351,11 +351,14 @@ the published bootstrap byte for byte. What the surface holds today:
   every call and resolved to the concrete declaration, never a vtable
   (`specs/declarations.md`).
 - **Functions** - extensions, `data` pure functions the compiler may reuse, `borrow`
-  read-only functions, and lambdas.
+  read-only functions, expression bodies (`fun f(): T = expr`), and lambdas - including
+  the trailing brace form with `it` (`xs.forEach { println(it) }`).
 - **Containers and text** - `List`, `Array`, `Dictionary`, `Span`, `Opt`, `Res`, `Str`
-  with a full string library and interpolation.
-- **Control and iteration** - `when`, `for` over containers and over `yield` state
-  machines.
+  with a full string library and interpolation (`@name` in a backtick string, `$name` /
+  `${expr}` in an ordinary one).
+- **Control and iteration** - `when` (with or without a subject), `for` over containers,
+  ranges (`a..b`, `until`, `downTo`, `step`), the membership tests `in`/`!in`, and `for`
+  over `yield` state machines.
 - **The edges** - file I/O, packages and modules, `main(args)`, `simse.md` projects, and
   source generators (`@SmGen`) for C++, resource, Simse and native (P/Invoke) bodies.
 

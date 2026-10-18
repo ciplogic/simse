@@ -27,7 +27,7 @@ frameworks, and (for now) third-party binary packages.
 
 | Area | Today | Gap a user feels immediately |
 | --- | --- | --- |
-| Loops | `while`, and `for` over a `yield`ing machine | range/`foreach` over `List`/`Str`/ranges |
+| Loops | `while`, `for` over containers/ranges/machines, `in`/`!in` | `break`/`continue` labels, `Dictionary` pair iteration |
 | Branching | `if`/`else`, `when` | closed unions, exhaustive `when` (no dynamic dispatch) |
 | Strings | method library, `+`, `appendStr`, `` `@name` `` interpolation | `format`, a `toString` protocol for user types |
 | Printing | `println`/`print` are *emitter intrinsics* over `std::cout` | a real `Printable` protocol, float formatting with a defined shape |
@@ -39,6 +39,28 @@ frameworks, and (for now) third-party binary packages.
 | Runtime services | files, paths, `eprintln`, `main(List<Str>)` | clock, randomness, env vars, stdin, exit codes, logging |
 | Bytes | `Str` (bytes, mutable), `Array<T>` | a byte `Buffer` with endian-aware reads/writes, hex/base64, checksums |
 | Tooling | `simse_transpile <files>`, `build.js`, MSVC on Windows | `simse init/build/run/test` for a *user* project, Linux/macOS, formatter, LSP with caret diagnostics |
+
+## 2.1 The next cheap Kotlin constructions
+
+What landed in the 2026-10 ergonomics pass: ranges (`a..b`, `until`/`downTo`/`step`),
+`in`/`!in`, `$name`/`${expr}` interpolation, trailing brace lambdas with `it` (plus
+`repeat`/`forEach`), subjectless `when`, and expression bodies. What is sized cheap next,
+by the same measure (a parse-time desugar or a prelude body, nothing new downstream):
+
+- `Char` and `Int64` ranges - `rangeTo`/`until`/`downTo` overloads and their machines,
+  once call overload resolution picks them by argument type.
+- `Dictionary` iteration - decide the element (keys, or a pair type and destructuring) and
+  write the `iterValues`.
+- Named arguments (`f(x = 1)`) - a call-site rewrite the arity check already understands;
+  useful mostly once default parameter values exist (a bigger change: every call site).
+- `when` pattern labels `in 1..5` - the sugar exists (`contains`), so a label is a test the
+  chain can spell; `is T` still needs runtime type information.
+- The `to` infix and pair destructuring (`val (a, b) = pair`) - a prelude `Pair` plus a
+  `val` desugar; worth it when a function wants two results without a data class.
+
+Deliberately not on the list: labeled `break`/`continue` (the lowering has one loop depth),
+general `infix fun` (resolution across every adjacent-identifier parse), `?.`/`?:` (lazy
+evaluation needs statement positions), and multi-declaration captures.
 
 ## 3. Keystone: static interfaces (protocols)
 
@@ -117,8 +139,8 @@ transfer, any binary format, and "read the file that isn't UTF-8".
 
 ### 4.5 Collections for real programs
 
-`for` over a container (range/`foreach`; the `for` that exists iterates a `yield`ing machine,
-`impl_specs/for.md` - biggest daily win); `Set<T: Hashable>`; `sorted` containers or at least
+`for` over containers and ranges landed (`1..n`, `until`/`downTo`/`step`, `in`/`!in`);
+`Set<T: Hashable>`; `sorted` containers or at least
 `sort` + binary search; functional helpers (`map`/`filter`/`reduce`/`join`/`slice`)
 implemented over the existing extension mechanism; `List.reserve` (performance code cannot
 preallocate); `Span`-style slices as the safe way to pass a window of a list.
@@ -188,7 +210,7 @@ mean "drop to C for one function" (only the RTL can today).
 
 | Phase | Contents | Gate |
 | --- | --- | --- |
-| 1. Ergonomics | `for`, interpolation, default args, reference captures, closed unions (`union class`), `Printable` + `data class` defaults, `panic`/`assert`, enum names | a 300-line CLI tool reads files, parses text, prints well-formatted output - no `while` boilerplate, no `println` limits |
+| 1. Ergonomics | ranges + `in`, `$` interpolation, trailing lambdas, subjectless `when`, expression bodies (landed); default args, reference captures, `Printable` + `data class` defaults, `panic`/`assert`, enum names | a 300-line CLI tool reads files, parses text, prints well-formatted output - no `while` boilerplate, no `println` limits |
 | 2. Protocols | constraint checking + `Hashable`/`Comparable`, `Set`, `List.reserve`, functional helpers | a `Dictionary<MyKey, V>` over a user `data class`, sorted sets, a word-count program that beats the scripting version |
 | 3. Texts and bytes | `format`, UTF-8 rules, `Buffer`, hex/base64/CRC, clock, randomness, env/stdin/logging | a tool that parses a binary file format and logs a report with timings |
 | 4. JSON | `json.encode`/`json.decode<T>` derived from data classes, `JsonValue`, error paths | a CLI that converts between JSON and a text format, round-tripping a nested structure |
