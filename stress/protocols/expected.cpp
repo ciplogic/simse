@@ -475,6 +475,10 @@ template <class T>
 Int size(Span<T>* self);
 template <class T>
 T at(Span<T>* self, Int index);
+template <class T>
+T get(Span<T>* self, Int index);
+template <class T>
+void set(Span<T>* self, Int index, T value);
 Str substr(Span<Char>* self, Int from, Int count);
 Str toString(Span<Char>* self);
 Int compareTo(Span<Char>* self, Span<Char> other);
@@ -544,6 +548,19 @@ T at(Span<T>* self, Int index) {
     _sm_base1 = self->ptr;
     auto _sm_expr1 = _sm_base1[index];
     return _sm_expr1;
+}
+template <class T>
+T get(Span<T>* self, Int index) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    auto _sm_expr1 = _sm_base1[index];
+    return _sm_expr1;
+}
+template <class T>
+void set(Span<T>* self, Int index, T value) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    _sm_base1[index] = value;
 }
 Str substr(Span<Char>* self, Int from, Int count) {
     Int len, begin, take;

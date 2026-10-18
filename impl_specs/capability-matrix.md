@@ -5286,3 +5286,18 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Verified: `bun tools/iterate.js --full` - **108/108** and both fixed points;
   `stress/flow`'s new `when-subjectless` part covers order and single-body, a compound
   condition with `in`, a no-`else` fall-through, and `break`/`continue` from inside arms.
+
+- **A prelude typealias reaches its target (`StrView` -> `Span`).** `collectTypeNames` now
+  resolves a named prelude alias to its target when it fills `referencedTypes`, so naming
+  `StrView` names `Span` - which is what lets `collectProgramNames`' operator rule fire for
+  an index site: `x[i]` synthesizes its `get` at emission, so no call node exists for the
+  name walk and only the receiver's type name can reach the operator. A prelude body that
+  indexes its `StrView` parameter (`fmtStrWith`'s template walk) names only the alias, which
+  never reached `Span` and left the emitted body calling a `get` nothing declared - a
+  *minimal* interpolation program (``println(`n=@n`)`` and nothing else) did not compile,
+  while every corpus case indexed something of its own and reached `get` for it. The alias
+  is the only prelude one, so the change's reach is exactly the programs that name `StrView`;
+  three goldens gained the two span operators (additive, plus the order shift of the range
+  machines `strings` carries).
+  Verified: `bun tools/iterate.js --full` - **109/109** and both fixed points; the new case
+  `stress/interp-minimal` is the minimal program that used to fail.

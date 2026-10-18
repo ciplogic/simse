@@ -111,6 +111,22 @@ fun Emitter.collectTypeNames(node: *AstXmlNode): Unit {
     val name: Str = xmlAttr(node, AstNodeAttributeKind.Name)
     if (name != "") {
         this.referencedTypes.insert(name, true)
+        // A prelude typealias names its target: `StrView` *is* `Span<Char>` everywhere, so
+        // what the alias reaches is what the target reaches. The prelude operators are the
+        // reason this matters - an index site synthesizes its `get` at emission, so no call
+        // node exists for the walk to see and only the receiver's *type name* can reach it
+        // (`collectProgramNames`'s operator rule). A body that indexes its `StrView`
+        // parameter (`fmtStrWith`'s template walk) names the alias, which without this
+        // resolution never reached `Span` and left the emitted body calling a `get` nothing
+        // declared - a program that indexes a span of its own papered over it by naming
+        // `Span` itself.
+        val alias: *AstXmlNode = this.types.getPtr(name)
+        if (alias != null && alias.name == AstNodeKind.TypeAlias) {
+            val target: *AstXmlNode = xmlChildPtr(alias, AstNodeKind.TargetType)
+            if (!xmlIsEmpty(target)) {
+                this.collectTypeNames(target)
+            }
+        }
     }
     var i: Int = 0
     while (i < node.Children.count()) {

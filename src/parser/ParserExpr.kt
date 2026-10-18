@@ -312,10 +312,14 @@ fun Parser.parsePrimary(): ExprNode {
     }
     if (this.checkKind(TokenKind.String)) {
         val raw: Str = this.advance().text
-        // A backtick string interpolates `@name`: the desugar (ParserInterp.kt) turns the
-        // literal into an `fmtStr` call, so everything downstream sees ordinary expressions.
+        // A backtick string interpolates `@name`, an ordinary one `$name`/`${expr}` (Kotlin's
+        // spelling): the desugars (ParserInterp.kt) turn the literal into an `fmtStrWith`
+        // call, so everything downstream sees ordinary expressions.
         if (interpHasItem(raw)) {
             return this.parseInterpolatedRaw(raw, pos)
+        }
+        if (interpHasDollarItem(raw)) {
+            return this.parseInterpolatedQuoted(raw, pos)
         }
         val text: Str = this.stringTokenText(raw)
         var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
