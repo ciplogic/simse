@@ -46,7 +46,7 @@ import common
 // `strcat` section's primitives are reached by it alone (src/rtl/rtl.kt), because the
 // emitter writes those symbols itself and no program names one.
 fun ilConcatSymbol(): Str {
-    return "simse_strAddInt"
+    return "strAddInt"
 }
 
 // The slot an instruction writes, or -1 when it writes memory or jumps instead.

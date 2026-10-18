@@ -77,7 +77,7 @@ Details worth knowing:
   whose text is a C++
   *resource* - the tree's own `_res.md` files first, the compiler's second, which is where
   the RTL's own C++ lives now (`src/rtl/_res.md`: `strtable`, `timeops`, `listops`,
-  `dictops`, `strops`, `lenops`, `strcat`, `spanOf`, `strview`, `resources`; a module owns its
+  `dictops`, `strops`, `lenops`, `spanOf`, `strview`, `resources`; a module owns its
   own, like `io`'s `fileio` and `streams`' `filestream`) - and
   `kt`, whose text is *Simse source* the driver hands back to the
   compiler's own front end: parsed, checked and emitted with the program, the call site
@@ -226,7 +226,7 @@ The C++ that used to need a header of its own is a **resource** now
 (`src/rtl/_res.md`, read by the `res` generator): the string table's decoder
 (`strtable`), the clocks (`timeops`), the `List`/`Array` primitives (`listops`), the
 `Dictionary` operations (`dictops`), the string/character/numeric conversions (`strops`),
-the length accessors (`lenops`), the concatenation (`strcat`), `spanOf`, the view operations (`strview`), and
+the length accessors (`lenops`), `spanOf`, the view operations (`strview`), and
 the resource table's accessor (`resources`). A module owns its C++ the same way, in its own
 `_res.md`: `io`'s `fileio` is the platform's file I/O (it
 carries its own prototypes) and `streams`' `filestream` is the file stream's open and method

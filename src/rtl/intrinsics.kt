@@ -21,6 +21,13 @@ borrow fun memCompare(a: *Char, aIndex: Int, b: *Char, bIndex: Int, count: Int):
 @SmGen("cpp", "simse_mem_findByte")
 borrow fun memFindByte(a: *Char, from: Int, count: Int, value: Char): Int
 
+// The position of the highest set bit of `|value|` (the magnitude as an unsigned 64-bit
+// pattern), plus one - one `clz`/`bsr`. `INT64_MIN` answers 64, because its magnitude is
+// 2^63, which is exactly what the digit-counting scan over it wants; the unsigned
+// negation lives here because the language has no unsigned arithmetic.
+@SmGen("cpp", "simse_bit_width64")
+data fun bitWidth64(value: Int64): Int
+
 // A `Str`'s bytes, borrowed: valid until the string changes. It is the one place a `Str`'s
 // internals are reached, and the reason the text operations can be written in the language.
 @SmGen("cpp", "simse_str_data")

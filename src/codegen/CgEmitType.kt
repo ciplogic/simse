@@ -1202,6 +1202,14 @@ fun Emitter.reachesPreludeBody(fn: *CgFn): Bool {
         return false
     }
     val name: Str = fn.name
+    // The concat trio is the emitter's own ABI (`strAddInt` and friends, src/rtl/rtl.kt):
+    // whether a program fuses concatenations is only decided while bodies are extracted,
+    // after this rule has already run for the prototype pass, so their reach cannot ride
+    // the names the extraction records (`ilFuseConcatUnit`). Three small bodies are the
+    // whole cost of emitting them for every program instead.
+    if (name == "strAddInt" || name == "strCountDigits" || name == "strBoolView") {
+        return true
+    }
     if (!this.referencedNames.has(name)) {
         return false
     }

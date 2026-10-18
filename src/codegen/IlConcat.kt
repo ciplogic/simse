@@ -15,7 +15,7 @@ import optimizations
 import profiling
 
 // What a body's concatenations need declared at its top: whether any chain writes a byte (the
-// shared `char*` cursor), whether any chain is in place (the `at` temporary), and how many
+// shared `Char*` cursor), whether any chain is in place (the `at` temporary), and how many
 // integer counts the widest chain needs at once. One pass, so the body declares exactly what
 // it uses.
 data class IlConcatPool(
@@ -58,12 +58,12 @@ fun ilConcatPoolOf(il: *IlBody): IlConcatPool {
 }
 
 // The concatenation storage a body needs, at its top: declared where a jump cannot skip it, so
-// one `char*` cursor serves every chain (`ilConcatStatements` recycles it on each `resize`) and
+// one `Char*` cursor serves every chain (`ilConcatStatements` recycles it on each `resize`) and
 // the counts are one line. Nothing here collides across bodies - each has its own scope.
 fun Emitter.ilConcatPreamble(il: *IlBody, out: *Str, level: Int): Unit {
     val pool: IlConcatPool = ilConcatPoolOf(il)
     if (pool.pointer) {
-        this.ilLine(out, level, "char* __sm_catP;")
+        this.ilLine(out, level, "Char* __sm_catP;")
     }
     if (pool.at) {
         this.ilLine(out, level, "Int __sm_catAt;")
@@ -122,7 +122,7 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
     // shape whose chain keeps the bytes that are already there.
     val inPlace: Bool = op.operands.size() > 1 && op.operands[1] == dst
     // The cursor and the counts are the *body's* names (`ilConcatPreamble` declares them at the
-    // top): a `char*` is a cursor every `resize` recycles, and a chain's counts are dead before
+    // top): a `Char*` is a cursor every `resize` recycles, and a chain's counts are dead before
     // the next chain starts, so one set per body serves them all. A chain can sit in a block the
     // crossing logic opened, which is why they cannot be declared per chain.
     val atName: Str = "__sm_catAt"
@@ -190,15 +190,15 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
                 writes.append(`*@pName = (char) (@value);`)
                 writes.append(`@pName = @pName + 1;`)
             } else if (kind == "Bool") {
-                sums.append(`simse_strBoolView(@value).len`)
-                writes.append(`std::memcpy(@pName, simse_strBoolView(@value).ptr, simse_strBoolView(@value).len);`)
-                writes.append(`@pName = @pName + simse_strBoolView(@value).len;`)
+                sums.append(`strBoolView(@value).len`)
+                writes.append(`std::memcpy(@pName, strBoolView(@value).ptr, strBoolView(@value).len);`)
+                writes.append(`@pName = @pName + strBoolView(@value).len;`)
             } else if (ilConcatNumberOk(kind)) {
                 val count: Str = `__sm_catC@counts`
                 counts = counts + 1
-                prelude.append(`@count = simse_strCountDigits(@value);`)
+                prelude.append(`@count = strCountDigits(@value);`)
                 sums.append(count)
-                writes.append(`simse_strAddInt(@pName, @value, @count);`)
+                writes.append(`strAddInt(@pName, @value, @count);`)
                 writes.append(`@pName = @pName + @count;`)
             } else {
                 this.ilWhy = "a part of a concatenation"
@@ -250,12 +250,12 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
         this.ilLine(out, level, `@atName = @name.size();`)
         this.ilLine(out, level, `@name.resize(@atName + @rest);`)
         if (writes.size() > 0) {
-            this.ilLine(out, level, `@pName = @name.data() + @atName;`)
+            this.ilLine(out, level, `@pName = simse_str_data(&@name) + @atName;`)
         }
     } else {
         this.ilLine(out, level, `@name.resize(@rest);`)
         if (writes.size() > 0) {
-            this.ilLine(out, level, `@pName = @name.data();`)
+            this.ilLine(out, level, `@pName = simse_str_data(&@name);`)
         }
     }
     p = 0

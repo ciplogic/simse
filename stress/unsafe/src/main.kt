@@ -34,7 +34,7 @@ fun main(): Int {
     println("u32-shr " + UInt32(-1).shr(16).value().toString())
     println("u32-mask " + UInt32(-1).andWith(UInt32(65535)).value().toString())
     println("u32-add " + (UInt32(-1) + UInt32(1)).value().toString())
-    println("u32-shl " + UInt32(-2147483648).shl(1).value().toString())
+    println("u32-shl " + UInt32(0 - 2147483647 - 1).shl(1).value().toString())
 
     // 64-bit: the signed read caveat, and `toInt64`.
     println("u64-v " + UInt64(42).value().toString())

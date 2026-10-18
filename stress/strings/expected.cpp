@@ -309,13 +309,13 @@ SIMSE_PACK_POP
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 97;
+static const Int __sm_stringCount = 99;
 static const char __sm_stringPool[] =
-    "the quick brown fox jumps over the lazy dog the extraordinary fox" "a literal well past the twenty-three byte inline capacity of Str" "line one\nline \"two\" with \\ back\n\ttabbed" "line one\nline \"two\" with \\ back\n	tabbed" "He said \"hi\" and left \\ right" "first @\nsecond @" "  Hello,World  " "@ who and @2" "empty-or-bar" "relational" "say \"hi\"" "a@ b and " "equality" "line one" "_sm_@_@" "bitwise" "hello @" "matched" "a=@b=@" "a=|b=|" "letter" "x|y\n@" "Hello" "Simse" "World" "a\\nb" "alpha" "a|b=@" "b=|=|" "c=@:@" "empty" "other" "plain" "shift" "world" " -> " "@who" "HEAD" "a\nb" "beta" "head" "pair" " ~ " "(@)" "@ |" "THE" "a=|" "abc" "cat" "fox" "n=@" "run" "s=@" "the" "two" "v=|" "w=@" "x=@" "zzz" "|@|" "|x|" "!=" "<<" "<=" "==" ">=" "@!" "@@" "\t" "aa" "ab" "bb" "no" "zz" "||" " " "!" "&" "," "-" "<" "=" ">" "?" "@" "Z" "[" "]" "^" "a" "l" "p" "q" "t" "x" "|" "" 
+    "the quick brown fox jumps over the lazy dog the extraordinary fox" "a literal well past the twenty-three byte inline capacity of Str" "line one\nline \"two\" with \\ back\n\ttabbed" "line one\nline \"two\" with \\ back\n	tabbed" "He said \"hi\" and left \\ right" "first @\nsecond @" "  Hello,World  " "@ who and @2" "empty-or-bar" "relational" "say \"hi\"" "a@ b and " "equality" "line one" "_sm_@_@" "bitwise" "hello @" "matched" "a=@b=@" "a=|b=|" "letter" "x|y\n@" "Hello" "Simse" "World" "a\\nb" "alpha" "a|b=@" "b=|=|" "c=@:@" "empty" "false" "other" "plain" "shift" "world" " -> " "@who" "HEAD" "a\nb" "beta" "head" "pair" "true" " ~ " "(@)" "@ |" "THE" "a=|" "abc" "cat" "fox" "n=@" "run" "s=@" "the" "two" "v=|" "w=@" "x=@" "zzz" "|@|" "|x|" "!=" "<<" "<=" "==" ">=" "@!" "@@" "\t" "aa" "ab" "bb" "no" "zz" "||" " " "!" "&" "," "-" "<" "=" ">" "?" "@" "Z" "[" "]" "^" "a" "l" "p" "q" "t" "x" "|" "" 
 ;
-static const Int16 __sm_stringStarts[] = {97,10,0,-65,1,25,0,10,13,1,3,0,1,2,2,4,-1,1,0,1,1,3,0,1,1,1,2,0,1,1,1,3,0,2,1,-1,1,8,0,1,1,1,2,0,2,1,-1,1,2,0,1,1,1,18,0,1,1,1,6,0,2,1,-1,1,5,0,1,1,1,20,0};
-static const Int16 __sm_stringLens[] = {97,9,-65,1,25,0,10,13,1,3,0,1,2,2,4,-1,1,0,1,1,3,0,1,1,1,2,0,1,1,1,3,0,2,1,-1,1,8,0,1,1,1,2,0,2,1,-1,1,2,0,1,1,1,18,0,1,1,1,6,0,2,1,-1,1,5,0,1,1,1,20,0,1,1};
-static_assert(sizeof(__sm_stringPool) - 1 == 581, "the string pool and its length index disagree");
+static const Int16 __sm_stringStarts[] = {99,10,0,-65,1,25,0,10,13,1,3,0,1,2,2,4,-1,1,0,1,1,3,0,1,1,1,2,0,1,1,1,3,0,2,1,-1,1,9,0,1,1,1,2,0,2,1,-1,1,3,0,1,1,1,18,0,1,1,1,6,0,2,1,-1,1,5,0,1,1,1,20,0};
+static const Int16 __sm_stringLens[] = {99,9,-65,1,25,0,10,13,1,3,0,1,2,2,4,-1,1,0,1,1,3,0,1,1,1,2,0,1,1,1,3,0,2,1,-1,1,9,0,1,1,1,2,0,2,1,-1,1,3,0,1,1,1,18,0,1,1,1,6,0,2,1,-1,1,5,0,1,1,1,20,0,1,1};
+static_assert(sizeof(__sm_stringPool) - 1 == 590, "the string pool and its length index disagree");
 static Span<Char> __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
@@ -419,13 +419,6 @@ void simse_str_initByValue(Str& self, const Str& value);
 template <class T>
 Str simse_num_toString(const T& self);
 Str simse_bool_toString(Bool self);
-
-#include <bit>
-#include <cstring>
-
-Int simse_strCountDigits(Int64 value);
-void simse_strAddInt(char* target, Int64 value, Int count);
-Span<Char> simse_strBoolView(Bool value);
 
 #include <cstdio>
 
@@ -577,6 +570,9 @@ Bool compareLessThan(Str* left, Str* right);
 void initByValue(Str* self);
 Str fmtStr(Span<Char> fmt, List<Str>* items);
 Str fmtStrWith(Char separator, Span<Char> templateText, List<Str>* items);
+Int strCountDigits(Int64 value);
+void strAddInt(Char* target, Int64 value, Int count);
+Span<Char> strBoolView(Bool value);
 Int findFrom(Str* self, Str* sub, Int from);
 Int find(Str* self, Str sub);
 Int indexOf(Str* self, Str* sub);
@@ -956,7 +952,7 @@ Str fmtStr(Span<Char> fmt, List<Str>* items) {
     L7:;
     return fmt;
     L8:;
-    out = __sm_stringTable[96];
+    out = __sm_stringTable[98];
     _sm_expr8 = size(simse_addressOf(fmt));
     simse_str_reserve(out, _sm_expr8);
     used = 0;
@@ -1016,7 +1012,7 @@ Str fmtStrWith(Char separator, Span<Char> templateText, List<Str>* items) {
     L7:;
     return templateText;
     L8:;
-    out = __sm_stringTable[96];
+    out = __sm_stringTable[98];
     _sm_expr8 = size(simse_addressOf(templateText));
     simse_str_reserve(out, _sm_expr8);
     used = 0;
@@ -1041,6 +1037,105 @@ Str fmtStrWith(Char separator, Span<Char> templateText, List<Str>* items) {
     goto L9;
     L10:;
     return out;
+}
+Int strCountDigits(Int64 value) {
+    Bool _sm_expr2;
+    Int bits, _sm_expr5, guess, i, digits;
+    Int64 limit, _sm_expr9;
+    _sm_expr2 = value > -10;
+    if (_sm_expr2) goto L3;
+    goto L2;
+    L3:;
+    _sm_expr2 = value < 10;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = value < 0;
+    if (_sm_expr2) goto L4;
+    goto L5;
+    L4:;
+    return 2;
+    L5:;
+    return 1;
+    L2:;
+    bits = simse_bit_width64(value);
+    _sm_expr5 = bits * 1233;
+    guess = _sm_expr5 / 4096;
+    _sm_expr2 = guess >= 19;
+    if (_sm_expr2) goto L6;
+    goto L7;
+    L6:;
+    return 20;
+    L7:;
+    limit = 10;
+    i = 1;
+    L8:;
+    _sm_expr2 = i < guess;
+    if (!(_sm_expr2)) goto L9;
+    limit = limit * 10;
+    i = i + 1;
+    goto L8;
+    L9:;
+    digits = guess;
+    _sm_expr2 = value >= limit;
+    if (_sm_expr2) goto L10;
+    _sm_expr9 = 0 - limit;
+    _sm_expr2 = value <= _sm_expr9;
+    if (_sm_expr2) goto L10;
+    goto L11;
+    L10:;
+    digits = digits + 1;
+    L11:;
+    _sm_expr2 = value < 0;
+    if (_sm_expr2) goto L13;
+    goto L14;
+    L13:;
+    digits = digits + 1;
+    L14:;
+    return digits;
+}
+void strAddInt(Char* target, Int64 value, Int count) {
+    Int64 rest, _sm_expr5;
+    Bool _sm_expr1;
+    Int at, _sm_expr3;
+    Char ch;
+    rest = value;
+    _sm_expr1 = rest > 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    rest = 0 - rest;
+    L2:;
+    at = count;
+    _sm_expr1 = value < 0;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    target[0] = '-';
+    L4:;
+    _sm_expr3 = -10;
+    _sm_expr1 = rest <= _sm_expr3;
+    if (!(_sm_expr1)) goto L6;
+    _sm_expr5 = rest % 10;
+    _sm_expr3 = 0 - _sm_expr5;
+    at = at - 1;
+    ch = '0' + _sm_expr3;
+    target[at] = ch;
+    rest = rest / 10;
+    goto L4;
+    L6:;
+    at = at - 1;
+    _sm_expr5 = 0 - rest;
+    ch = '0' + _sm_expr5;
+    target[at] = ch;
+}
+Span<Char> strBoolView(Bool value) {
+    if (value) goto L1;
+    goto L2;
+    L1:;
+    return __sm_stringTable[43];
+    L2:;
+    return __sm_stringTable[31];
 }
 Int findFrom(Str* self, Str* sub, Int from) {
     Str* _sm_base1;
@@ -1279,7 +1374,7 @@ Str replace(Str* self, Str from, Str to) {
     L1:;
     return (*self);
     L2:;
-    out = __sm_stringTable[96];
+    out = __sm_stringTable[98];
     _sm_expr1 = simse_lenOf((*self));
     _sm_expr4 = simse_lenOf(to);
     _sm_expr5 = _sm_expr1 + _sm_expr4;
@@ -1532,7 +1627,7 @@ Str intToStr(Int64 value) {
     L1:;
     rest = 0 - rest;
     L2:;
-    reversed = __sm_stringTable[96];
+    reversed = __sm_stringTable[98];
     _sm_expr1 = rest == 0;
     if (_sm_expr1) goto L3;
     goto L4;
@@ -1548,7 +1643,7 @@ Str intToStr(Int64 value) {
     rest = rest / 10;
     goto L4;
     L6:;
-    out = __sm_stringTable[96];
+    out = __sm_stringTable[98];
     digit = simse_lenOf(reversed);
     _sm_expr6 = digit + 1;
     simse_str_reserve(out, _sm_expr6);
@@ -1591,13 +1686,13 @@ Str toString(Char* self) {
 Int ns1_partStrIsEmpty() {
     Str _sm_base1, _sm_base2, _sm_base3;
     Bool _sm_expr1, _sm_expr2, _sm_expr3;
-    _sm_base1 = __sm_stringTable[96];
+    _sm_base1 = __sm_stringTable[98];
     _sm_expr1 = isEmpty(simse_addressOf(_sm_base1));
     simse_println((_sm_expr1), stdout);
-    _sm_base2 = __sm_stringTable[94];
+    _sm_base2 = __sm_stringTable[96];
     _sm_expr2 = isEmpty(simse_addressOf(_sm_base2));
     simse_println((_sm_expr2), stdout);
-    _sm_base3 = __sm_stringTable[96];
+    _sm_base3 = __sm_stringTable[98];
     _sm_expr3 = isEmpty(simse_addressOf(_sm_base3));
     if (_sm_expr3) goto L1;
     goto L2;
@@ -1610,11 +1705,11 @@ Int ns1_partStrIsEmpty() {
 Int ns1_partStringEscapes() {
     Str newline, escaped, quote, tab, empty, longText;
     Int _sm_expr1, _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr5, _sm_expr6;
-    newline = __sm_stringTable[38];
+    newline = __sm_stringTable[39];
     escaped = __sm_stringTable[25];
     quote = __sm_stringTable[10];
-    tab = __sm_stringTable[68];
-    empty = __sm_stringTable[96];
+    tab = __sm_stringTable[70];
+    empty = __sm_stringTable[98];
     longText = __sm_stringTable[1];
     _sm_expr1 = simse_lenOf(newline);
     simse_println((_sm_expr1), stdout);
@@ -1630,9 +1725,9 @@ Int ns1_partStringEscapes() {
     simse_println((escaped), stdout);
     _sm_expr6 = simse_lenOf(longText);
     simse_println((_sm_expr6), stdout);
-    simse_println((__sm_stringTable[89]), stdout);
-    simse_println((__sm_stringTable[70]), stdout);
-    simse_println((__sm_stringTable[47]), stdout);
+    simse_println((__sm_stringTable[91]), stdout);
+    simse_println((__sm_stringTable[72]), stdout);
+    simse_println((__sm_stringTable[49]), stdout);
     return 0;
 }
 // stress/strings/src/main.kt
@@ -1659,7 +1754,7 @@ Int ns1_partStrings() {
     simse_println((_sm_expr5), stdout);
     _sm_expr6 = simse_lenOf(text);
     simse_println((_sm_expr6), stdout);
-    parts = split(simse_addressOf(text), simse_addressOf(Str(__sm_stringTable[78])));
+    parts = split(simse_addressOf(text), simse_addressOf(Str(__sm_stringTable[80])));
     _sm_expr7 = simse_lenOf(parts);
     simse_println((_sm_expr7), stdout);
     _sm_base1 = parts[0];
@@ -1672,9 +1767,9 @@ Int ns1_partStrings() {
     _sm_base3 = &_sm_base4;
     _sm_expr9 = indexOf(simse_addressOf(text), _sm_base3);
     simse_println((_sm_expr9), stdout);
-    _sm_expr10 = find(simse_addressOf(text), __sm_stringTable[58]);
+    _sm_expr10 = find(simse_addressOf(text), __sm_stringTable[60]);
     simse_println((_sm_expr10), stdout);
-    _sm_base6 = __sm_stringTable[90];
+    _sm_base6 = __sm_stringTable[92];
     _sm_base5 = &_sm_base6;
     _sm_expr11 = lastIndexOf(simse_addressOf(text), _sm_base5);
     simse_println((_sm_expr11), stdout);
@@ -1702,7 +1797,7 @@ Int ns1_partTextProcessing() {
     Bool _sm_expr2, _sm_expr12, _sm_expr18, _sm_expr20;
     Opt<Int> seen, _sm_expr8, _sm_expr10;
     text = __sm_stringTable[0];
-    words = split(simse_addressOf(text), simse_addressOf(Str(__sm_stringTable[75])));
+    words = split(simse_addressOf(text), simse_addressOf(Str(__sm_stringTable[77])));
     counts = simse_dictionaryOf<Str, Int>();
     i = 0;
     L1:;
@@ -1729,15 +1824,15 @@ Int ns1_partTextProcessing() {
     simse_println((_sm_expr6), stdout);
     _sm_expr7 = simse_dict_size(counts);
     simse_println((_sm_expr7), stdout);
-    _sm_expr8 = simse_dict_get(counts, __sm_stringTable[53]);
+    _sm_expr8 = simse_dict_get(counts, __sm_stringTable[55]);
     _sm_expr9 = simse_optValue(simse_addressOf(_sm_expr8));
     simse_println((_sm_expr9), stdout);
-    _sm_expr10 = simse_dict_get(counts, __sm_stringTable[49]);
+    _sm_expr10 = simse_dict_get(counts, __sm_stringTable[51]);
     _sm_expr11 = simse_optValue(simse_addressOf(_sm_expr10));
     simse_println((_sm_expr11), stdout);
-    _sm_expr12 = simse_dict_has(counts, __sm_stringTable[48]);
+    _sm_expr12 = simse_dict_has(counts, __sm_stringTable[50]);
     simse_println((_sm_expr12), stdout);
-    longest = __sm_stringTable[96];
+    longest = __sm_stringTable[98];
     keys = simse_dict_keys(counts);
     simse_list_sort(keys, compareLessThan);
     k = 0;
@@ -1759,12 +1854,12 @@ Int ns1_partTextProcessing() {
     L7:;
     simse_println((longest), stdout);
     shout = toUpper(simse_addressOf(text));
-    _sm_base4 = __sm_stringTable[45];
+    _sm_base4 = __sm_stringTable[47];
     _sm_base3 = &_sm_base4;
     _sm_expr18 = startsWith(simse_addressOf(shout), _sm_base3);
     simse_println((_sm_expr18), stdout);
-    _sm_expr19 = replace(simse_addressOf(text), __sm_stringTable[49], __sm_stringTable[48]);
-    _sm_base6 = __sm_stringTable[48];
+    _sm_expr19 = replace(simse_addressOf(text), __sm_stringTable[51], __sm_stringTable[50]);
+    _sm_base6 = __sm_stringTable[50];
     _sm_base5 = &_sm_base6;
     _sm_expr20 = endsWith(simse_addressOf(_sm_expr19), _sm_base5);
     simse_println((_sm_expr20), stdout);
@@ -1772,17 +1867,17 @@ Int ns1_partTextProcessing() {
 }
 // stress/strings/src/main.kt
 Str ns1_pair(Str* a, Str* b) {
-    char* __sm_catP;
+    Char* __sm_catP;
     Str _sm_base1, _sm_base2, _sm_expr1, _sm_expr2;
     _sm_base1 = *(a);
     _sm_expr1.resize(1 + _sm_base1.size());
-    __sm_catP = _sm_expr1.data();
+    __sm_catP = simse_str_data(&_sm_expr1);
     std::memcpy(__sm_catP, _sm_base1.data(), _sm_base1.size());
     __sm_catP = __sm_catP + _sm_base1.size();
     *__sm_catP = (char) ('-');
     _sm_base2 = *(b);
     _sm_expr2.resize(_sm_expr1.size() + _sm_base2.size());
-    __sm_catP = _sm_expr2.data();
+    __sm_catP = simse_str_data(&_sm_expr2);
     std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
     __sm_catP = __sm_catP + _sm_expr1.size();
     std::memcpy(__sm_catP, _sm_base2.data(), _sm_base2.size());
@@ -1790,7 +1885,7 @@ Str ns1_pair(Str* a, Str* b) {
 }
 // stress/strings/src/main.kt
 Int ns1_partConcat() {
-    char* __sm_catP;
+    Char* __sm_catP;
     Int __sm_catAt;
     Int __sm_catC0;
     Str* _sm_base1, * _sm_base3, * _sm_base5, * _sm_base6;
@@ -1806,9 +1901,9 @@ Int ns1_partConcat() {
     Span<Char> format, withFormat;
     Char withSep;
     a = __sm_stringTable[26];
-    b = __sm_stringTable[39];
+    b = __sm_stringTable[40];
     _sm_expr2.resize(1 + a.size() + b.size());
-    __sm_catP = _sm_expr2.data();
+    __sm_catP = simse_str_data(&_sm_expr2);
     std::memcpy(__sm_catP, a.data(), a.size());
     __sm_catP = __sm_catP + a.size();
     std::memcpy(__sm_catP, b.data(), b.size());
@@ -1816,26 +1911,26 @@ Int ns1_partConcat() {
     *__sm_catP = (char) ('!');
     simse_println((_sm_expr2), stdout);
     _sm_expr3.resize(1 + a.size());
-    __sm_catP = _sm_expr3.data();
+    __sm_catP = simse_str_data(&_sm_expr3);
     *__sm_catP = (char) ('x');
     __sm_catP = __sm_catP + 1;
     std::memcpy(__sm_catP, a.data(), a.size());
     simse_println((_sm_expr3), stdout);
     _sm_expr5.resize(1 + a.size() + b.size());
-    __sm_catP = _sm_expr5.data();
+    __sm_catP = simse_str_data(&_sm_expr5);
     std::memcpy(__sm_catP, a.data(), a.size());
     __sm_catP = __sm_catP + a.size();
     *__sm_catP = (char) (':');
     __sm_catP = __sm_catP + 1;
     std::memcpy(__sm_catP, b.data(), b.size());
     simse_println((_sm_expr5), stdout);
-    _sm_base2 = __sm_stringTable[91];
+    _sm_base2 = __sm_stringTable[93];
     _sm_base1 = &_sm_base2;
-    _sm_base4 = __sm_stringTable[92];
+    _sm_base4 = __sm_stringTable[94];
     _sm_base3 = &_sm_base4;
     _sm_expr6 = ns1_pair(_sm_base1, _sm_base3);
     _sm_expr7.resize(a.size() + _sm_expr6.size());
-    __sm_catP = _sm_expr7.data();
+    __sm_catP = simse_str_data(&_sm_expr7);
     std::memcpy(__sm_catP, a.data(), a.size());
     __sm_catP = __sm_catP + a.size();
     std::memcpy(__sm_catP, _sm_expr6.data(), _sm_expr6.size());
@@ -1844,31 +1939,31 @@ Int ns1_partConcat() {
     _sm_base6 = &b;
     _sm_expr8 = ns1_pair(_sm_base5, _sm_base6);
     simse_println((_sm_expr8), stdout);
-    tag = ns1_Tag{__sm_stringTable[93], 3};
+    tag = ns1_Tag{__sm_stringTable[95], 3};
     _sm_expr9 = tag.name;
     _sm_expr10.resize(1 + _sm_expr9.size());
-    __sm_catP = _sm_expr10.data();
+    __sm_catP = simse_str_data(&_sm_expr10);
     std::memcpy(__sm_catP, _sm_expr9.data(), _sm_expr9.size());
     __sm_catP = __sm_catP + _sm_expr9.size();
     *__sm_catP = (char) ('=');
     _sm_base7 = simse_addressOf(tag.count);
-    __sm_catC0 = simse_strCountDigits((*_sm_base7));
+    __sm_catC0 = strCountDigits((*_sm_base7));
     _sm_expr12.resize(_sm_expr10.size() + __sm_catC0);
-    __sm_catP = _sm_expr12.data();
+    __sm_catP = simse_str_data(&_sm_expr12);
     std::memcpy(__sm_catP, _sm_expr10.data(), _sm_expr10.size());
     __sm_catP = __sm_catP + _sm_expr10.size();
-    simse_strAddInt(__sm_catP, (*_sm_base7), __sm_catC0);
+    strAddInt(__sm_catP, (*_sm_base7), __sm_catC0);
     simse_println((_sm_expr12), stdout);
     _sm_expr13.resize(4);
-    __sm_catP = _sm_expr13.data();
+    __sm_catP = simse_str_data(&_sm_expr13);
     std::memcpy(__sm_catP, "aa", 2);
     __sm_catP = __sm_catP + 2;
     std::memcpy(__sm_catP, "bb", 2);
     simse_println((_sm_expr13), stdout);
-    acc = __sm_stringTable[51];
+    acc = __sm_stringTable[53];
     __sm_catAt = acc.size();
     acc.resize(__sm_catAt + 1 + a.size() + b.size());
-    __sm_catP = acc.data() + __sm_catAt;
+    __sm_catP = simse_str_data(&acc) + __sm_catAt;
     *__sm_catP = (char) ('-');
     __sm_catP = __sm_catP + 1;
     std::memcpy(__sm_catP, a.data(), a.size());
@@ -1876,7 +1971,7 @@ Int ns1_partConcat() {
     std::memcpy(__sm_catP, b.data(), b.size());
     simse_println((acc), stdout);
     _sm_expr17.resize(2 + acc.size());
-    __sm_catP = _sm_expr17.data();
+    __sm_catP = simse_str_data(&_sm_expr17);
     *__sm_catP = (char) ('[');
     __sm_catP = __sm_catP + 1;
     std::memcpy(__sm_catP, acc.data(), acc.size());
@@ -1884,17 +1979,17 @@ Int ns1_partConcat() {
     *__sm_catP = (char) (']');
     simse_println((_sm_expr17), stdout);
     _sm_expr18.resize(5);
-    __sm_catP = _sm_expr18.data();
+    __sm_catP = simse_str_data(&_sm_expr18);
     std::memcpy(__sm_catP, "plain", 5);
     simse_println((_sm_expr18), stdout);
     _sm_expr19.resize(2 + a.size());
-    __sm_catP = _sm_expr19.data();
+    __sm_catP = simse_str_data(&_sm_expr19);
     std::memcpy(__sm_catP, "a=", 2);
     __sm_catP = __sm_catP + 2;
     std::memcpy(__sm_catP, a.data(), a.size());
     simse_println((_sm_expr19), stdout);
     _sm_expr20.resize(1 + a.size() + b.size());
-    __sm_catP = _sm_expr20.data();
+    __sm_catP = simse_str_data(&_sm_expr20);
     std::memcpy(__sm_catP, a.data(), a.size());
     __sm_catP = __sm_catP + a.size();
     *__sm_catP = (char) ('x');
@@ -1902,7 +1997,7 @@ Int ns1_partConcat() {
     std::memcpy(__sm_catP, b.data(), b.size());
     simse_println((_sm_expr20), stdout);
     _sm_expr21.resize(3 + a.size() + b.size());
-    __sm_catP = _sm_expr21.data();
+    __sm_catP = simse_str_data(&_sm_expr21);
     std::memcpy(__sm_catP, "b=", 2);
     __sm_catP = __sm_catP + 2;
     std::memcpy(__sm_catP, a.data(), a.size());
@@ -1912,16 +2007,16 @@ Int ns1_partConcat() {
     std::memcpy(__sm_catP, b.data(), b.size());
     simse_println((_sm_expr21), stdout);
     _sm_expr23.resize(a.size());
-    __sm_catP = _sm_expr23.data();
+    __sm_catP = simse_str_data(&_sm_expr23);
     std::memcpy(__sm_catP, a.data(), a.size());
     simse_println((_sm_expr23), stdout);
     _sm_expr24.resize(0);
     simse_println((_sm_expr24), stdout);
-    bare = __sm_stringTable[85];
+    bare = __sm_stringTable[87];
     __sm_catAt = bare.size();
     bare.resize(__sm_catAt + 0);
     simse_println((bare), stdout);
-    format = __sm_stringTable[55];
+    format = __sm_stringTable[57];
     _sm_base16 = List<Str>{a};
     _sm_base17 = &_sm_base16;
     _sm_expr25 = fmtStr(format, _sm_base17);
@@ -1931,13 +2026,13 @@ Int ns1_partConcat() {
     _sm_expr26 = fmtStr(__sm_stringTable[19], _sm_base19);
     simse_println((_sm_expr26), stdout);
     _sm_expr27.resize(2 + a.size());
-    __sm_catP = _sm_expr27.data();
+    __sm_catP = simse_str_data(&_sm_expr27);
     std::memcpy(__sm_catP, "x=", 2);
     __sm_catP = __sm_catP + 2;
     std::memcpy(__sm_catP, a.data(), a.size());
     simse_println((_sm_expr27), stdout);
     _sm_expr28.resize(2 + a.size());
-    __sm_catP = _sm_expr28.data();
+    __sm_catP = simse_str_data(&_sm_expr28);
     *__sm_catP = (char) ('|');
     __sm_catP = __sm_catP + 1;
     std::memcpy(__sm_catP, a.data(), a.size());
@@ -1945,7 +2040,7 @@ Int ns1_partConcat() {
     *__sm_catP = (char) ('|');
     simse_println((_sm_expr28), stdout);
     _sm_expr29.resize(3 + a.size() + b.size());
-    __sm_catP = _sm_expr29.data();
+    __sm_catP = simse_str_data(&_sm_expr29);
     std::memcpy(__sm_catP, "c=", 2);
     __sm_catP = __sm_catP + 2;
     std::memcpy(__sm_catP, a.data(), a.size());
@@ -1955,18 +2050,18 @@ Int ns1_partConcat() {
     std::memcpy(__sm_catP, b.data(), b.size());
     simse_println((_sm_expr29), stdout);
     _sm_expr30.resize(5);
-    __sm_catP = _sm_expr30.data();
+    __sm_catP = simse_str_data(&_sm_expr30);
     std::memcpy(__sm_catP, "plain", 5);
     simse_println((_sm_expr30), stdout);
     _sm_base29 = tag.count;
-    __sm_catC0 = simse_strCountDigits(_sm_base29);
+    __sm_catC0 = strCountDigits(_sm_base29);
     _sm_expr31.resize(2 + __sm_catC0);
-    __sm_catP = _sm_expr31.data();
+    __sm_catP = simse_str_data(&_sm_expr31);
     std::memcpy(__sm_catP, "n=", 2);
     __sm_catP = __sm_catP + 2;
-    simse_strAddInt(__sm_catP, _sm_base29, __sm_catC0);
+    strAddInt(__sm_catP, _sm_base29, __sm_catC0);
     simse_println((_sm_expr31), stdout);
-    withFormat = __sm_stringTable[56];
+    withFormat = __sm_stringTable[58];
     _sm_base31 = List<Str>{a};
     _sm_base32 = &_sm_base31;
     _sm_expr32 = fmtStrWith('@', withFormat, _sm_base32);
@@ -1974,7 +2069,7 @@ Int ns1_partConcat() {
     withSep = '@';
     _sm_base33 = List<Str>{a};
     _sm_base34 = &_sm_base33;
-    _sm_expr33 = fmtStrWith(withSep, __sm_stringTable[52], _sm_base34);
+    _sm_expr33 = fmtStrWith(withSep, __sm_stringTable[54], _sm_base34);
     simse_println((_sm_expr33), stdout);
     _sm_base35 = List<Str>{a};
     _sm_base36 = &_sm_base35;
@@ -1984,7 +2079,7 @@ Int ns1_partConcat() {
 }
 // stress/strings/src/main.kt
 Int ns1_partRawStrings() {
-    char* __sm_catP;
+    Char* __sm_catP;
     Int __sm_catC0;
     Str* _sm_base1, * _sm_base2, * _sm_base4;
     Str _sm_base3, text, empty, quoted, who, _sm_expr10, _sm_expr11, _sm_expr12, _sm_expr13, _sm_expr14,
@@ -1998,7 +2093,7 @@ Int ns1_partRawStrings() {
     _sm_expr1 = simse_lenOf(text);
     simse_println((_sm_expr1), stdout);
     simse_println((text), stdout);
-    empty = __sm_stringTable[96];
+    empty = __sm_stringTable[98];
     _sm_expr2 = simse_lenOf(empty);
     simse_println((_sm_expr2), stdout);
     _sm_expr3 = isEmpty(simse_addressOf(empty));
@@ -2025,75 +2120,75 @@ Int ns1_partRawStrings() {
     simse_println((__sm_stringTable[17]), stdout);
     goto L4;
     L2:;
-    simse_println((__sm_stringTable[72]), stdout);
+    simse_println((__sm_stringTable[74]), stdout);
     L4:;
     quoted = __sm_stringTable[4];
     _sm_expr9 = simse_lenOf(quoted);
     simse_println((_sm_expr9), stdout);
     simse_println((quoted), stdout);
-    who = __sm_stringTable[34];
+    who = __sm_stringTable[35];
     n = 42;
     _sm_expr10.resize(6 + who.size());
-    __sm_catP = _sm_expr10.data();
+    __sm_catP = simse_str_data(&_sm_expr10);
     std::memcpy(__sm_catP, "hello ", 6);
     __sm_catP = __sm_catP + 6;
     std::memcpy(__sm_catP, who.data(), who.size());
     simse_println((_sm_expr10), stdout);
     _sm_expr11.resize(1 + who.size());
-    __sm_catP = _sm_expr11.data();
+    __sm_catP = simse_str_data(&_sm_expr11);
     std::memcpy(__sm_catP, who.data(), who.size());
     __sm_catP = __sm_catP + who.size();
     *__sm_catP = (char) ('!');
     simse_println((_sm_expr11), stdout);
     _sm_expr12.resize(who.size() + who.size());
-    __sm_catP = _sm_expr12.data();
+    __sm_catP = simse_str_data(&_sm_expr12);
     std::memcpy(__sm_catP, who.data(), who.size());
     __sm_catP = __sm_catP + who.size();
     std::memcpy(__sm_catP, who.data(), who.size());
     simse_println((_sm_expr12), stdout);
-    __sm_catC0 = simse_strCountDigits(n);
+    __sm_catC0 = strCountDigits(n);
     _sm_expr13.resize(2 + __sm_catC0);
-    __sm_catP = _sm_expr13.data();
+    __sm_catP = simse_str_data(&_sm_expr13);
     std::memcpy(__sm_catP, "n=", 2);
     __sm_catP = __sm_catP + 2;
-    simse_strAddInt(__sm_catP, n, __sm_catC0);
+    strAddInt(__sm_catP, n, __sm_catC0);
     simse_println((_sm_expr13), stdout);
     simse_println((__sm_stringTable[7]), stdout);
-    simse_println((__sm_stringTable[84]), stdout);
+    simse_println((__sm_stringTable[86]), stdout);
     _sm_expr14.resize(4 + who.size());
-    __sm_catP = _sm_expr14.data();
+    __sm_catP = simse_str_data(&_sm_expr14);
     std::memcpy(__sm_catP, "a|b=", 4);
     __sm_catP = __sm_catP + 4;
     std::memcpy(__sm_catP, who.data(), who.size());
     simse_println((_sm_expr14), stdout);
     _sm_expr15.resize(2 + who.size());
-    __sm_catP = _sm_expr15.data();
+    __sm_catP = simse_str_data(&_sm_expr15);
     *__sm_catP = (char) ('|');
     __sm_catP = __sm_catP + 1;
     std::memcpy(__sm_catP, who.data(), who.size());
     __sm_catP = __sm_catP + who.size();
     *__sm_catP = (char) ('|');
     simse_println((_sm_expr15), stdout);
-    __sm_catC0 = simse_strCountDigits(n);
+    __sm_catC0 = strCountDigits(n);
     _sm_expr16.resize(5 + who.size() + __sm_catC0);
-    __sm_catP = _sm_expr16.data();
+    __sm_catP = simse_str_data(&_sm_expr16);
     std::memcpy(__sm_catP, "_sm_", 4);
     __sm_catP = __sm_catP + 4;
     std::memcpy(__sm_catP, who.data(), who.size());
     __sm_catP = __sm_catP + who.size();
     *__sm_catP = (char) ('_');
     __sm_catP = __sm_catP + 1;
-    simse_strAddInt(__sm_catP, n, __sm_catC0);
+    strAddInt(__sm_catP, n, __sm_catC0);
     simse_println((_sm_expr16), stdout);
-    __sm_catC0 = simse_strCountDigits(n);
+    __sm_catC0 = strCountDigits(n);
     _sm_expr17.resize(who.size() + __sm_catC0);
-    __sm_catP = _sm_expr17.data();
+    __sm_catP = simse_str_data(&_sm_expr17);
     std::memcpy(__sm_catP, who.data(), who.size());
     __sm_catP = __sm_catP + who.size();
-    simse_strAddInt(__sm_catP, n, __sm_catC0);
+    strAddInt(__sm_catP, n, __sm_catC0);
     simse_println((_sm_expr17), stdout);
     _sm_expr18.resize(2 + who.size());
-    __sm_catP = _sm_expr18.data();
+    __sm_catP = simse_str_data(&_sm_expr18);
     *__sm_catP = (char) ('(');
     __sm_catP = __sm_catP + 1;
     std::memcpy(__sm_catP, who.data(), who.size());
@@ -2101,7 +2196,7 @@ Int ns1_partRawStrings() {
     *__sm_catP = (char) (')');
     simse_println((_sm_expr18), stdout);
     _sm_expr20.resize(11 + who.size());
-    __sm_catP = _sm_expr20.data();
+    __sm_catP = simse_str_data(&_sm_expr20);
     std::memcpy(__sm_catP, "a@ b and ", 9);
     __sm_catP = __sm_catP + 9;
     std::memcpy(__sm_catP, who.data(), who.size());
@@ -2116,7 +2211,7 @@ Int ns1_partRawStrings() {
     _sm_base28 = &_sm_base27;
     piped = fmtStrWith('@', __sm_stringTable[21], _sm_base28);
     simse_println((piped), stdout);
-    plain = __sm_stringTable[36];
+    plain = __sm_stringTable[37];
     simse_println((plain), stdout);
     return 0;
 }
@@ -2165,14 +2260,14 @@ Str ns1_classify(Str* op) {
     if (_sm_expr1) goto L15;
     goto L14;
     L15:;
-    _sm_expr1 = equals(simse_addressOf(_sm_when2_v), __sm_stringTable[64]);
+    _sm_expr1 = equals(simse_addressOf(_sm_when2_v), __sm_stringTable[66]);
     if (_sm_expr1) goto L12;
     L14:;
     _sm_expr1 = _sm_when2_n == 2;
     if (_sm_expr1) goto L16;
     goto L13;
     L16:;
-    _sm_expr1 = equals(simse_addressOf(_sm_when2_v), __sm_stringTable[61]);
+    _sm_expr1 = equals(simse_addressOf(_sm_when2_v), __sm_stringTable[63]);
     if (_sm_expr1) goto L12;
     goto L13;
     L12:;
@@ -2198,14 +2293,14 @@ Str ns1_classify(Str* op) {
     if (_sm_expr1) goto L25;
     goto L20;
     L25:;
-    _sm_expr1 = equals(simse_addressOf(_sm_when2_v), __sm_stringTable[63]);
+    _sm_expr1 = equals(simse_addressOf(_sm_when2_v), __sm_stringTable[65]);
     if (_sm_expr1) goto L18;
     L20:;
     _sm_expr1 = _sm_when2_n == 2;
     if (_sm_expr1) goto L26;
     goto L19;
     L26:;
-    _sm_expr1 = equals(simse_addressOf(_sm_when2_v), __sm_stringTable[65]);
+    _sm_expr1 = equals(simse_addressOf(_sm_when2_v), __sm_stringTable[67]);
     if (_sm_expr1) goto L18;
     goto L19;
     L18:;
@@ -2215,13 +2310,13 @@ Str ns1_classify(Str* op) {
     if (_sm_expr1) goto L30;
     goto L29;
     L30:;
-    _sm_expr1 = equals(simse_addressOf(_sm_when2_v), __sm_stringTable[62]);
+    _sm_expr1 = equals(simse_addressOf(_sm_when2_v), __sm_stringTable[64]);
     if (_sm_expr1) goto L28;
     goto L29;
     L28:;
-    return __sm_stringTable[33];
+    return __sm_stringTable[34];
     L29:;
-    return __sm_stringTable[31];
+    return __sm_stringTable[32];
 }
 // stress/strings/src/main.kt
 Str ns1_classifyPtr(Str* op) {
@@ -2250,20 +2345,20 @@ Str ns1_classifyPtr(Str* op) {
     if (_sm_expr1) goto L9;
     goto L8;
     L9:;
-    _sm_expr1 = equals(simse_addressOf(_sm_when3_v), __sm_stringTable[64]);
+    _sm_expr1 = equals(simse_addressOf(_sm_when3_v), __sm_stringTable[66]);
     if (_sm_expr1) goto L6;
     L8:;
     _sm_expr1 = _sm_when3_n == 2;
     if (_sm_expr1) goto L10;
     goto L7;
     L10:;
-    _sm_expr1 = equals(simse_addressOf(_sm_when3_v), __sm_stringTable[70]);
+    _sm_expr1 = equals(simse_addressOf(_sm_when3_v), __sm_stringTable[72]);
     if (_sm_expr1) goto L6;
     goto L7;
     L6:;
-    return __sm_stringTable[54];
+    return __sm_stringTable[56];
     L7:;
-    return __sm_stringTable[31];
+    return __sm_stringTable[32];
 }
 // stress/strings/src/main.kt
 Str ns1_viewKind(Span<Char> v) {
@@ -2296,30 +2391,30 @@ Str ns1_viewKind(Span<Char> v) {
     if (_sm_expr1) goto L9;
     goto L8;
     L9:;
-    _sm_expr1 = equals(simse_addressOf(_sm_when4_v), __sm_stringTable[70]);
+    _sm_expr1 = equals(simse_addressOf(_sm_when4_v), __sm_stringTable[72]);
     if (_sm_expr1) goto L7;
     goto L8;
     L7:;
-    return __sm_stringTable[41];
+    return __sm_stringTable[42];
     L8:;
-    return __sm_stringTable[83];
+    return __sm_stringTable[85];
 }
 // stress/strings/src/main.kt
 Str ns1_fixed(Str* op) {
     Str _sm_base1;
     Bool _sm_expr1;
     _sm_base1 = *(op);
-    _sm_expr1 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_base1))), __sm_stringTable[40]);
+    _sm_expr1 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_base1))), __sm_stringTable[41]);
     if (_sm_expr1) goto L1;
     goto L2;
     L1:;
-    return __sm_stringTable[37];
+    return __sm_stringTable[38];
     L2:;
-    return __sm_stringTable[31];
+    return __sm_stringTable[32];
 }
 // stress/strings/src/main.kt
 Int ns1_partWhenStrings() {
-    char* __sm_catP;
+    Char* __sm_catP;
     List<Str>* _sm_base1, * _sm_base3;
     Str* _sm_base2, * _sm_base4, * _sm_base5, * _sm_base7;
     Str _sm_base6, _sm_base8, op, _sm_expr3, _sm_expr4, _sm_expr5, _sm_expr8, _sm_expr10, _sm_expr11,
@@ -2329,7 +2424,7 @@ Int ns1_partWhenStrings() {
     Span_iterValues_yieldable<Str> _sm_for6, _sm_for7;
     Bool _sm_expr2;
     Ref<Str> _sm_expr16;
-    ops = List<Str>{__sm_stringTable[96], __sm_stringTable[95], __sm_stringTable[88], __sm_stringTable[77], __sm_stringTable[64], __sm_stringTable[61], __sm_stringTable[80], __sm_stringTable[82], __sm_stringTable[63], __sm_stringTable[65], __sm_stringTable[62], __sm_stringTable[73], __sm_stringTable[74]};
+    ops = List<Str>{__sm_stringTable[98], __sm_stringTable[97], __sm_stringTable[90], __sm_stringTable[79], __sm_stringTable[66], __sm_stringTable[63], __sm_stringTable[82], __sm_stringTable[84], __sm_stringTable[65], __sm_stringTable[67], __sm_stringTable[64], __sm_stringTable[75], __sm_stringTable[76]};
     _sm_base1 = &ops;
     _sm_expr1 = simse_spanOf(_sm_base1);
     _sm_for6 = iterValues(simse_addressOf(_sm_expr1));
@@ -2338,42 +2433,42 @@ Int ns1_partWhenStrings() {
     if (!(_sm_expr2)) goto L2;
     op = _sm_for6.current;
     _sm_expr3.resize(4 + op.size());
-    __sm_catP = _sm_expr3.data();
+    __sm_catP = simse_str_data(&_sm_expr3);
     std::memcpy(__sm_catP, op.data(), op.size());
     __sm_catP = __sm_catP + op.size();
     std::memcpy(__sm_catP, " -> ", 4);
     _sm_base2 = &op;
     _sm_expr4 = ns1_classify(_sm_base2);
     _sm_expr5.resize(_sm_expr3.size() + _sm_expr4.size());
-    __sm_catP = _sm_expr5.data();
+    __sm_catP = simse_str_data(&_sm_expr5);
     std::memcpy(__sm_catP, _sm_expr3.data(), _sm_expr3.size());
     __sm_catP = __sm_catP + _sm_expr3.size();
     std::memcpy(__sm_catP, _sm_expr4.data(), _sm_expr4.size());
     simse_println((_sm_expr5), stdout);
     goto L1;
     L2:;
-    _sm_expr3 = ns1_viewKind(__sm_stringTable[89]);
+    _sm_expr3 = ns1_viewKind(__sm_stringTable[91]);
     _sm_expr4.resize(1 + _sm_expr3.size());
-    __sm_catP = _sm_expr4.data();
+    __sm_catP = simse_str_data(&_sm_expr4);
     std::memcpy(__sm_catP, _sm_expr3.data(), _sm_expr3.size());
     __sm_catP = __sm_catP + _sm_expr3.size();
     *__sm_catP = (char) (' ');
-    _sm_expr8 = ns1_viewKind(__sm_stringTable[70]);
+    _sm_expr8 = ns1_viewKind(__sm_stringTable[72]);
     _sm_expr10.resize(1 + _sm_expr4.size() + _sm_expr8.size());
-    __sm_catP = _sm_expr10.data();
+    __sm_catP = simse_str_data(&_sm_expr10);
     std::memcpy(__sm_catP, _sm_expr4.data(), _sm_expr4.size());
     __sm_catP = __sm_catP + _sm_expr4.size();
     std::memcpy(__sm_catP, _sm_expr8.data(), _sm_expr8.size());
     __sm_catP = __sm_catP + _sm_expr8.size();
     *__sm_catP = (char) (' ');
-    _sm_expr11 = ns1_viewKind(__sm_stringTable[47]);
+    _sm_expr11 = ns1_viewKind(__sm_stringTable[49]);
     _sm_expr12.resize(_sm_expr10.size() + _sm_expr11.size());
-    __sm_catP = _sm_expr12.data();
+    __sm_catP = simse_str_data(&_sm_expr12);
     std::memcpy(__sm_catP, _sm_expr10.data(), _sm_expr10.size());
     __sm_catP = __sm_catP + _sm_expr10.size();
     std::memcpy(__sm_catP, _sm_expr11.data(), _sm_expr11.size());
     simse_println((_sm_expr12), stdout);
-    words = List<Str>{__sm_stringTable[96], __sm_stringTable[95], __sm_stringTable[70], __sm_stringTable[73]};
+    words = List<Str>{__sm_stringTable[98], __sm_stringTable[97], __sm_stringTable[72], __sm_stringTable[75]};
     _sm_base3 = &words;
     _sm_expr13 = simse_spanOf(_sm_base3);
     _sm_for7 = iterValues(simse_addressOf(_sm_expr13));
@@ -2382,7 +2477,7 @@ Int ns1_partWhenStrings() {
     if (!(_sm_expr2)) goto L4;
     word = _sm_for7.current;
     _sm_expr3.resize(3 + word.size());
-    __sm_catP = _sm_expr3.data();
+    __sm_catP = simse_str_data(&_sm_expr3);
     std::memcpy(__sm_catP, word.data(), word.size());
     __sm_catP = __sm_catP + word.size();
     std::memcpy(__sm_catP, " ~ ", 3);
@@ -2390,26 +2485,26 @@ Int ns1_partWhenStrings() {
     _sm_base4 = (_sm_expr16).get();
     _sm_expr4 = ns1_classifyPtr(_sm_base4);
     _sm_expr18.resize(_sm_expr3.size() + _sm_expr4.size());
-    __sm_catP = _sm_expr18.data();
+    __sm_catP = simse_str_data(&_sm_expr18);
     std::memcpy(__sm_catP, _sm_expr3.data(), _sm_expr3.size());
     __sm_catP = __sm_catP + _sm_expr3.size();
     std::memcpy(__sm_catP, _sm_expr4.data(), _sm_expr4.size());
     simse_println((_sm_expr18), stdout);
     goto L3;
     L4:;
-    _sm_base6 = __sm_stringTable[40];
+    _sm_base6 = __sm_stringTable[41];
     _sm_base5 = &_sm_base6;
     _sm_expr3 = ns1_fixed(_sm_base5);
     _sm_expr4.resize(1 + _sm_expr3.size());
-    __sm_catP = _sm_expr4.data();
+    __sm_catP = simse_str_data(&_sm_expr4);
     std::memcpy(__sm_catP, _sm_expr3.data(), _sm_expr3.size());
     __sm_catP = __sm_catP + _sm_expr3.size();
     *__sm_catP = (char) (' ');
-    _sm_base8 = __sm_stringTable[31];
+    _sm_base8 = __sm_stringTable[32];
     _sm_base7 = &_sm_base8;
     _sm_expr8 = ns1_fixed(_sm_base7);
     _sm_expr22.resize(_sm_expr4.size() + _sm_expr8.size());
-    __sm_catP = _sm_expr22.data();
+    __sm_catP = simse_str_data(&_sm_expr22);
     std::memcpy(__sm_catP, _sm_expr4.data(), _sm_expr4.size());
     __sm_catP = __sm_catP + _sm_expr4.size();
     std::memcpy(__sm_catP, _sm_expr8.data(), _sm_expr8.size());
@@ -2602,64 +2697,6 @@ inline Str simse_num_toString(const T& self) {
 
 inline Str simse_bool_toString(Bool self) {
     return self ? "true" : "false";
-}
-
-static const unsigned long long smStrDigitPow10[20] = {
-    1ull, 10ull, 100ull, 1000ull, 10000ull, 100000ull, 1000000ull, 10000000ull,
-    100000000ull, 1000000000ull, 10000000000ull, 100000000000ull, 1000000000000ull,
-    10000000000000ull, 100000000000000ull, 1000000000000000ull, 10000000000000000ull,
-    100000000000000000ull, 1000000000000000000ull, 10000000000000000000ull
-};
-
-inline Int simse_strCountDigits(Int64 value) {
-    unsigned long long magnitude =
-        value < 0 ? 0ull - (unsigned long long) value : (unsigned long long) value;
-    if (magnitude < 10ull) {
-        return value < 0 ? 2 : 1;
-    }
-    Int bits = (Int) std::bit_width(magnitude);
-    Int guess = (Int) (((unsigned int) bits * 1233u) >> 12);
-    Int digits = guess + (magnitude >= smStrDigitPow10[guess] ? 1 : 0);
-    return digits + (value < 0 ? 1 : 0);
-}
-
-struct SmStrDigitPairTable {
-    char text[200];
-    constexpr SmStrDigitPairTable() : text() {
-        for (Int i = 0; i < 100; i = i + 1) {
-            text[i * 2] = (char) ('0' + i / 10);
-            text[i * 2 + 1] = (char) ('0' + i % 10);
-        }
-    }
-};
-
-static constexpr SmStrDigitPairTable smStrDigitPairs{};
-
-inline void simse_strAddInt(char* target, Int64 value, Int count) {
-    unsigned long long magnitude =
-        value < 0 ? 0ull - (unsigned long long) value : (unsigned long long) value;
-    if (value < 0) {
-        target[0] = '-';
-        count = count - 1;
-        target = target + 1;
-    }
-    while (count >= 2) {
-        unsigned int pair = (unsigned int) (magnitude % 100ull);
-        magnitude /= 100ull;
-        count = count - 2;
-        target[count] = smStrDigitPairs.text[pair * 2];
-        target[count + 1] = smStrDigitPairs.text[pair * 2 + 1];
-    }
-    if (count == 1) {
-        target[0] = (char) ('0' + (Int) magnitude);
-    }
-}
-
-inline Span<Char> simse_strBoolView(Bool value) {
-    static Char texts[2][6] = {"true", "false"};
-    static Int lens[2] = {4, 5};
-    Int at = value ? 0 : 1;
-    return Span<Char>{texts[at], lens[at]};
 }
 
 template <class T>

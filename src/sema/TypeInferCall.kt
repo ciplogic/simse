@@ -586,6 +586,12 @@ fun SemInfer.infer(e: *AstXmlNode): AstXmlNode {
     val kind: AstNodeCategory = xmlKind(e)
     when (kind) {
         AstNodeCategory.ExprIntLit -> {
+            // A decimal literal wider than `Int32` is an `Int64`: `0 - 9223372036854775807`
+            // was `Int - Int` (the literal's own type), truncated at the temporary the
+            // lowering hoists, and the wider-operand rule never saw a wider side to pick.
+            if (semIsInt64Literal(xmlAttr(e, AstNodeAttributeKind.Text))) {
+                return semNamedType("Int64")
+            }
             return semNamedType("Int")
         }
 

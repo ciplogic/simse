@@ -301,13 +301,13 @@ inline void initByValue(Res<T>* self, Str value) {
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 2;
+static const Int __sm_stringCount = 4;
 static const char __sm_stringPool[] =
-    "abcd" "" 
+    "false" "abcd" "true" "" 
 ;
-static const Int16 __sm_stringStarts[] = {2,2,0,-4};
-static const Int16 __sm_stringLens[] = {2,2,-4,4};
-static_assert(sizeof(__sm_stringPool) - 1 == 4, "the string pool and its length index disagree");
+static const Int16 __sm_stringStarts[] = {4,4,0,-5,1,0};
+static const Int16 __sm_stringLens[] = {4,4,-5,1,0,4};
+static_assert(sizeof(__sm_stringPool) - 1 == 13, "the string pool and its length index disagree");
 static Span<Char> __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
@@ -494,6 +494,9 @@ Res<T> simse_resOk(T value);
 template <class T>
 Res<T> simse_resErr(Str message);
 void initByValue(Str* self);
+Int strCountDigits(Int64 value);
+void strAddInt(Char* target, Int64 value, Int count);
+Span<Char> strBoolView(Bool value);
 Str substr(Str* self, Int start, Int len);
 Str intToStr(Int64 value);
 Str toString(Int* self);
@@ -705,6 +708,105 @@ Res<T> simse_resErr(Str message) {
 }
 void initByValue(Str* self) {
 }
+Int strCountDigits(Int64 value) {
+    Bool _sm_expr2;
+    Int bits, _sm_expr5, guess, i, digits;
+    Int64 limit, _sm_expr9;
+    _sm_expr2 = value > -10;
+    if (_sm_expr2) goto L3;
+    goto L2;
+    L3:;
+    _sm_expr2 = value < 10;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = value < 0;
+    if (_sm_expr2) goto L4;
+    goto L5;
+    L4:;
+    return 2;
+    L5:;
+    return 1;
+    L2:;
+    bits = simse_bit_width64(value);
+    _sm_expr5 = bits * 1233;
+    guess = _sm_expr5 / 4096;
+    _sm_expr2 = guess >= 19;
+    if (_sm_expr2) goto L6;
+    goto L7;
+    L6:;
+    return 20;
+    L7:;
+    limit = 10;
+    i = 1;
+    L8:;
+    _sm_expr2 = i < guess;
+    if (!(_sm_expr2)) goto L9;
+    limit = limit * 10;
+    i = i + 1;
+    goto L8;
+    L9:;
+    digits = guess;
+    _sm_expr2 = value >= limit;
+    if (_sm_expr2) goto L10;
+    _sm_expr9 = 0 - limit;
+    _sm_expr2 = value <= _sm_expr9;
+    if (_sm_expr2) goto L10;
+    goto L11;
+    L10:;
+    digits = digits + 1;
+    L11:;
+    _sm_expr2 = value < 0;
+    if (_sm_expr2) goto L13;
+    goto L14;
+    L13:;
+    digits = digits + 1;
+    L14:;
+    return digits;
+}
+void strAddInt(Char* target, Int64 value, Int count) {
+    Int64 rest, _sm_expr5;
+    Bool _sm_expr1;
+    Int at, _sm_expr3;
+    Char ch;
+    rest = value;
+    _sm_expr1 = rest > 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    rest = 0 - rest;
+    L2:;
+    at = count;
+    _sm_expr1 = value < 0;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    target[0] = '-';
+    L4:;
+    _sm_expr3 = -10;
+    _sm_expr1 = rest <= _sm_expr3;
+    if (!(_sm_expr1)) goto L6;
+    _sm_expr5 = rest % 10;
+    _sm_expr3 = 0 - _sm_expr5;
+    at = at - 1;
+    ch = '0' + _sm_expr3;
+    target[at] = ch;
+    rest = rest / 10;
+    goto L4;
+    L6:;
+    at = at - 1;
+    _sm_expr5 = 0 - rest;
+    ch = '0' + _sm_expr5;
+    target[at] = ch;
+}
+Span<Char> strBoolView(Bool value) {
+    if (value) goto L1;
+    goto L2;
+    L1:;
+    return __sm_stringTable[2];
+    L2:;
+    return __sm_stringTable[0];
+}
 Str substr(Str* self, Int start, Int len) {
     Str* _sm_base1;
     Int begin, _sm_expr2, count;
@@ -760,7 +862,7 @@ Str intToStr(Int64 value) {
     L1:;
     rest = 0 - rest;
     L2:;
-    reversed = __sm_stringTable[1];
+    reversed = __sm_stringTable[3];
     _sm_expr1 = rest == 0;
     if (_sm_expr1) goto L3;
     goto L4;
@@ -776,7 +878,7 @@ Str intToStr(Int64 value) {
     rest = rest / 10;
     goto L4;
     L6:;
-    out = __sm_stringTable[1];
+    out = __sm_stringTable[3];
     digit = simse_lenOf(reversed);
     _sm_expr6 = digit + 1;
     simse_str_reserve(out, _sm_expr6);
@@ -841,7 +943,7 @@ int main() {
     Str* _sm_base1, * _sm_base2;
     Str name, _sm_expr2, _sm_expr4;
     Int _sm_expr1, _sm_expr3;
-    name = __sm_stringTable[0];
+    name = __sm_stringTable[1];
     _sm_base1 = &name;
     _sm_expr1 = ns1_use(_sm_base1);
     _sm_expr2 = toString(simse_addressOf(_sm_expr1));

@@ -423,6 +423,11 @@ fun Emitter.ilFuseConcatUnit(unit: *IlUnit): Unit {
     }
     if (fused) {
         this.referencedNames.insert(ilConcatSymbol(), true)
+        // The other two the expansion calls: no AST call site exists for the emitter to
+        // have walked, so the whole trio is recorded here or the bodies are dropped while
+        // the emitted calls stay (src/rtl/rtl.kt).
+        this.referencedNames.insert("strCountDigits", true)
+        this.referencedNames.insert("strBoolView", true)
     }
 }
 

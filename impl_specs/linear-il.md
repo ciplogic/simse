@@ -316,14 +316,15 @@ body whose dump has neither is fully covered by the IL.
   merges the whole chain, and the split format, into *one* instruction over every part,
   which the backend *expands* into a length sum, one `resize` and one slot write per part
   (the Java 9 `StringConcatFactory` shape, `ilConcatStatements` in
-  `src/codegen/IlCodeGen.kt`, `src/rtl/_res.md`'s `strcat` section): no call, so a
+  `src/codegen/IlCodeGen.kt`, over the prelude's Simse bodies `strCountDigits`/
+  `strAddInt`/`strBoolView` - src/rtl/rtl.kt): no call, so a
   *literal* part contributes a compile-time integer to the sum and a destination that is
   the chain's own first part is appended onto in place. It declines rather than guess - a
   `+` operand that is a number (`s + n` appends one *byte*), a format that is not a
   literal or holds an escape, a `+`-count that does not match the packed items, a
   destination the chain reads somewhere but first - and leaves the code as it was, where
   the runtime's own `fmtStr`/`fmtStrWith` still answers. `--no-concat` turns the whole pass off (a `+`
-  chain and a literal `fmtStr`/`fmtStrWith` keep the lowering's shape, and the `strcat` section goes
+  chain and a literal `fmtStr`/`fmtStrWith` keep the lowering's shape, and the trio's bodies go
   with it): the A/B switch for what the fusion costs and what it buys, off by default.
 - **A repeated pure call of an unchanged slot is merged into the first one**
   (`src/linear/ReusePure.kt`). A `Str` tested against literals lowers to a view of it per

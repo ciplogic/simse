@@ -301,13 +301,13 @@ inline void initByValue(Res<T>* self, Str value) {
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 20;
+static const Int __sm_stringCount = 22;
 static const char __sm_stringPool[] =
-    "shadowing the protocol:" "every other, up to 10:" "with for and an index:" "skip 4, stop after 8:" "countdown from 3:" "after the end:" "with for:" "negative" "called" "parsed" "alpha" "gamma" "beta" "gone" ":" "=" "a" "b" "c" "" 
+    "shadowing the protocol:" "every other, up to 10:" "with for and an index:" "skip 4, stop after 8:" "countdown from 3:" "after the end:" "with for:" "negative" "called" "parsed" "alpha" "false" "gamma" "beta" "gone" "true" ":" "=" "a" "b" "c" "" 
 ;
-static const Int16 __sm_stringStarts[] = {20,16,0,-23,1,0,1,4,3,5,1,2,0,1,0,1,0,3,1,4,0};
-static const Int16 __sm_stringLens[] = {20,15,-23,1,0,1,4,3,5,1,2,0,1,0,1,0,3,1,4,0,1,1};
-static_assert(sizeof(__sm_stringPool) - 1 == 171, "the string pool and its length index disagree");
+static const Int16 __sm_stringStarts[] = {22,12,0,-23,1,0,1,4,3,5,1,2,0,1,1,2,0,1,1,1,2,0,1,3,1,4,0};
+static const Int16 __sm_stringLens[] = {22,11,-23,1,0,1,4,3,5,1,2,0,1,1,2,0,1,1,1,2,0,1,3,1,4,0,1,1};
+static_assert(sizeof(__sm_stringPool) - 1 == 180, "the string pool and its length index disagree");
 static Span<Char> __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
@@ -403,13 +403,6 @@ Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& val
 
 template <class T, class F>
 void simse_list_sort(List<T>& self, F less);
-
-#include <bit>
-#include <cstring>
-
-Int simse_strCountDigits(Int64 value);
-void simse_strAddInt(char* target, Int64 value, Int count);
-Span<Char> simse_strBoolView(Bool value);
 
 #include <cstdio>
 
@@ -553,6 +546,9 @@ Bool advance(Span_iterValues_yieldable<T>* self) {
 template <class T>
 Span_iterValues_yieldable<T> iterValues(Span<T>* self);
 void initByValue(Str* self);
+Int strCountDigits(Int64 value);
+void strAddInt(Char* target, Int64 value, Int count);
+Span<Char> strBoolView(Bool value);
 Str substr(Str* self, Int start, Int len);
 Str intToStr(Int64 value);
 Str toString(Int* self);
@@ -969,6 +965,105 @@ Span_iterValues_yieldable<T> iterValues(Span<T>* self) {
 }
 void initByValue(Str* self) {
 }
+Int strCountDigits(Int64 value) {
+    Bool _sm_expr2;
+    Int bits, _sm_expr5, guess, i, digits;
+    Int64 limit, _sm_expr9;
+    _sm_expr2 = value > -10;
+    if (_sm_expr2) goto L3;
+    goto L2;
+    L3:;
+    _sm_expr2 = value < 10;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = value < 0;
+    if (_sm_expr2) goto L4;
+    goto L5;
+    L4:;
+    return 2;
+    L5:;
+    return 1;
+    L2:;
+    bits = simse_bit_width64(value);
+    _sm_expr5 = bits * 1233;
+    guess = _sm_expr5 / 4096;
+    _sm_expr2 = guess >= 19;
+    if (_sm_expr2) goto L6;
+    goto L7;
+    L6:;
+    return 20;
+    L7:;
+    limit = 10;
+    i = 1;
+    L8:;
+    _sm_expr2 = i < guess;
+    if (!(_sm_expr2)) goto L9;
+    limit = limit * 10;
+    i = i + 1;
+    goto L8;
+    L9:;
+    digits = guess;
+    _sm_expr2 = value >= limit;
+    if (_sm_expr2) goto L10;
+    _sm_expr9 = 0 - limit;
+    _sm_expr2 = value <= _sm_expr9;
+    if (_sm_expr2) goto L10;
+    goto L11;
+    L10:;
+    digits = digits + 1;
+    L11:;
+    _sm_expr2 = value < 0;
+    if (_sm_expr2) goto L13;
+    goto L14;
+    L13:;
+    digits = digits + 1;
+    L14:;
+    return digits;
+}
+void strAddInt(Char* target, Int64 value, Int count) {
+    Int64 rest, _sm_expr5;
+    Bool _sm_expr1;
+    Int at, _sm_expr3;
+    Char ch;
+    rest = value;
+    _sm_expr1 = rest > 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    rest = 0 - rest;
+    L2:;
+    at = count;
+    _sm_expr1 = value < 0;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    target[0] = '-';
+    L4:;
+    _sm_expr3 = -10;
+    _sm_expr1 = rest <= _sm_expr3;
+    if (!(_sm_expr1)) goto L6;
+    _sm_expr5 = rest % 10;
+    _sm_expr3 = 0 - _sm_expr5;
+    at = at - 1;
+    ch = '0' + _sm_expr3;
+    target[at] = ch;
+    rest = rest / 10;
+    goto L4;
+    L6:;
+    at = at - 1;
+    _sm_expr5 = 0 - rest;
+    ch = '0' + _sm_expr5;
+    target[at] = ch;
+}
+Span<Char> strBoolView(Bool value) {
+    if (value) goto L1;
+    goto L2;
+    L1:;
+    return __sm_stringTable[15];
+    L2:;
+    return __sm_stringTable[11];
+}
 Str substr(Str* self, Int start, Int len) {
     Str* _sm_base1;
     Int begin, _sm_expr2, count;
@@ -1024,7 +1119,7 @@ Str intToStr(Int64 value) {
     L1:;
     rest = 0 - rest;
     L2:;
-    reversed = __sm_stringTable[19];
+    reversed = __sm_stringTable[21];
     _sm_expr1 = rest == 0;
     if (_sm_expr1) goto L3;
     goto L4;
@@ -1040,7 +1135,7 @@ Str intToStr(Int64 value) {
     rest = rest / 10;
     goto L4;
     L6:;
-    out = __sm_stringTable[19];
+    out = __sm_stringTable[21];
     digit = simse_lenOf(reversed);
     _sm_expr6 = digit + 1;
     simse_str_reserve(out, _sm_expr6);
@@ -1187,9 +1282,9 @@ Int ns1_partFlatBlocks() {
     _sm_expr8 = ns1_describe(_sm_expr7);
     simse_println((_sm_expr8), stdout);
     names = List<Str>();
-    simse_list_append(names, __sm_stringTable[16]);
-    simse_list_append(names, __sm_stringTable[17]);
     simse_list_append(names, __sm_stringTable[18]);
+    simse_list_append(names, __sm_stringTable[19]);
+    simse_list_append(names, __sm_stringTable[20]);
     _sm_base1 = &names;
     _sm_expr9 = ns1_countUntil(_sm_base1);
     simse_println((_sm_expr9), stdout);
@@ -1206,7 +1301,7 @@ ns1_List_everyNth_yieldable<T> ns1_everyNth(List<T>* self, Int step) {
 }
 // stress/machines/src/main.kt
 Int ns1_partGenericYield() {
-    char* __sm_catP;
+    Char* __sm_catP;
     Int __sm_catC0;
     List<Int> numbers;
     ns1_List_everyNth_yieldable<Int> _sm_expr1, _sm_for1, byOne;
@@ -1234,8 +1329,8 @@ Int ns1_partGenericYield() {
     L2:;
     words = List<Str>();
     simse_list_append(words, __sm_stringTable[10]);
+    simse_list_append(words, __sm_stringTable[13]);
     simse_list_append(words, __sm_stringTable[12]);
-    simse_list_append(words, __sm_stringTable[11]);
     _sm_expr4 = ns1_everyNth(simse_addressOf(words), 2);
     _sm_for2 = _sm_expr4;
     _sm_index2 = -1;
@@ -1245,10 +1340,10 @@ Int ns1_partGenericYield() {
     _sm_index2 = _sm_index2 + 1;
     word = _sm_for2.current;
     index = _sm_index2;
-    __sm_catC0 = simse_strCountDigits(index);
+    __sm_catC0 = strCountDigits(index);
     _sm_expr8.resize(1 + __sm_catC0 + word.size());
-    __sm_catP = _sm_expr8.data();
-    simse_strAddInt(__sm_catP, index, __sm_catC0);
+    __sm_catP = simse_str_data(&_sm_expr8);
+    strAddInt(__sm_catP, index, __sm_catC0);
     __sm_catP = __sm_catP + __sm_catC0;
     *__sm_catP = (char) (':');
     __sm_catP = __sm_catP + 1;
@@ -1292,7 +1387,7 @@ ns1_shadowing_yieldable ns1_shadowing() {
 }
 // stress/machines/src/main.kt
 Int ns1_partYield() {
-    char* __sm_catP;
+    Char* __sm_catP;
     Int* _sm_base1, * _sm_base2;
     ns1_everyOther_yieldable evens, _sm_expr10, _sm_for4, _sm_expr13, _sm_for5, _sm_expr19, _sm_for6;
     Bool _sm_expr1, _sm_expr5;
@@ -1359,13 +1454,13 @@ Int ns1_partYield() {
     index = _sm_index5;
     _sm_expr15 = toString(simse_addressOf(index));
     _sm_expr16.resize(1 + _sm_expr15.size());
-    __sm_catP = _sm_expr16.data();
+    __sm_catP = simse_str_data(&_sm_expr16);
     std::memcpy(__sm_catP, _sm_expr15.data(), _sm_expr15.size());
     __sm_catP = __sm_catP + _sm_expr15.size();
     *__sm_catP = (char) (':');
     _sm_expr17 = toString(simse_addressOf(_sm_value_2));
     _sm_expr18.resize(_sm_expr16.size() + _sm_expr17.size());
-    __sm_catP = _sm_expr18.data();
+    __sm_catP = simse_str_data(&_sm_expr18);
     std::memcpy(__sm_catP, _sm_expr16.data(), _sm_expr16.size());
     __sm_catP = __sm_catP + _sm_expr16.size();
     std::memcpy(__sm_catP, _sm_expr17.data(), _sm_expr17.size());
@@ -1388,13 +1483,13 @@ Int ns1_partYield() {
     if (_sm_expr1) goto L12;
     _sm_expr15 = toString(simse_addressOf(_sm_index_2));
     _sm_expr16.resize(1 + _sm_expr15.size());
-    __sm_catP = _sm_expr16.data();
+    __sm_catP = simse_str_data(&_sm_expr16);
     std::memcpy(__sm_catP, _sm_expr15.data(), _sm_expr15.size());
     __sm_catP = __sm_catP + _sm_expr15.size();
     *__sm_catP = (char) ('=');
     _sm_expr17 = toString(simse_addressOf(_sm_value_3));
     _sm_expr26.resize(_sm_expr16.size() + _sm_expr17.size());
-    __sm_catP = _sm_expr26.data();
+    __sm_catP = simse_str_data(&_sm_expr26);
     std::memcpy(__sm_catP, _sm_expr16.data(), _sm_expr16.size());
     __sm_catP = __sm_catP + _sm_expr16.size();
     std::memcpy(__sm_catP, _sm_expr17.data(), _sm_expr17.size());
@@ -1567,64 +1662,6 @@ inline void simse_list_sort(List<T>& self, F less) {
     std::sort(self.begin(), self.end(), [&fn](const T& a, const T& b) {
         return fn(const_cast<T*>(&a), const_cast<T*>(&b));
     });
-}
-
-static const unsigned long long smStrDigitPow10[20] = {
-    1ull, 10ull, 100ull, 1000ull, 10000ull, 100000ull, 1000000ull, 10000000ull,
-    100000000ull, 1000000000ull, 10000000000ull, 100000000000ull, 1000000000000ull,
-    10000000000000ull, 100000000000000ull, 1000000000000000ull, 10000000000000000ull,
-    100000000000000000ull, 1000000000000000000ull, 10000000000000000000ull
-};
-
-inline Int simse_strCountDigits(Int64 value) {
-    unsigned long long magnitude =
-        value < 0 ? 0ull - (unsigned long long) value : (unsigned long long) value;
-    if (magnitude < 10ull) {
-        return value < 0 ? 2 : 1;
-    }
-    Int bits = (Int) std::bit_width(magnitude);
-    Int guess = (Int) (((unsigned int) bits * 1233u) >> 12);
-    Int digits = guess + (magnitude >= smStrDigitPow10[guess] ? 1 : 0);
-    return digits + (value < 0 ? 1 : 0);
-}
-
-struct SmStrDigitPairTable {
-    char text[200];
-    constexpr SmStrDigitPairTable() : text() {
-        for (Int i = 0; i < 100; i = i + 1) {
-            text[i * 2] = (char) ('0' + i / 10);
-            text[i * 2 + 1] = (char) ('0' + i % 10);
-        }
-    }
-};
-
-static constexpr SmStrDigitPairTable smStrDigitPairs{};
-
-inline void simse_strAddInt(char* target, Int64 value, Int count) {
-    unsigned long long magnitude =
-        value < 0 ? 0ull - (unsigned long long) value : (unsigned long long) value;
-    if (value < 0) {
-        target[0] = '-';
-        count = count - 1;
-        target = target + 1;
-    }
-    while (count >= 2) {
-        unsigned int pair = (unsigned int) (magnitude % 100ull);
-        magnitude /= 100ull;
-        count = count - 2;
-        target[count] = smStrDigitPairs.text[pair * 2];
-        target[count + 1] = smStrDigitPairs.text[pair * 2 + 1];
-    }
-    if (count == 1) {
-        target[0] = (char) ('0' + (Int) magnitude);
-    }
-}
-
-inline Span<Char> simse_strBoolView(Bool value) {
-    static Char texts[2][6] = {"true", "false"};
-    static Int lens[2] = {4, 5};
-    Int at = value ? 0 : 1;
-    return Span<Char>{texts[at], lens[at]};
 }
 
 template <class T>

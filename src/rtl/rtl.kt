@@ -292,14 +292,85 @@ fun fmtStrWith(separator: Char, templateText: StrView, items: *List<Str>): Str {
 // `fmtStr`/`fmtStrWith` whose format is a literal are fused into one `Concat` instruction
 // (impl_specs/linear-il.md, "Concat"), which the emitter *expands* - one length sum, one
 // `resize`, and one slot write per part through a pointer that advances
-// (src/codegen/IlCodeGen.kt's `ilConcatStatements`) - and whose reach it records itself.
-// This declaration is the anchor the section hangs on: the symbol below is the one the
-// emitter records (`ilConcatSymbol`, src/linear/MergeConcat.kt), so reaching it emits the
-// section's primitives (`strcat`, src/rtl/_res.md) and nothing else. No program calls it -
-// the emitter writes those symbols - and the section's `forward` text *is* the declaration,
-// so it places no prototype of its own.
-@SmGen("res", "strcat", "simse_strAddInt")
-fun strAddInt(target: *Char, value: Int64, count: Int): Unit
+// (src/codegen/IlCodeGen.kt's `ilConcatStatements`). These three bodies are what an
+// expansion calls; no program names them, and the emitter records their reach itself
+// (`ilFuseConcatUnit`, src/codegen/IlMachine.kt).
+//
+// The digits are peeled *negatively* - `rest % 10` of a negative is negative, division
+// truncates toward zero - so `INT64_MIN` needs no unsigned arithmetic and the negation
+// never crosses `+9223372036854775807` (`intToStr` above peels the same way).
+
+// The digit count of `value`, sign included, exact for every width: one `bitWidth64` (a
+// single `clz`-class instruction behind the intrinsic), then the log10 guess
+// `bits * 1233 / 4096` (1233/4096 is 0.3010..., log10 of 2) which is floor(log10|v|) or one
+// off, and one comparison against 10^guess settles which. `guess >= 19` happens only at
+// `INT64_MIN` - the one value whose magnitude is 2^63 - whose 19 digits and sign are 20
+// without the comparison, so 10^19 (which an `Int64` cannot hold) is never built.
+fun strCountDigits(value: Int64): Int {
+    if (value > 0 - 10 && value < 10) {
+        if (value < 0) {
+            return 2
+        }
+        return 1
+    }
+    val bits: Int = bitWidth64(value)
+    val guess: Int = bits * 1233 / 4096
+    if (guess >= 19) {
+        return 20
+    }
+    var limit: Int64 = 10
+    var i: Int = 1
+    while (i < guess) {
+        limit = limit * 10
+        i = i + 1
+    }
+    var digits: Int = guess
+    if (value >= limit || value <= 0 - limit) {
+        digits = digits + 1
+    }
+    if (value < 0) {
+        digits = digits + 1
+    }
+    return digits
+}
+
+// The digits of `value` written straight into the `count` bytes `target` already owns -
+// `strCountDigits`' answer, sign included - walking *back* through them from the least
+// significant, so no second buffer and no second pass. One division per digit (the C++
+// wrote two at a time out of a 200-byte table; a typical part is one to three digits, where
+// the table bought nothing and its static cost was real).
+fun strAddInt(target: *Char, value: Int64, count: Int): Unit {
+    var rest: Int64 = value
+    if (rest > 0) {
+        rest = 0 - rest
+    }
+    // `at` starts at `count` for a sign and no sign alike: each write pre-decrements, so
+    // the D digits land at count-1 .. count-D - position 0 when a sign was counted, and
+    // the '-' written there survives.
+    var at: Int = count
+    if (value < 0) {
+        target[0] = '-'
+    }
+    while (rest <= -10) {
+        val digit: Int = 0 - (rest % 10)
+        at = at - 1
+        val ch: Char = '0' + digit
+        target[at] = ch
+        rest = rest / 10
+    }
+    at = at - 1
+    val last: Char = '0' + (0 - rest)
+    target[at] = last
+}
+
+// The two texts a bool can be, as views over the string pool - the same table shape the
+// literals themselves have, so a bool part of a concatenation is just another text part.
+fun strBoolView(value: Bool): StrView {
+    if (value) {
+        return "true"
+    }
+    return "false"
+}
 
 // Pre-allocates the buffer for a run of `append`/`appendStr`: a *hint*, not a length - the
 // string keeps its size, and a longer run grows it as usual.

@@ -1148,13 +1148,13 @@ inline void ns1_initByValue(ns1_Opt2<T>* self, T value) {
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 22;
+static const Int __sm_stringCount = 24;
 static const char __sm_stringPool[] =
-    "a-string-longer-than-the-inline-buffer" "payload-longer-than-the-inline-buffer!" "returned-through-a-function-call" "ada@example.com" "collided" "second" "error" "first" "float" "later" "value" "boom" "none" "ada" "int" "str" "d:" "no" "?" "L" "R" "" 
+    "a-string-longer-than-the-inline-buffer" "payload-longer-than-the-inline-buffer!" "returned-through-a-function-call" "ada@example.com" "collided" "second" "error" "false" "first" "float" "later" "value" "boom" "none" "true" "ada" "int" "str" "d:" "no" "?" "L" "R" "" 
 ;
-static const Int16 __sm_stringStarts[] = {22,8,0,-38,0,6,17,7,2,1,1,4,0,3,1,0,1,1,2,0,3,1,0,1,1,2,0};
-static const Int16 __sm_stringLens[] = {22,7,-38,0,6,17,7,2,1,1,4,0,3,1,0,1,1,2,0,3,1,0,1,1,2,0,1,1};
-static_assert(sizeof(__sm_stringPool) - 1 == 186, "the string pool and its length index disagree");
+static const Int16 __sm_stringStarts[] = {24,8,0,-38,0,6,17,7,2,1,1,5,0,1,1,1,2,0,1,1,1,2,0,3,1,0,1,1,2,0};
+static const Int16 __sm_stringLens[] = {24,7,-38,0,6,17,7,2,1,1,5,0,1,1,1,2,0,1,1,1,2,0,3,1,0,1,1,2,0,1,1};
+static_assert(sizeof(__sm_stringPool) - 1 == 195, "the string pool and its length index disagree");
 static Span<Char> __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
@@ -1251,13 +1251,6 @@ Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& val
 template <class T, class F>
 void simse_list_sort(List<T>& self, F less);
 
-#include <bit>
-#include <cstring>
-
-Int simse_strCountDigits(Int64 value);
-void simse_strAddInt(char* target, Int64 value, Int count);
-Span<Char> simse_strBoolView(Bool value);
-
 #include <cstdio>
 
 inline void simse_write(const Str& value, FILE* out) {
@@ -1322,6 +1315,11 @@ inline void simse_println(const T& value, FILE* out) {
 template <class T>
 Int size(Span<T>* self);
 template <class T>
+T at(Span<T>* self, Int index);
+Int compareTo(Span<Char>* self, Span<Char> other);
+Bool equals(Span<Char>* self, Span<Char> other);
+Str plus(Span<Char>* self, Span<Char> other);
+template <class T>
 Bool simse_optHasValue(Opt<T>* self);
 template <class T>
 T simse_optValue(Opt<T>* self);
@@ -1340,6 +1338,9 @@ Res<T> simse_resOk(T value);
 template <class T>
 Res<T> simse_resErr(Str message);
 void initByValue(Str* self);
+Int strCountDigits(Int64 value);
+void strAddInt(Char* target, Int64 value, Int count);
+Span<Char> strBoolView(Bool value);
 Int ns1_doubled(ns1_WithMethod* self);
 Str ns1_label(ns1_DoubleOrFloat* u);
 Str ns1_tagged(ns1_DoubleOrFloat* u);
@@ -1370,6 +1371,90 @@ Int size(Span<T>* self) {
     Int _sm_expr1;
     _sm_expr1 = self->len;
     return _sm_expr1;
+}
+template <class T>
+T at(Span<T>* self, Int index) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    auto _sm_expr1 = _sm_base1[index];
+    return _sm_expr1;
+}
+Int compareTo(Span<Char>* self, Span<Char> other) {
+    Bool _sm_expr3, _sm_expr4, _sm_expr7;
+    Int _sm_diff_2, _sm_expr8, diff;
+    auto _sm_expr1 = self->len;
+    auto _sm_expr2 = other.len;
+    _sm_expr3 = _sm_expr1 <= _sm_expr2;
+    if (_sm_expr3) goto L1;
+    goto L2;
+    L1:;
+    _sm_diff_2 = simse_mem_compare(self->ptr, 0, other.ptr, 0, self->len);
+    _sm_expr4 = _sm_diff_2 != 0;
+    if (_sm_expr4) goto L3;
+    goto L4;
+    L3:;
+    return _sm_diff_2;
+    L4:;
+    {
+        auto _sm_expr5 = self->len;
+        auto _sm_expr6 = other.len;
+        _sm_expr7 = _sm_expr5 == _sm_expr6;
+        if (_sm_expr7) goto L5;
+        goto L6;
+        L5:;
+        return 0;
+        L6:;
+        _sm_expr8 = -1;
+        return _sm_expr8;
+    }
+    L2:;
+    diff = simse_mem_compare(self->ptr, 0, other.ptr, 0, other.len);
+    _sm_expr3 = diff != 0;
+    if (_sm_expr3) goto L7;
+    goto L8;
+    L7:;
+    return diff;
+    L8:;
+    return 1;
+}
+Bool equals(Span<Char>* self, Span<Char> other) {
+    Bool _sm_expr3;
+    Int _sm_expr4;
+    auto _sm_expr1 = self->len;
+    auto _sm_expr2 = other.len;
+    _sm_expr3 = _sm_expr1 != _sm_expr2;
+    if (_sm_expr3) goto L1;
+    goto L2;
+    L1:;
+    return false;
+    L2:;
+    _sm_expr4 = simse_mem_compare(self->ptr, 0, other.ptr, 0, self->len);
+    _sm_expr3 = _sm_expr4 == 0;
+    return _sm_expr3;
+}
+Str plus(Span<Char>* self, Span<Char> other) {
+    Str* _sm_base3;
+    Bool _sm_expr2;
+    Int at, _sm_expr4;
+    Char* _sm_expr5;
+    Str result;
+    simse_str_setBytes(result, self->ptr, 0, self->len);
+    auto _sm_expr1 = other.len;
+    _sm_expr2 = _sm_expr1 > 0;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    at = simse_lenOf(result);
+    {
+        auto _sm_expr3 = other.len;
+        _sm_expr4 = at + _sm_expr3;
+        result.resize(_sm_expr4);
+        _sm_base3 = &result;
+        _sm_expr5 = simse_str_data(_sm_base3);
+        simse_mem_copy(_sm_expr5, at, other.ptr, 0, other.len);
+    }
+    L2:;
+    return result;
 }
 template <class T>
 Bool simse_optHasValue(Opt<T>* self) {
@@ -1434,6 +1519,105 @@ Res<T> simse_resErr(Str message) {
 }
 void initByValue(Str* self) {
 }
+Int strCountDigits(Int64 value) {
+    Bool _sm_expr2;
+    Int bits, _sm_expr5, guess, i, digits;
+    Int64 limit, _sm_expr9;
+    _sm_expr2 = value > -10;
+    if (_sm_expr2) goto L3;
+    goto L2;
+    L3:;
+    _sm_expr2 = value < 10;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = value < 0;
+    if (_sm_expr2) goto L4;
+    goto L5;
+    L4:;
+    return 2;
+    L5:;
+    return 1;
+    L2:;
+    bits = simse_bit_width64(value);
+    _sm_expr5 = bits * 1233;
+    guess = _sm_expr5 / 4096;
+    _sm_expr2 = guess >= 19;
+    if (_sm_expr2) goto L6;
+    goto L7;
+    L6:;
+    return 20;
+    L7:;
+    limit = 10;
+    i = 1;
+    L8:;
+    _sm_expr2 = i < guess;
+    if (!(_sm_expr2)) goto L9;
+    limit = limit * 10;
+    i = i + 1;
+    goto L8;
+    L9:;
+    digits = guess;
+    _sm_expr2 = value >= limit;
+    if (_sm_expr2) goto L10;
+    _sm_expr9 = 0 - limit;
+    _sm_expr2 = value <= _sm_expr9;
+    if (_sm_expr2) goto L10;
+    goto L11;
+    L10:;
+    digits = digits + 1;
+    L11:;
+    _sm_expr2 = value < 0;
+    if (_sm_expr2) goto L13;
+    goto L14;
+    L13:;
+    digits = digits + 1;
+    L14:;
+    return digits;
+}
+void strAddInt(Char* target, Int64 value, Int count) {
+    Int64 rest, _sm_expr5;
+    Bool _sm_expr1;
+    Int at, _sm_expr3;
+    Char ch;
+    rest = value;
+    _sm_expr1 = rest > 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    rest = 0 - rest;
+    L2:;
+    at = count;
+    _sm_expr1 = value < 0;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    target[0] = '-';
+    L4:;
+    _sm_expr3 = -10;
+    _sm_expr1 = rest <= _sm_expr3;
+    if (!(_sm_expr1)) goto L6;
+    _sm_expr5 = rest % 10;
+    _sm_expr3 = 0 - _sm_expr5;
+    at = at - 1;
+    ch = '0' + _sm_expr3;
+    target[at] = ch;
+    rest = rest / 10;
+    goto L4;
+    L6:;
+    at = at - 1;
+    _sm_expr5 = 0 - rest;
+    ch = '0' + _sm_expr5;
+    target[at] = ch;
+}
+Span<Char> strBoolView(Bool value) {
+    if (value) goto L1;
+    goto L2;
+    L1:;
+    return __sm_stringTable[14];
+    L2:;
+    return __sm_stringTable[7];
+}
 // stress/unions/src/main.kt
 Int ns1_doubled(ns1_WithMethod* self) {
     Int _sm_expr1, _sm_expr2;
@@ -1446,13 +1630,13 @@ Str ns1_label(ns1_DoubleOrFloat* u) {
     Str out;
     ns1_SmDoubleOrFloatTypes _sm_expr1;
     Bool _sm_expr2;
-    out = __sm_stringTable[21];
+    out = __sm_stringTable[23];
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::IntValue;
     _sm_expr2 = u == _sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    out = __sm_stringTable[14];
+    out = __sm_stringTable[16];
     goto L6;
     L2:;
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::DoubleValue;
@@ -1460,10 +1644,10 @@ Str ns1_label(ns1_DoubleOrFloat* u) {
     if (_sm_expr2) goto L4;
     goto L5;
     L4:;
-    out = __sm_stringTable[8];
+    out = __sm_stringTable[9];
     goto L6;
     L5:;
-    out = __sm_stringTable[12];
+    out = __sm_stringTable[13];
     L6:;
     return out;
 }
@@ -1472,13 +1656,13 @@ Str ns1_tagged(ns1_DoubleOrFloat* u) {
     Str out;
     ns1_SmDoubleOrFloatTypes _sm_expr1;
     Bool _sm_expr2;
-    out = __sm_stringTable[21];
+    out = __sm_stringTable[23];
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::None;
     _sm_expr2 = u == _sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    out = __sm_stringTable[12];
+    out = __sm_stringTable[13];
     goto L8;
     L2:;
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::IntValue;
@@ -1486,7 +1670,7 @@ Str ns1_tagged(ns1_DoubleOrFloat* u) {
     if (_sm_expr2) goto L4;
     goto L5;
     L4:;
-    out = __sm_stringTable[14];
+    out = __sm_stringTable[16];
     goto L8;
     L5:;
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::DoubleValue;
@@ -1494,7 +1678,7 @@ Str ns1_tagged(ns1_DoubleOrFloat* u) {
     if (_sm_expr2) goto L7;
     goto L8;
     L7:;
-    out = __sm_stringTable[8];
+    out = __sm_stringTable[9];
     L8:;
     return out;
 }
@@ -1503,14 +1687,14 @@ Str ns1_labelSide(ns1_SideOrSide s) {
     Str out;
     ns1_SmSideOrSideTypes _sm_when3, _sm_expr1;
     Bool _sm_expr2;
-    out = __sm_stringTable[21];
+    out = __sm_stringTable[23];
     _sm_when3 = ns1_getTypeOf(simse_addressOf(s));
     _sm_expr1 = ns1_SmSideOrSideTypes::L;
     _sm_expr2 = _sm_when3 == _sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    out = __sm_stringTable[19];
+    out = __sm_stringTable[21];
     goto L6;
     L2:;
     _sm_expr1 = ns1_SmSideOrSideTypes::R;
@@ -1518,22 +1702,22 @@ Str ns1_labelSide(ns1_SideOrSide s) {
     if (_sm_expr2) goto L4;
     goto L5;
     L4:;
-    out = __sm_stringTable[20];
+    out = __sm_stringTable[22];
     goto L6;
     L5:;
-    out = __sm_stringTable[12];
+    out = __sm_stringTable[13];
     L6:;
     return out;
 }
 // stress/unions/src/main.kt
 Str ns1_describe(ns1_DoubleOrFloat* self) {
-    char* __sm_catP;
+    Char* __sm_catP;
     ns1_DoubleOrFloat* _sm_base1;
     Str _sm_expr1, _sm_expr2;
     _sm_base1 = self;
     _sm_expr1 = ns1_label(_sm_base1);
     _sm_expr2.resize(2 + _sm_expr1.size());
-    __sm_catP = _sm_expr2.data();
+    __sm_catP = simse_str_data(&_sm_expr2);
     std::memcpy(__sm_catP, "d:", 2);
     __sm_catP = __sm_catP + 2;
     std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
@@ -1560,13 +1744,13 @@ Str ns1_strKind(ns1_IntOrStr* u) {
     Str out;
     ns1_SmIntOrStrTypes _sm_expr1;
     Bool _sm_expr2;
-    out = __sm_stringTable[18];
+    out = __sm_stringTable[20];
     _sm_expr1 = ns1_SmIntOrStrTypes::I;
     _sm_expr2 = u == _sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    out = __sm_stringTable[14];
+    out = __sm_stringTable[16];
     goto L6;
     L2:;
     _sm_expr1 = ns1_SmIntOrStrTypes::S;
@@ -1574,10 +1758,10 @@ Str ns1_strKind(ns1_IntOrStr* u) {
     if (_sm_expr2) goto L4;
     goto L5;
     L4:;
-    out = __sm_stringTable[15];
+    out = __sm_stringTable[17];
     goto L6;
     L5:;
-    out = __sm_stringTable[12];
+    out = __sm_stringTable[13];
     L6:;
     return out;
 }
@@ -1753,7 +1937,7 @@ Int ns1_partSameType() {
     _sm_base1 = ns1_SmUserOrEmailTypes::None;
     _sm_expr1 = ns1_isOfType(simse_addressOf(u), _sm_base1);
     simse_println((_sm_expr1), stdout);
-    ns1_setUser(simse_addressOf(u), __sm_stringTable[13]);
+    ns1_setUser(simse_addressOf(u), __sm_stringTable[15]);
     _sm_base2 = ns1_SmUserOrEmailTypes::User;
     _sm_expr2 = ns1_isOfType(simse_addressOf(u), _sm_base2);
     simse_println((_sm_expr2), stdout);
@@ -1774,7 +1958,7 @@ Int ns1_partSameType() {
     _sm_expr11 = simse_lenOf((*_sm_expr10));
     simse_println((_sm_expr11), stdout);
     ns1_UserOrEmail v;
-    ns1_initByValue(simse_addressOf(v), __sm_stringTable[7]);
+    ns1_initByValue(simse_addressOf(v), __sm_stringTable[8]);
     _sm_base6 = ns1_SmUserOrEmailTypes::User;
     _sm_expr12 = ns1_isOfType(simse_addressOf(v), _sm_base6);
     simse_println((_sm_expr12), stdout);
@@ -1906,8 +2090,8 @@ Int ns1_partUnionGenerics() {
     bv = ns1_getValue(simse_addressOf(b));
     _sm_base2 = *bv;
     simse_println((_sm_base2), stdout);
-    e = simse_resErr<Int>(__sm_stringTable[17]);
-    e2 = ns1_err2<Int>(__sm_stringTable[17]);
+    e = simse_resErr<Int>(__sm_stringTable[19]);
+    e2 = ns1_err2<Int>(__sm_stringTable[19]);
     _sm_expr3 = simse_resHasValue(simse_addressOf(e));
     simse_println((_sm_expr3), stdout);
     _sm_expr4 = ns1_isOk2(e2);
@@ -1917,13 +2101,13 @@ Int ns1_partUnionGenerics() {
     e2e = ns1_getError(simse_addressOf(e2));
     _sm_base4 = *e2e;
     simse_println((_sm_base4), stdout);
-    out = __sm_stringTable[21];
+    out = __sm_stringTable[23];
     _sm_expr5 = ns1_SmRes2Types::Value;
     _sm_expr6 = b == _sm_expr5;
     if (_sm_expr6) goto L1;
     goto L2;
     L1:;
-    out = __sm_stringTable[10];
+    out = __sm_stringTable[11];
     goto L6;
     L2:;
     _sm_expr5 = ns1_SmRes2Types::Error;
@@ -1934,10 +2118,10 @@ Int ns1_partUnionGenerics() {
     out = __sm_stringTable[6];
     goto L6;
     L5:;
-    out = __sm_stringTable[12];
+    out = __sm_stringTable[13];
     L6:;
     simse_println((out), stdout);
-    ns1_setError(simse_addressOf(b), __sm_stringTable[9]);
+    ns1_setError(simse_addressOf(b), __sm_stringTable[10]);
     _sm_expr9 = ns1_isOk2(b);
     simse_println((_sm_expr9), stdout);
     later = ns1_getError(simse_addressOf(b));
@@ -1984,7 +2168,7 @@ Int ns1_partUnionGenerics() {
     _sm_expr21 = ns1_getValue(simse_addressOf(collided));
     _sm_base9 = *_sm_expr21;
     simse_println((_sm_base9), stdout);
-    ns1_setError(simse_addressOf(collided), __sm_stringTable[11]);
+    ns1_setError(simse_addressOf(collided), __sm_stringTable[12]);
     _sm_expr22 = ns1_isOk2(collided);
     simse_println((_sm_expr22), stdout);
     _sm_expr23 = ns1_getError(simse_addressOf(collided));
@@ -2157,64 +2341,6 @@ inline void simse_list_sort(List<T>& self, F less) {
     std::sort(self.begin(), self.end(), [&fn](const T& a, const T& b) {
         return fn(const_cast<T*>(&a), const_cast<T*>(&b));
     });
-}
-
-static const unsigned long long smStrDigitPow10[20] = {
-    1ull, 10ull, 100ull, 1000ull, 10000ull, 100000ull, 1000000ull, 10000000ull,
-    100000000ull, 1000000000ull, 10000000000ull, 100000000000ull, 1000000000000ull,
-    10000000000000ull, 100000000000000ull, 1000000000000000ull, 10000000000000000ull,
-    100000000000000000ull, 1000000000000000000ull, 10000000000000000000ull
-};
-
-inline Int simse_strCountDigits(Int64 value) {
-    unsigned long long magnitude =
-        value < 0 ? 0ull - (unsigned long long) value : (unsigned long long) value;
-    if (magnitude < 10ull) {
-        return value < 0 ? 2 : 1;
-    }
-    Int bits = (Int) std::bit_width(magnitude);
-    Int guess = (Int) (((unsigned int) bits * 1233u) >> 12);
-    Int digits = guess + (magnitude >= smStrDigitPow10[guess] ? 1 : 0);
-    return digits + (value < 0 ? 1 : 0);
-}
-
-struct SmStrDigitPairTable {
-    char text[200];
-    constexpr SmStrDigitPairTable() : text() {
-        for (Int i = 0; i < 100; i = i + 1) {
-            text[i * 2] = (char) ('0' + i / 10);
-            text[i * 2 + 1] = (char) ('0' + i % 10);
-        }
-    }
-};
-
-static constexpr SmStrDigitPairTable smStrDigitPairs{};
-
-inline void simse_strAddInt(char* target, Int64 value, Int count) {
-    unsigned long long magnitude =
-        value < 0 ? 0ull - (unsigned long long) value : (unsigned long long) value;
-    if (value < 0) {
-        target[0] = '-';
-        count = count - 1;
-        target = target + 1;
-    }
-    while (count >= 2) {
-        unsigned int pair = (unsigned int) (magnitude % 100ull);
-        magnitude /= 100ull;
-        count = count - 2;
-        target[count] = smStrDigitPairs.text[pair * 2];
-        target[count + 1] = smStrDigitPairs.text[pair * 2 + 1];
-    }
-    if (count == 1) {
-        target[0] = (char) ('0' + (Int) magnitude);
-    }
-}
-
-inline Span<Char> simse_strBoolView(Bool value) {
-    static Char texts[2][6] = {"true", "false"};
-    static Int lens[2] = {4, 5};
-    Int at = value ? 0 : 1;
-    return Span<Char>{texts[at], lens[at]};
 }
 
 template <class T>

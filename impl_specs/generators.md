@@ -255,7 +255,7 @@ The RTL's hand-written C++ is here (`src/rtl/_res.md`), one section per header i
 from: `strtable` and `timeops` (`emit: always`), `listops`, `dictops` and `strops`
 (shared: the List/Array/Str primitives, the Dictionary operations, and the
 string/character/numeric conversions the headers held), `spanOf` (the first user) and
-`strcat` (the emitter's own concatenation: no *program* names it, the emitter records its
+the concat trio (the emitter's own concatenation: no *program* names it, the emitter records its
 reach, and the one declaration it hangs on is shaped so a program cannot usefully call it). A
 module owns its own resource: `fileio` (`emit: always`: the platform's filesystem/IO
 operations) is `modules/io/_res.md`, and `streams`' `_res.md`

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <cstring>
 
 #include "types.hpp"
@@ -45,4 +46,12 @@ inline Int simse_mem_findByte(const Char* a, Int from, Int count, Char value) {
         return -1;
     }
     return (Int) (reinterpret_cast<const Char*>(found) - a);
+}
+
+// The bit width of the magnitude: the unsigned negation of `INT64_MIN` is the one step the
+// language cannot spell (src/rtl/intrinsics.kt, `bitWidth64`).
+inline Int simse_bit_width64(Int64 value) {
+    const unsigned long long magnitude =
+        value < 0 ? 0ull - (unsigned long long) value : (unsigned long long) value;
+    return (Int) std::bit_width(magnitude);
 }

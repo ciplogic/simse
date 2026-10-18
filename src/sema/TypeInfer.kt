@@ -151,6 +151,21 @@ fun semWithType(decl: *AstXmlNode, typeNode: *AstXmlNode): AstXmlNode {
     return AstXmlNode(decl.name, decl.kind, copy(decl.attributes), kids.toArray())
 }
 
+// Whether a decimal integer literal's magnitude does not fit an `Int32`: more than ten
+// digits, or ten that outrank "2147483647" lexicographically (same length, digits only -
+// the scanner has already refused anything else). The sign is the unary operator's, so the
+// magnitude is what decides; `0 - 2147483648` narrows back to `Int32_MIN` at its binding.
+fun semIsInt64Literal(text: Str): Bool {
+    val digits: Int = text.size()
+    if (digits < 10) {
+        return false
+    }
+    if (digits > 10) {
+        return true
+    }
+    return text > "2147483647"
+}
+
 // The wider of two numeric operand types: `Int - Int64` answers `Int64`, the way the C++
 // the emitter writes computes the expression (the usual arithmetic conversions). Empty
 // unless *both* sides are plain numeric scalars and the right one is strictly wider - a

@@ -301,13 +301,13 @@ inline void initByValue(Res<T>* self, Str value) {
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 6;
+static const Int __sm_stringCount = 8;
 static const char __sm_stringPool[] =
-    "ends yes" "view yes" "str yes" "abcdef" "abc" "def" 
+    "ends yes" "view yes" "str yes" "abcdef" "false" "true" "abc" "def" 
 ;
-static const Int16 __sm_stringStarts[] = {6,3,0,-8,0,1,2,1,1,3};
-static const Int16 __sm_stringLens[] = {6,2,-8,0,1,2,1,2,3,0};
-static_assert(sizeof(__sm_stringPool) - 1 == 35, "the string pool and its length index disagree");
+static const Int16 __sm_stringStarts[] = {8,3,0,-8,0,1,5,1};
+static const Int16 __sm_stringLens[] = {8,2,-8,0,1,5,1,1,0};
+static_assert(sizeof(__sm_stringPool) - 1 == 44, "the string pool and its length index disagree");
 static Span<Char> __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
@@ -496,6 +496,9 @@ Res<T> simse_resOk(T value);
 template <class T>
 Res<T> simse_resErr(Str message);
 void initByValue(Str* self);
+Int strCountDigits(Int64 value);
+void strAddInt(Char* target, Int64 value, Int count);
+Span<Char> strBoolView(Bool value);
 Bool startsWith(Str* self, Str* prefix);
 Bool endsWith(Str* self, Str* suffix);
 
@@ -674,6 +677,105 @@ Res<T> simse_resErr(Str message) {
 }
 void initByValue(Str* self) {
 }
+Int strCountDigits(Int64 value) {
+    Bool _sm_expr2;
+    Int bits, _sm_expr5, guess, i, digits;
+    Int64 limit, _sm_expr9;
+    _sm_expr2 = value > -10;
+    if (_sm_expr2) goto L3;
+    goto L2;
+    L3:;
+    _sm_expr2 = value < 10;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = value < 0;
+    if (_sm_expr2) goto L4;
+    goto L5;
+    L4:;
+    return 2;
+    L5:;
+    return 1;
+    L2:;
+    bits = simse_bit_width64(value);
+    _sm_expr5 = bits * 1233;
+    guess = _sm_expr5 / 4096;
+    _sm_expr2 = guess >= 19;
+    if (_sm_expr2) goto L6;
+    goto L7;
+    L6:;
+    return 20;
+    L7:;
+    limit = 10;
+    i = 1;
+    L8:;
+    _sm_expr2 = i < guess;
+    if (!(_sm_expr2)) goto L9;
+    limit = limit * 10;
+    i = i + 1;
+    goto L8;
+    L9:;
+    digits = guess;
+    _sm_expr2 = value >= limit;
+    if (_sm_expr2) goto L10;
+    _sm_expr9 = 0 - limit;
+    _sm_expr2 = value <= _sm_expr9;
+    if (_sm_expr2) goto L10;
+    goto L11;
+    L10:;
+    digits = digits + 1;
+    L11:;
+    _sm_expr2 = value < 0;
+    if (_sm_expr2) goto L13;
+    goto L14;
+    L13:;
+    digits = digits + 1;
+    L14:;
+    return digits;
+}
+void strAddInt(Char* target, Int64 value, Int count) {
+    Int64 rest, _sm_expr5;
+    Bool _sm_expr1;
+    Int at, _sm_expr3;
+    Char ch;
+    rest = value;
+    _sm_expr1 = rest > 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    rest = 0 - rest;
+    L2:;
+    at = count;
+    _sm_expr1 = value < 0;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    target[0] = '-';
+    L4:;
+    _sm_expr3 = -10;
+    _sm_expr1 = rest <= _sm_expr3;
+    if (!(_sm_expr1)) goto L6;
+    _sm_expr5 = rest % 10;
+    _sm_expr3 = 0 - _sm_expr5;
+    at = at - 1;
+    ch = '0' + _sm_expr3;
+    target[at] = ch;
+    rest = rest / 10;
+    goto L4;
+    L6:;
+    at = at - 1;
+    _sm_expr5 = 0 - rest;
+    ch = '0' + _sm_expr5;
+    target[at] = ch;
+}
+Span<Char> strBoolView(Bool value) {
+    if (value) goto L1;
+    goto L2;
+    L1:;
+    return __sm_stringTable[5];
+    L2:;
+    return __sm_stringTable[4];
+}
 Bool startsWith(Str* self, Str* prefix) {
     Int count, _sm_expr1, i;
     Bool _sm_expr2;
@@ -741,7 +843,7 @@ int main() {
     Span<Char> view;
     Bool _sm_expr1;
     text = __sm_stringTable[3];
-    prefix = __sm_stringTable[4];
+    prefix = __sm_stringTable[6];
     _sm_base1 = &text;
     view = simse_spanOfStr(_sm_base1);
     _sm_base2 = &prefix;
@@ -758,7 +860,7 @@ int main() {
     L3:;
     simse_println((__sm_stringTable[2]), stdout);
     L4:;
-    _sm_base5 = __sm_stringTable[5];
+    _sm_base5 = __sm_stringTable[7];
     _sm_base4 = &_sm_base5;
     _sm_expr1 = endsWith(simse_addressOf(text), _sm_base4);
     if (_sm_expr1) goto L5;

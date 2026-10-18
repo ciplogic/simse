@@ -268,6 +268,9 @@ fun Analyzer.checkUnionConstruction(
 fun Analyzer.unionArgType(arg: *AstXmlNode): AstXmlNode {
     val kind: AstNodeCategory = xmlKind(arg)
     if (kind == AstNodeCategory.ExprIntLit) {
+        if (semIsInt64Literal(xmlAttr(arg, AstNodeAttributeKind.Text))) {
+            return semNamedType("Int64")
+        }
         return semNamedType("Int")
     }
     if (kind == AstNodeCategory.ExprFloatLit) {
