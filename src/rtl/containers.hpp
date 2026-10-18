@@ -520,9 +520,5 @@ struct Array {
 };
 SIMSE_PACK_POP
 
-// `arrayEmpty<T>()` (specs/built-in-types.md): the empty array of `T`. It is a null block - no
-// allocation and no shared static (see the note on `Array`).
-template <class T>
-Array<T> arrayEmpty() {
-    return Array<T>();
-}
+// `arrayEmpty<T>()` is the prelude's Simse body (src/rtl/rtl.kt): a default-constructed
+// `Array<T>` is the null block, no allocation and no shared static.

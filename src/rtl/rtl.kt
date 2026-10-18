@@ -101,11 +101,18 @@ fun compareLessThan(left: *Str, right: *Str): Bool {
 }
 
 // `Array<T>` is a fixed-length, ref-counted block: the allocation holds the element count
-// first, then the elements (specs/built-in-types.md). `arrayEmpty<T>()` is the shared empty
-// array; `toArray`/`toList` convert between the fixed and the growable sequence.
-@SmGen("res", "listops", "simse_arrayEmpty")
-fun arrayEmpty<T>(): Array<T>
+// first, then the elements (specs/built-in-types.md). The empty array is a default
+// construction - a null block, no allocation; `toArray`/`toList` convert between the fixed
+// and the growable sequence, and both are loops the language spells: the copies are value
+// copies either way, and the `mutates` mark lets `toList`'s appends land on the list the
+// body built without costing the proof.
+fun arrayEmpty<T>(): Array<T> {
+    var out: Array<T>
+    return out
+}
 
+// `count` stays native: it reads the block header through a possibly-null handle (an empty
+// array holds no block at all), which is the C++'s own null test.
 @SmGen("res", "listops", "simse_array_count")
 data fun count<T>(this: Array<T>): Int
 
@@ -119,11 +126,31 @@ data fun size(this: Str): Int
 @SmGen("res", "lenops", "simse_lenOf")
 data fun size<T>(this: List<T>): Int
 
-@SmGen("res", "listops", "simse_list_toArray")
-borrow fun toArray<T>(this: List<T>): Array<T>
+fun List<T>.toArray<T>(): Array<T> {
+    val count: Int = this.size()
+    if (count == 0) {
+        return arrayEmpty<T>()
+    }
+    var out: Array<T> = Array<T>(count)
+    var i: Int = 0
+    while (i < count) {
+        out[i] = this[i]
+        i = i + 1
+    }
+    return out
+}
 
-@SmGen("res", "listops", "simse_array_toList")
-fun toList<T>(this: Array<T>): List<T>
+fun Array<T>.toList<T>(): List<T> {
+    var out: List<T> = List<T>(0)
+    val count: Int = this.count()
+    out.reserve(count)
+    var i: Int = 0
+    while (i < count) {
+        out.append(this[i])
+        i = i + 1
+    }
+    return out
+}
 
 // The construction convention: `initByValue` is an *extension* on the instance - it sets
 // the receiver and returns nothing. `return (x)` (src/parser/Parser.kt) and

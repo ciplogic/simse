@@ -352,12 +352,6 @@ template <class T>
 void simse_list_removeRange(List<T>& self, Int start, Int end);
 template <class T>
 Int simse_array_count(const Array<T>& self);
-template <class T>
-Array<T> simse_list_toArray(const List<T>& self);
-template <class T>
-List<T> simse_array_toList(const Array<T>& self);
-template <class T>
-Array<T> simse_arrayEmpty();
 
 void simse_str_append(Str& self, Char value);
 void simse_str_appendStr(Str& self, const Str& value);
@@ -2478,34 +2472,6 @@ inline Int simse_array_count(const Array<T>& self) {
     return self.count();
 }
 
-template <class T>
-inline Array<T> simse_list_toArray(const List<T>& self) {
-    const Int count = self.size();
-    if (count <= 0) {
-        return Array<T>();
-    }
-    Array<T> result(count);
-    for (Int i = 0; i < count; i++) {
-        result[i] = self[i];
-    }
-    return result;
-}
-
-template <class T>
-inline List<T> simse_array_toList(const Array<T>& self) {
-    List<T> result;
-    const Int count = self.count();
-    result.reserve(count);
-    for (Int i = 0; i < count; i++) {
-        result.push_back(self[i]);
-    }
-    return result;
-}
-
-template <class T>
-inline Array<T> simse_arrayEmpty() {
-    return Array<T>();
-}
 
 inline void simse_str_append(Str& self, Char value) {
     self.push_back(static_cast<char>(value));

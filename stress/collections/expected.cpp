@@ -383,12 +383,6 @@ template <class T>
 void simse_list_removeRange(List<T>& self, Int start, Int end);
 template <class T>
 Int simse_array_count(const Array<T>& self);
-template <class T>
-Array<T> simse_list_toArray(const List<T>& self);
-template <class T>
-List<T> simse_array_toList(const Array<T>& self);
-template <class T>
-Array<T> simse_arrayEmpty();
 
 void simse_str_append(Str& self, Char value);
 void simse_str_appendStr(Str& self, const Str& value);
@@ -664,6 +658,12 @@ Bool advance(Span_iter_yieldable<T>* self) {
 template <class T>
 Span_iter_yieldable<T> iter(Span<T>* self);
 Bool compareLessThan(Str* left, Str* right);
+template <class T>
+Array<T> arrayEmpty();
+template <class T>
+Array<T> toArray(List<T>* self);
+template <class T>
+List<T> toList(Array<T>* self);
 void initByValue(Str* self);
 Int findFrom(Str* self, Str sub, Int from);
 Int find(Str* self, Str sub);
@@ -1218,6 +1218,57 @@ Bool compareLessThan(Str* left, Str* right) {
     _sm_expr3 = (compareTo(simse_addressOf(_sm_expr1), _sm_expr2) < 0);
     return _sm_expr3;
 }
+template <class T>
+Array<T> arrayEmpty() {
+    Array<T> out;
+    return out;
+}
+template <class T>
+Array<T> toArray(List<T>* self) {
+    T _sm_base1;
+    Int count, i;
+    Bool _sm_expr1;
+    Array<T> _sm_expr2, out;
+    count = simse_lenOf((*self));
+    _sm_expr1 = count == 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = arrayEmpty<T>();
+    return _sm_expr2;
+    L2:;
+    out = Array<T>(count);
+    i = 0;
+    L3:;
+    _sm_expr1 = i < count;
+    if (!(_sm_expr1)) goto L4;
+    _sm_base1 = (*self)[i];
+    out[i] = _sm_base1;
+    i = i + 1;
+    goto L3;
+    L4:;
+    return out;
+}
+template <class T>
+List<T> toList(Array<T>* self) {
+    T _sm_base1;
+    List<T> out;
+    Int count, i;
+    Bool _sm_expr1;
+    out = List<T>(0);
+    count = simse_array_count((*self));
+    out.reserve(count);
+    i = 0;
+    L1:;
+    _sm_expr1 = i < count;
+    if (!(_sm_expr1)) goto L2;
+    _sm_base1 = (*self)[i];
+    simse_list_append(out, _sm_base1);
+    i = i + 1;
+    goto L1;
+    L2:;
+    return out;
+}
 void initByValue(Str* self) {
 }
 Int findFrom(Str* self, Str sub, Int from) {
@@ -1459,7 +1510,7 @@ Int ns1_partArrayLayout() {
     simse_list_append(values, 10);
     simse_list_append(values, 20);
     simse_list_append(values, 30);
-    arr = simse_list_toArray(values);
+    arr = toArray(simse_addressOf(values));
     _sm_expr1 = simse_array_count(arr);
     simse_println((_sm_expr1), stdout);
     _sm_expr2 = arr[0];
@@ -1472,16 +1523,16 @@ Int ns1_partArrayLayout() {
     alias[1] = 99;
     _sm_base1 = arr[1];
     simse_println((_sm_base1), stdout);
-    empty = simse_arrayEmpty<Int>();
+    empty = arrayEmpty<Int>();
     _sm_expr7 = simse_array_count(empty);
     simse_println((_sm_expr7), stdout);
     nothing = List<Int>();
-    emptyAgain = simse_list_toArray(nothing);
+    emptyAgain = toArray(simse_addressOf(nothing));
     _sm_expr8 = simse_array_count(emptyAgain);
     simse_println((_sm_expr8), stdout);
-    growable = simse_array_toList(arr);
+    growable = toList(simse_addressOf(arr));
     simse_list_append(growable, 40);
-    grown = simse_list_toArray(growable);
+    grown = toArray(simse_addressOf(growable));
     _sm_expr9 = simse_array_count(grown);
     simse_println((_sm_expr9), stdout);
     _sm_base2 = grown[3];
@@ -1491,7 +1542,7 @@ Int ns1_partArrayLayout() {
     simse_list_append(points, _sm_expr10);
     _sm_expr11 = ns1_Point{3, 4};
     simse_list_append(points, _sm_expr11);
-    pointArray = simse_list_toArray(points);
+    pointArray = toArray(simse_addressOf(points));
     _sm_expr12 = simse_array_count(pointArray);
     simse_println((_sm_expr12), stdout);
     _sm_base3 = simse_addressOf(pointArray[0]);
@@ -1501,7 +1552,7 @@ Int ns1_partArrayLayout() {
     _sm_expr15 = _sm_expr13 + _sm_expr14;
     simse_println((_sm_expr15), stdout);
     _sm_expr16 = ns1_texts();
-    names = simse_list_toArray(_sm_expr16);
+    names = toArray(simse_addressOf(_sm_expr16));
     _sm_expr17 = simse_array_count(names);
     simse_println((_sm_expr17), stdout);
     _sm_base5 = names[1];
@@ -1646,7 +1697,7 @@ Int ns1_arraySum(List<Int>* items) {
     Span<Int> _sm_expr1;
     Span_iterValues_yieldable<Int> _sm_for1;
     Bool _sm_expr2;
-    arr = simse_list_toArray((*items));
+    arr = toArray(items);
     sum = 0;
     _sm_base1 = &arr;
     _sm_expr1 = simse_spanOf(_sm_base1);
@@ -1696,7 +1747,7 @@ Int ns1_partForArray() {
     simse_list_append(numbers, 4);
     simse_list_append(numbers, 99);
     simse_list_append(numbers, 5);
-    _sm_expr1 = simse_list_toArray(numbers);
+    _sm_expr1 = toArray(simse_addressOf(numbers));
     _sm_base1 = &_sm_expr1;
     _sm_expr2 = simse_spanOf(_sm_base1);
     _sm_for3 = iterValues(simse_addressOf(_sm_expr2));
@@ -1708,7 +1759,7 @@ Int ns1_partForArray() {
     simse_println((_sm_expr4), stdout);
     goto L1;
     L2:;
-    _sm_expr5 = simse_list_toArray(numbers);
+    _sm_expr5 = toArray(simse_addressOf(numbers));
     _sm_base2 = &_sm_expr5;
     _sm_expr6 = simse_spanOf(_sm_base2);
     _sm_for4 = iterValues(simse_addressOf(_sm_expr6));
@@ -1927,7 +1978,7 @@ Int ns1_arrayBump(List<ns1_Cell>* items) {
     Span_iter_yieldable<ns1_Cell> _sm_for11;
     Bool _sm_expr2;
     ns1_Cell* cell;
-    cells = simse_list_toArray((*items));
+    cells = toArray(items);
     total = 0;
     _sm_base1 = &cells;
     _sm_expr1 = simse_spanOf(_sm_base1);
@@ -2651,7 +2702,7 @@ Int ns1_partForStr() {
     room = List<Int>();
     simse_list_append(room, 4);
     simse_list_append(room, 5);
-    _sm_expr17 = simse_list_toArray(room);
+    _sm_expr17 = toArray(simse_addressOf(room));
     rack = ns1_Rack{_sm_expr17};
     _sm_base7 = &rack;
     _sm_expr18 = ns1_rackTotal(_sm_base7);
@@ -2740,34 +2791,6 @@ inline Int simse_array_count(const Array<T>& self) {
     return self.count();
 }
 
-template <class T>
-inline Array<T> simse_list_toArray(const List<T>& self) {
-    const Int count = self.size();
-    if (count <= 0) {
-        return Array<T>();
-    }
-    Array<T> result(count);
-    for (Int i = 0; i < count; i++) {
-        result[i] = self[i];
-    }
-    return result;
-}
-
-template <class T>
-inline List<T> simse_array_toList(const Array<T>& self) {
-    List<T> result;
-    const Int count = self.count();
-    result.reserve(count);
-    for (Int i = 0; i < count; i++) {
-        result.push_back(self[i]);
-    }
-    return result;
-}
-
-template <class T>
-inline Array<T> simse_arrayEmpty() {
-    return Array<T>();
-}
 
 inline void simse_str_append(Str& self, Char value) {
     self.push_back(static_cast<char>(value));
