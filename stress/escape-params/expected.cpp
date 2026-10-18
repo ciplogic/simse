@@ -330,10 +330,6 @@ static struct __SmStringTableInitType {
     }
 } __sm_stringTableInit;
 
-Int simse_lenOf(const Str& self);
-template <class T, int N>
-Int simse_lenOf(const SmallVector<T, N>& self);
-
 #include <cerrno>
 #include <cstddef>
 #include <cstdlib>
@@ -349,48 +345,6 @@ void simse_str_initByValue(Str& self, const Str& value);
 template <class T>
 Str simse_num_toString(const T& self);
 Str simse_bool_toString(Bool self);
-
-#include <algorithm>
-#include <type_traits>
-#include <utility>
-
-
-template <class K, class V>
-Dictionary<K, V> simse_dictionaryOf();
-
-template <class K, class V>
-V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
-
-template <class K, class V>
-Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
-
-template <class K, class V>
-Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
-
-template <class K, class V>
-void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
-                       const std::type_identity_t<V>& value);
-
-template <class K, class V>
-void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key);
-
-template <class K, class V>
-Int simse_dict_size(const Dictionary<K, V>& self);
-
-template <class K, class V>
-List<K> simse_dict_keys(const Dictionary<K, V>& self);
-
-template <class K, class V>
-List<V> simse_dict_values(const Dictionary<K, V>& self);
-
-template <class K, class V>
-void simse_dict_clear(Dictionary<K, V>& self);
-
-template <class T>
-Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value);
-
-template <class T, class F>
-void simse_list_sort(List<T>& self, F less);
 
 #include <cstdio>
 
@@ -457,13 +411,6 @@ inline void simse_println(const T& value, FILE* out) {
 ns1_Cell* ns1_saved{};
 
 template <class T>
-Int size(Span<T>* self);
-template <class T>
-T at(Span<T>* self, Int index);
-Int compareTo(Span<Char>* self, Span<Char> other);
-Bool equals(Span<Char>* self, Span<Char> other);
-Str plus(Span<Char>* self, Span<Char> other);
-template <class T>
 Bool simse_optHasValue(Opt<T>* self);
 template <class T>
 T simse_optValue(Opt<T>* self);
@@ -499,96 +446,6 @@ void simse_initStatics() {
     ns1_saved = nullptr;
 }
 
-template <class T>
-Int size(Span<T>* self) {
-    Int _sm_expr1;
-    _sm_expr1 = self->len;
-    return _sm_expr1;
-}
-template <class T>
-T at(Span<T>* self, Int index) {
-    T* _sm_base1;
-    _sm_base1 = self->ptr;
-    auto _sm_expr1 = _sm_base1[index];
-    return _sm_expr1;
-}
-Int compareTo(Span<Char>* self, Span<Char> other) {
-    Bool _sm_expr3, _sm_expr4, _sm_expr7;
-    Int _sm_diff_2, _sm_expr8, diff;
-    auto _sm_expr1 = self->len;
-    auto _sm_expr2 = other.len;
-    _sm_expr3 = _sm_expr1 <= _sm_expr2;
-    if (_sm_expr3) goto L1;
-    goto L2;
-    L1:;
-    _sm_diff_2 = simse_mem_compare(self->ptr, 0, other.ptr, 0, self->len);
-    _sm_expr4 = _sm_diff_2 != 0;
-    if (_sm_expr4) goto L3;
-    goto L4;
-    L3:;
-    return _sm_diff_2;
-    L4:;
-    {
-        auto _sm_expr5 = self->len;
-        auto _sm_expr6 = other.len;
-        _sm_expr7 = _sm_expr5 == _sm_expr6;
-        if (_sm_expr7) goto L5;
-        goto L6;
-        L5:;
-        return 0;
-        L6:;
-        _sm_expr8 = -1;
-        return _sm_expr8;
-    }
-    L2:;
-    diff = simse_mem_compare(self->ptr, 0, other.ptr, 0, other.len);
-    _sm_expr3 = diff != 0;
-    if (_sm_expr3) goto L7;
-    goto L8;
-    L7:;
-    return diff;
-    L8:;
-    return 1;
-}
-Bool equals(Span<Char>* self, Span<Char> other) {
-    Bool _sm_expr3;
-    Int _sm_expr4;
-    auto _sm_expr1 = self->len;
-    auto _sm_expr2 = other.len;
-    _sm_expr3 = _sm_expr1 != _sm_expr2;
-    if (_sm_expr3) goto L1;
-    goto L2;
-    L1:;
-    return false;
-    L2:;
-    _sm_expr4 = simse_mem_compare(self->ptr, 0, other.ptr, 0, self->len);
-    _sm_expr3 = _sm_expr4 == 0;
-    return _sm_expr3;
-}
-Str plus(Span<Char>* self, Span<Char> other) {
-    Str* _sm_base3;
-    Bool _sm_expr2;
-    Int at, _sm_expr4;
-    Char* _sm_expr5;
-    Str result;
-    simse_str_setBytes(result, self->ptr, 0, self->len);
-    auto _sm_expr1 = other.len;
-    _sm_expr2 = _sm_expr1 > 0;
-    if (_sm_expr2) goto L1;
-    goto L2;
-    L1:;
-    at = simse_lenOf(result);
-    {
-        auto _sm_expr3 = other.len;
-        _sm_expr4 = at + _sm_expr3;
-        result.resize(_sm_expr4);
-        _sm_base3 = &result;
-        _sm_expr5 = simse_str_data(_sm_base3);
-        simse_mem_copy(_sm_expr5, at, other.ptr, 0, other.len);
-    }
-    L2:;
-    return result;
-}
 template <class T>
 Bool simse_optHasValue(Opt<T>* self) {
     SmOptTypes _sm_base1;
@@ -850,15 +707,6 @@ int main() {
     return 0;
 }
 
-inline Int simse_lenOf(const Str& self) {
-    return self.size();
-}
-
-template <class T, int N>
-inline Int simse_lenOf(const SmallVector<T, N>& self) {
-    return self.size();
-}
-
 inline Char simse_str_charAt(const Str& self, Int index) {
     return (Char) self[index];
 }
@@ -886,83 +734,6 @@ inline Str simse_num_toString(const T& self) {
 
 inline Str simse_bool_toString(Bool self) {
     return self ? "true" : "false";
-}
-
-template <class K, class V>
-inline Dictionary<K, V> simse_dictionaryOf() {
-    return Dictionary<K, V>();
-}
-
-template <class K, class V>
-inline V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
-    return self.valuePtr(key);
-}
-
-template <class K, class V>
-inline Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
-    const V* found = simse_dict_getPtr(self, key);
-    if (found == nullptr) return Opt<V>();
-    Opt<V> result;
-    result.setValue(*found);
-    return result;
-}
-
-template <class K, class V>
-inline Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
-    return simse_dict_getPtr(self, key) != nullptr;
-}
-
-template <class K, class V>
-inline void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
-                              const std::type_identity_t<V>& value) {
-    self.insert_or_assign(key, value);
-}
-
-template <class K, class V>
-inline void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
-    self.erase(key);
-}
-
-template <class K, class V>
-inline Int simse_dict_size(const Dictionary<K, V>& self) {
-    return (Int) self.size();
-}
-
-template <class K, class V>
-inline List<K> simse_dict_keys(const Dictionary<K, V>& self) {
-    List<K> out;
-    out.reserve((Int) self.size());
-    for (const auto& entry : self) out.push_back(entry.first);
-    return out;
-}
-
-template <class K, class V>
-inline List<V> simse_dict_values(const Dictionary<K, V>& self) {
-    List<V> out;
-    out.reserve((Int) self.size());
-    for (const auto& entry : self) out.push_back(entry.second);
-    return out;
-}
-
-template <class K, class V>
-inline void simse_dict_clear(Dictionary<K, V>& self) {
-    self.clear();
-}
-
-template <class T>
-inline Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value) {
-    for (const T& item : self) {
-        if (item == value) return true;
-    }
-    return false;
-}
-
-template <class T, class F>
-inline void simse_list_sort(List<T>& self, F less) {
-    Func<Bool(T*, T*)> fn = less;
-    std::sort(self.begin(), self.end(), [&fn](const T& a, const T& b) {
-        return fn(const_cast<T*>(&a), const_cast<T*>(&b));
-    });
 }
 
 template <class T>

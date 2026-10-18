@@ -370,6 +370,9 @@ fun Emitter.run(): Res<Str> {
     // the program reaches, which is what tells a prelude `suspend fun` from one of the
     // program's own.
     this.collectProgramNames()
+    // The concat trio's reach, before `emitFunctions` decides it (`ilConcatReachScan`'s
+    // header says why this cannot wait for the fusion itself).
+    this.ilConcatReachScan()
     this.collectAsync()
     // The program's constant globals (`optimizations/FoldGlobals.kt`), a property of the
     // whole program: declarations first (the borrow rule asks which functions take a handle

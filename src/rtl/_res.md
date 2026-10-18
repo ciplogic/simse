@@ -11,9 +11,10 @@ named by the program. Three are
 that a declaration reaches by naming its symbol - `listops`, `dictops`, `strops`. `spanOf`
 (and the collision fixture's `spanOfEmpty`) carries a symbol key of its own. The emitter's
 own concatenation used to be a fourth such section (`strcat`); its three helpers are Simse
-bodies now (src/rtl/rtl.kt), emitted for every program because whether one fuses
-concatenations is only decided while bodies are extracted - after the reached-name rule has
-run (`reachesPreludeBody`, src/codegen/CgEmitType.kt). `support`
+bodies now (src/rtl/rtl.kt), emitted when a conservative pre-scan says some emitted body
+holds a `+` or an `fmtStr` the fusion could fire on (`ilConcatReachScan`,
+src/codegen/IlConcat.kt) - the fusion itself is only decided while bodies are extracted,
+after the reached-name rule has run. `support`
 holds what the program's *preamble* needs, `forward` a declaration and `bodies` a
 definition, and a section's texts are placed in the emitted file's section of the same
 name. A prose line here is ignored only when it holds no colon character, so keep the

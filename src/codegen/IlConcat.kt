@@ -57,6 +57,79 @@ fun ilConcatPoolOf(il: *IlBody): IlConcatPool {
     return pool
 }
 
+// Whether a declaration's tree holds anything the concat fusion could fire on: a `+` (the
+// chains MergeConcat builds over `Str`/`Char`/`Bool`/numbers, and any declared `plus` the
+// fusion accepts) or an `fmtStr`/`fmtStrWith` call (the interpolation lowering's shape).
+// Conservative on purpose - it may say yes where fusion later declines - because the cost
+// of a yes is three small bodies, while the cost of a no the fusion disagrees with is a
+// program that references functions nothing emitted.
+fun ilConcatCapable(node: *AstXmlNode): Bool {
+    val kind: AstNodeCategory = xmlKind(node)
+    if (kind == AstNodeCategory.ExprBinary && xmlAttr(node, AstNodeAttributeKind.Op) == "+") {
+        return true
+    }
+    if (kind == AstNodeCategory.ExprCall) {
+        val callee: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Callee)
+        if (xmlKind(callee) == AstNodeCategory.ExprName) {
+            val calleeName: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+            if (calleeName == "fmtStr" || calleeName == "fmtStrWith") {
+                return true
+            }
+        }
+    }
+    var i: Int = 0
+    while (i < node.Children.count()) {
+        if (ilConcatCapable(node.Children[i])) {
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}
+
+// The concat trio's reach, decided before `emitFunctions` runs: fusion itself happens while
+// bodies are extracted - after the reached-name rule - so the names it records
+// (`ilFuseConcatUnit`) arrive too late for the prototype pass. This scan walks the emitted
+// functions' declarations for what fusion could fire on and marks the trio reached up
+// front; the late insertion stays as the belt-and-suspenders half. A program whose bodies
+// hold no `+` and no `fmtStr` carries none of the three.
+// The literal half of the reach walk (`collectNames`'), for a body that became reached
+// after the fixpoint ran: its string literals still have to be pooled, or the emission
+// spells a raw C++ literal where the table entry belongs (a `return "true"` into a
+// `Span<Char>` - which is exactly how small programs first caught this).
+fun Emitter.ilConcatPoolLiterals(node: *AstXmlNode): Unit {
+    if (xmlKind(node) == AstNodeCategory.ExprStrLit) {
+        this.literals.add(xmlAttr(node, AstNodeAttributeKind.Text))
+    }
+    var i: Int = 0
+    while (i < node.Children.count()) {
+        this.ilConcatPoolLiterals(node.Children[i])
+        i = i + 1
+    }
+}
+
+fun Emitter.ilConcatReachScan(): Unit {
+    for (*fn in this.functions) {
+        if (fn.prelude && !this.reachesPreludeBody(fn)) {
+            continue
+        }
+        if (ilConcatCapable(fn.decl)) {
+            this.referencedNames.insert("strAddInt", true)
+            this.referencedNames.insert("strCountDigits", true)
+            this.referencedNames.insert("strBoolView", true)
+            for (*helper in this.functions) {
+                if (helper.prelude && helper.hasBody
+                    && (helper.name == "strAddInt" || helper.name == "strCountDigits"
+                        || helper.name == "strBoolView")
+                ) {
+                    this.ilConcatPoolLiterals(helper.decl)
+                }
+            }
+            return
+        }
+    }
+}
+
 // The concatenation storage a body needs, at its top: declared where a jump cannot skip it, so
 // one `Char*` cursor serves every chain (`ilConcatStatements` recycles it on each `resize`) and
 // the counts are one line. Nothing here collides across bodies - each has its own scope.

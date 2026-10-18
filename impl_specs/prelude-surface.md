@@ -55,16 +55,17 @@ header is a C++ member, never a prelude function).
   not have. *Fix when*: the checker grows strict call checking, or a `println<T>`
   declaration lands with a read-through rule for handles.
 - **The concat expansion** (`IlConcat`'s cursor/memcpy loop): instruction selection
-  for the `Concat` IL - legitimately the backend's - but its *reach* is decided at
-  body-extraction time, after the reached-name rule runs, which is why the trio is
-  whitelisted in `reachesPreludeBody` and `print` is placed conditionally.
-  *The structural fix*: extract and fuse every unit **before** the prototype pass,
-  then run the reach fixpoint once - both special cases delete, and any future
-  emitter-written call gets normal reach for free. That refactor (units stored per
-  function, emitted from the store) is the one big lever this file exists to
-  remember.
-- **`ilConcatSymbol`** hardcodes `strAddInt` as the anchor name: the same refactor
-  absorbs it.
+  for the `Concat` IL - legitimately the backend's. Its *reach* is decided at
+  body-extraction time, after the reached-name rule runs; `ilConcatReachScan` closes
+  that gap with a conservative AST pre-scan (any `+`, any `fmtStr`/`fmtStrWith`) that
+  marks the trio reached - and pools their literals - before `emitFunctions` decides,
+  so a program whose bodies hold neither carries none of the three. Full pre-extraction
+  (units built before the prototype pass) was assessed and rejected: it doubles the
+  lowering pipeline for the many bodies that concatenate, or trades that for a unit
+  cache threaded through every emission path. The scan is the same guarantee at a walk.
+- **`print`/`println`**'s conditional placement in `resGenAlways` stands as written
+  below - its inputs (the AST's own `println` calls) are early-visible, so it needs
+  nothing from the fusion timeline.
 
 ### Platform-shaped — stays in `_res.md` C++
 

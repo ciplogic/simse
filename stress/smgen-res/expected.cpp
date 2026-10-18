@@ -292,28 +292,6 @@ inline void initByValue(Res<T>* self, Str value) {
     self->setError(std::move(value));
 }
 
-// The program's string literals: one pool, and two run-length encoded index
-// series (offsets as deltas, then lengths), each as what to subtract from the
-// previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 2;
-static const char __sm_stringPool[] =
-    "false" "true" 
-;
-static const Int16 __sm_stringStarts[] = {2,2,0,-5};
-static const Int16 __sm_stringLens[] = {2,2,-5,1};
-static_assert(sizeof(__sm_stringPool) - 1 == 9, "the string pool and its length index disagree");
-static Span<Char> __sm_stringTable[__sm_stringCount];
-static struct __SmStringTableInitType {
-    __SmStringTableInitType() {
-        Int starts[__sm_stringCount];
-        Int lens[__sm_stringCount];
-        simse_strTableExpand(__sm_stringStarts, starts, __sm_stringCount);
-        simse_strTableExpand(__sm_stringLens, lens, __sm_stringCount);
-        simse_strTableDecode(__sm_stringPool, starts, lens, __sm_stringTable,
-            __sm_stringCount);
-    }
-} __sm_stringTableInit;
-
 template <class T>
 Span<T> simse_spanOf(List<T>* items);
 template <class T>
@@ -472,9 +450,6 @@ template <class T>
 T get(Span<T>* self, Int index);
 template <class T>
 void set(Span<T>* self, Int index, T value);
-Int compareTo(Span<Char>* self, Span<Char> other);
-Bool equals(Span<Char>* self, Span<Char> other);
-Str plus(Span<Char>* self, Span<Char> other);
 template <class T>
 Bool simse_optHasValue(Opt<T>* self);
 template <class T>
@@ -494,9 +469,6 @@ Res<T> simse_resOk(T value);
 template <class T>
 Res<T> simse_resErr(Str message);
 void initByValue(Str* self);
-Int strCountDigits(Int64 value);
-void strAddInt(Char* target, Int64 value, Int count);
-Span<Char> strBoolView(Bool value);
 
 template <class T>
 Int size(Span<T>* self) {
@@ -523,83 +495,6 @@ void set(Span<T>* self, Int index, T value) {
     T* _sm_base1;
     _sm_base1 = self->ptr;
     _sm_base1[index] = value;
-}
-Int compareTo(Span<Char>* self, Span<Char> other) {
-    Bool _sm_expr3, _sm_expr4, _sm_expr7;
-    Int _sm_diff_2, _sm_expr8, diff;
-    auto _sm_expr1 = self->len;
-    auto _sm_expr2 = other.len;
-    _sm_expr3 = _sm_expr1 <= _sm_expr2;
-    if (_sm_expr3) goto L1;
-    goto L2;
-    L1:;
-    _sm_diff_2 = simse_mem_compare(self->ptr, 0, other.ptr, 0, self->len);
-    _sm_expr4 = _sm_diff_2 != 0;
-    if (_sm_expr4) goto L3;
-    goto L4;
-    L3:;
-    return _sm_diff_2;
-    L4:;
-    {
-        auto _sm_expr5 = self->len;
-        auto _sm_expr6 = other.len;
-        _sm_expr7 = _sm_expr5 == _sm_expr6;
-        if (_sm_expr7) goto L5;
-        goto L6;
-        L5:;
-        return 0;
-        L6:;
-        _sm_expr8 = -1;
-        return _sm_expr8;
-    }
-    L2:;
-    diff = simse_mem_compare(self->ptr, 0, other.ptr, 0, other.len);
-    _sm_expr3 = diff != 0;
-    if (_sm_expr3) goto L7;
-    goto L8;
-    L7:;
-    return diff;
-    L8:;
-    return 1;
-}
-Bool equals(Span<Char>* self, Span<Char> other) {
-    Bool _sm_expr3;
-    Int _sm_expr4;
-    auto _sm_expr1 = self->len;
-    auto _sm_expr2 = other.len;
-    _sm_expr3 = _sm_expr1 != _sm_expr2;
-    if (_sm_expr3) goto L1;
-    goto L2;
-    L1:;
-    return false;
-    L2:;
-    _sm_expr4 = simse_mem_compare(self->ptr, 0, other.ptr, 0, self->len);
-    _sm_expr3 = _sm_expr4 == 0;
-    return _sm_expr3;
-}
-Str plus(Span<Char>* self, Span<Char> other) {
-    Str* _sm_base3;
-    Bool _sm_expr2;
-    Int at, _sm_expr4;
-    Char* _sm_expr5;
-    Str result;
-    simse_str_setBytes(result, self->ptr, 0, self->len);
-    auto _sm_expr1 = other.len;
-    _sm_expr2 = _sm_expr1 > 0;
-    if (_sm_expr2) goto L1;
-    goto L2;
-    L1:;
-    at = simse_lenOf(result);
-    {
-        auto _sm_expr3 = other.len;
-        _sm_expr4 = at + _sm_expr3;
-        result.resize(_sm_expr4);
-        _sm_base3 = &result;
-        _sm_expr5 = simse_str_data(_sm_base3);
-        simse_mem_copy(_sm_expr5, at, other.ptr, 0, other.len);
-    }
-    L2:;
-    return result;
 }
 template <class T>
 Bool simse_optHasValue(Opt<T>* self) {
@@ -663,105 +558,6 @@ Res<T> simse_resErr(Str message) {
     return result;
 }
 void initByValue(Str* self) {
-}
-Int strCountDigits(Int64 value) {
-    Bool _sm_expr2;
-    Int bits, _sm_expr5, guess, i, digits;
-    Int64 limit, _sm_expr9;
-    _sm_expr2 = value > -10;
-    if (_sm_expr2) goto L3;
-    goto L2;
-    L3:;
-    _sm_expr2 = value < 10;
-    if (_sm_expr2) goto L1;
-    goto L2;
-    L1:;
-    _sm_expr2 = value < 0;
-    if (_sm_expr2) goto L4;
-    goto L5;
-    L4:;
-    return 2;
-    L5:;
-    return 1;
-    L2:;
-    bits = simse_bit_width64(value);
-    _sm_expr5 = bits * 1233;
-    guess = _sm_expr5 / 4096;
-    _sm_expr2 = guess >= 19;
-    if (_sm_expr2) goto L6;
-    goto L7;
-    L6:;
-    return 20;
-    L7:;
-    limit = 10;
-    i = 1;
-    L8:;
-    _sm_expr2 = i < guess;
-    if (!(_sm_expr2)) goto L9;
-    limit = limit * 10;
-    i = i + 1;
-    goto L8;
-    L9:;
-    digits = guess;
-    _sm_expr2 = value >= limit;
-    if (_sm_expr2) goto L10;
-    _sm_expr9 = 0 - limit;
-    _sm_expr2 = value <= _sm_expr9;
-    if (_sm_expr2) goto L10;
-    goto L11;
-    L10:;
-    digits = digits + 1;
-    L11:;
-    _sm_expr2 = value < 0;
-    if (_sm_expr2) goto L13;
-    goto L14;
-    L13:;
-    digits = digits + 1;
-    L14:;
-    return digits;
-}
-void strAddInt(Char* target, Int64 value, Int count) {
-    Int64 rest, _sm_expr5;
-    Bool _sm_expr1;
-    Int at, _sm_expr3;
-    Char ch;
-    rest = value;
-    _sm_expr1 = rest > 0;
-    if (_sm_expr1) goto L1;
-    goto L2;
-    L1:;
-    rest = 0 - rest;
-    L2:;
-    at = count;
-    _sm_expr1 = value < 0;
-    if (_sm_expr1) goto L3;
-    goto L4;
-    L3:;
-    target[0] = '-';
-    L4:;
-    _sm_expr3 = -10;
-    _sm_expr1 = rest <= _sm_expr3;
-    if (!(_sm_expr1)) goto L6;
-    _sm_expr5 = rest % 10;
-    _sm_expr3 = 0 - _sm_expr5;
-    at = at - 1;
-    ch = '0' + _sm_expr3;
-    target[at] = ch;
-    rest = rest / 10;
-    goto L4;
-    L6:;
-    at = at - 1;
-    _sm_expr5 = 0 - rest;
-    ch = '0' + _sm_expr5;
-    target[at] = ch;
-}
-Span<Char> strBoolView(Bool value) {
-    if (value) goto L1;
-    goto L2;
-    L1:;
-    return __sm_stringTable[1];
-    L2:;
-    return __sm_stringTable[0];
 }
 // stress/smgen-res/src/main.kt
 int main() {
