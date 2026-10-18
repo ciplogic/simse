@@ -550,13 +550,44 @@ fun Char.isSpace(): Bool {
     return this == ' ' || this == '\t' || this == '\n' || this == '\r'
 }
 
-// The one numeric formatter the C++ carries: `std::to_string` of an `Int64`. Every integer
-// width's `toString` lands here - the Simse bodies below widen the small widths at the call,
-// which is all a cast between signed widths is - and the two alias spellings (`Int8` ≡
-// `Char` and `Int32` ≡ `Int` are one C++ type each, where two bodies would define one
-// function twice) ride the same symbol as natives, the receiver converting at the call.
-@SmGen("res", "strops", "simse_int64_toString")
-borrow fun intToStr(value: Int64): Str
+// The decimal spelling of a signed 64-bit value, `INT64_MIN` included, written in the
+// language: the digits are peeled *negatively* (`rest % 10` of a negative is negative, and
+// division truncates toward zero), so the negation never has to cross `+9223372036854775807`
+// and the most negative value needs no special case. The digits come out least-significant
+// first, so they append into a scratch string and the result reads back off its end.
+//
+// A plain function rather than an extension on purpose: a body is emitted when its *name* is
+// reached, and an extension must additionally have its receiver's type named somewhere -
+// which a program printing a scalar it never spelled does not do (src/codegen/CgProtocol.kt
+// carries the protocol-shaped half of that rule). The `toString` bodies below are the one
+// caller group, and every width widens at the call.
+fun intToStr(value: Int64): Str {
+    var rest: Int64 = value
+    if (rest > 0) {
+        rest = 0 - rest
+    }
+    var reversed: Str = ""
+    if (rest == 0) {
+        reversed.append('0')
+    }
+    while (rest < 0) {
+        val digit: Int = 0 - (rest % 10)
+        val ch: Char = '0' + digit
+        reversed.append(ch)
+        rest = rest / 10
+    }
+    var out: Str = ""
+    out.reserve(reversed.size() + 1)
+    if (value < 0) {
+        out.append('-')
+    }
+    var i: Int = reversed.size() - 1
+    while (i >= 0) {
+        out.append(reversed.charAt(i))
+        i = i - 1
+    }
+    return out
+}
 
 fun Int.toString(): Str {
     return intToStr(this)
@@ -576,11 +607,13 @@ fun Char.toString(): Str {
     return intToStr(value)
 }
 
-// The two alias spellings a body cannot declare (see `intToStr` above).
-@SmGen("res", "strops", "simse_int64_toString")
+// The two alias spellings a body cannot declare (`Int8` ≡ `Char` and `Int32` ≡ `Int` are one
+// C++ type each, where two bodies would define one function twice): natives over the shared
+// template, whose numeric output is the `intToStr` body's, byte for byte.
+@SmGen("res", "strops", "simse_num_toString")
 borrow fun toString(this: Int8): Str
 
-@SmGen("res", "strops", "simse_int64_toString")
+@SmGen("res", "strops", "simse_num_toString")
 borrow fun toString(this: Int32): Str
 
 // The floats keep `std::to_string` of themselves: a different format (`%f`-style), which is

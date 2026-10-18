@@ -1794,7 +1794,6 @@ Opt<Float64> simse_str_toFloat(const Str& self);
 
 void simse_str_initByValue(Str& self, const Str& value);
 
-Str simse_int64_toString(Int64 self);
 template <class T>
 Str simse_num_toString(const T& self);
 Str simse_bool_toString(Bool self);
@@ -2242,6 +2241,7 @@ Bool isDigit(Char* self);
 Bool isAlpha(Char* self);
 Bool isAlphaOrDigit(Char* self);
 Bool isSpace(Char* self);
+Str intToStr(Int64 value);
 Str toString(Int* self);
 Str toString(Int64* self);
 Str toString(Char* self);
@@ -5413,21 +5413,72 @@ Bool isSpace(Char* self) {
     _sm_sc1:;
     return _sm_expr1;
 }
+Str intToStr(Int64 value) {
+    Int64 rest, _sm_expr4;
+    Bool _sm_expr1;
+    Str reversed, out;
+    Int digit, _sm_expr6, i;
+    Char ch, _sm_expr10;
+    rest = value;
+    _sm_expr1 = rest > 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    rest = 0 - rest;
+    L2:;
+    reversed = __sm_stringTable[1182];
+    _sm_expr1 = rest == 0;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    simse_str_append(reversed, '0');
+    L4:;
+    _sm_expr1 = rest < 0;
+    if (!(_sm_expr1)) goto L6;
+    _sm_expr4 = rest % 10;
+    digit = 0 - _sm_expr4;
+    ch = '0' + digit;
+    simse_str_append(reversed, ch);
+    rest = rest / 10;
+    goto L4;
+    L6:;
+    out = __sm_stringTable[1182];
+    digit = simse_lenOf(reversed);
+    _sm_expr6 = digit + 1;
+    simse_str_reserve(out, _sm_expr6);
+    _sm_expr1 = value < 0;
+    if (_sm_expr1) goto L7;
+    goto L8;
+    L7:;
+    simse_str_append(out, '-');
+    L8:;
+    digit = simse_lenOf(reversed);
+    i = digit - 1;
+    L9:;
+    _sm_expr1 = i >= 0;
+    if (!(_sm_expr1)) goto L10;
+    _sm_expr10 = simse_str_charAt(reversed, i);
+    simse_str_append(out, _sm_expr10);
+    i = i - 1;
+    goto L9;
+    L10:;
+    return out;
+}
 Str toString(Int* self) {
     Str _sm_expr1;
-    _sm_expr1 = simse_int64_toString((*self));
+    _sm_expr1 = intToStr((*self));
     return _sm_expr1;
 }
 Str toString(Int64* self) {
     Str _sm_expr1;
-    _sm_expr1 = simse_int64_toString((*self));
+    _sm_expr1 = intToStr((*self));
     return _sm_expr1;
 }
 Str toString(Char* self) {
     Int64 value;
     Str _sm_expr1;
     value = (*self);
-    _sm_expr1 = simse_int64_toString(value);
+    _sm_expr1 = intToStr(value);
     return _sm_expr1;
 }
 // modules/compiler/gen.kt
@@ -94573,10 +94624,6 @@ inline Opt<Float64> simse_str_toFloat(const Str& self) {
 
 inline void simse_str_initByValue(Str& self, const Str& value) {
     self = value;
-}
-
-inline Str simse_int64_toString(Int64 self) {
-    return std::to_string(self);
 }
 
 template <class T>

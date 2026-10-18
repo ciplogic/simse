@@ -309,12 +309,12 @@ SIMSE_PACK_POP
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 2;
+static const Int __sm_stringCount = 3;
 static const char __sm_stringPool[] =
-    "The comments a `res` section carries:What a program's own generated C++ looks like" "the declarations and bodies below name the" 
+    "The comments a `res` section carries:What a program's own generated C++ looks like" "the declarations and bodies below name the" "" 
 ;
-static const Int16 __sm_stringStarts[] = {2,2,0,-82};
-static const Int16 __sm_stringLens[] = {2,2,-82,40};
+static const Int16 __sm_stringStarts[] = {3,3,0,-82,40};
+static const Int16 __sm_stringLens[] = {3,3,-82,40,42};
 static_assert(sizeof(__sm_stringPool) - 1 == 124, "the string pool and its length index disagree");
 static Span<Char> __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
@@ -383,7 +383,6 @@ Opt<Float64> simse_str_toFloat(const Str& self);
 
 void simse_str_initByValue(Str& self, const Str& value);
 
-Str simse_int64_toString(Int64 self);
 template <class T>
 Str simse_num_toString(const T& self);
 Str simse_bool_toString(Bool self);
@@ -504,6 +503,7 @@ template <class T>
 T get(Span<T>* self, Int index);
 template <class T>
 void set(Span<T>* self, Int index, T value);
+Char charAt(Span<Char>* self, Int index);
 Str substr(Span<Char>* self, Int from, Int count);
 Str toString(Span<Char>* self);
 Int compareTo(Span<Char>* self, Span<Char> other);
@@ -530,6 +530,7 @@ Res<T> simse_resErr(Str message);
 void resourcesInstall(Span<Char>* table, Int tableCount, Int* index, Int count);
 void initByValue(Str* self);
 Str substr(Str* self, Int start, Int len);
+Str intToStr(Int64 value);
 Str toString(Int* self);
 Str toString(Int64* self);
 Str toString(Char* self);
@@ -564,6 +565,11 @@ void set(Span<T>* self, Int index, T value) {
     T* _sm_base1;
     _sm_base1 = self->ptr;
     _sm_base1[index] = value;
+}
+Char charAt(Span<Char>* self, Int index) {
+    Char _sm_expr1;
+    _sm_expr1 = at(self, index);
+    return _sm_expr1;
 }
 Str substr(Span<Char>* self, Int from, Int count) {
     Int len, begin, take;
@@ -818,21 +824,72 @@ Str substr(Str* self, Int start, Int len) {
     L9:;
     return out;
 }
+Str intToStr(Int64 value) {
+    Int64 rest, _sm_expr4;
+    Bool _sm_expr1;
+    Str reversed, out;
+    Int digit, _sm_expr6, i;
+    Char ch, _sm_expr10;
+    rest = value;
+    _sm_expr1 = rest > 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    rest = 0 - rest;
+    L2:;
+    reversed = __sm_stringTable[2];
+    _sm_expr1 = rest == 0;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    simse_str_append(reversed, '0');
+    L4:;
+    _sm_expr1 = rest < 0;
+    if (!(_sm_expr1)) goto L6;
+    _sm_expr4 = rest % 10;
+    digit = 0 - _sm_expr4;
+    ch = '0' + digit;
+    simse_str_append(reversed, ch);
+    rest = rest / 10;
+    goto L4;
+    L6:;
+    out = __sm_stringTable[2];
+    digit = simse_lenOf(reversed);
+    _sm_expr6 = digit + 1;
+    simse_str_reserve(out, _sm_expr6);
+    _sm_expr1 = value < 0;
+    if (_sm_expr1) goto L7;
+    goto L8;
+    L7:;
+    simse_str_append(out, '-');
+    L8:;
+    digit = simse_lenOf(reversed);
+    i = digit - 1;
+    L9:;
+    _sm_expr1 = i >= 0;
+    if (!(_sm_expr1)) goto L10;
+    _sm_expr10 = simse_str_charAt(reversed, i);
+    simse_str_append(out, _sm_expr10);
+    i = i - 1;
+    goto L9;
+    L10:;
+    return out;
+}
 Str toString(Int* self) {
     Str _sm_expr1;
-    _sm_expr1 = simse_int64_toString((*self));
+    _sm_expr1 = intToStr((*self));
     return _sm_expr1;
 }
 Str toString(Int64* self) {
     Str _sm_expr1;
-    _sm_expr1 = simse_int64_toString((*self));
+    _sm_expr1 = intToStr((*self));
     return _sm_expr1;
 }
 Str toString(Char* self) {
     Int64 value;
     Str _sm_expr1;
     value = (*self);
-    _sm_expr1 = simse_int64_toString(value);
+    _sm_expr1 = intToStr(value);
     return _sm_expr1;
 }
 // stress/res-comments/src/main.kt
@@ -1007,10 +1064,6 @@ inline Opt<Float64> simse_str_toFloat(const Str& self) {
 
 inline void simse_str_initByValue(Str& self, const Str& value) {
     self = value;
-}
-
-inline Str simse_int64_toString(Int64 self) {
-    return std::to_string(self);
 }
 
 template <class T>

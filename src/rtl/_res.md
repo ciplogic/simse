@@ -621,10 +621,9 @@ Opt<Float64> simse_str_toFloat(const Str& self);
 // setting the receiver in place. The empty form is a Simse method (an empty body).
 void simse_str_initByValue(Str& self, const Str& value);
 
-// The one integer formatter: `std::to_string` of the `Int64` every width widens to
-// (src/rtl/rtl.kt names the spellings that ride it). The template stays for the two floats,
-// whose format is `std::to_string` of themselves; `Bool` keeps its own word.
-Str simse_int64_toString(Int64 self);
+// The integer formatter is Simse (src/rtl/rtl.kt's `intToStr`); the template serves the two
+// spellings a body cannot declare (`Int8`/`Int32`, the aliases of `Char`/`Int`) and the two
+// floats, whose format is `std::to_string` of themselves; `Bool` keeps its own word.
 template <class T>
 Str simse_num_toString(const T& self);
 Str simse_bool_toString(Bool self);
@@ -714,10 +713,6 @@ inline Opt<Float64> simse_str_toFloat(const Str& self) {
 
 inline void simse_str_initByValue(Str& self, const Str& value) {
     self = value;
-}
-
-inline Str simse_int64_toString(Int64 self) {
-    return std::to_string(self);
 }
 
 template <class T>

@@ -301,12 +301,12 @@ inline void initByValue(Res<T>* self, Str value) {
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 19;
+static const Int __sm_stringCount = 20;
 static const char __sm_stringPool[] =
-    "shadowing the protocol:" "every other, up to 10:" "with for and an index:" "skip 4, stop after 8:" "countdown from 3:" "after the end:" "with for:" "negative" "called" "parsed" "alpha" "gamma" "beta" "gone" ":" "=" "a" "b" "c" 
+    "shadowing the protocol:" "every other, up to 10:" "with for and an index:" "skip 4, stop after 8:" "countdown from 3:" "after the end:" "with for:" "negative" "called" "parsed" "alpha" "gamma" "beta" "gone" ":" "=" "a" "b" "c" "" 
 ;
-static const Int16 __sm_stringStarts[] = {19,16,0,-23,1,0,1,4,3,5,1,2,0,1,0,1,0,3,1,3,0};
-static const Int16 __sm_stringLens[] = {19,15,-23,1,0,1,4,3,5,1,2,0,1,0,1,0,3,1,4,0};
+static const Int16 __sm_stringStarts[] = {20,16,0,-23,1,0,1,4,3,5,1,2,0,1,0,1,0,3,1,4,0};
+static const Int16 __sm_stringLens[] = {20,15,-23,1,0,1,4,3,5,1,2,0,1,0,1,0,3,1,4,0,1,1};
 static_assert(sizeof(__sm_stringPool) - 1 == 171, "the string pool and its length index disagree");
 static Span<Char> __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
@@ -369,7 +369,6 @@ Opt<Float64> simse_str_toFloat(const Str& self);
 
 void simse_str_initByValue(Str& self, const Str& value);
 
-Str simse_int64_toString(Int64 self);
 template <class T>
 Str simse_num_toString(const T& self);
 Str simse_bool_toString(Bool self);
@@ -487,9 +486,17 @@ inline void simse_println(const T& value, FILE* out) {
 template <class T>
 Int size(Span<T>* self);
 template <class T>
+T at(Span<T>* self, Int index);
+template <class T>
 T get(Span<T>* self, Int index);
 template <class T>
 void set(Span<T>* self, Int index, T value);
+Char charAt(Span<Char>* self, Int index);
+Str substr(Span<Char>* self, Int from, Int count);
+Str toString(Span<Char>* self);
+Int compareTo(Span<Char>* self, Span<Char> other);
+Bool equals(Span<Char>* self, Span<Char> other);
+Str plus(Span<Char>* self, Span<Char> other);
 template <class T>
 Bool simse_optHasValue(Opt<T>* self);
 template <class T>
@@ -557,6 +564,8 @@ Bool advance(Span_iterValues_yieldable<T>* self) {
 template <class T>
 Span_iterValues_yieldable<T> iterValues(Span<T>* self);
 void initByValue(Str* self);
+Str substr(Str* self, Int start, Int len);
+Str intToStr(Int64 value);
 Str toString(Int* self);
 Str toString(Int64* self);
 Str toString(Char* self);
@@ -756,6 +765,13 @@ Int size(Span<T>* self) {
     return _sm_expr1;
 }
 template <class T>
+T at(Span<T>* self, Int index) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    auto _sm_expr1 = _sm_base1[index];
+    return _sm_expr1;
+}
+template <class T>
 T get(Span<T>* self, Int index) {
     T* _sm_base1;
     _sm_base1 = self->ptr;
@@ -767,6 +783,132 @@ void set(Span<T>* self, Int index, T value) {
     T* _sm_base1;
     _sm_base1 = self->ptr;
     _sm_base1[index] = value;
+}
+Char charAt(Span<Char>* self, Int index) {
+    Char _sm_expr1;
+    _sm_expr1 = at(self, index);
+    return _sm_expr1;
+}
+Str substr(Span<Char>* self, Int from, Int count) {
+    Int len, begin, take;
+    Bool _sm_expr1;
+    len = size(self);
+    begin = from;
+    _sm_expr1 = begin < 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    begin = 0;
+    L2:;
+    _sm_expr1 = begin > len;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    begin = len;
+    L4:;
+    take = len - begin;
+    _sm_expr1 = count >= 0;
+    if (_sm_expr1) goto L7;
+    goto L6;
+    L7:;
+    _sm_expr1 = count < take;
+    if (_sm_expr1) goto L5;
+    goto L6;
+    L5:;
+    take = count;
+    L6:;
+    Str out;
+    _sm_expr1 = take > 0;
+    if (_sm_expr1) goto L8;
+    goto L9;
+    L8:;
+    simse_str_setBytes(out, self->ptr, begin, take);
+    L9:;
+    return out;
+}
+Str toString(Span<Char>* self) {
+    Int _sm_expr1;
+    Str _sm_expr2;
+    _sm_expr1 = size(self);
+    _sm_expr2 = substr(self, 0, _sm_expr1);
+    return _sm_expr2;
+}
+Int compareTo(Span<Char>* self, Span<Char> other) {
+    Bool _sm_expr3, _sm_expr4, _sm_expr7;
+    Int _sm_diff_2, _sm_expr8, diff;
+    auto _sm_expr1 = self->len;
+    auto _sm_expr2 = other.len;
+    _sm_expr3 = _sm_expr1 <= _sm_expr2;
+    if (_sm_expr3) goto L1;
+    goto L2;
+    L1:;
+    _sm_diff_2 = simse_mem_compare(self->ptr, 0, other.ptr, 0, self->len);
+    _sm_expr4 = _sm_diff_2 != 0;
+    if (_sm_expr4) goto L3;
+    goto L4;
+    L3:;
+    return _sm_diff_2;
+    L4:;
+    {
+        auto _sm_expr5 = self->len;
+        auto _sm_expr6 = other.len;
+        _sm_expr7 = _sm_expr5 == _sm_expr6;
+        if (_sm_expr7) goto L5;
+        goto L6;
+        L5:;
+        return 0;
+        L6:;
+        _sm_expr8 = -1;
+        return _sm_expr8;
+    }
+    L2:;
+    diff = simse_mem_compare(self->ptr, 0, other.ptr, 0, other.len);
+    _sm_expr3 = diff != 0;
+    if (_sm_expr3) goto L7;
+    goto L8;
+    L7:;
+    return diff;
+    L8:;
+    return 1;
+}
+Bool equals(Span<Char>* self, Span<Char> other) {
+    Bool _sm_expr3;
+    Int _sm_expr4;
+    auto _sm_expr1 = self->len;
+    auto _sm_expr2 = other.len;
+    _sm_expr3 = _sm_expr1 != _sm_expr2;
+    if (_sm_expr3) goto L1;
+    goto L2;
+    L1:;
+    return false;
+    L2:;
+    _sm_expr4 = simse_mem_compare(self->ptr, 0, other.ptr, 0, self->len);
+    _sm_expr3 = _sm_expr4 == 0;
+    return _sm_expr3;
+}
+Str plus(Span<Char>* self, Span<Char> other) {
+    Str* _sm_base3;
+    Bool _sm_expr2;
+    Int at, _sm_expr4;
+    Char* _sm_expr5;
+    Str result;
+    simse_str_setBytes(result, self->ptr, 0, self->len);
+    auto _sm_expr1 = other.len;
+    _sm_expr2 = _sm_expr1 > 0;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    at = simse_lenOf(result);
+    {
+        auto _sm_expr3 = other.len;
+        _sm_expr4 = at + _sm_expr3;
+        result.resize(_sm_expr4);
+        _sm_base3 = &result;
+        _sm_expr5 = simse_str_data(_sm_base3);
+        simse_mem_copy(_sm_expr5, at, other.ptr, 0, other.len);
+    }
+    L2:;
+    return result;
 }
 template <class T>
 Bool simse_optHasValue(Opt<T>* self) {
@@ -838,21 +980,114 @@ Span_iterValues_yieldable<T> iterValues(Span<T>* self) {
 }
 void initByValue(Str* self) {
 }
+Str substr(Str* self, Int start, Int len) {
+    Str* _sm_base1;
+    Int begin, _sm_expr2, count;
+    Bool _sm_expr1;
+    Char* _sm_expr8;
+    begin = start;
+    _sm_expr1 = begin < 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    begin = 0;
+    L2:;
+    _sm_expr2 = simse_lenOf((*self));
+    _sm_expr1 = begin > _sm_expr2;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    begin = simse_lenOf((*self));
+    L4:;
+    _sm_expr2 = simse_lenOf((*self));
+    count = _sm_expr2 - begin;
+    _sm_expr1 = len >= 0;
+    if (_sm_expr1) goto L7;
+    goto L6;
+    L7:;
+    _sm_expr1 = len < count;
+    if (_sm_expr1) goto L5;
+    goto L6;
+    L5:;
+    count = len;
+    L6:;
+    Str out;
+    _sm_expr1 = count > 0;
+    if (_sm_expr1) goto L8;
+    goto L9;
+    L8:;
+    _sm_base1 = self;
+    _sm_expr8 = simse_str_data(_sm_base1);
+    simse_str_setBytes(out, _sm_expr8, begin, count);
+    L9:;
+    return out;
+}
+Str intToStr(Int64 value) {
+    Int64 rest, _sm_expr4;
+    Bool _sm_expr1;
+    Str reversed, out;
+    Int digit, _sm_expr6, i;
+    Char ch, _sm_expr10;
+    rest = value;
+    _sm_expr1 = rest > 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    rest = 0 - rest;
+    L2:;
+    reversed = __sm_stringTable[19];
+    _sm_expr1 = rest == 0;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    simse_str_append(reversed, '0');
+    L4:;
+    _sm_expr1 = rest < 0;
+    if (!(_sm_expr1)) goto L6;
+    _sm_expr4 = rest % 10;
+    digit = 0 - _sm_expr4;
+    ch = '0' + digit;
+    simse_str_append(reversed, ch);
+    rest = rest / 10;
+    goto L4;
+    L6:;
+    out = __sm_stringTable[19];
+    digit = simse_lenOf(reversed);
+    _sm_expr6 = digit + 1;
+    simse_str_reserve(out, _sm_expr6);
+    _sm_expr1 = value < 0;
+    if (_sm_expr1) goto L7;
+    goto L8;
+    L7:;
+    simse_str_append(out, '-');
+    L8:;
+    digit = simse_lenOf(reversed);
+    i = digit - 1;
+    L9:;
+    _sm_expr1 = i >= 0;
+    if (!(_sm_expr1)) goto L10;
+    _sm_expr10 = simse_str_charAt(reversed, i);
+    simse_str_append(out, _sm_expr10);
+    i = i - 1;
+    goto L9;
+    L10:;
+    return out;
+}
 Str toString(Int* self) {
     Str _sm_expr1;
-    _sm_expr1 = simse_int64_toString((*self));
+    _sm_expr1 = intToStr((*self));
     return _sm_expr1;
 }
 Str toString(Int64* self) {
     Str _sm_expr1;
-    _sm_expr1 = simse_int64_toString((*self));
+    _sm_expr1 = intToStr((*self));
     return _sm_expr1;
 }
 Str toString(Char* self) {
     Int64 value;
     Str _sm_expr1;
     value = (*self);
-    _sm_expr1 = simse_int64_toString(value);
+    _sm_expr1 = intToStr(value);
     return _sm_expr1;
 }
 // stress/machines/src/main.kt
@@ -1349,10 +1584,6 @@ inline Opt<Float64> simse_str_toFloat(const Str& self) {
 
 inline void simse_str_initByValue(Str& self, const Str& value) {
     self = value;
-}
-
-inline Str simse_int64_toString(Int64 self) {
-    return std::to_string(self);
 }
 
 template <class T>

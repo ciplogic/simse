@@ -340,7 +340,6 @@ Opt<Float64> simse_str_toFloat(const Str& self);
 
 void simse_str_initByValue(Str& self, const Str& value);
 
-Str simse_int64_toString(Int64 self);
 template <class T>
 Str simse_num_toString(const T& self);
 Str simse_bool_toString(Bool self);
@@ -579,10 +578,6 @@ inline Opt<Float64> simse_str_toFloat(const Str& self) {
 
 inline void simse_str_initByValue(Str& self, const Str& value) {
     self = value;
-}
-
-inline Str simse_int64_toString(Int64 self) {
-    return std::to_string(self);
 }
 
 template <class T>
