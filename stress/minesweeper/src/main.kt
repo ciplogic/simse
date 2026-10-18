@@ -32,7 +32,7 @@ fun render(b: *Board): Str {
             } else if (cell.neighbors == 0) {
                 out.append('.')
             } else {
-                out.append("12345678".charAt(cell.neighbors - 1))
+                out.append("12345678"[cell.neighbors - 1])
             }
             x = x + 1
         }

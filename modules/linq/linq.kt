@@ -139,7 +139,7 @@ fun Str.splitIter(separator: Char): ..*StrView {
     var pos: Int = 0
     while (true) {
         var end: Int = pos
-        while (end < len && source.charAt(end) != separator) {
+        while (end < len && source[end] != separator) {
             end = end + 1
         }
         var part: StrView = source.slice(pos, end - pos)

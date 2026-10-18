@@ -466,6 +466,7 @@ Res<T> simse_resOk(T value);
 template <class T>
 Res<T> simse_resErr(Str message);
 void initByValue(Str* self);
+void set(Str* self, Int index, Char value);
 void ns1_initByValue(ns1_Point* self, Int x, Int y);
 Opt<Int> ns1_three();
 Opt<Int> ns1_nothing();
@@ -539,6 +540,13 @@ Res<T> simse_resErr(Str message) {
     return result;
 }
 void initByValue(Str* self) {
+}
+void set(Str* self, Int index, Char value) {
+    Str* _sm_base1;
+    Char* bytes;
+    _sm_base1 = self;
+    bytes = simse_str_data(_sm_base1);
+    bytes[index] = value;
 }
 // stress/ctor-return/src/main.kt
 void ns1_initByValue(ns1_Point* self, Int x, Int y) {

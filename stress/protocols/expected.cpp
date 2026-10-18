@@ -471,7 +471,6 @@ template <class T>
 Int size(Span<T>* self);
 template <class T>
 T at(Span<T>* self, Int index);
-Char charAt(Span<Char>* self, Int index);
 Str substr(Span<Char>* self, Int from, Int count);
 Str toString(Span<Char>* self);
 Int compareTo(Span<Char>* self, Span<Char> other);
@@ -500,6 +499,7 @@ Int strCountDigits(Int64 value);
 void strAddInt(Char* target, Int64 value, Int count);
 Span<Char> strBoolView(Bool value);
 Str substr(Str* self, Int start, Int len);
+void set(Str* self, Int index, Char value);
 Str intToStr(Int64 value);
 Str toString(Int* self);
 Str toString(Int16* self);
@@ -539,11 +539,6 @@ T at(Span<T>* self, Int index) {
     T* _sm_base1;
     _sm_base1 = self->ptr;
     auto _sm_expr1 = _sm_base1[index];
-    return _sm_expr1;
-}
-Char charAt(Span<Char>* self, Int index) {
-    Char _sm_expr1;
-    _sm_expr1 = at(self, index);
     return _sm_expr1;
 }
 Str substr(Span<Char>* self, Int from, Int count) {
@@ -871,12 +866,19 @@ Str substr(Str* self, Int start, Int len) {
     L9:;
     return out;
 }
+void set(Str* self, Int index, Char value) {
+    Str* _sm_base1;
+    Char* bytes;
+    _sm_base1 = self;
+    bytes = simse_str_data(_sm_base1);
+    bytes[index] = value;
+}
 Str intToStr(Int64 value) {
+    Char _sm_base1, ch;
     Int64 rest, _sm_expr4;
     Bool _sm_expr1;
     Str reversed, out;
     Int digit, _sm_expr6, i;
-    Char ch, _sm_expr10;
     rest = value;
     _sm_expr1 = rest > 0;
     if (_sm_expr1) goto L1;
@@ -915,8 +917,8 @@ Str intToStr(Int64 value) {
     L9:;
     _sm_expr1 = i >= 0;
     if (!(_sm_expr1)) goto L10;
-    _sm_expr10 = simse_str_charAt(reversed, i);
-    simse_str_append(out, _sm_expr10);
+    _sm_base1 = reversed[i];
+    simse_str_append(out, _sm_base1);
     i = i - 1;
     goto L9;
     L10:;

@@ -19,7 +19,7 @@ fun jsonQuoted(value: Str): Str {
     out.append('"')
     var i: Int = 0
     while (i < value.size()) {
-        val ch: Char = value.charAt(i)
+        val ch: Char = value[i]
         if (ch == '"') {
             out.append('\\')
             out.append('"')

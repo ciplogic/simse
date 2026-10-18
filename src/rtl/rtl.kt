@@ -226,7 +226,7 @@ fun fmtStr(fmt: StrView, items: *List<Str>): Str {
     var points: Int = 0
     var i: Int = 0
     while (i < fmt.size()) {
-        if (fmt.charAt(i) == '|') {
+        if (fmt[i] == '|') {
             points = points + 1
         }
         i = i + 1
@@ -239,7 +239,7 @@ fun fmtStr(fmt: StrView, items: *List<Str>): Str {
     var used: Int = 0
     i = 0
     while (i < fmt.size()) {
-        val ch: Char = fmt.charAt(i)
+        val ch: Char = fmt[i]
         if (ch == '|') {
             out.appendStr(items[used])
             used = used + 1
@@ -263,7 +263,7 @@ fun fmtStrWith(separator: Char, templateText: StrView, items: *List<Str>): Str {
     var points: Int = 0
     var i: Int = 0
     while (i < templateText.size()) {
-        if (templateText.charAt(i) == separator) {
+        if (templateText[i] == separator) {
             points = points + 1
         }
         i = i + 1
@@ -276,7 +276,7 @@ fun fmtStrWith(separator: Char, templateText: StrView, items: *List<Str>): Str {
     var used: Int = 0
     i = 0
     while (i < templateText.size()) {
-        val ch: Char = templateText.charAt(i)
+        val ch: Char = templateText[i]
         if (ch == separator) {
             out.appendStr(items[used])
             used = used + 1
@@ -461,8 +461,20 @@ fun Str.substr(start: Int, len: Int): Str {
     return out
 }
 
+// The byte at `index`, as the indexer: `s[i]` is `get(s, i)` through the operator
+// convention (`specs/functions.md`), the same route `Span`'s `[]` takes - the declaration
+// was `charAt` before the indexer was uniform, and the symbol keeps its old name (reach is
+// by symbol, so the shared `get` name cannot drag the section anywhere).
 @SmGen("res", "strops", "simse_str_charAt")
-borrow fun charAt(this: Str, index: Int): Char
+borrow operator fun get(this: Str, index: Int): Char
+
+// The byte at `index`, written: `s[i] = ch`. One byte through the borrowed pointer, the
+// same write `Span.set` spells; a run of them still wants `setBytes` (one resize, one
+// block copy).
+operator fun Str.set(index: Int, value: Char): Unit {
+    val bytes: *Char = strBytes(this)
+    bytes[index] = value
+}
 
 // A byte comparison, prefix first: a longer prefix cannot match.
 fun Str.startsWith(prefix: Str): Bool {
@@ -472,7 +484,7 @@ fun Str.startsWith(prefix: Str): Bool {
     }
     var i = 0
     while (i < count) {
-        if (this.charAt(i) != prefix.charAt(i)) {
+        if (this[i] != prefix[i]) {
             return false
         }
         i = i + 1
@@ -488,7 +500,7 @@ fun Str.endsWith(suffix: Str): Bool {
     }
     var i = 0
     while (i < count) {
-        if (this.charAt(len - count + i) != suffix.charAt(i)) {
+        if (this[len - count + i] != suffix[i]) {
             return false
         }
         i = i + 1
@@ -527,14 +539,14 @@ fun Str.trim(): Str {
     var begin = 0
     var end = this.size()
     while (begin < end) {
-        val ch: Char = this.charAt(begin)
+        val ch: Char = this[begin]
         if (!ch.isSpace()) {
             break
         }
         begin = begin + 1
     }
     while (end > begin) {
-        val ch: Char = this.charAt(end - 1)
+        val ch: Char = this[end - 1]
         if (!ch.isSpace()) {
             break
         }
@@ -603,7 +615,7 @@ fun Str.toUpper(): Str {
     out.reserve(this.size())
     var i = 0
     while (i < this.size()) {
-        var ch = this.charAt(i)
+        var ch = this[i]
         if (ch >= 'a' && ch <= 'z') {
             ch = ch - 32
         }
@@ -618,7 +630,7 @@ fun Str.toLower(): Str {
     out.reserve(this.size())
     var i = 0
     while (i < this.size()) {
-        var ch = this.charAt(i)
+        var ch = this[i]
         if (ch >= 'A' && ch <= 'Z') {
             ch = ch + 32
         }
@@ -748,7 +760,7 @@ fun intToStr(value: Int64): Str {
     }
     var i: Int = reversed.size() - 1
     while (i >= 0) {
-        out.append(reversed.charAt(i))
+        out.append(reversed[i])
         i = i - 1
     }
     return out

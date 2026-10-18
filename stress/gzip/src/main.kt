@@ -56,8 +56,8 @@ fun hex(bytes: List<Int8>): Str {
     var i: Int = 0
     while (i < bytes.size()) {
         val byte: Int = byteAt(bytes, i)
-        out.append(digits.charAt(byte >> 4))
-        out.append(digits.charAt(byte & 15))
+        out.append(digits[byte >> 4])
+        out.append(digits[byte & 15])
         i = i + 1
     }
     return out
@@ -75,7 +75,7 @@ fun fromHex(text: Str): List<Int8> {
     var out: List<Int8> = List<Int8>()
     var i: Int = 0
     while (i + 1 < text.size()) {
-        out.append(hexDigit(text.charAt(i)) * 16 + hexDigit(text.charAt(i + 1)))
+        out.append(hexDigit(text[i]) * 16 + hexDigit(text[i + 1]))
         i = i + 2
     }
     return out

@@ -450,11 +450,12 @@ forward:
 // call a receiver-writing native on a result it built itself - and `toInt` with
 // `from_chars`' semantics). What stays: what the emitter's reach rule makes hazardous as a
 // body (the `toString` family over scalar receivers, src/rtl/rtl.kt), what reaches
-// `SmString` internals (`charAt`), the standard library (`std::strtod`, `std::to_string`
+// `SmString` internals (the indexer's `simse_str_charAt`), the standard library (`std::strtod`, `std::to_string`
 // for the spellings a body cannot declare), and the emitter's own concat primitives
 // (the concat trio's reach rule, src/codegen/CgEmitType.kt).
 
-// `Str.charAt(index)`: the byte at `index` (unchecked; no bounds test).
+// `Str`'s indexer (`s[i]`, the declaration named `get` in src/rtl/rtl.kt): the byte at
+// `index`, unchecked, no bounds test.
 Char simse_str_charAt(const Str& self, Int index);
 
 // `Str.toFloat()` parses the whole string; failure (or a non-empty trailing remainder)

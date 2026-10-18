@@ -123,8 +123,16 @@ inline void simse_println(const T& value, FILE* out) {
     std::fputc('\n', out);
 }
 
+void set(Str* self, Int index, Char value);
 Str greeting(Str name);
 
+void set(Str* self, Int index, Char value) {
+    Str* _sm_base1;
+    Char* bytes;
+    _sm_base1 = self;
+    bytes = simse_str_data(_sm_base1);
+    bytes[index] = value;
+}
 // stress/smgen-kt/src/main.kt
 int main() {
     Str _sm_expr1, _sm_expr2;

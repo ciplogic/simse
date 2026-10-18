@@ -157,7 +157,7 @@ fun zipBytes(content: Str): List<Int> {
     var bytes: List<Int> = List<Int>()
     var i: Int = 0
     while (i < content.size()) {
-        val wide: Int = content.charAt(i)
+        val wide: Int = content[i]
         bytes.append(wide & 255)
         i = i + 1
     }
@@ -227,10 +227,10 @@ fun zipNormalizedName(name: Str): Str {
     var out: Str = Str()
     var i: Int = 0
     while (i < name.size()) {
-        if (name.charAt(i) == '\\') {
+        if (name[i] == '\\') {
             out.append('/')
         } else {
-            out.append(name.charAt(i))
+            out.append(name[i])
         }
         i = i + 1
     }
@@ -246,22 +246,22 @@ fun zipNameIsSafe(name: Str): Bool {
     }
     var i: Int = 0
     while (i < name.size()) {
-        val ch: Char = name.charAt(i)
+        val ch: Char = name[i]
         if (ch == ':') {
             return false
         }
         i = i + 1
     }
-    if (name.charAt(0) == '/') {
+    if (name[0] == '/') {
         return false
     }
     var start: Int = 0
     while (start < name.size()) {
         var end: Int = start
-        while (end < name.size() && name.charAt(end) != '/') {
+        while (end < name.size() && name[end] != '/') {
             end = end + 1
         }
-        if (end - start == 2 && name.charAt(start) == '.' && name.charAt(start + 1) == '.') {
+        if (end - start == 2 && name[start] == '.' && name[start + 1] == '.') {
             return false
         }
         start = end + 1
@@ -270,7 +270,7 @@ fun zipNameIsSafe(name: Str): Bool {
 }
 
 fun zipNameIsDirectory(name: Str): Bool {
-    return name.charAt(name.size() - 1) == '/'
+    return name[name.size() - 1] == '/'
 }
 
 // The folder an entry's parents live in: `dir` itself for a top-level name, or `dir` plus
@@ -279,7 +279,7 @@ fun zipParent(dir: Str, name: Str): Str {
     var slash: Int = -1
     var i: Int = 0
     while (i < name.size()) {
-        if (name.charAt(i) == '/') {
+        if (name[i] == '/') {
             slash = i
         }
         i = i + 1

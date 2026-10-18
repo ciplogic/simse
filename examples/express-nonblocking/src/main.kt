@@ -56,7 +56,7 @@ fun contentLength(pending: *Str): Int {
     var i: Int = at + 15
     var value: Int = 0
     while (i < headers.size()) {
-        val ch: Char = headers.charAt(i)
+        val ch: Char = headers[i]
         if (ch >= '0' && ch <= '9') {
             value = value * 10 + (ch - '0')
         } else if (ch != ' ' && ch != '\t') {

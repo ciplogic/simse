@@ -23,7 +23,7 @@ fun fromHex(text: Str): List<Int8> {
     var out: List<Int8> = List<Int8>()
     var i: Int = 0
     while (i + 1 < text.size()) {
-        out.append(hexDigit(text.charAt(i)) * 16 + hexDigit(text.charAt(i + 1)))
+        out.append(hexDigit(text[i]) * 16 + hexDigit(text[i + 1]))
         i = i + 2
     }
     return out
@@ -41,7 +41,7 @@ fun toBytes(text: Str): List<Int8> {
     var out: List<Int8> = List<Int8>()
     var i: Int = 0
     while (i < text.size()) {
-        out.append(text.charAt(i))
+        out.append(text[i])
         i = i + 1
     }
     return out
@@ -129,7 +129,7 @@ fun equalText(got: Str, want: Str): Bool {
     }
     var i: Int = 0
     while (i < got.size()) {
-        if (got.charAt(i) != want.charAt(i)) {
+        if (got[i] != want[i]) {
             return false
         }
         i = i + 1

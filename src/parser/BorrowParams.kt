@@ -719,11 +719,11 @@ fun bpCppCalled(texts: *List<Str>): Dictionary<Str, Bool> {
         val len: Int = text.size()
         var i: Int = 0
         while (i < len) {
-            val ch: Char = text.charAt(i)
+            val ch: Char = text[i]
             if (ch.isAlpha() || ch == '_') {
                 val start: Int = i
                 while (i < len) {
-                    val part: Char = text.charAt(i)
+                    val part: Char = text[i]
                     if (!part.isAlphaOrDigit() && part != '_') {
                         break
                     }
@@ -731,13 +731,13 @@ fun bpCppCalled(texts: *List<Str>): Dictionary<Str, Bool> {
                 }
                 var after: Int = i
                 while (after < len) {
-                    val gap: Char = text.charAt(after)
+                    val gap: Char = text[after]
                     if (gap != ' ' && gap != '\t') {
                         break
                     }
                     after = after + 1
                 }
-                if (after < len && text.charAt(after) == '(') {
+                if (after < len && text[after] == '(') {
                     out.insert(text.substr(start, i - start), true)
                 }
             } else {

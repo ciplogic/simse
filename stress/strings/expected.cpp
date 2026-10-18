@@ -485,7 +485,6 @@ template <class T>
 T get(Span<T>* self, Int index);
 template <class T>
 void set(Span<T>* self, Int index, T value);
-Char charAt(Span<Char>* self, Int index);
 Bool startsWith(Span<Char>* self, Str* text);
 Int find(Span<Char>* self, Str* sub);
 Int indexOf(Span<Char>* self, Str* sub);
@@ -572,6 +571,7 @@ Int find(Str* self, Str* sub);
 Int indexOf(Str* self, Str* sub);
 Int lastIndexOf(Str* self, Str* sub);
 Str substr(Str* self, Int start, Int len);
+void set(Str* self, Int index, Char value);
 Bool startsWith(Str* self, Str* prefix);
 Bool endsWith(Str* self, Str* suffix);
 Str replace(Str* self, Str* from, Str* to);
@@ -632,11 +632,6 @@ void set(Span<T>* self, Int index, T value) {
     T* _sm_base1;
     _sm_base1 = self->ptr;
     _sm_base1[index] = value;
-}
-Char charAt(Span<Char>* self, Int index) {
-    Char _sm_expr1;
-    _sm_expr1 = at(self, index);
-    return _sm_expr1;
 }
 Bool startsWith(Span<Char>* self, Str* text) {
     Int count, compareResult;
@@ -925,7 +920,7 @@ Str fmtStr(Span<Char> fmt, List<Str>* items) {
     _sm_expr2 = size(simse_addressOf(fmt));
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L4;
-    _sm_expr4 = charAt(simse_addressOf(fmt), i);
+    _sm_expr4 = get(simse_addressOf(fmt), i);
     _sm_expr1 = _sm_expr4 == '|';
     if (_sm_expr1) goto L5;
     goto L6;
@@ -951,7 +946,7 @@ Str fmtStr(Span<Char> fmt, List<Str>* items) {
     _sm_expr2 = size(simse_addressOf(fmt));
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L10;
-    ch = charAt(simse_addressOf(fmt), i);
+    ch = get(simse_addressOf(fmt), i);
     _sm_expr1 = ch == '|';
     if (_sm_expr1) goto L11;
     goto L12;
@@ -985,7 +980,7 @@ Str fmtStrWith(Char separator, Span<Char> templateText, List<Str>* items) {
     _sm_expr2 = size(simse_addressOf(templateText));
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L4;
-    _sm_expr4 = charAt(simse_addressOf(templateText), i);
+    _sm_expr4 = get(simse_addressOf(templateText), i);
     _sm_expr1 = _sm_expr4 == separator;
     if (_sm_expr1) goto L5;
     goto L6;
@@ -1011,7 +1006,7 @@ Str fmtStrWith(Char separator, Span<Char> templateText, List<Str>* items) {
     _sm_expr2 = size(simse_addressOf(templateText));
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L10;
-    ch = charAt(simse_addressOf(templateText), i);
+    ch = get(simse_addressOf(templateText), i);
     _sm_expr1 = ch == separator;
     if (_sm_expr1) goto L11;
     goto L12;
@@ -1290,6 +1285,13 @@ Str substr(Str* self, Int start, Int len) {
     L9:;
     return out;
 }
+void set(Str* self, Int index, Char value) {
+    Str* _sm_base1;
+    Char* bytes;
+    _sm_base1 = self;
+    bytes = simse_str_data(_sm_base1);
+    bytes[index] = value;
+}
 Bool startsWith(Str* self, Str* prefix) {
     Int count, _sm_expr1, i;
     Bool _sm_expr2;
@@ -1306,8 +1308,8 @@ Bool startsWith(Str* self, Str* prefix) {
     L3:;
     _sm_expr2 = i < count;
     if (!(_sm_expr2)) goto L4;
-    _sm_expr4 = simse_str_charAt((*self), i);
-    _sm_expr5 = simse_str_charAt((*prefix), i);
+    _sm_expr4 = (*self)[i];
+    _sm_expr5 = (*prefix)[i];
     _sm_expr2 = _sm_expr4 != _sm_expr5;
     if (_sm_expr2) goto L5;
     goto L6;
@@ -1337,8 +1339,8 @@ Bool endsWith(Str* self, Str* suffix) {
     if (!(_sm_expr1)) goto L4;
     _sm_expr3 = len - count;
     _sm_expr4 = _sm_expr3 + i;
-    _sm_expr5 = simse_str_charAt((*self), _sm_expr4);
-    _sm_expr6 = simse_str_charAt((*suffix), i);
+    _sm_expr5 = (*self)[_sm_expr4];
+    _sm_expr6 = (*suffix)[i];
     _sm_expr1 = _sm_expr5 != _sm_expr6;
     if (_sm_expr1) goto L5;
     goto L6;
@@ -1400,7 +1402,7 @@ Str trim(Str* self) {
     L1:;
     _sm_expr1 = begin < end;
     if (!(_sm_expr1)) goto L2;
-    ch = simse_str_charAt((*self), begin);
+    ch = (*self)[begin];
     _sm_expr1 = isSpace(simse_addressOf(ch));
     _sm_expr3 = !_sm_expr1;
     if (_sm_expr3) goto L2;
@@ -1410,7 +1412,7 @@ Str trim(Str* self) {
     _sm_expr1 = end > begin;
     if (!(_sm_expr1)) goto L6;
     _sm_expr5 = end - 1;
-    _sm_ch_2 = simse_str_charAt((*self), _sm_expr5);
+    _sm_ch_2 = (*self)[_sm_expr5];
     _sm_expr1 = isSpace(simse_addressOf(_sm_ch_2));
     _sm_expr3 = !_sm_expr1;
     if (_sm_expr3) goto L6;
@@ -1516,7 +1518,7 @@ List<Str> split(Str* self, Char separator) {
     return parts;
 }
 Str toUpper(Str* self) {
-    Int _sm_expr1, i, _sm_expr2;
+    Int _sm_expr1, i;
     Bool _sm_expr3;
     Char ch;
     Str out;
@@ -1524,10 +1526,9 @@ Str toUpper(Str* self) {
     simse_str_reserve(out, _sm_expr1);
     i = 0;
     L1:;
-    _sm_expr2 = simse_lenOf((*self));
-    _sm_expr3 = i < _sm_expr2;
+    _sm_expr3 = i < _sm_expr1;
     if (!(_sm_expr3)) goto L2;
-    ch = simse_str_charAt((*self), i);
+    ch = (*self)[i];
     _sm_expr3 = ch >= 'a';
     if (_sm_expr3) goto L5;
     goto L4;
@@ -1545,7 +1546,7 @@ Str toUpper(Str* self) {
     return out;
 }
 Str toLower(Str* self) {
-    Int _sm_expr1, i, _sm_expr2;
+    Int _sm_expr1, i;
     Bool _sm_expr3;
     Char ch;
     Str out;
@@ -1553,10 +1554,9 @@ Str toLower(Str* self) {
     simse_str_reserve(out, _sm_expr1);
     i = 0;
     L1:;
-    _sm_expr2 = simse_lenOf((*self));
-    _sm_expr3 = i < _sm_expr2;
+    _sm_expr3 = i < _sm_expr1;
     if (!(_sm_expr3)) goto L2;
-    ch = simse_str_charAt((*self), i);
+    ch = (*self)[i];
     _sm_expr3 = ch >= 'A';
     if (_sm_expr3) goto L5;
     goto L4;
@@ -1602,11 +1602,11 @@ Bool isSpace(Char* self) {
     return _sm_expr1;
 }
 Str intToStr(Int64 value) {
+    Char _sm_base1, ch;
     Int64 rest, _sm_expr4;
     Bool _sm_expr1;
     Str reversed, out;
     Int digit, _sm_expr6, i;
-    Char ch, _sm_expr10;
     rest = value;
     _sm_expr1 = rest > 0;
     if (_sm_expr1) goto L1;
@@ -1645,8 +1645,8 @@ Str intToStr(Int64 value) {
     L9:;
     _sm_expr1 = i >= 0;
     if (!(_sm_expr1)) goto L10;
-    _sm_expr10 = simse_str_charAt(reversed, i);
-    simse_str_append(out, _sm_expr10);
+    _sm_base1 = reversed[i];
+    simse_str_append(out, _sm_base1);
     i = i - 1;
     goto L9;
     L10:;
@@ -1719,13 +1719,13 @@ Int ns1_partStringEscapes() {
 }
 // stress/strings/src/main.kt
 Int ns1_partStrings() {
-    Str _sm_base1, _sm_base2, _sm_base4, _sm_base6, _sm_base8, _sm_base10, _sm_base12, _sm_base14,
-        _sm_base16, raw, text, _sm_expr1, _sm_expr2, _sm_expr12, _sm_expr15;
-    Str* _sm_base3, * _sm_base5, * _sm_base7, * _sm_base9, * _sm_base11, * _sm_base13, * _sm_base15;
-    Bool _sm_expr3, _sm_expr5, _sm_expr13, _sm_expr14;
-    Int _sm_expr6, _sm_expr7, _sm_expr9, _sm_expr10, _sm_expr11;
+    Str _sm_base1, _sm_base2, _sm_base5, _sm_base7, _sm_base9, _sm_base11, _sm_base13, _sm_base15,
+        _sm_base17, raw, text, _sm_expr1, _sm_expr2, _sm_expr11, _sm_expr14;
+    Char _sm_base3;
+    Str* _sm_base4, * _sm_base6, * _sm_base8, * _sm_base10, * _sm_base12, * _sm_base14, * _sm_base16;
+    Bool _sm_expr3, _sm_expr5, _sm_expr12, _sm_expr13;
+    Int _sm_expr6, _sm_expr7, _sm_expr8, _sm_expr9, _sm_expr10;
     List<Str> parts;
-    Char _sm_expr8;
     raw = __sm_stringTable[6];
     text = trim(simse_addressOf(raw));
     simse_println((text), stdout);
@@ -1748,36 +1748,36 @@ Int ns1_partStrings() {
     simse_println((_sm_base1), stdout);
     _sm_base2 = parts[1];
     simse_println((_sm_base2), stdout);
-    _sm_expr8 = simse_str_charAt(text, 0);
+    _sm_base3 = text[0];
+    simse_println((_sm_base3), stdout);
+    _sm_base5 = __sm_stringTable[24];
+    _sm_base4 = &_sm_base5;
+    _sm_expr8 = indexOf(simse_addressOf(text), _sm_base4);
     simse_println((_sm_expr8), stdout);
-    _sm_base4 = __sm_stringTable[24];
-    _sm_base3 = &_sm_base4;
-    _sm_expr9 = indexOf(simse_addressOf(text), _sm_base3);
+    _sm_base7 = __sm_stringTable[60];
+    _sm_base6 = &_sm_base7;
+    _sm_expr9 = find(simse_addressOf(text), _sm_base6);
     simse_println((_sm_expr9), stdout);
-    _sm_base6 = __sm_stringTable[60];
-    _sm_base5 = &_sm_base6;
-    _sm_expr10 = find(simse_addressOf(text), _sm_base5);
+    _sm_base9 = __sm_stringTable[92];
+    _sm_base8 = &_sm_base9;
+    _sm_expr10 = lastIndexOf(simse_addressOf(text), _sm_base8);
     simse_println((_sm_expr10), stdout);
-    _sm_base8 = __sm_stringTable[92];
-    _sm_base7 = &_sm_base8;
-    _sm_expr11 = lastIndexOf(simse_addressOf(text), _sm_base7);
+    _sm_expr11 = substr(simse_addressOf(text), 6, 5);
     simse_println((_sm_expr11), stdout);
-    _sm_expr12 = substr(simse_addressOf(text), 6, 5);
+    _sm_base11 = __sm_stringTable[22];
+    _sm_base10 = &_sm_base11;
+    _sm_expr12 = startsWith(simse_addressOf(text), _sm_base10);
     simse_println((_sm_expr12), stdout);
-    _sm_base10 = __sm_stringTable[22];
-    _sm_base9 = &_sm_base10;
-    _sm_expr13 = startsWith(simse_addressOf(text), _sm_base9);
+    _sm_base13 = __sm_stringTable[24];
+    _sm_base12 = &_sm_base13;
+    _sm_expr13 = endsWith(simse_addressOf(text), _sm_base12);
     simse_println((_sm_expr13), stdout);
-    _sm_base12 = __sm_stringTable[24];
-    _sm_base11 = &_sm_base12;
-    _sm_expr14 = endsWith(simse_addressOf(text), _sm_base11);
+    _sm_base15 = __sm_stringTable[24];
+    _sm_base14 = &_sm_base15;
+    _sm_base17 = __sm_stringTable[23];
+    _sm_base16 = &_sm_base17;
+    _sm_expr14 = replace(simse_addressOf(text), _sm_base14, _sm_base16);
     simse_println((_sm_expr14), stdout);
-    _sm_base14 = __sm_stringTable[24];
-    _sm_base13 = &_sm_base14;
-    _sm_base16 = __sm_stringTable[23];
-    _sm_base15 = &_sm_base16;
-    _sm_expr15 = replace(simse_addressOf(text), _sm_base13, _sm_base15);
-    simse_println((_sm_expr15), stdout);
     return 0;
 }
 // stress/strings/src/main.kt

@@ -80,7 +80,7 @@ fun resHexToBytes(hex: Str): Str {
     var high: Int = 0 - 1
     var i: Int = 0
     while (i < hex.size()) {
-        val ch: Char = hex.charAt(i)
+        val ch: Char = hex[i]
         if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
             i = i + 1
             continue
@@ -117,7 +117,7 @@ fun resQuoteBinary(bytes: Str): Str {
     out.reserve(bytes.size() + 2)
     var i: Int = 0
     while (i < bytes.size()) {
-        val ch: Char = bytes.charAt(i)
+        val ch: Char = bytes[i]
         // The byte as the *unsigned* value the C++ spelled (`(unsigned char) ch`): a `Char`
         // reads back signed, so 0xFF is -56 until it is put back in range.
         var byte: Int = ch

@@ -22,11 +22,6 @@ typealias StrView = Span<Char>
 // generated class (`view.slice(1)` is `slice(&view, 1)` in C++). No passthrough
 // declaration is needed - the alias resolves to the class's method.
 
-// `charAt` is the view's own spelling of `at` (the byte at `index`, unchecked).
-fun StrView.charAt(index: Int): Char {
-    return this.at(index)
-}
-
 // Read-only, so auto-borrow works the parameter: `text` is a `*Str` in the emitted signature
 // and the scanner's table lookup passes a pointer into the table, with nothing copied.
 fun StrView.startsWith(text: Str): Bool {

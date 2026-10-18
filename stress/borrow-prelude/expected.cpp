@@ -466,7 +466,6 @@ template <class T>
 Int size(Span<T>* self);
 template <class T>
 T at(Span<T>* self, Int index);
-Char charAt(Span<Char>* self, Int index);
 Bool startsWith(Span<Char>* self, Str* text);
 Int compareTo(Span<Char>* self, Span<Char> other);
 Bool equals(Span<Char>* self, Span<Char> other);
@@ -493,6 +492,7 @@ void initByValue(Str* self);
 Int strCountDigits(Int64 value);
 void strAddInt(Char* target, Int64 value, Int count);
 Span<Char> strBoolView(Bool value);
+void set(Str* self, Int index, Char value);
 Bool startsWith(Str* self, Str* prefix);
 Bool endsWith(Str* self, Str* suffix);
 
@@ -507,11 +507,6 @@ T at(Span<T>* self, Int index) {
     T* _sm_base1;
     _sm_base1 = self->ptr;
     auto _sm_expr1 = _sm_base1[index];
-    return _sm_expr1;
-}
-Char charAt(Span<Char>* self, Int index) {
-    Char _sm_expr1;
-    _sm_expr1 = at(self, index);
     return _sm_expr1;
 }
 Bool startsWith(Span<Char>* self, Str* text) {
@@ -770,6 +765,13 @@ Span<Char> strBoolView(Bool value) {
     L2:;
     return __sm_stringTable[4];
 }
+void set(Str* self, Int index, Char value) {
+    Str* _sm_base1;
+    Char* bytes;
+    _sm_base1 = self;
+    bytes = simse_str_data(_sm_base1);
+    bytes[index] = value;
+}
 Bool startsWith(Str* self, Str* prefix) {
     Int count, _sm_expr1, i;
     Bool _sm_expr2;
@@ -786,8 +788,8 @@ Bool startsWith(Str* self, Str* prefix) {
     L3:;
     _sm_expr2 = i < count;
     if (!(_sm_expr2)) goto L4;
-    _sm_expr4 = simse_str_charAt((*self), i);
-    _sm_expr5 = simse_str_charAt((*prefix), i);
+    _sm_expr4 = (*self)[i];
+    _sm_expr5 = (*prefix)[i];
     _sm_expr2 = _sm_expr4 != _sm_expr5;
     if (_sm_expr2) goto L5;
     goto L6;
@@ -817,8 +819,8 @@ Bool endsWith(Str* self, Str* suffix) {
     if (!(_sm_expr1)) goto L4;
     _sm_expr3 = len - count;
     _sm_expr4 = _sm_expr3 + i;
-    _sm_expr5 = simse_str_charAt((*self), _sm_expr4);
-    _sm_expr6 = simse_str_charAt((*suffix), i);
+    _sm_expr5 = (*self)[_sm_expr4];
+    _sm_expr6 = (*suffix)[i];
     _sm_expr1 = _sm_expr5 != _sm_expr6;
     if (_sm_expr1) goto L5;
     goto L6;

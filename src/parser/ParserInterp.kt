@@ -59,19 +59,19 @@ fun Parser.parseInterpolatedRaw(raw: *Str, pos: SourcePos): ExprNode {
     var items: List<AstXmlNode> = List<AstXmlNode>()
     var i: Int = 1
     while (i < end) {
-        val ch: Char = raw.charAt(i)
+        val ch: Char = raw[i]
         if (ch != '@') {
             templateText.append(ch)
             i = i + 1
             continue
         }
-        if (i + 1 < end && raw.charAt(i + 1) == '(') {
+        if (i + 1 < end && raw[i + 1] == '(') {
             var close: Int = i + 2
-            while (close < end && lexIsAlphaOrDigit(raw.charAt(close))) {
+            while (close < end && lexIsAlphaOrDigit(raw[close])) {
                 close = close + 1
             }
-            val closed: Bool = close < end && raw.charAt(close) == ')'
-            val named: Bool = close > i + 2 && lexIsAlpha(raw.charAt(i + 2))
+            val closed: Bool = close < end && raw[close] == ')'
+            val named: Bool = close > i + 2 && lexIsAlpha(raw[i + 2])
             if (!closed || !named) {
                 this.setError(
                     interpPosAt(raw, i, pos),
@@ -85,7 +85,7 @@ fun Parser.parseInterpolatedRaw(raw: *Str, pos: SourcePos): ExprNode {
             i = close + 1
             continue
         }
-        if (i + 1 >= end || !lexIsAlpha(raw.charAt(i + 1))) {
+        if (i + 1 >= end || !lexIsAlpha(raw[i + 1])) {
             this.setError(
                 interpPosAt(raw, i, pos),
                 "invalid interpolation string: `@` must be followed by a name (`@name`) or `@(name)`; for a literal `@`, write it in a \"...\" string or in a raw string that does not interpolate"
@@ -93,7 +93,7 @@ fun Parser.parseInterpolatedRaw(raw: *Str, pos: SourcePos): ExprNode {
             return this.emptyExpr()
         }
         var j: Int = i + 1
-        while (j < end && lexIsAlphaOrDigit(raw.charAt(j))) {
+        while (j < end && lexIsAlphaOrDigit(raw[j])) {
             j = j + 1
         }
         templateText.append('@')
@@ -120,9 +120,9 @@ fun interpPosAt(raw: *Str, index: Int, pos: SourcePos): SourcePos {
     var column: Int = pos.column
     var i: Int = 0
     while (i < index) {
-        val ch: Char = raw.charAt(i)
+        val ch: Char = raw[i]
         if (ch == '\r') {
-            if (i + 1 < raw.size() && raw.charAt(i + 1) == '\n') {
+            if (i + 1 < raw.size() && raw[i + 1] == '\n') {
                 i = i + 1
             }
             line = line + 1

@@ -726,7 +726,7 @@ fun uiKey(f: *Frame, e: *UiEvent, answer: (Hit, *UiEvent) -> Bool): Hit {
         }
         var text: Str = f.nodes[focus].text
         if (text.size() < limit) {
-            text.append(EditPrintable.charAt(key - 32))
+            text.append(EditPrintable[key - 32])
             f.nodes[focus].text = text
         }
         return Hit(0 - 1, 0 - 1, focus, 0)

@@ -58,7 +58,7 @@ fun Emitter.prettySymbol(name: *Str): Str {
         var digits: Str
         var d: Int = 0
         while (d < rest.size()) {
-            val ch: Char = rest.charAt(d)
+            val ch: Char = rest[d]
             if (ch < '0' || ch > '9') {
                 break
             }

@@ -2021,7 +2021,6 @@ template <class T>
 T get(Span<T>* self, Int index);
 template <class T>
 void set(Span<T>* self, Int index, T value);
-Char charAt(Span<Char>* self, Int index);
 Bool startsWith(Span<Char>* self, Str* text);
 Int find(Span<Char>* self, Str* sub);
 Int indexOf(Span<Char>* self, Str* sub);
@@ -2220,6 +2219,7 @@ Int find(Str* self, Str* sub);
 Int indexOf(Str* self, Str* sub);
 Int lastIndexOf(Str* self, Str* sub);
 Str substr(Str* self, Int start, Int len);
+void set(Str* self, Int index, Char value);
 Bool startsWith(Str* self, Str* prefix);
 Bool endsWith(Str* self, Str* suffix);
 Str trim(Str* self);
@@ -2725,7 +2725,7 @@ Bool advance(ns11_Str_splitIter_yieldable_Char* self) {
     L6:;
     _sm_base15 = simse_addressOf(self->source);
     _sm_base16 = self->end;
-    _sm_expr2 = charAt(_sm_base15, _sm_base16);
+    _sm_expr2 = get(_sm_base15, _sm_base16);
     _sm_base17 = self->separator;
     _sm_expr1 = _sm_expr2 != _sm_base17;
     if (_sm_expr1) goto L5;
@@ -4456,11 +4456,6 @@ void set(Span<T>* self, Int index, T value) {
     _sm_base1 = self->ptr;
     _sm_base1[index] = value;
 }
-Char charAt(Span<Char>* self, Int index) {
-    Char _sm_expr1;
-    _sm_expr1 = at(self, index);
-    return _sm_expr1;
-}
 Bool startsWith(Span<Char>* self, Str* text) {
     Int count, compareResult;
     Bool _sm_expr1;
@@ -4892,7 +4887,7 @@ Str fmtStr(Span<Char> fmt, List<Str>* items) {
     _sm_expr2 = size(simse_addressOf(fmt));
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L4;
-    _sm_expr4 = charAt(simse_addressOf(fmt), i);
+    _sm_expr4 = get(simse_addressOf(fmt), i);
     _sm_expr1 = _sm_expr4 == '|';
     if (_sm_expr1) goto L5;
     goto L6;
@@ -4918,7 +4913,7 @@ Str fmtStr(Span<Char> fmt, List<Str>* items) {
     _sm_expr2 = size(simse_addressOf(fmt));
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L10;
-    ch = charAt(simse_addressOf(fmt), i);
+    ch = get(simse_addressOf(fmt), i);
     _sm_expr1 = ch == '|';
     if (_sm_expr1) goto L11;
     goto L12;
@@ -4952,7 +4947,7 @@ Str fmtStrWith(Char separator, Span<Char> templateText, List<Str>* items) {
     _sm_expr2 = size(simse_addressOf(templateText));
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L4;
-    _sm_expr4 = charAt(simse_addressOf(templateText), i);
+    _sm_expr4 = get(simse_addressOf(templateText), i);
     _sm_expr1 = _sm_expr4 == separator;
     if (_sm_expr1) goto L5;
     goto L6;
@@ -4978,7 +4973,7 @@ Str fmtStrWith(Char separator, Span<Char> templateText, List<Str>* items) {
     _sm_expr2 = size(simse_addressOf(templateText));
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L10;
-    ch = charAt(simse_addressOf(templateText), i);
+    ch = get(simse_addressOf(templateText), i);
     _sm_expr1 = ch == separator;
     if (_sm_expr1) goto L11;
     goto L12;
@@ -5257,6 +5252,13 @@ Str substr(Str* self, Int start, Int len) {
     L9:;
     return out;
 }
+void set(Str* self, Int index, Char value) {
+    Str* _sm_base1;
+    Char* bytes;
+    _sm_base1 = self;
+    bytes = simse_str_data(_sm_base1);
+    bytes[index] = value;
+}
 Bool startsWith(Str* self, Str* prefix) {
     Int count, _sm_expr1, i;
     Bool _sm_expr2;
@@ -5273,8 +5275,8 @@ Bool startsWith(Str* self, Str* prefix) {
     L3:;
     _sm_expr2 = i < count;
     if (!(_sm_expr2)) goto L4;
-    _sm_expr4 = simse_str_charAt((*self), i);
-    _sm_expr5 = simse_str_charAt((*prefix), i);
+    _sm_expr4 = (*self)[i];
+    _sm_expr5 = (*prefix)[i];
     _sm_expr2 = _sm_expr4 != _sm_expr5;
     if (_sm_expr2) goto L5;
     goto L6;
@@ -5304,8 +5306,8 @@ Bool endsWith(Str* self, Str* suffix) {
     if (!(_sm_expr1)) goto L4;
     _sm_expr3 = len - count;
     _sm_expr4 = _sm_expr3 + i;
-    _sm_expr5 = simse_str_charAt((*self), _sm_expr4);
-    _sm_expr6 = simse_str_charAt((*suffix), i);
+    _sm_expr5 = (*self)[_sm_expr4];
+    _sm_expr6 = (*suffix)[i];
     _sm_expr1 = _sm_expr5 != _sm_expr6;
     if (_sm_expr1) goto L5;
     goto L6;
@@ -5328,7 +5330,7 @@ Str trim(Str* self) {
     L1:;
     _sm_expr1 = begin < end;
     if (!(_sm_expr1)) goto L2;
-    ch = simse_str_charAt((*self), begin);
+    ch = (*self)[begin];
     _sm_expr1 = isSpace(simse_addressOf(ch));
     _sm_expr3 = !_sm_expr1;
     if (_sm_expr3) goto L2;
@@ -5338,7 +5340,7 @@ Str trim(Str* self) {
     _sm_expr1 = end > begin;
     if (!(_sm_expr1)) goto L6;
     _sm_expr5 = end - 1;
-    _sm_ch_2 = simse_str_charAt((*self), _sm_expr5);
+    _sm_ch_2 = (*self)[_sm_expr5];
     _sm_expr1 = isSpace(simse_addressOf(_sm_ch_2));
     _sm_expr3 = !_sm_expr1;
     if (_sm_expr3) goto L6;
@@ -5444,7 +5446,7 @@ List<Str> split(Str* self, Char separator) {
     return parts;
 }
 Str toUpper(Str* self) {
-    Int _sm_expr1, i, _sm_expr2;
+    Int _sm_expr1, i;
     Bool _sm_expr3;
     Char ch;
     Str out;
@@ -5452,10 +5454,9 @@ Str toUpper(Str* self) {
     simse_str_reserve(out, _sm_expr1);
     i = 0;
     L1:;
-    _sm_expr2 = simse_lenOf((*self));
-    _sm_expr3 = i < _sm_expr2;
+    _sm_expr3 = i < _sm_expr1;
     if (!(_sm_expr3)) goto L2;
-    ch = simse_str_charAt((*self), i);
+    ch = (*self)[i];
     _sm_expr3 = ch >= 'a';
     if (_sm_expr3) goto L5;
     goto L4;
@@ -5643,11 +5644,11 @@ Bool isSpace(Char* self) {
     return _sm_expr1;
 }
 Str intToStr(Int64 value) {
+    Char _sm_base1, ch;
     Int64 rest, _sm_expr4;
     Bool _sm_expr1;
     Str reversed, out;
     Int digit, _sm_expr6, i;
-    Char ch, _sm_expr10;
     rest = value;
     _sm_expr1 = rest > 0;
     if (_sm_expr1) goto L1;
@@ -5686,8 +5687,8 @@ Str intToStr(Int64 value) {
     L9:;
     _sm_expr1 = i >= 0;
     if (!(_sm_expr1)) goto L10;
-    _sm_expr10 = simse_str_charAt(reversed, i);
-    simse_str_append(out, _sm_expr10);
+    _sm_base1 = reversed[i];
+    simse_str_append(out, _sm_base1);
     i = i - 1;
     goto L9;
     L10:;
@@ -8689,7 +8690,7 @@ ns8_JsonNode ns8_jsonObject(List<Ref<ns8_JsonMember>> members) {
 Str ns8_jsonNumberText(Float64 value) {
     Str* _sm_base1;
     Str _sm_base2, printed, _sm_expr11;
-    Int _sm_expr1, end, _sm_expr4, _sm_expr8;
+    Int _sm_expr1, end;
     Bool _sm_expr2;
     Char _sm_expr5;
     printed = simse_num_toString(value);
@@ -8708,8 +8709,8 @@ Str ns8_jsonNumberText(Float64 value) {
     if (_sm_expr2) goto L6;
     goto L4;
     L6:;
-    _sm_expr4 = end - 1;
-    _sm_expr5 = simse_str_charAt(printed, _sm_expr4);
+    _sm_expr1 = end - 1;
+    _sm_expr5 = printed[_sm_expr1];
     _sm_expr2 = _sm_expr5 == '0';
     if (_sm_expr2) goto L5;
     goto L4;
@@ -8721,8 +8722,8 @@ Str ns8_jsonNumberText(Float64 value) {
     if (_sm_expr2) goto L9;
     goto L8;
     L9:;
-    _sm_expr8 = end - 1;
-    _sm_expr5 = simse_str_charAt(printed, _sm_expr8);
+    _sm_expr1 = end - 1;
+    _sm_expr5 = printed[_sm_expr1];
     _sm_expr2 = _sm_expr5 == '.';
     if (_sm_expr2) goto L7;
     goto L8;
@@ -8743,7 +8744,7 @@ void ns8_jsonWriteQuoted(Str* out, Str value) {
     _sm_expr1 = simse_lenOf(value);
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    ch = simse_str_charAt(value, i);
+    ch = value[i];
     _sm_expr2 = ch == '"';
     if (_sm_expr2) goto L3;
     goto L4;
@@ -9000,8 +9001,8 @@ Res<Char> ns8_failChar(ns8_JsonReader* self, Str* message) {
 // modules/jsonnode/jsonnode.kt
 void ns8_skipSpace(ns8_JsonReader* self) {
     Str* _sm_base1, * _sm_base2;
-    Int _sm_base3, _sm_base4, _sm_expr1, _sm_expr2;
-    Bool _sm_expr3, _sm_expr5;
+    Int _sm_base3, _sm_expr1, _sm_expr2;
+    Bool _sm_expr3, _sm_expr6;
     Char ch;
     L1:;
     _sm_expr1 = self->at;
@@ -9009,15 +9010,15 @@ void ns8_skipSpace(ns8_JsonReader* self) {
     _sm_expr2 = simse_lenOf((*_sm_base1));
     _sm_expr3 = _sm_expr1 < _sm_expr2;
     if (!(_sm_expr3)) goto L2;
-    _sm_base2 = simse_addressOf(self->text);
-    _sm_base3 = self->at;
-    ch = simse_str_charAt((*_sm_base2), _sm_base3);
-    _sm_expr3 = isSpace(simse_addressOf(ch));
-    _sm_expr5 = !_sm_expr3;
-    if (_sm_expr5) goto L2;
     _sm_expr1 = self->at;
-    _sm_base4 = _sm_expr1 + 1;
-    self->at = _sm_base4;
+    _sm_base2 = simse_addressOf(self->text);
+    ch = (*_sm_base2)[_sm_expr1];
+    _sm_expr3 = isSpace(simse_addressOf(ch));
+    _sm_expr6 = !_sm_expr3;
+    if (_sm_expr6) goto L2;
+    _sm_expr1 = self->at;
+    _sm_base3 = _sm_expr1 + 1;
+    self->at = _sm_base3;
     goto L1;
     L2:;
 }
@@ -9055,13 +9056,13 @@ Bool ns8_consume(ns8_JsonReader* self, Str word) {
 // modules/jsonnode/jsonnode.kt
 Res<ns8_JsonNode> ns8_parseValue(ns8_JsonReader* self) {
     Str* _sm_base1, * _sm_base2;
-    Int _sm_base3, _sm_expr1, _sm_expr2;
-    Str _sm_base4, text;
-    Bool _sm_expr3, _sm_expr11;
+    Str _sm_base3, text;
+    Int _sm_expr1, _sm_expr2;
+    Bool _sm_expr3, _sm_expr12;
     Res<ns8_JsonNode> _sm_expr4;
     Char ch;
     Res<Str> parsedText, _sm_prop1;
-    ns8_JsonNode _sm_expr13;
+    ns8_JsonNode _sm_expr14;
     ns8_skipSpace(self);
     _sm_expr1 = self->at;
     _sm_base1 = simse_addressOf(self->text);
@@ -9073,9 +9074,9 @@ Res<ns8_JsonNode> ns8_parseValue(ns8_JsonReader* self) {
     _sm_expr4 = ns8_fail(self, __sm_stringTable[327]);
     return _sm_expr4;
     L2:;
+    _sm_expr1 = self->at;
     _sm_base2 = simse_addressOf(self->text);
-    _sm_base3 = self->at;
-    ch = simse_str_charAt((*_sm_base2), _sm_base3);
+    ch = (*_sm_base2)[_sm_expr1];
     _sm_expr3 = ch == '{';
     if (_sm_expr3) goto L3;
     goto L4;
@@ -9097,17 +9098,17 @@ Res<ns8_JsonNode> ns8_parseValue(ns8_JsonReader* self) {
     parsedText = ns8_parseString(self);
     _sm_prop1 = parsedText;
     _sm_expr3 = simse_resHasValue(simse_addressOf(_sm_prop1));
-    _sm_expr11 = !_sm_expr3;
-    if (_sm_expr11) goto L9;
+    _sm_expr12 = !_sm_expr3;
+    if (_sm_expr12) goto L9;
     goto L10;
     L9:;
-    _sm_base4 = _sm_prop1.Error;
-    _sm_expr4 = simse_resErr<ns8_JsonNode>(_sm_base4);
+    _sm_base3 = _sm_prop1.Error;
+    _sm_expr4 = simse_resErr<ns8_JsonNode>(_sm_base3);
     return _sm_expr4;
     L10:;
     text = _sm_prop1.Value;
-    _sm_expr13 = ns8_jsonText(text);
-    _sm_expr4 = simse_resOk<ns8_JsonNode>(_sm_expr13);
+    _sm_expr14 = ns8_jsonText(text);
+    _sm_expr4 = simse_resOk<ns8_JsonNode>(_sm_expr14);
     return _sm_expr4;
     L8:;
     _sm_expr3 = ch == 't';
@@ -9159,15 +9160,15 @@ Res<ns8_JsonNode> ns8_parseLiteral(ns8_JsonReader* self) {
 // modules/jsonnode/jsonnode.kt
 Res<ns8_JsonNode> ns8_parseNumber(ns8_JsonReader* self) {
     Char* __sm_catP;
-    Str* _sm_base1, * _sm_base2, * _sm_base5;
-    Int _sm_base3, _sm_base4, start, _sm_expr1, _sm_expr2, _sm_expr15;
-    Bool _sm_expr3, _sm_expr17;
+    Str* _sm_base1, * _sm_base2, * _sm_base4;
+    Int _sm_base3, start, _sm_expr1, _sm_expr2, _sm_expr16;
+    Bool _sm_expr3, _sm_expr18;
     Char ch;
-    Res<ns8_JsonNode> _sm_expr13;
-    Str token, _sm_expr18;
+    Res<ns8_JsonNode> _sm_expr14;
+    Str token, _sm_expr19;
     Opt<Float64> value;
-    Float64 _sm_expr20;
-    ns8_JsonNode _sm_expr21;
+    Float64 _sm_expr21;
+    ns8_JsonNode _sm_expr22;
     start = self->at;
     L1:;
     _sm_expr1 = self->at;
@@ -9175,9 +9176,9 @@ Res<ns8_JsonNode> ns8_parseNumber(ns8_JsonReader* self) {
     _sm_expr2 = simse_lenOf((*_sm_base1));
     _sm_expr3 = _sm_expr1 < _sm_expr2;
     if (!(_sm_expr3)) goto L2;
+    _sm_expr1 = self->at;
     _sm_base2 = simse_addressOf(self->text);
-    _sm_base3 = self->at;
-    ch = simse_str_charAt((*_sm_base2), _sm_base3);
+    ch = (*_sm_base2)[_sm_expr1];
     _sm_expr3 = isDigit(simse_addressOf(ch));
     if (_sm_expr3) goto L3;
     _sm_expr3 = ch == '-';
@@ -9193,8 +9194,8 @@ Res<ns8_JsonNode> ns8_parseNumber(ns8_JsonReader* self) {
     goto L2;
     L3:;
     _sm_expr1 = self->at;
-    _sm_base4 = _sm_expr1 + 1;
-    self->at = _sm_base4;
+    _sm_base3 = _sm_expr1 + 1;
+    self->at = _sm_base3;
     goto L1;
     L2:;
     _sm_expr1 = self->at;
@@ -9202,42 +9203,42 @@ Res<ns8_JsonNode> ns8_parseNumber(ns8_JsonReader* self) {
     if (_sm_expr3) goto L11;
     goto L12;
     L11:;
-    _sm_expr13 = ns8_fail(self, __sm_stringTable[434]);
-    return _sm_expr13;
+    _sm_expr14 = ns8_fail(self, __sm_stringTable[434]);
+    return _sm_expr14;
     L12:;
     _sm_expr1 = self->at;
-    _sm_expr15 = _sm_expr1 - start;
-    _sm_base5 = simse_addressOf(self->text);
-    token = substr(_sm_base5, start, _sm_expr15);
+    _sm_expr16 = _sm_expr1 - start;
+    _sm_base4 = simse_addressOf(self->text);
+    token = substr(_sm_base4, start, _sm_expr16);
     value = simse_str_toFloat(token);
     _sm_expr3 = simse_optHasValue(simse_addressOf(value));
-    _sm_expr17 = !_sm_expr3;
-    if (_sm_expr17) goto L13;
+    _sm_expr18 = !_sm_expr3;
+    if (_sm_expr18) goto L13;
     goto L14;
     L13:;
-    _sm_expr18.resize(13 + token.size());
-    __sm_catP = simse_str_data(&_sm_expr18);
+    _sm_expr19.resize(13 + token.size());
+    __sm_catP = simse_str_data(&_sm_expr19);
     std::memcpy(__sm_catP, "bad number '", 12);
     __sm_catP = __sm_catP + 12;
     std::memcpy(__sm_catP, token.data(), token.size());
     __sm_catP = __sm_catP + token.size();
     *__sm_catP = (char) ('\'');
-    _sm_expr13 = ns8_fail(self, _sm_expr18);
-    return _sm_expr13;
+    _sm_expr14 = ns8_fail(self, _sm_expr19);
+    return _sm_expr14;
     L14:;
-    _sm_expr20 = simse_optValue(simse_addressOf(value));
-    _sm_expr21 = ns8_jsonNumber(_sm_expr20);
-    _sm_expr13 = simse_resOk<ns8_JsonNode>(_sm_expr21);
-    return _sm_expr13;
+    _sm_expr21 = simse_optValue(simse_addressOf(value));
+    _sm_expr22 = ns8_jsonNumber(_sm_expr21);
+    _sm_expr14 = simse_resOk<ns8_JsonNode>(_sm_expr22);
+    return _sm_expr14;
 }
 // modules/jsonnode/jsonnode.kt
 Res<Str> ns8_parseString(ns8_JsonReader* self) {
-    Int _sm_base1, _sm_base4, _sm_base5, _sm_base8, _sm_base9, _sm_expr1, _sm_expr3;
-    Str* _sm_base2, * _sm_base3, * _sm_base6, * _sm_base7, * _sm_base11, * _sm_base13;
-    Str _sm_base10, _sm_base12, _sm_base14, out;
-    Bool _sm_expr4, _sm_expr23;
+    Int _sm_base1, _sm_base4, _sm_base7, _sm_expr1, _sm_expr3;
+    Str* _sm_base2, * _sm_base3, * _sm_base5, * _sm_base6, * _sm_base9, * _sm_base11;
+    Str _sm_base8, _sm_base10, _sm_base12, out;
+    Bool _sm_expr4, _sm_expr25;
     Char ch, esc, decoded;
-    Res<Str> _sm_expr7;
+    Res<Str> _sm_expr8;
     Res<Char> parsedHex, _sm_prop1;
     _sm_expr1 = self->at;
     _sm_base1 = _sm_expr1 + 1;
@@ -9249,18 +9250,18 @@ Res<Str> ns8_parseString(ns8_JsonReader* self) {
     _sm_expr3 = simse_lenOf((*_sm_base2));
     _sm_expr4 = _sm_expr1 < _sm_expr3;
     if (!(_sm_expr4)) goto L2;
-    _sm_base3 = simse_addressOf(self->text);
-    _sm_base4 = self->at;
-    ch = simse_str_charAt((*_sm_base3), _sm_base4);
     _sm_expr1 = self->at;
-    _sm_base5 = _sm_expr1 + 1;
-    self->at = _sm_base5;
+    _sm_base3 = simse_addressOf(self->text);
+    ch = (*_sm_base3)[_sm_expr1];
+    _sm_expr3 = self->at;
+    _sm_base4 = _sm_expr3 + 1;
+    self->at = _sm_base4;
     _sm_expr4 = ch == '"';
     if (_sm_expr4) goto L3;
     goto L4;
     L3:;
-    _sm_expr7 = simse_resOk<Str>(out);
-    return _sm_expr7;
+    _sm_expr8 = simse_resOk<Str>(out);
+    return _sm_expr8;
     L4:;
     _sm_expr4 = ch != '\\';
     if (_sm_expr4) goto L5;
@@ -9270,16 +9271,16 @@ Res<Str> ns8_parseString(ns8_JsonReader* self) {
     goto L1;
     L6:;
     _sm_expr1 = self->at;
-    _sm_base6 = simse_addressOf(self->text);
-    _sm_expr3 = simse_lenOf((*_sm_base6));
+    _sm_base5 = simse_addressOf(self->text);
+    _sm_expr3 = simse_lenOf((*_sm_base5));
     _sm_expr4 = _sm_expr1 >= _sm_expr3;
     if (_sm_expr4) goto L2;
-    _sm_base7 = simse_addressOf(self->text);
-    _sm_base8 = self->at;
-    esc = simse_str_charAt((*_sm_base7), _sm_base8);
     _sm_expr1 = self->at;
-    _sm_base9 = _sm_expr1 + 1;
-    self->at = _sm_base9;
+    _sm_base6 = simse_addressOf(self->text);
+    esc = (*_sm_base6)[_sm_expr1];
+    _sm_expr3 = self->at;
+    _sm_base7 = _sm_expr3 + 1;
+    self->at = _sm_base7;
     _sm_expr4 = esc == '"';
     if (_sm_expr4) goto L9;
     goto L10;
@@ -9343,33 +9344,33 @@ Res<Str> ns8_parseString(ns8_JsonReader* self) {
     parsedHex = ns8_parseUnicodeEscape(self);
     _sm_prop1 = parsedHex;
     _sm_expr4 = simse_resHasValue(simse_addressOf(_sm_prop1));
-    _sm_expr23 = !_sm_expr4;
-    if (_sm_expr23) goto L35;
+    _sm_expr25 = !_sm_expr4;
+    if (_sm_expr25) goto L35;
     goto L36;
     L35:;
-    _sm_base10 = _sm_prop1.Error;
-    _sm_expr7 = simse_resErr<Str>(_sm_base10);
-    return _sm_expr7;
+    _sm_base8 = _sm_prop1.Error;
+    _sm_expr8 = simse_resErr<Str>(_sm_base8);
+    return _sm_expr8;
     L36:;
     decoded = _sm_prop1.Value;
     simse_str_append(out, decoded);
     goto L1;
     L34:;
-    _sm_base12 = __sm_stringTable[635];
-    _sm_base11 = &_sm_base12;
-    _sm_expr7 = ns8_failText(self, _sm_base11);
-    return _sm_expr7;
+    _sm_base10 = __sm_stringTable[635];
+    _sm_base9 = &_sm_base10;
+    _sm_expr8 = ns8_failText(self, _sm_base9);
+    return _sm_expr8;
     L2:;
-    _sm_base14 = __sm_stringTable[389];
-    _sm_base13 = &_sm_base14;
-    _sm_expr7 = ns8_failText(self, _sm_base13);
-    return _sm_expr7;
+    _sm_base12 = __sm_stringTable[389];
+    _sm_base11 = &_sm_base12;
+    _sm_expr8 = ns8_failText(self, _sm_base11);
+    return _sm_expr8;
 }
 // modules/jsonnode/jsonnode.kt
 Res<Char> ns8_parseUnicodeEscape(ns8_JsonReader* self) {
-    Str* _sm_base1, * _sm_base2, * _sm_base4, * _sm_base7;
-    Str _sm_base3, _sm_base8;
-    Int _sm_base5, _sm_base6, _sm_expr1, _sm_expr2, _sm_expr3, code, i, digit, _sm_expr13;
+    Str* _sm_base1, * _sm_base2, * _sm_base4, * _sm_base6;
+    Str _sm_base3, _sm_base7;
+    Int _sm_base5, _sm_expr1, _sm_expr2, _sm_expr3, code, i, digit, _sm_expr14;
     Bool _sm_expr4;
     Res<Char> _sm_expr5;
     Char ch;
@@ -9391,20 +9392,20 @@ Res<Char> ns8_parseUnicodeEscape(ns8_JsonReader* self) {
     L3:;
     _sm_expr4 = i < 4;
     if (!(_sm_expr4)) goto L4;
-    _sm_base4 = simse_addressOf(self->text);
-    _sm_base5 = self->at;
-    ch = simse_str_charAt((*_sm_base4), _sm_base5);
     _sm_expr1 = self->at;
-    _sm_base6 = _sm_expr1 + 1;
-    self->at = _sm_base6;
+    _sm_base4 = simse_addressOf(self->text);
+    ch = (*_sm_base4)[_sm_expr1];
+    _sm_expr2 = self->at;
+    _sm_base5 = _sm_expr2 + 1;
+    self->at = _sm_base5;
     digit = ns8_jsonHexValue(ch);
     _sm_expr4 = digit < 0;
     if (_sm_expr4) goto L5;
     goto L6;
     L5:;
-    _sm_base8 = __sm_stringTable[395];
-    _sm_base7 = &_sm_base8;
-    _sm_expr5 = ns8_failChar(self, _sm_base7);
+    _sm_base7 = __sm_stringTable[395];
+    _sm_base6 = &_sm_base7;
+    _sm_expr5 = ns8_failChar(self, _sm_base6);
     return _sm_expr5;
     L6:;
     _sm_expr1 = code * 16;
@@ -9419,20 +9420,20 @@ Res<Char> ns8_parseUnicodeEscape(ns8_JsonReader* self) {
     _sm_expr5 = simse_resOk<Char>('?');
     return _sm_expr5;
     L8:;
-    _sm_expr13 = '\0' + code;
-    _sm_expr5 = simse_resOk<Char>(_sm_expr13);
+    _sm_expr14 = '\0' + code;
+    _sm_expr5 = simse_resOk<Char>(_sm_expr14);
     return _sm_expr5;
 }
 // modules/jsonnode/jsonnode.kt
 Res<ns8_JsonNode> ns8_parseArray(ns8_JsonReader* self) {
-    Int _sm_base1, _sm_base4, _sm_base5, _sm_base8, _sm_base9, _sm_expr1, _sm_expr2, _sm_expr3;
-    Str* _sm_base2, * _sm_base3, * _sm_base6, * _sm_base7;
+    Int _sm_base1, _sm_base4, _sm_base7, _sm_expr1, _sm_expr2, _sm_expr3;
+    Str* _sm_base2, * _sm_base3, * _sm_base5, * _sm_base6;
     List<Ref<ns8_JsonNode>> items;
-    Bool _sm_expr4, _sm_expr11;
-    Char _sm_expr5, ch;
-    ns8_JsonNode _sm_expr8, value, _sm_expr19;
-    Res<ns8_JsonNode> _sm_expr9, _sm_prop1;
-    Ref<ns8_JsonNode> _sm_expr12;
+    Bool _sm_expr4, _sm_expr12;
+    Char _sm_expr6, ch;
+    ns8_JsonNode _sm_expr9, value, _sm_expr21;
+    Res<ns8_JsonNode> _sm_expr10, _sm_prop1;
+    Ref<ns8_JsonNode> _sm_expr13;
     _sm_expr1 = self->at;
     _sm_base1 = _sm_expr1 + 1;
     self->at = _sm_base1;
@@ -9445,63 +9446,63 @@ Res<ns8_JsonNode> ns8_parseArray(ns8_JsonReader* self) {
     if (_sm_expr4) goto L3;
     goto L2;
     L3:;
+    _sm_expr1 = self->at;
     _sm_base3 = simse_addressOf(self->text);
-    _sm_base4 = self->at;
-    _sm_expr5 = simse_str_charAt((*_sm_base3), _sm_base4);
-    _sm_expr4 = _sm_expr5 == ']';
+    _sm_expr6 = (*_sm_base3)[_sm_expr1];
+    _sm_expr4 = _sm_expr6 == ']';
     if (_sm_expr4) goto L1;
     goto L2;
     L1:;
     _sm_expr1 = self->at;
-    _sm_base5 = _sm_expr1 + 1;
-    self->at = _sm_base5;
-    _sm_expr8 = ns8_arrayNode(self, items);
-    _sm_expr9 = simse_resOk<ns8_JsonNode>(_sm_expr8);
-    return _sm_expr9;
+    _sm_base4 = _sm_expr1 + 1;
+    self->at = _sm_base4;
+    _sm_expr9 = ns8_arrayNode(self, items);
+    _sm_expr10 = simse_resOk<ns8_JsonNode>(_sm_expr9);
+    return _sm_expr10;
     L2:;
-    _sm_expr9 = ns8_parseValue(self);
-    _sm_prop1 = _sm_expr9;
+    _sm_expr10 = ns8_parseValue(self);
+    _sm_prop1 = _sm_expr10;
     _sm_expr4 = simse_resHasValue(simse_addressOf(_sm_prop1));
-    _sm_expr11 = !_sm_expr4;
-    if (_sm_expr11) goto L6;
+    _sm_expr12 = !_sm_expr4;
+    if (_sm_expr12) goto L6;
     goto L7;
     L6:;
     return _sm_prop1;
     L7:;
     value = _sm_prop1.Value;
-    _sm_expr12 = makeRef<std::remove_cvref_t<decltype((value))>>(value);
-    simse_list_append(items, _sm_expr12);
+    _sm_expr13 = makeRef<std::remove_cvref_t<decltype((value))>>(value);
+    simse_list_append(items, _sm_expr13);
     ns8_skipSpace(self);
     _sm_expr1 = self->at;
-    _sm_base6 = simse_addressOf(self->text);
-    _sm_expr2 = simse_lenOf((*_sm_base6));
+    _sm_base5 = simse_addressOf(self->text);
+    _sm_expr2 = simse_lenOf((*_sm_base5));
     _sm_expr4 = _sm_expr1 >= _sm_expr2;
     if (_sm_expr4) goto L8;
     goto L9;
     L8:;
-    _sm_expr9 = ns8_fail(self, __sm_stringTable[401]);
-    return _sm_expr9;
+    _sm_expr10 = ns8_fail(self, __sm_stringTable[401]);
+    return _sm_expr10;
     L9:;
-    _sm_base7 = simse_addressOf(self->text);
-    _sm_base8 = self->at;
-    ch = simse_str_charAt((*_sm_base7), _sm_base8);
     _sm_expr1 = self->at;
-    _sm_base9 = _sm_expr1 + 1;
-    self->at = _sm_base9;
+    _sm_base6 = simse_addressOf(self->text);
+    ch = (*_sm_base6)[_sm_expr1];
+    _sm_expr2 = self->at;
+    _sm_base7 = _sm_expr2 + 1;
+    self->at = _sm_base7;
     _sm_expr4 = ch == ']';
     if (_sm_expr4) goto L10;
     goto L11;
     L10:;
-    _sm_expr19 = ns8_arrayNode(self, items);
-    _sm_expr9 = simse_resOk<ns8_JsonNode>(_sm_expr19);
-    return _sm_expr9;
+    _sm_expr21 = ns8_arrayNode(self, items);
+    _sm_expr10 = simse_resOk<ns8_JsonNode>(_sm_expr21);
+    return _sm_expr10;
     L11:;
     _sm_expr4 = ch != ',';
     if (_sm_expr4) goto L12;
     goto L2;
     L12:;
-    _sm_expr9 = ns8_fail(self, __sm_stringTable[378]);
-    return _sm_expr9;
+    _sm_expr10 = ns8_fail(self, __sm_stringTable[378]);
+    return _sm_expr10;
 }
 // modules/jsonnode/jsonnode.kt
 ns8_JsonNode ns8_arrayNode(ns8_JsonReader* self, List<Ref<ns8_JsonNode>> items) {
@@ -9512,19 +9513,18 @@ ns8_JsonNode ns8_arrayNode(ns8_JsonReader* self, List<Ref<ns8_JsonNode>> items) 
 }
 // modules/jsonnode/jsonnode.kt
 Res<ns8_JsonNode> ns8_parseObject(ns8_JsonReader* self) {
-    Int _sm_base1, _sm_base4, _sm_base5, _sm_base8, _sm_base12, _sm_base13, _sm_base16, _sm_base17,
-        _sm_expr1, _sm_expr2, _sm_expr3;
-    Str* _sm_base2, * _sm_base3, * _sm_base6, * _sm_base7, * _sm_base10, * _sm_base11, * _sm_base14,
-        * _sm_base15;
-    Str _sm_base9, key;
+    Int _sm_base1, _sm_base4, _sm_base10, _sm_base13, _sm_expr1, _sm_expr2, _sm_expr3;
+    Str* _sm_base2, * _sm_base3, * _sm_base5, * _sm_base6, * _sm_base8, * _sm_base9, * _sm_base11,
+        * _sm_base12;
+    Str _sm_base7, key;
     List<Ref<ns8_JsonMember>> members;
-    Bool _sm_expr4, _sm_expr17;
-    Char _sm_expr5, ch;
-    ns8_JsonNode _sm_expr8, value, _sm_expr36;
-    Res<ns8_JsonNode> _sm_expr9, _sm_prop2;
+    Bool _sm_expr4, _sm_expr19;
+    Char _sm_expr6, ch;
+    ns8_JsonNode _sm_expr9, value, _sm_expr40;
+    Res<ns8_JsonNode> _sm_expr10, _sm_prop2;
     Res<Str> parsedKey, _sm_prop1;
-    Ref<ns8_JsonNode> _sm_expr28;
-    Ref<ns8_JsonMember> _sm_expr29;
+    Ref<ns8_JsonNode> _sm_expr31;
+    Ref<ns8_JsonMember> _sm_expr32;
     _sm_expr1 = self->at;
     _sm_base1 = _sm_expr1 + 1;
     self->at = _sm_base1;
@@ -9537,111 +9537,111 @@ Res<ns8_JsonNode> ns8_parseObject(ns8_JsonReader* self) {
     if (_sm_expr4) goto L3;
     goto L2;
     L3:;
+    _sm_expr1 = self->at;
     _sm_base3 = simse_addressOf(self->text);
-    _sm_base4 = self->at;
-    _sm_expr5 = simse_str_charAt((*_sm_base3), _sm_base4);
-    _sm_expr4 = _sm_expr5 == '}';
+    _sm_expr6 = (*_sm_base3)[_sm_expr1];
+    _sm_expr4 = _sm_expr6 == '}';
     if (_sm_expr4) goto L1;
     goto L2;
     L1:;
     _sm_expr1 = self->at;
-    _sm_base5 = _sm_expr1 + 1;
-    self->at = _sm_base5;
-    _sm_expr8 = ns8_jsonObject(members);
-    _sm_expr9 = simse_resOk<ns8_JsonNode>(_sm_expr8);
-    return _sm_expr9;
+    _sm_base4 = _sm_expr1 + 1;
+    self->at = _sm_base4;
+    _sm_expr9 = ns8_jsonObject(members);
+    _sm_expr10 = simse_resOk<ns8_JsonNode>(_sm_expr9);
+    return _sm_expr10;
     L2:;
     ns8_skipSpace(self);
     _sm_expr1 = self->at;
-    _sm_base6 = simse_addressOf(self->text);
-    _sm_expr2 = simse_lenOf((*_sm_base6));
+    _sm_base5 = simse_addressOf(self->text);
+    _sm_expr2 = simse_lenOf((*_sm_base5));
     _sm_expr4 = _sm_expr1 >= _sm_expr2;
     if (_sm_expr4) goto L6;
-    _sm_base7 = simse_addressOf(self->text);
-    _sm_base8 = self->at;
-    _sm_expr5 = simse_str_charAt((*_sm_base7), _sm_base8);
-    _sm_expr4 = _sm_expr5 != '"';
+    _sm_expr1 = self->at;
+    _sm_base6 = simse_addressOf(self->text);
+    _sm_expr6 = (*_sm_base6)[_sm_expr1];
+    _sm_expr4 = _sm_expr6 != '"';
     if (_sm_expr4) goto L6;
     goto L7;
     L6:;
-    _sm_expr9 = ns8_fail(self, __sm_stringTable[353]);
-    return _sm_expr9;
+    _sm_expr10 = ns8_fail(self, __sm_stringTable[353]);
+    return _sm_expr10;
     L7:;
     parsedKey = ns8_parseString(self);
     _sm_prop1 = parsedKey;
     _sm_expr4 = simse_resHasValue(simse_addressOf(_sm_prop1));
-    _sm_expr17 = !_sm_expr4;
-    if (_sm_expr17) goto L9;
+    _sm_expr19 = !_sm_expr4;
+    if (_sm_expr19) goto L9;
     goto L10;
     L9:;
-    _sm_base9 = _sm_prop1.Error;
-    _sm_expr9 = simse_resErr<ns8_JsonNode>(_sm_base9);
-    return _sm_expr9;
+    _sm_base7 = _sm_prop1.Error;
+    _sm_expr10 = simse_resErr<ns8_JsonNode>(_sm_base7);
+    return _sm_expr10;
     L10:;
     key = _sm_prop1.Value;
     ns8_skipSpace(self);
     _sm_expr1 = self->at;
-    _sm_base10 = simse_addressOf(self->text);
-    _sm_expr2 = simse_lenOf((*_sm_base10));
+    _sm_base8 = simse_addressOf(self->text);
+    _sm_expr2 = simse_lenOf((*_sm_base8));
     _sm_expr4 = _sm_expr1 >= _sm_expr2;
     if (_sm_expr4) goto L11;
-    _sm_base11 = simse_addressOf(self->text);
-    _sm_base12 = self->at;
-    _sm_expr5 = simse_str_charAt((*_sm_base11), _sm_base12);
-    _sm_expr4 = _sm_expr5 != ':';
+    _sm_expr1 = self->at;
+    _sm_base9 = simse_addressOf(self->text);
+    _sm_expr6 = (*_sm_base9)[_sm_expr1];
+    _sm_expr4 = _sm_expr6 != ':';
     if (_sm_expr4) goto L11;
     goto L12;
     L11:;
-    _sm_expr9 = ns8_fail(self, __sm_stringTable[550]);
-    return _sm_expr9;
+    _sm_expr10 = ns8_fail(self, __sm_stringTable[550]);
+    return _sm_expr10;
     L12:;
     _sm_expr1 = self->at;
-    _sm_base13 = _sm_expr1 + 1;
-    self->at = _sm_base13;
-    _sm_expr9 = ns8_parseValue(self);
-    _sm_prop2 = _sm_expr9;
+    _sm_base10 = _sm_expr1 + 1;
+    self->at = _sm_base10;
+    _sm_expr10 = ns8_parseValue(self);
+    _sm_prop2 = _sm_expr10;
     _sm_expr4 = simse_resHasValue(simse_addressOf(_sm_prop2));
-    _sm_expr17 = !_sm_expr4;
-    if (_sm_expr17) goto L14;
+    _sm_expr19 = !_sm_expr4;
+    if (_sm_expr19) goto L14;
     goto L15;
     L14:;
     return _sm_prop2;
     L15:;
     value = _sm_prop2.Value;
-    _sm_expr28 = makeRef<std::remove_cvref_t<decltype((value))>>(value);
-    _sm_expr29 = makeRef<ns8_JsonMember>(key, _sm_expr28);
-    simse_list_append(members, _sm_expr29);
+    _sm_expr31 = makeRef<std::remove_cvref_t<decltype((value))>>(value);
+    _sm_expr32 = makeRef<ns8_JsonMember>(key, _sm_expr31);
+    simse_list_append(members, _sm_expr32);
     ns8_skipSpace(self);
     _sm_expr1 = self->at;
-    _sm_base14 = simse_addressOf(self->text);
-    _sm_expr2 = simse_lenOf((*_sm_base14));
+    _sm_base11 = simse_addressOf(self->text);
+    _sm_expr2 = simse_lenOf((*_sm_base11));
     _sm_expr4 = _sm_expr1 >= _sm_expr2;
     if (_sm_expr4) goto L16;
     goto L17;
     L16:;
-    _sm_expr9 = ns8_fail(self, __sm_stringTable[388]);
-    return _sm_expr9;
+    _sm_expr10 = ns8_fail(self, __sm_stringTable[388]);
+    return _sm_expr10;
     L17:;
-    _sm_base15 = simse_addressOf(self->text);
-    _sm_base16 = self->at;
-    ch = simse_str_charAt((*_sm_base15), _sm_base16);
     _sm_expr1 = self->at;
-    _sm_base17 = _sm_expr1 + 1;
-    self->at = _sm_base17;
+    _sm_base12 = simse_addressOf(self->text);
+    ch = (*_sm_base12)[_sm_expr1];
+    _sm_expr2 = self->at;
+    _sm_base13 = _sm_expr2 + 1;
+    self->at = _sm_base13;
     _sm_expr4 = ch == '}';
     if (_sm_expr4) goto L18;
     goto L19;
     L18:;
-    _sm_expr36 = ns8_jsonObject(members);
-    _sm_expr9 = simse_resOk<ns8_JsonNode>(_sm_expr36);
-    return _sm_expr9;
+    _sm_expr40 = ns8_jsonObject(members);
+    _sm_expr10 = simse_resOk<ns8_JsonNode>(_sm_expr40);
+    return _sm_expr10;
     L19:;
     _sm_expr4 = ch != ',';
     if (_sm_expr4) goto L20;
     goto L2;
     L20:;
-    _sm_expr9 = ns8_fail(self, __sm_stringTable[379]);
-    return _sm_expr9;
+    _sm_expr10 = ns8_fail(self, __sm_stringTable[379]);
+    return _sm_expr10;
 }
 // modules/jsonnode/jsonnode.kt
 Int ns8_jsonHexValue(Char ch) {
@@ -10897,7 +10897,7 @@ List<Int> ns21_zipBytes(Str* content) {
     _sm_expr1 = simse_lenOf((*content));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_expr1 = simse_str_charAt((*content), i);
+    _sm_expr1 = (*content)[i];
     _sm_expr3 = _sm_expr1 & 255;
     simse_list_append(bytes, _sm_expr3);
     i = i + 1;
@@ -11044,17 +11044,17 @@ Str ns21_zipDataStr(List<Int>* plain) {
 }
 // modules/zip/api.kt
 Str ns21_zipNormalizedName(Str* name) {
+    Char _sm_base1, _sm_expr3;
     Str out;
     Int i, _sm_expr1;
     Bool _sm_expr2;
-    Char _sm_expr3, _sm_expr5;
     out = Str();
     i = 0;
     L1:;
     _sm_expr1 = simse_lenOf((*name));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_expr3 = simse_str_charAt((*name), i);
+    _sm_expr3 = (*name)[i];
     _sm_expr2 = _sm_expr3 == '\\';
     if (_sm_expr2) goto L3;
     goto L4;
@@ -11062,8 +11062,8 @@ Str ns21_zipNormalizedName(Str* name) {
     simse_str_append(out, '/');
     goto L5;
     L4:;
-    _sm_expr5 = simse_str_charAt((*name), i);
-    simse_str_append(out, _sm_expr5);
+    _sm_base1 = (*name)[i];
+    simse_str_append(out, _sm_base1);
     L5:;
     i = i + 1;
     goto L1;
@@ -11072,7 +11072,7 @@ Str ns21_zipNormalizedName(Str* name) {
 }
 // modules/zip/api.kt
 Bool ns21_zipNameIsSafe(Str* name) {
-    Int _sm_expr1, i, start, end, _sm_expr18;
+    Int _sm_expr1, i, start, end;
     Bool _sm_expr2;
     Char ch;
     _sm_expr1 = simse_lenOf((*name));
@@ -11087,7 +11087,7 @@ Bool ns21_zipNameIsSafe(Str* name) {
     _sm_expr1 = simse_lenOf((*name));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L4;
-    ch = simse_str_charAt((*name), i);
+    ch = (*name)[i];
     _sm_expr2 = ch == ':';
     if (_sm_expr2) goto L5;
     goto L6;
@@ -11097,7 +11097,7 @@ Bool ns21_zipNameIsSafe(Str* name) {
     i = i + 1;
     goto L3;
     L4:;
-    ch = simse_str_charAt((*name), 0);
+    ch = (*name)[0];
     _sm_expr2 = ch == '/';
     if (_sm_expr2) goto L7;
     goto L8;
@@ -11116,7 +11116,7 @@ Bool ns21_zipNameIsSafe(Str* name) {
     if (_sm_expr2) goto L14;
     goto L12;
     L14:;
-    ch = simse_str_charAt((*name), end);
+    ch = (*name)[end];
     _sm_expr2 = ch != '/';
     if (_sm_expr2) goto L13;
     goto L12;
@@ -11129,13 +11129,13 @@ Bool ns21_zipNameIsSafe(Str* name) {
     if (_sm_expr2) goto L18;
     goto L16;
     L18:;
-    ch = simse_str_charAt((*name), start);
+    ch = (*name)[start];
     _sm_expr2 = ch == '.';
     if (_sm_expr2) goto L17;
     goto L16;
     L17:;
-    _sm_expr18 = start + 1;
-    ch = simse_str_charAt((*name), _sm_expr18);
+    _sm_expr1 = start + 1;
+    ch = (*name)[_sm_expr1];
     _sm_expr2 = ch == '.';
     if (_sm_expr2) goto L15;
     goto L16;
@@ -11154,7 +11154,7 @@ Bool ns21_zipNameIsDirectory(Str* name) {
     Bool _sm_expr4;
     _sm_expr1 = simse_lenOf((*name));
     _sm_expr2 = _sm_expr1 - 1;
-    _sm_expr3 = simse_str_charAt((*name), _sm_expr2);
+    _sm_expr3 = (*name)[_sm_expr2];
     _sm_expr4 = _sm_expr3 == '/';
     return _sm_expr4;
 }
@@ -11171,7 +11171,7 @@ Str ns21_zipParent(Str* dir, Str* name) {
     _sm_expr1 = simse_lenOf((*name));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_expr3 = simse_str_charAt((*name), i);
+    _sm_expr3 = (*name)[i];
     _sm_expr2 = _sm_expr3 == '/';
     if (_sm_expr2) goto L3;
     goto L4;
@@ -22501,7 +22501,7 @@ Str ns1_prettySymbol(ns1_Emitter* self, Str* name) {
     _sm_expr3 = simse_lenOf(rest);
     _sm_expr1 = d < _sm_expr3;
     if (!(_sm_expr1)) goto L4;
-    ch = simse_str_charAt(rest, d);
+    ch = rest[d];
     _sm_expr1 = ch < '0';
     if (_sm_expr1) goto L4;
     _sm_expr1 = ch > '9';
@@ -34068,7 +34068,7 @@ Str ns2_litCharSpelling(Str* text) {
 // src/common/literals.kt
 Str ns2_litRawString(Str* text) {
     Str out;
-    Int _sm_expr1, end, i, _sm_expr8;
+    Int _sm_expr1, end, i;
     Bool _sm_expr2;
     Char ch, _sm_expr9;
     out = __sm_stringTable[1129];
@@ -34078,7 +34078,7 @@ Str ns2_litRawString(Str* text) {
     L1:;
     _sm_expr2 = i < end;
     if (!(_sm_expr2)) goto L2;
-    ch = simse_str_charAt((*text), i);
+    ch = (*text)[i];
     _sm_expr2 = ch == '\\';
     if (_sm_expr2) goto L3;
     _sm_expr2 = ch == '\"';
@@ -34098,8 +34098,8 @@ Str ns2_litRawString(Str* text) {
     if (_sm_expr2) goto L11;
     goto L10;
     L11:;
-    _sm_expr8 = i + 1;
-    _sm_expr9 = simse_str_charAt((*text), _sm_expr8);
+    _sm_expr1 = i + 1;
+    _sm_expr9 = (*text)[_sm_expr1];
     _sm_expr2 = _sm_expr9 == '\n';
     if (_sm_expr2) goto L9;
     goto L10;
@@ -37545,7 +37545,7 @@ Str ns3_nativeInvokeSupportText() {
 Str ns3_resCppStripComments(Str text) {
     Str* _sm_base1, * _sm_base2, * _sm_base3;
     Str out;
-    Int i, n, lineStart, _sm_expr5, _sm_expr7, _sm_expr13, _sm_expr23, j;
+    Int i, n, lineStart, _sm_expr5, j;
     Bool lineOnly, _sm_expr1;
     Char c, _sm_expr8;
     out = Str();
@@ -37556,7 +37556,7 @@ Str ns3_resCppStripComments(Str text) {
     L1:;
     _sm_expr1 = i < n;
     if (!(_sm_expr1)) goto L2;
-    c = simse_str_charAt(text, i);
+    c = text[i];
     _sm_expr1 = c == '\"';
     if (_sm_expr1) goto L3;
     _sm_expr1 = c == '\'';
@@ -37577,8 +37577,8 @@ Str ns3_resCppStripComments(Str text) {
     if (_sm_expr1) goto L8;
     goto L7;
     L8:;
-    _sm_expr7 = i + 1;
-    _sm_expr8 = simse_str_charAt(text, _sm_expr7);
+    _sm_expr5 = i + 1;
+    _sm_expr8 = text[_sm_expr5];
     _sm_expr1 = _sm_expr8 == '\"';
     if (_sm_expr1) goto L6;
     goto L7;
@@ -37597,8 +37597,8 @@ Str ns3_resCppStripComments(Str text) {
     if (_sm_expr1) goto L12;
     goto L11;
     L12:;
-    _sm_expr13 = i + 1;
-    _sm_expr8 = simse_str_charAt(text, _sm_expr13);
+    _sm_expr5 = i + 1;
+    _sm_expr8 = text[_sm_expr5];
     _sm_expr1 = _sm_expr8 == '/';
     if (_sm_expr1) goto L10;
     goto L11;
@@ -37607,7 +37607,7 @@ Str ns3_resCppStripComments(Str text) {
     if (_sm_expr1) goto L17;
     goto L15;
     L17:;
-    _sm_expr8 = simse_str_charAt(text, i);
+    _sm_expr8 = text[i];
     _sm_expr1 = _sm_expr8 != '\n';
     if (_sm_expr1) goto L16;
     goto L15;
@@ -37635,8 +37635,8 @@ Str ns3_resCppStripComments(Str text) {
     if (_sm_expr1) goto L24;
     goto L23;
     L24:;
-    _sm_expr23 = i + 1;
-    _sm_expr8 = simse_str_charAt(text, _sm_expr23);
+    _sm_expr5 = i + 1;
+    _sm_expr8 = text[_sm_expr5];
     _sm_expr1 = _sm_expr8 == '*';
     if (_sm_expr1) goto L22;
     goto L23;
@@ -37652,13 +37652,13 @@ Str ns3_resCppStripComments(Str text) {
     if (_sm_expr1) goto L31;
     goto L29;
     L31:;
-    _sm_expr8 = simse_str_charAt(text, j);
+    _sm_expr8 = text[j];
     _sm_expr1 = _sm_expr8 == ' ';
     if (_sm_expr1) goto L30;
-    _sm_expr8 = simse_str_charAt(text, j);
+    _sm_expr8 = text[j];
     _sm_expr1 = _sm_expr8 == '\t';
     if (_sm_expr1) goto L30;
-    _sm_expr8 = simse_str_charAt(text, j);
+    _sm_expr8 = text[j];
     _sm_expr1 = _sm_expr8 == '\r';
     if (_sm_expr1) goto L30;
     goto L29;
@@ -37668,7 +37668,7 @@ Str ns3_resCppStripComments(Str text) {
     L29:;
     _sm_expr1 = j >= n;
     if (_sm_expr1) goto L34;
-    _sm_expr8 = simse_str_charAt(text, j);
+    _sm_expr8 = text[j];
     _sm_expr1 = _sm_expr8 == '\n';
     if (_sm_expr1) goto L34;
     goto L35;
@@ -37718,17 +37718,17 @@ Str ns3_resCppStripComments(Str text) {
 }
 // src/compiler/ResComments.kt
 Int ns3_resCopyQuoted(Str text, Int start, Str* out) {
-    Char quote, c, _sm_expr4;
+    Char _sm_base1, quote, c;
     Int i, n;
     Bool _sm_expr1;
-    quote = simse_str_charAt(text, start);
+    quote = text[start];
     simse_str_append((*out), quote);
     i = start + 1;
     n = simse_lenOf(text);
     L1:;
     _sm_expr1 = i < n;
     if (!(_sm_expr1)) goto L2;
-    c = simse_str_charAt(text, i);
+    c = text[i];
     simse_str_append((*out), c);
     i = i + 1;
     _sm_expr1 = c == '\\';
@@ -37739,8 +37739,8 @@ Int ns3_resCopyQuoted(Str text, Int start, Str* out) {
     if (_sm_expr1) goto L5;
     goto L1;
     L5:;
-    _sm_expr4 = simse_str_charAt(text, i);
-    simse_str_append((*out), _sm_expr4);
+    _sm_base1 = text[i];
+    simse_str_append((*out), _sm_base1);
     i = i + 1;
     goto L1;
     L4:;
@@ -37755,9 +37755,9 @@ Int ns3_resCopyQuoted(Str text, Int start, Str* out) {
 // src/compiler/ResComments.kt
 Int ns3_resCopyRawString(Str text, Int start, Str* out) {
     Char* __sm_catP;
+    Char _sm_base1, c;
     Int n, open, i, _sm_expr10, _sm_expr12, _sm_expr14, _sm_expr15, _sm_expr16, j, _sm_expr23;
     Bool _sm_expr1;
-    Char c, _sm_expr28;
     Str _sm_expr13, _sm_expr17, close;
     n = simse_lenOf(text);
     open = -1;
@@ -37765,7 +37765,7 @@ Int ns3_resCopyRawString(Str text, Int start, Str* out) {
     L1:;
     _sm_expr1 = i < n;
     if (!(_sm_expr1)) goto L2;
-    c = simse_str_charAt(text, i);
+    c = text[i];
     _sm_expr1 = c == '(';
     if (_sm_expr1) goto L3;
     goto L4;
@@ -37832,8 +37832,8 @@ Int ns3_resCopyRawString(Str text, Int start, Str* out) {
     _sm_expr15 = j + _sm_expr10;
     return _sm_expr15;
     L17:;
-    _sm_expr28 = simse_str_charAt(text, j);
-    simse_str_append((*out), _sm_expr28);
+    _sm_base1 = text[j];
+    simse_str_append((*out), _sm_base1);
     j = j + 1;
     goto L14;
     L15:;
@@ -37841,7 +37841,7 @@ Int ns3_resCopyRawString(Str text, Int start, Str* out) {
 }
 // src/compiler/ResComments.kt
 Int ns3_resSkipBlockComment(Str* text, Int start) {
-    Int n, i, _sm_expr4, _sm_expr6;
+    Int n, i, _sm_expr4;
     Bool _sm_expr1;
     Char _sm_expr2;
     n = simse_lenOf((*text));
@@ -37849,7 +37849,7 @@ Int ns3_resSkipBlockComment(Str* text, Int start) {
     L1:;
     _sm_expr1 = i < n;
     if (!(_sm_expr1)) goto L2;
-    _sm_expr2 = simse_str_charAt((*text), i);
+    _sm_expr2 = (*text)[i];
     _sm_expr1 = _sm_expr2 == '*';
     if (_sm_expr1) goto L6;
     goto L4;
@@ -37859,8 +37859,8 @@ Int ns3_resSkipBlockComment(Str* text, Int start) {
     if (_sm_expr1) goto L5;
     goto L4;
     L5:;
-    _sm_expr6 = i + 1;
-    _sm_expr2 = simse_str_charAt((*text), _sm_expr6);
+    _sm_expr4 = i + 1;
+    _sm_expr2 = (*text)[_sm_expr4];
     _sm_expr1 = _sm_expr2 == '/';
     if (_sm_expr1) goto L3;
     goto L4;
@@ -65685,7 +65685,7 @@ Dictionary<Str, Bool> ns13_bpCppCalled(List<Str>* texts) {
     L3:;
     _sm_expr2 = i < len;
     if (!(_sm_expr2)) goto L1;
-    ch = simse_str_charAt((*text), i);
+    ch = (*text)[i];
     _sm_expr2 = isAlpha(simse_addressOf(ch));
     if (_sm_expr2) goto L5;
     _sm_expr2 = ch == '_';
@@ -65696,7 +65696,7 @@ Dictionary<Str, Bool> ns13_bpCppCalled(List<Str>* texts) {
     L8:;
     _sm_expr2 = i < len;
     if (!(_sm_expr2)) goto L9;
-    part = simse_str_charAt((*text), i);
+    part = (*text)[i];
     _sm_expr2 = isAlphaOrDigit(simse_addressOf(part));
     if (_sm_expr2) goto L11;
     _sm_expr2 = part != '_';
@@ -65709,7 +65709,7 @@ Dictionary<Str, Bool> ns13_bpCppCalled(List<Str>* texts) {
     L13:;
     _sm_expr2 = after < len;
     if (!(_sm_expr2)) goto L14;
-    gap = simse_str_charAt((*text), after);
+    gap = (*text)[after];
     _sm_expr2 = gap != ' ';
     if (_sm_expr2) goto L17;
     goto L16;
@@ -65724,7 +65724,7 @@ Dictionary<Str, Bool> ns13_bpCppCalled(List<Str>* texts) {
     if (_sm_expr2) goto L20;
     goto L3;
     L20:;
-    _sm_expr13 = simse_str_charAt((*text), after);
+    _sm_expr13 = (*text)[after];
     _sm_expr2 = _sm_expr13 == '(';
     if (_sm_expr2) goto L18;
     goto L3;
@@ -73093,18 +73093,17 @@ Bool ns13_interpHasItem(Str* raw) {
 }
 // src/parser/ParserInterp.kt
 ns13_ExprNode ns13_parseInterpolatedRaw(ns13_Parser* self, Str* raw, ns2_SourcePos pos) {
-    ns2_SourcePos* _sm_base1, * _sm_base5, * _sm_base6, * _sm_base10, * _sm_base11, * _sm_base13;
-    Str* _sm_base2, * _sm_base4, * _sm_base7, * _sm_base9, * _sm_base12, * _sm_base15;
-    Str _sm_base3, _sm_base8, _sm_base16, templateText, nameInParens, name;
-    ns3_AstXmlNode _sm_base14, _sm_expr28, _sm_expr43, _sm_expr45, _sm_expr47;
-    List<ns3_AstXmlNode>* _sm_base17;
-    Int _sm_expr1, end, i, _sm_expr6, close, _sm_expr19, _sm_expr24, _sm_expr26, _sm_expr31, j,
-        _sm_expr39, _sm_expr41, k;
+    Char _sm_base1, _sm_base2, _sm_base8, _sm_base12, ch, _sm_expr7;
+    ns2_SourcePos* _sm_base3, * _sm_base7, * _sm_base9, * _sm_base14, * _sm_base15, * _sm_base17;
+    Str* _sm_base4, * _sm_base6, * _sm_base10, * _sm_base13, * _sm_base16, * _sm_base19;
+    Str _sm_base5, _sm_base11, _sm_base20, templateText, nameInParens, name;
+    ns3_AstXmlNode _sm_base18, _sm_expr26, _sm_expr39, _sm_expr41, _sm_expr43;
+    List<ns3_AstXmlNode>* _sm_base21;
+    Int _sm_expr1, end, i, close, _sm_expr22, _sm_expr24, j, _sm_expr35, _sm_expr37, k;
     List<ns3_AstXmlNode> items, args;
-    Bool _sm_expr2, _sm_expr12, closed, _sm_expr16, named;
-    Char ch, _sm_expr7, _sm_expr10, _sm_expr20, _sm_expr32, _sm_expr37;
-    ns2_SourcePos _sm_expr22, _sm_expr34;
-    ns13_ExprNode _sm_expr23, _sm_expr46;
+    Bool _sm_expr2, _sm_expr11, closed, _sm_expr15, named;
+    ns2_SourcePos _sm_expr20, _sm_expr31;
+    ns13_ExprNode _sm_expr21, _sm_expr42;
     _sm_expr1 = simse_lenOf((*raw));
     end = _sm_expr1 - 1;
     templateText = Str();
@@ -73113,7 +73112,7 @@ ns13_ExprNode ns13_parseInterpolatedRaw(ns13_Parser* self, Str* raw, ns2_SourceP
     L1:;
     _sm_expr2 = i < end;
     if (!(_sm_expr2)) goto L2;
-    ch = simse_str_charAt((*raw), i);
+    ch = (*raw)[i];
     _sm_expr2 = ch != '@';
     if (_sm_expr2) goto L3;
     goto L4;
@@ -73127,8 +73126,8 @@ ns13_ExprNode ns13_parseInterpolatedRaw(ns13_Parser* self, Str* raw, ns2_SourceP
     if (_sm_expr2) goto L7;
     goto L6;
     L7:;
-    _sm_expr6 = i + 1;
-    _sm_expr7 = simse_str_charAt((*raw), _sm_expr6);
+    _sm_expr1 = i + 1;
+    _sm_expr7 = (*raw)[_sm_expr1];
     _sm_expr2 = _sm_expr7 == '(';
     if (_sm_expr2) goto L5;
     goto L6;
@@ -73139,8 +73138,8 @@ ns13_ExprNode ns13_parseInterpolatedRaw(ns13_Parser* self, Str* raw, ns2_SourceP
     if (_sm_expr2) goto L11;
     goto L9;
     L11:;
-    _sm_expr10 = simse_str_charAt((*raw), close);
-    _sm_expr2 = ns9_lexIsAlphaOrDigit(_sm_expr10);
+    _sm_base1 = (*raw)[close];
+    _sm_expr2 = ns9_lexIsAlphaOrDigit(_sm_base1);
     if (_sm_expr2) goto L10;
     goto L9;
     L10:;
@@ -73148,64 +73147,64 @@ ns13_ExprNode ns13_parseInterpolatedRaw(ns13_Parser* self, Str* raw, ns2_SourceP
     goto L8;
     L9:;
     _sm_expr2 = close < end;
-    _sm_expr12 = _sm_expr2;
-    if (!(_sm_expr12)) goto _sm_sc1;
-    _sm_expr7 = simse_str_charAt((*raw), close);
+    _sm_expr11 = _sm_expr2;
+    if (!(_sm_expr11)) goto _sm_sc1;
+    _sm_expr7 = (*raw)[close];
     _sm_expr2 = _sm_expr7 == ')';
-    _sm_expr12 = _sm_expr2;
+    _sm_expr11 = _sm_expr2;
     _sm_sc1:;
-    closed = _sm_expr12;
+    closed = _sm_expr11;
     _sm_expr1 = i + 2;
     _sm_expr2 = close > _sm_expr1;
-    _sm_expr16 = _sm_expr2;
-    if (!(_sm_expr16)) goto _sm_sc2;
-    _sm_expr19 = i + 2;
-    _sm_expr20 = simse_str_charAt((*raw), _sm_expr19);
-    _sm_expr2 = ns9_lexIsAlpha(_sm_expr20);
-    _sm_expr16 = _sm_expr2;
+    _sm_expr15 = _sm_expr2;
+    if (!(_sm_expr15)) goto _sm_sc2;
+    _sm_expr1 = i + 2;
+    _sm_base2 = (*raw)[_sm_expr1];
+    _sm_expr2 = ns9_lexIsAlpha(_sm_base2);
+    _sm_expr15 = _sm_expr2;
     _sm_sc2:;
-    named = _sm_expr16;
+    named = _sm_expr15;
     if (closed) goto L14;
     goto L12;
     L14:;
     if (named) goto L13;
     L12:;
-    _sm_base1 = &pos;
-    _sm_expr22 = ns13_interpPosAt(raw, i, _sm_base1);
-    _sm_base3 = __sm_stringTable[11];
-    _sm_base2 = &_sm_base3;
-    ns13_setError(self, _sm_expr22, _sm_base2);
-    _sm_expr23 = ns13_emptyExpr(self);
-    return _sm_expr23;
+    _sm_base3 = &pos;
+    _sm_expr20 = ns13_interpPosAt(raw, i, _sm_base3);
+    _sm_base5 = __sm_stringTable[11];
+    _sm_base4 = &_sm_base5;
+    ns13_setError(self, _sm_expr20, _sm_base4);
+    _sm_expr21 = ns13_emptyExpr(self);
+    return _sm_expr21;
     L13:;
     simse_str_append(templateText, '@');
-    _sm_expr24 = i + 2;
+    _sm_expr22 = i + 2;
     _sm_expr1 = close - i;
-    _sm_expr26 = _sm_expr1 - 2;
-    nameInParens = substr(raw, _sm_expr24, _sm_expr26);
-    _sm_base4 = &nameInParens;
-    _sm_base5 = &pos;
-    _sm_expr23 = ns13_nameExprAt(self, _sm_base4, _sm_base5);
-    _sm_expr28 = _sm_expr23.node;
-    simse_list_append(items, _sm_expr28);
+    _sm_expr24 = _sm_expr1 - 2;
+    nameInParens = substr(raw, _sm_expr22, _sm_expr24);
+    _sm_base6 = &nameInParens;
+    _sm_base7 = &pos;
+    _sm_expr21 = ns13_nameExprAt(self, _sm_base6, _sm_base7);
+    _sm_expr26 = _sm_expr21.node;
+    simse_list_append(items, _sm_expr26);
     i = close + 1;
     goto L1;
     L6:;
     _sm_expr1 = i + 1;
     _sm_expr2 = _sm_expr1 >= end;
     if (_sm_expr2) goto L15;
-    _sm_expr31 = i + 1;
-    _sm_expr32 = simse_str_charAt((*raw), _sm_expr31);
-    _sm_expr2 = ns9_lexIsAlpha(_sm_expr32);
+    _sm_expr1 = i + 1;
+    _sm_base8 = (*raw)[_sm_expr1];
+    _sm_expr2 = ns9_lexIsAlpha(_sm_base8);
     if (_sm_expr2) goto L16;
     L15:;
-    _sm_base6 = &pos;
-    _sm_expr34 = ns13_interpPosAt(raw, i, _sm_base6);
-    _sm_base8 = __sm_stringTable[12];
-    _sm_base7 = &_sm_base8;
-    ns13_setError(self, _sm_expr34, _sm_base7);
-    _sm_expr23 = ns13_emptyExpr(self);
-    return _sm_expr23;
+    _sm_base9 = &pos;
+    _sm_expr31 = ns13_interpPosAt(raw, i, _sm_base9);
+    _sm_base11 = __sm_stringTable[12];
+    _sm_base10 = &_sm_base11;
+    ns13_setError(self, _sm_expr31, _sm_base10);
+    _sm_expr21 = ns13_emptyExpr(self);
+    return _sm_expr21;
     L16:;
     j = i + 1;
     L18:;
@@ -73213,8 +73212,8 @@ ns13_ExprNode ns13_parseInterpolatedRaw(ns13_Parser* self, Str* raw, ns2_SourceP
     if (_sm_expr2) goto L21;
     goto L19;
     L21:;
-    _sm_expr37 = simse_str_charAt((*raw), j);
-    _sm_expr2 = ns9_lexIsAlphaOrDigit(_sm_expr37);
+    _sm_base12 = (*raw)[j];
+    _sm_expr2 = ns9_lexIsAlphaOrDigit(_sm_base12);
     if (_sm_expr2) goto L20;
     goto L19;
     L20:;
@@ -73222,47 +73221,47 @@ ns13_ExprNode ns13_parseInterpolatedRaw(ns13_Parser* self, Str* raw, ns2_SourceP
     goto L18;
     L19:;
     simse_str_append(templateText, '@');
-    _sm_expr39 = i + 1;
+    _sm_expr35 = i + 1;
     _sm_expr1 = j - i;
-    _sm_expr41 = _sm_expr1 - 1;
-    name = substr(raw, _sm_expr39, _sm_expr41);
-    _sm_base9 = &name;
-    _sm_base10 = &pos;
-    _sm_expr23 = ns13_nameExprAt(self, _sm_base9, _sm_base10);
-    _sm_expr43 = _sm_expr23.node;
-    simse_list_append(items, _sm_expr43);
+    _sm_expr37 = _sm_expr1 - 1;
+    name = substr(raw, _sm_expr35, _sm_expr37);
+    _sm_base13 = &name;
+    _sm_base14 = &pos;
+    _sm_expr21 = ns13_nameExprAt(self, _sm_base13, _sm_base14);
+    _sm_expr39 = _sm_expr21.node;
+    simse_list_append(items, _sm_expr39);
     i = j;
     goto L1;
     L2:;
     args = List<ns3_AstXmlNode>();
-    _sm_base11 = &pos;
-    _sm_expr23 = ns13_interpCharLitAt(self, '@', _sm_base11);
-    _sm_expr45 = _sm_expr23.node;
-    simse_list_append(args, _sm_expr45);
-    _sm_base12 = &templateText;
-    _sm_base13 = &pos;
-    _sm_expr46 = ns13_interpTemplateNode(self, _sm_base12, _sm_base13);
-    _sm_expr47 = _sm_expr46.node;
-    simse_list_append(args, _sm_expr47);
+    _sm_base15 = &pos;
+    _sm_expr21 = ns13_interpCharLitAt(self, '@', _sm_base15);
+    _sm_expr41 = _sm_expr21.node;
+    simse_list_append(args, _sm_expr41);
+    _sm_base16 = &templateText;
+    _sm_base17 = &pos;
+    _sm_expr42 = ns13_interpTemplateNode(self, _sm_base16, _sm_base17);
+    _sm_expr43 = _sm_expr42.node;
+    simse_list_append(args, _sm_expr43);
     k = 0;
     L22:;
     _sm_expr1 = simse_lenOf(items);
     _sm_expr2 = k < _sm_expr1;
     if (!(_sm_expr2)) goto L23;
-    _sm_base14 = items[k];
-    simse_list_append(args, _sm_base14);
+    _sm_base18 = items[k];
+    simse_list_append(args, _sm_base18);
     k = k + 1;
     goto L22;
     L23:;
-    _sm_base16 = __sm_stringTable[641];
-    _sm_base15 = &_sm_base16;
-    _sm_base17 = &args;
-    _sm_expr23 = ns13_interpCallAt(self, _sm_base15, _sm_base17, pos);
-    return _sm_expr23;
+    _sm_base20 = __sm_stringTable[641];
+    _sm_base19 = &_sm_base20;
+    _sm_base21 = &args;
+    _sm_expr21 = ns13_interpCallAt(self, _sm_base19, _sm_base21, pos);
+    return _sm_expr21;
 }
 // src/parser/ParserInterp.kt
 ns2_SourcePos ns13_interpPosAt(Str* raw, Int index, ns2_SourcePos* pos) {
-    Int line, column, i, _sm_expr3, _sm_expr4, _sm_expr6, _sm_expr11;
+    Int line, column, i, _sm_expr3, _sm_expr4, _sm_expr11;
     Bool _sm_expr1;
     Char ch, _sm_expr7;
     ns2_SourcePos _sm_expr12;
@@ -73272,7 +73271,7 @@ ns2_SourcePos ns13_interpPosAt(Str* raw, Int index, ns2_SourcePos* pos) {
     L1:;
     _sm_expr1 = i < index;
     if (!(_sm_expr1)) goto L2;
-    ch = simse_str_charAt((*raw), i);
+    ch = (*raw)[i];
     _sm_expr1 = ch == '\r';
     if (_sm_expr1) goto L3;
     goto L4;
@@ -73283,8 +73282,8 @@ ns2_SourcePos ns13_interpPosAt(Str* raw, Int index, ns2_SourcePos* pos) {
     if (_sm_expr1) goto L7;
     goto L6;
     L7:;
-    _sm_expr6 = i + 1;
-    _sm_expr7 = simse_str_charAt((*raw), _sm_expr6);
+    _sm_expr3 = i + 1;
+    _sm_expr7 = (*raw)[_sm_expr3];
     _sm_expr1 = _sm_expr7 == '\n';
     if (_sm_expr1) goto L5;
     goto L6;
@@ -79397,7 +79396,7 @@ Str ns15_profEscape(Str* text) {
     _sm_expr1 = simse_lenOf((*text));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    ch = simse_str_charAt((*text), i);
+    ch = (*text)[i];
     _sm_expr2 = ch == '\\';
     if (_sm_expr2) goto L3;
     _sm_expr2 = ch == '"';
@@ -79446,16 +79445,16 @@ Str ns15_profPreludeText() {
 }
 // src/profiling/Profiling.kt
 Str ns15_profDots(Str* name) {
-    Int i, _sm_expr1, _sm_expr6, _sm_expr8;
+    Char _sm_base1, _sm_expr3;
+    Int i, _sm_expr1, _sm_expr6;
     Bool _sm_expr2;
-    Char _sm_expr3, _sm_expr11;
     Str out;
     i = 0;
     L1:;
     _sm_expr1 = simse_lenOf((*name));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_expr3 = simse_str_charAt((*name), i);
+    _sm_expr3 = (*name)[i];
     _sm_expr2 = _sm_expr3 == ':';
     if (_sm_expr2) goto L6;
     goto L4;
@@ -79466,8 +79465,8 @@ Str ns15_profDots(Str* name) {
     if (_sm_expr2) goto L5;
     goto L4;
     L5:;
-    _sm_expr8 = i + 1;
-    _sm_expr3 = simse_str_charAt((*name), _sm_expr8);
+    _sm_expr1 = i + 1;
+    _sm_expr3 = (*name)[_sm_expr1];
     _sm_expr2 = _sm_expr3 == ':';
     if (_sm_expr2) goto L3;
     goto L4;
@@ -79476,8 +79475,8 @@ Str ns15_profDots(Str* name) {
     i = i + 2;
     goto L1;
     L4:;
-    _sm_expr11 = simse_str_charAt((*name), i);
-    simse_str_append(out, _sm_expr11);
+    _sm_base1 = (*name)[i];
+    simse_str_append(out, _sm_base1);
     i = i + 1;
     goto L1;
     L2:;
@@ -79602,7 +79601,7 @@ Str ns16_resHexToBytes(Str* hex) {
     _sm_expr1 = simse_lenOf((*hex));
     _sm_expr4 = i < _sm_expr1;
     if (!(_sm_expr4)) goto L2;
-    ch = simse_str_charAt((*hex), i);
+    ch = (*hex)[i];
     _sm_expr4 = ch == ' ';
     if (_sm_expr4) goto L3;
     _sm_expr4 = ch == '\t';
@@ -79673,7 +79672,7 @@ Str ns16_resQuoteBinary(Str* bytes) {
     _sm_expr1 = simse_lenOf((*bytes));
     _sm_expr4 = i < _sm_expr1;
     if (!(_sm_expr4)) goto L2;
-    ch = simse_str_charAt((*bytes), i);
+    ch = (*bytes)[i];
     byte = ch;
     _sm_expr4 = byte < 0;
     if (_sm_expr4) goto L3;

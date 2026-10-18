@@ -1330,6 +1330,7 @@ void initByValue(Str* self);
 Int strCountDigits(Int64 value);
 void strAddInt(Char* target, Int64 value, Int count);
 Span<Char> strBoolView(Bool value);
+void set(Str* self, Int index, Char value);
 Int ns1_doubled(ns1_WithMethod* self);
 Str ns1_label(ns1_DoubleOrFloat* u);
 Str ns1_tagged(ns1_DoubleOrFloat* u);
@@ -1522,6 +1523,13 @@ Span<Char> strBoolView(Bool value) {
     return __sm_stringTable[14];
     L2:;
     return __sm_stringTable[7];
+}
+void set(Str* self, Int index, Char value) {
+    Str* _sm_base1;
+    Char* bytes;
+    _sm_base1 = self;
+    bytes = simse_str_data(_sm_base1);
+    bytes[index] = value;
 }
 // stress/unions/src/main.kt
 Int ns1_doubled(ns1_WithMethod* self) {

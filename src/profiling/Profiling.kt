@@ -79,7 +79,7 @@ fun profEscape(text: Str): Str {
     var out: Str
     var i: Int = 0
     while (i < text.size()) {
-        val ch: Char = text.charAt(i)
+        val ch: Char = text[i]
         if (ch == '\\' || ch == '"') {
             out.append('\\')
         }
@@ -354,11 +354,11 @@ fun profDots(name: *Str): Str {
     var out: Str
     var i: Int = 0
     while (i < name.size()) {
-        if (name.charAt(i) == ':' && i + 1 < name.size() && name.charAt(i + 1) == ':') {
+        if (name[i] == ':' && i + 1 < name.size() && name[i + 1] == ':') {
             out.append('.')
             i = i + 2
         } else {
-            out.append(name.charAt(i))
+            out.append(name[i])
             i = i + 1
         }
     }

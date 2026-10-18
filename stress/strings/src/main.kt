@@ -70,7 +70,7 @@ fun partStrings(): Int {
     println(parts[0])
     println(parts[1])
 
-    println(text.charAt(0))
+    println(text[0])
     println(text.indexOf("World"))
     println(text.find("zzz"))
     println(text.lastIndexOf("l"))

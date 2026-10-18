@@ -133,6 +133,7 @@ inline void simse_println(const T& value, FILE* out) {
 Int strCountDigits(Int64 value);
 void strAddInt(Char* target, Int64 value, Int count);
 Span<Char> strBoolView(Bool value);
+void set(Str* self, Int index, Char value);
 void ns1_add(ns1_Cell* self, Int n);
 Int ns1_bump();
 Ref<ns1_Cell> ns1_make();
@@ -236,6 +237,13 @@ Span<Char> strBoolView(Bool value) {
     return __sm_stringTable[1];
     L2:;
     return __sm_stringTable[0];
+}
+void set(Str* self, Int index, Char value) {
+    Str* _sm_base1;
+    Char* bytes;
+    _sm_base1 = self;
+    bytes = simse_str_data(_sm_base1);
+    bytes[index] = value;
 }
 // stress/ref-promote/src/main.kt
 void ns1_add(ns1_Cell* self, Int n) {

@@ -99,12 +99,12 @@ fun litRawString(text: *Str): Str {
     val end: Int = text.size() - 1
     var i: Int = 1
     while (i < end) {
-        val ch: Char = text.charAt(i)
+        val ch: Char = text[i]
         if (ch == '\\' || ch == '\"') {
             out.append('\\')
             out.append(ch)
         } else if (ch == '\r') {
-            if (i + 1 < end && text.charAt(i + 1) == '\n') {
+            if (i + 1 < end && text[i + 1] == '\n') {
                 i = i + 1
             }
             out.append('\\')

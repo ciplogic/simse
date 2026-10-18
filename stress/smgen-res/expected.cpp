@@ -469,6 +469,7 @@ Res<T> simse_resOk(T value);
 template <class T>
 Res<T> simse_resErr(Str message);
 void initByValue(Str* self);
+void set(Str* self, Int index, Char value);
 
 template <class T>
 Int size(Span<T>* self) {
@@ -558,6 +559,13 @@ Res<T> simse_resErr(Str message) {
     return result;
 }
 void initByValue(Str* self) {
+}
+void set(Str* self, Int index, Char value) {
+    Str* _sm_base1;
+    Char* bytes;
+    _sm_base1 = self;
+    bytes = simse_str_data(_sm_base1);
+    bytes[index] = value;
 }
 // stress/smgen-res/src/main.kt
 int main() {

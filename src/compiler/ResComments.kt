@@ -18,19 +18,19 @@ fun resCppStripComments(text: Str): Str {
     var lineStart: Int = 0
     var lineOnly: Bool = true
     while (i < n) {
-        val c: Char = text.charAt(i)
+        val c: Char = text[i]
         if (c == '\"' || c == '\'') {
             i = resCopyQuoted(text, i, *out)
             lineOnly = false
             continue
         }
-        if (c == 'R' && i + 1 < n && text.charAt(i + 1) == '\"') {
+        if (c == 'R' && i + 1 < n && text[i + 1] == '\"') {
             i = resCopyRawString(text, i, *out)
             lineOnly = false
             continue
         }
-        if (c == '/' && i + 1 < n && text.charAt(i + 1) == '/') {
-            while (i < n && text.charAt(i) != '\n') {
+        if (c == '/' && i + 1 < n && text[i + 1] == '/') {
+            while (i < n && text[i] != '\n') {
                 i = i + 1
             }
             if (lineOnly) {
@@ -41,17 +41,17 @@ fun resCppStripComments(text: Str): Str {
             }
             continue
         }
-        if (c == '/' && i + 1 < n && text.charAt(i + 1) == '*') {
+        if (c == '/' && i + 1 < n && text[i + 1] == '*') {
             i = resSkipBlockComment(text, i)
             if (lineOnly) {
                 // The comment was the whole line so far: if only blanks follow, the line goes.
                 var j: Int = i
-                while (j < n && (text.charAt(j) == ' ' || text.charAt(j) == '\t'
-                            || text.charAt(j) == '\r')
+                while (j < n && (text[j] == ' ' || text[j] == '\t'
+                            || text[j] == '\r')
                 ) {
                     j = j + 1
                 }
-                if (j >= n || text.charAt(j) == '\n') {
+                if (j >= n || text[j] == '\n') {
                     out.resize(lineStart)
                     if (j < n) {
                         i = j + 1
@@ -81,17 +81,17 @@ fun resCppStripComments(text: Str): Str {
 // they escape, so a `\"` inside does not end it and a `\`-newline continuation stays inside.
 // Returns the index after the closing quote, or the end of the line for an unterminated one.
 fun resCopyQuoted(text: Str, start: Int, out: *Str): Int {
-    val quote: Char = text.charAt(start)
+    val quote: Char = text[start]
     out.append(quote)
     var i: Int = start + 1
     val n: Int = text.size()
     while (i < n) {
-        val c: Char = text.charAt(i)
+        val c: Char = text[i]
         out.append(c)
         i = i + 1
         if (c == '\\') {
             if (i < n) {
-                out.append(text.charAt(i))
+                out.append(text[i])
                 i = i + 1
             }
             continue
@@ -114,7 +114,7 @@ fun resCopyRawString(text: Str, start: Int, out: *Str): Int {
     var open: Int = -1
     var i: Int = start + 2
     while (i < n) {
-        val c: Char = text.charAt(i)
+        val c: Char = text[i]
         if (c == '(') {
             open = i
             break
@@ -136,7 +136,7 @@ fun resCopyRawString(text: Str, start: Int, out: *Str): Int {
             out.appendStr(close)
             return j + close.size()
         }
-        out.append(text.charAt(j))
+        out.append(text[j])
         j = j + 1
     }
     return j
@@ -147,7 +147,7 @@ fun resSkipBlockComment(text: Str, start: Int): Int {
     val n: Int = text.size()
     var i: Int = start + 2
     while (i < n) {
-        if (text.charAt(i) == '*' && i + 1 < n && text.charAt(i + 1) == '/') {
+        if (text[i] == '*' && i + 1 < n && text[i + 1] == '/') {
             return i + 2
         }
         i = i + 1

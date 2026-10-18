@@ -522,7 +522,6 @@ template <class T>
 T get(Span<T>* self, Int index);
 template <class T>
 void set(Span<T>* self, Int index, T value);
-Char charAt(Span<Char>* self, Int index);
 Bool startsWith(Span<Char>* self, Str text);
 Int find(Span<Char>* self, Str sub);
 Str substr(Span<Char>* self, Int from, Int count);
@@ -658,6 +657,7 @@ Span<Char> strBoolView(Bool value);
 Int findFrom(Str* self, Str sub, Int from);
 Int find(Str* self, Str sub);
 Str substr(Str* self, Int start, Int len);
+void set(Str* self, Int index, Char value);
 Bool startsWith(Str* self, Str prefix);
 Bool isEmpty(Str* self);
 Str intToStr(Int64 value);
@@ -928,11 +928,6 @@ void set(Span<T>* self, Int index, T value) {
     T* _sm_base1;
     _sm_base1 = self->ptr;
     _sm_base1[index] = value;
-}
-Char charAt(Span<Char>* self, Int index) {
-    Char _sm_expr1;
-    _sm_expr1 = at(self, index);
-    return _sm_expr1;
 }
 Bool startsWith(Span<Char>* self, Str text) {
     Str* _sm_base1;
@@ -1470,6 +1465,13 @@ Str substr(Str* self, Int start, Int len) {
     L9:;
     return out;
 }
+void set(Str* self, Int index, Char value) {
+    Str* _sm_base1;
+    Char* bytes;
+    _sm_base1 = self;
+    bytes = simse_str_data(_sm_base1);
+    bytes[index] = value;
+}
 Bool startsWith(Str* self, Str prefix) {
     Int count, _sm_expr1, i;
     Bool _sm_expr2;
@@ -1486,8 +1488,8 @@ Bool startsWith(Str* self, Str prefix) {
     L3:;
     _sm_expr2 = i < count;
     if (!(_sm_expr2)) goto L4;
-    _sm_expr4 = simse_str_charAt((*self), i);
-    _sm_expr5 = simse_str_charAt(prefix, i);
+    _sm_expr4 = (*self)[i];
+    _sm_expr5 = prefix[i];
     _sm_expr2 = _sm_expr4 != _sm_expr5;
     if (_sm_expr2) goto L5;
     goto L6;
@@ -1507,11 +1509,11 @@ Bool isEmpty(Str* self) {
     return _sm_expr2;
 }
 Str intToStr(Int64 value) {
+    Char _sm_base1, ch;
     Int64 rest, _sm_expr4;
     Bool _sm_expr1;
     Str reversed, out;
     Int digit, _sm_expr6, i;
-    Char ch, _sm_expr10;
     rest = value;
     _sm_expr1 = rest > 0;
     if (_sm_expr1) goto L1;
@@ -1550,8 +1552,8 @@ Str intToStr(Int64 value) {
     L9:;
     _sm_expr1 = i >= 0;
     if (!(_sm_expr1)) goto L10;
-    _sm_expr10 = simse_str_charAt(reversed, i);
-    simse_str_append(out, _sm_expr10);
+    _sm_base1 = reversed[i];
+    simse_str_append(out, _sm_base1);
     i = i - 1;
     goto L9;
     L10:;
