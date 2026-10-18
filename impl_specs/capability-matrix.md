@@ -5393,3 +5393,25 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   anchors, the middle walk with its wall (`a*bc*bc` on `abcbc` matching with the first
   `bc` flush against the suffix), the collapse, the length rejects, case sensitivity, and
   compile-once-match-many.
+
+- **`Glob` is a tagged union: the pattern's shape is the tag.** The five parallel fields
+  (`exact`/`prefix`/`suffix`/`middles`/`minLen`) became `union class Glob(var Exact: Str,
+  var Parts: GlobParts)` - the matcher reads the tag first (`getTypeOf`, a `when` over
+  `SmGlobTypes`) and runs that shape's rule: an exact word is one view `==` (both operands
+  places - the arm's storage and the borrowed text), a `Parts` rule walks. `globCompile`
+  builds the arm through the arm-constructor convention (`return (pattern)`; the union
+  *owns* its `Str`, so the one copy the ownership needs happens on an owned local). No
+  behavior change; the stress case's stdout held byte for byte.
+  The EA work this pass attempted around it is **not landed**: marking the generated union
+  methods `borrow` and aliasing the `Opt`/`Res` member surface (`hasValue` -> the
+  collision-safe `simse_*` names the borrow fixpoint cannot see) made `matches` provably
+  borrow-clean (`Str* text` in the emitted C++, the middles loop a pointer machine), but
+  the same unlocks let the fixpoint borrow across the compiler's own sources, where three
+  extractor conversion gaps surface as C++ errors - a borrowed `Str*` into the
+  C++-resolved `initByValue` overloads (fixed en route: the arm-constructor call spells an
+  explicit deref for pointer-slot names), the same into *ambiguous native overloads*
+  (`parseModule`'s two shapes resolve no Simse target, so no conversion runs), and calls
+  through callable *values* whose C++ signature the ABI pointerizes (a value read where
+  the `Func<>` wants the pointer). The three gaps are enumerated for the follow-up that
+  lands the unlock with them.
+  Verified: `bun tools/iterate.js --full` - **112/112** and both fixed points.

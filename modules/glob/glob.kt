@@ -7,84 +7,112 @@
 // There is no `?` and no `[...]`: those would break the one optimization this module
 // exists for, and a glob rich enough to want them is a regex.
 //
-// The compiled shape is the pattern split at its `*`s, the way a `*`-only glob is always
-// matched fastest:
+// The compiled shape is a **tagged union** - the pattern's own shape is the tag, and the
+// matcher reads the tag first, then runs that shape's rule:
 //
-//   - `exact`   - the whole pattern, when it holds no `*` at all: the match is one
-//                 `==` (the exact-word specialization).
-//   - `prefix`  - the first segment, when the pattern does not start with `*`: an
-//                 anchored `startsWith`, so nothing before it is scanned.
-//   - `suffix`  - the last segment, when the pattern does not end with `*`: an anchored
-//                 `endsWith`, and the wall the middle segments may not cross - which is
-//                 what makes the greedy middle walk below complete without backtracking.
-//   - `middles` - the segments between the anchors (empty segments dropped: `a**b` is
-//                 `a*b`), each matched once, left to right, by `findFrom` - a `memchr`
-//                 jump to the segment's first byte, then one `memcmp` (src/rtl/rtl.kt).
+//   - `Exact(Str)`   - the pattern held no `*` at all: the match is one `==` (the
+//                      exact-word specialization).
+//   - `Parts`        - everything else, as `GlobParts`: the anchored ends (`prefix` /
+//                      `suffix`, `Opt<Str>`, absent where the pattern is `*`-open) and the
+//                      middle segments between them (`middles`, empty segments dropped:
+//                      `a**b` is `a*b`), with `minLen` - the segments' total - for the
+//                      reject that runs before any byte is compared.
 //
-// The prefix and the suffix are `Opt<Str>` (absent when the pattern is `*`-open on that
-// side), the middles are the leftovers, and `minLen` (the segments' total) rejects a text
-// that cannot hold them before any byte is compared. A match walks the text once: an
-// earlier segment's leftmost fit never costs a later one, because the suffix is pinned to
-// the end - if any placement of the segments exists, the greedy one is inside it
-// (each greedy find lands at or before the placement's own position, inductively, and the
-// wall ends the walk). No backtracking, no recursion, no allocation at match time.
+// The walk a `Parts` rule runs: one anchored `startsWith`, then each middle once, left to
+// right, by `findFrom` - a `memchr` jump to the segment's first byte, then one `memcmp`
+// (src/rtl/rtl.kt) - then the anchored `endsWith`. The suffix is the wall the middles may
+// not cross, and that is what makes the greedy walk complete without backtracking: each
+// leftmost fit lands at or before any placement's own position, inductively, and the
+// end-anchored suffix closes the last gap. No backtracking, no recursion, no allocation at
+// match time.
 //
 // Compile once, match many: `globCompile` builds the `Glob`, `.matches` tests texts
 // against it. `globMatches` is the one-shot spelling.
 
 package glob
 
-data class Glob(var exact: Opt<Str>, var prefix: Opt<Str>, var suffix: Opt<Str>, var middles: List<Str>, var minLen: Int) {
-    // Whether `text` matches the compiled pattern. `at` is the first byte the remaining
-    // segments may occupy, `end` the first byte they may not (the suffix's wall); each
-    // middle must fit wholly before the wall, so the suffix always has its place.
+// The segments of a `*`-carrying pattern: the anchored ends and the middle walk between
+// them. `prefix`/`suffix` are absent where the pattern is `*`-open on that side; `minLen`
+// is the segments' total, the cheapest reject there is.
+data class GlobParts(var prefix: Opt<Str>, var suffix: Opt<Str>, var middles: List<Str>, var minLen: Int) {
+}
+
+union class Glob(var Exact: Str, var Parts: GlobParts) {
+    // Whether `text` matches the compiled pattern. The tag decides the rule: an exact
+    // word is one view `==` (both operands are places - the arm's storage and the
+    // borrowed text - so nothing is copied), and a `Parts` rule walks. `at` is the first
+    // byte the remaining segments may occupy, `end` the first byte they may not (the
+    // suffix's wall); each middle must fit wholly before the wall, so the suffix always
+    // has its place.
     fun matches(text: Str): Bool {
-        if (this.exact.hasValue()) {
-            return text == this.exact.value()
-        }
-        if (text.size() < this.minLen) {
-            return false
-        }
-        var at: Int = 0
-        if (this.prefix.hasValue()) {
-            val head: Str = this.prefix.value()
-            if (!text.startsWith(head)) {
+        val tag: SmGlobTypes = this.getTypeOf()
+        when (tag) {
+            SmGlobTypes.Exact -> {
+                val word: *Str = this.getExact()
+                return text == *word
+            }
+
+            SmGlobTypes.Parts -> {
+                val parts: *GlobParts = this.getParts()
+                if (text.size() < parts.minLen) {
+                    return false
+                }
+                var at: Int = 0
+                if (parts.prefix.hasValue()) {
+                    // The arm's place, not a copy: `getValue` answers the live `Str`'s
+                    // address, `startsWith` borrows it (`borrow fun`), so the segment is
+                    // read where it lies - once compiled, never copied out per match.
+                    val head: *Str = parts.prefix.getValue()
+                    if (!text.startsWith(*head)) {
+                        return false
+                    }
+                    at = head.size()
+                }
+                var end: Int = text.size()
+                if (parts.suffix.hasValue()) {
+                    val tail: *Str = parts.suffix.getValue()
+                    end = end - tail.size()
+                    if (at > end) {
+                        return false
+                    }
+                }
+                for (*mid in parts.middles) {
+                    val found: Int = text.findFrom(*mid, at)
+                    if (found < 0) {
+                        return false
+                    }
+                    val after: Int = found + mid.size()
+                    if (after > end) {
+                        return false
+                    }
+                    at = after
+                }
+                if (parts.suffix.hasValue()) {
+                    val tail: *Str = parts.suffix.getValue()
+                    return text.endsWith(*tail)
+                }
+                return true
+            }
+
+            else -> {
+                // The `None` arm: `globCompile` never builds one, and a `Glob()` default
+                // matches nothing rather than guessing.
                 return false
             }
-            at = head.size()
         }
-        var end: Int = text.size()
-        if (this.suffix.hasValue()) {
-            end = end - this.suffix.value().size()
-            if (at > end) {
-                return false
-            }
-        }
-        for (mid in this.middles) {
-            val found: Int = text.findFrom(mid, at)
-            if (found < 0) {
-                return false
-            }
-            val after: Int = found + mid.size()
-            if (after > end) {
-                return false
-            }
-            at = after
-        }
-        if (this.suffix.hasValue()) {
-            return text.endsWith(this.suffix.value())
-        }
-        return true
     }
 }
 
-// The pattern as the `Glob` a program matches with: an exact word is its own answer, and
-// otherwise the `*`-split segments land as prefix, suffix and middles. `find` answers the
-// first `*`, so a pattern without one never pays for the split.
+// The pattern as the `Glob` a program matches with: the tag is the pattern's own shape, so
+// an exact word compiles to the one-compare rule and everything else to its segments.
+// `find` answers the first `*`, so a pattern without one never pays for the split.
 fun globCompile(pattern: Str): Glob {
     if (pattern.find("*") < 0) {
-        var empty: List<Str> = List<Str>()
-        return Glob(Opt<Str>.some(pattern), Opt<Str>.none(), Opt<Str>.none(), empty, pattern.size())
+        // The arm-constructor convention: `return (v)` builds the arm its type picks
+        // (`Exact`, the one `Str` arm). The arm *owns* its `Str`, and `pattern` is only
+        // borrowed here, so the one copy the ownership needs happens on the owned local.
+        val owned: Str = pattern
+        return (owned)
     }
     val parts: List<Str> = pattern.split("*")
     var prefix: Opt<Str> = Opt<Str>.none()
@@ -114,7 +142,7 @@ fun globCompile(pattern: Str): Glob {
         }
         i = i + 1
     }
-    return Glob(Opt<Str>.none(), prefix, suffix, middles, minLen)
+    return Glob(GlobParts(prefix, suffix, middles, minLen))
 }
 
 // The one-shot spelling: compile, match, drop. The compiled form is thrown away, so a
