@@ -166,7 +166,9 @@ function main() {
   console.log("");
   console.log("1. compile the published bootstrap (cl.exe only, no build system)");
   const compile = timed(`${BOOTSTRAP} -> simse_boot.exe`, cl, [
-    "/nologo", "/std:c++20", "/EHsc", "/W3", "/I" + REPO,
+    // `/bigobj` is not optional here either (build.js says why): the amalgamation is one
+    // translation unit, and the object file outgrew the COFF section limit.
+    "/nologo", "/std:c++20", "/EHsc", "/bigobj", "/W3", "/I" + REPO,
     ...(opts.debug ? ["/MDd", "/Od", "/Zi"]
         : opts.fast ? ["/MD", "/O1", "/DNDEBUG"]
             : ["/MD", "/O2", "/Ob3", "/DNDEBUG"]),
