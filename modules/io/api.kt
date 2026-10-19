@@ -36,6 +36,11 @@ fun pathIsDirectory(path: Str): Bool
 @SmGen("res", "fileio", "simse_pathExists")
 fun pathExists(path: Str): Bool
 
+// Removes the file at `path`; `true` when the path is gone afterwards (a file that was not
+// there is gone too; a directory or a protected file is not).
+@SmGen("res", "fileio", "simse_deleteFile")
+fun deleteFile(path: Str): Bool
+
 // One line to standard error, with the newline. The profiler's table and the driver's diagnostics
 // both leave through it.
 @SmGen("res", "fileio", "simse_eprintln")

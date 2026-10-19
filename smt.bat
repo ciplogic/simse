@@ -11,9 +11,11 @@ rem There is no script runtime in the loop: the toolchain is simse.exe (the
 rem compiler) and cl.exe (the C++ compiler). The checked-in amalgamation
 rem bin\smt-tool\smt_src.cpp is what gets compiled when simse.exe is absent.
 rem
-rem   smt.bat build                 transpile and compile the project
-rem   smt.bat run -- <args>         build, then run the program
-rem   smt.bat --help                the commands and options
+rem   smt.bat init [<dir>]         scaffold a project (dx.bat is the alias for all of this)
+rem   smt.bat build                transpile and compile the project
+rem   smt.bat run -- <args>        build, then run the program
+rem   smt.bat check | clean        transpile only | remove the build artifacts
+rem   smt.bat --help               the commands and options
 rem ---------------------------------------------------------------------------
 set "ARCH=x64"
 if /i "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "ARCH=arm64"

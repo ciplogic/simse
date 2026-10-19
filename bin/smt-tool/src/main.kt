@@ -1,13 +1,16 @@
 // main.kt
 //
-// The Simse toolset (smt): a project CLI in the shape of npm, written in Simse.
+// The Simse toolset (smt): a project CLI in the shape of npm, written in Simse. `dx.bat`
+// is the developer-experience alias that runs this same tool (`dx build` == `smt build`).
 //
 //   smt <command> [options] [-- <args>...]
 //
 // Commands:
-//   init [<dir>]           scaffold a project: simse.md + src/main.kt      (stub)
+//   init [<dir>]           scaffold a project: simse.md + src/main.kt
 //   build                  transpile the project, then compile it
 //   run [-- <args>...]     build the project, then run its program
+//   check                  transpile the project only: the fast front-end check
+//   clean                  remove the build artifacts (out.cpp, out.obj, out.exe)
 //   install [<module>...]  resolve the project's modules                   (stub)
 //   help [<command>]       the command list, or one command's
 //   version                the toolset's version
@@ -20,11 +23,12 @@
 //   -h, --help       this text; with a command, that command's
 //   --version        the toolset's version
 //
-// `build` and `run` drive the native toolchain through the `process` module
+// `build`, `run` and `check` drive the native toolchain through the `process` module
 // (modules/process) - no script runtime: the compiler (`simse.exe`) transpiles the project
 // to `<root>/out.cpp`, and the C++ compiler (`cl`) turns that into `<root>/out.exe`. Run smt
 // from the repository root, where `simse.exe` is, with `cl` on the path (`smt.bat` sets that
-// environment up). `init` and `install` are still stubs.
+// environment up). `init`, `check` and `clean` go through the `io` module (writeFile,
+// createDirectories, deleteFile); `install` is still a stub (`ai/dx.md` has the why).
 //
 // The program itself is built the same way every other one is - `smt.bat` does exactly this:
 //
@@ -36,7 +40,7 @@ package smt
 import io
 import process
 
-val smtVersion: Str = "0.1.0"
+val smtVersion: Str = "0.2.0"
 
 // One parsed command line. `smtParse` builds the value once, at the end; `main` only reads it.
 data class SmtOptions(
@@ -52,13 +56,13 @@ data class SmtOptions(
 )
 
 fun smtKnown(name: Str): Bool {
-    return name == "init" || name == "build" || name == "run"
-            || name == "install" || name == "help" || name == "version"
+    return name == "init" || name == "build" || name == "run" || name == "check"
+            || name == "clean" || name == "install" || name == "help" || name == "version"
 }
 
-// The commands that are still stubs: `build` and `run` are implemented.
+// The commands that are still stubs: everything else is implemented.
 fun smtStub(name: Str): Bool {
-    return name == "init" || name == "install"
+    return name == "install"
 }
 
 fun smtCommandUsage(name: Str): Str {
@@ -79,13 +83,19 @@ fun smtCommandUsage(name: Str): Str {
 
 fun smtCommandSummary(name: Str): Str {
     if (name == "init") {
-        return "scaffold a Simse project (simse.md + src/main.kt)"
+        return "scaffold a project: simse.md + src/main.kt"
     }
     if (name == "build") {
         return "transpile the project, then compile it"
     }
     if (name == "run") {
         return "build the project, then run its program"
+    }
+    if (name == "check") {
+        return "transpile the project only: the fast front-end check"
+    }
+    if (name == "clean") {
+        return "remove the build artifacts (out.cpp, out.obj, out.exe)"
     }
     if (name == "install") {
         return "resolve the project's modules (external modules are deferred)"
@@ -99,18 +109,19 @@ fun smtCommandSummary(name: Str): Str {
     return name
 }
 
-// What a command does, line by line: a stub's future work, or the steps `build`/`run` take.
+// What a command does, line by line: a stub's future work, or the steps the implemented
+// commands take.
 fun smtCommandPlan(name: Str): Unit {
-    if (name == "init") {
-        println("    - write <dir>/simse.md - the manifest a project root carries (specs/simse-md.md)")
-        println("    - write <dir>/src/main.kt - a main(args) that prints hello")
-        println("    - report the smt build / smt run commands to try next")
-    } else if (name == "install") {
+    if (name == "install") {
         println("    - resolve the module list from <root>/simse.md")
         println("    - stage external modules beside the project (specs/modules.md: external modules are deferred)")
     } else if (name == "build") {
         println("    - simse.exe --root <root> [--module <dir>]... -o <root>/out.cpp")
         println("    - cl /nologo /std:c++20 /EHsc /I. /Fo:<root>/out.obj /Fe:<root>/out.exe <root>/out.cpp")
+    } else if (name == "check") {
+        println("    - simse.exe --root <root> [--module <dir>]... -o <root>/out.cpp (transpile only)")
+    } else if (name == "clean") {
+        println("    - remove <root>/out.cpp, <root>/out.obj and <root>/out.exe when they exist")
     } else if (name == "run") {
         println("    - build (above)")
         println("    - <root>/out.exe, forwarding -- <args>... to main(args)")
@@ -123,9 +134,11 @@ fun smtUsage(): Unit {
     println("  smt <command> [options] [-- <args>...]")
     println("")
     println("Commands:")
-    println("  init [<dir>]           scaffold a project: simse.md + src/main.kt      (stub)")
+    println("  init [<dir>]           scaffold a project: simse.md + src/main.kt")
     println("  build                  transpile the project, then compile it")
     println("  run [-- <args>...]     build the project, then run its program")
+    println("  check                  transpile the project only: the fast front-end check")
+    println("  clean                  remove the build artifacts (out.cpp, out.obj, out.exe)")
     println("  install [<module>...]  resolve the project's modules                   (stub)")
     println("  help [<command>]       the command list, or one command's")
     println("  version                the toolset's version")
@@ -138,8 +151,8 @@ fun smtUsage(): Unit {
     println("  -h, --help       this text; with a command, that command's")
     println("  --version        the toolset's version")
     println("")
-    println("build and run call the compiler and the C++ compiler directly (no script runtime);")
-    println("they expect to run from the repository root, with cl on the path.")
+    println("build, run and check call the compiler and the C++ compiler directly (no script")
+    println("runtime); they expect to run from the repository root, with cl on the path.")
 }
 
 fun smtCommandHelp(name: Str): Int {
@@ -152,7 +165,7 @@ fun smtCommandHelp(name: Str): Int {
         println("")
         println("not implemented yet; it will:")
         smtCommandPlan(name)
-    } else if (name == "build" || name == "run") {
+    } else if (name == "build" || name == "run" || name == "check" || name == "clean") {
         println("")
         println("it runs:")
         smtCommandPlan(name)
@@ -259,7 +272,7 @@ fun smtCommandPath(text: Str): Str {
     var out: Str = Str()
     var i: Int = 0
     while (i < text.size()) {
-        val ch: Char = text.charAt(i)
+        val ch: Char = text[i]
         if (ch == '/') {
             out.append('\\')
         } else {
@@ -309,7 +322,121 @@ fun smtRun(opts: SmtOptions): Int {
     return run(command)
 }
 
-// The one stub body (init, install): say what the command is for, echo what it was given, and
+// init: scaffold a project at <dir> (or the root) - a manifest naming `src`, and a main.kt
+// that prints hello. It never overwrites: either file already there is a refusal, so an init
+// on an existing project writes nothing.
+fun smtInit(opts: SmtOptions): Int {
+    var target: Str = opts.root
+    if (opts.rest.size() > 0) {
+        target = opts.rest[0]
+    }
+    val manifest: Str = target + "/simse.md"
+    val mainKt: Str = target + "/src/main.kt"
+    if (pathExists(manifest)) {
+        eprintln("smt: " + manifest + " already exists - refusing to overwrite it")
+        return 1
+    }
+    if (pathExists(mainKt)) {
+        eprintln("smt: " + mainKt + " already exists - refusing to overwrite it")
+        return 1
+    }
+    if (!createDirectories(target + "/src")) {
+        eprintln("smt: could not create " + target + "/src")
+        return 1
+    }
+    if (!writeFile(manifest, smtManifestTemplate())) {
+        eprintln("smt: could not write " + manifest)
+        return 1
+    }
+    if (!writeFile(mainKt, smtMainTemplate())) {
+        eprintln("smt: could not write " + mainKt)
+        return 1
+    }
+    if (!opts.quiet) {
+        println("smt: wrote " + manifest)
+        println("smt: wrote " + mainKt)
+        println("next: smt build --root " + target + ", then smt run --root " + target)
+    }
+    return 0
+}
+
+// check: the fast loop - transpile only, no C++ compile. The transpile is the compiler's
+// whole front end, so a clean check means parse, types and borrow all passed; what it cannot
+// see is the C++ compile. It still writes <root>/out.cpp (the compiler's CLI is file-shaped),
+// which a following build overwrites anyway.
+fun smtCheck(opts: SmtOptions): Int {
+    val outCpp: Str = opts.root + "/out.cpp"
+    var code: Int = 0
+    val diagnostics: Str = capture(smtTranspile(opts, outCpp), *code)
+    if (code != 0) {
+        print(diagnostics)
+        eprintln("smt: check failed (exit " + code.toString() + ")")
+        return code
+    }
+    if (!opts.quiet) {
+        println("smt: " + opts.root + " transpiles cleanly")
+    }
+    return 0
+}
+
+// clean: remove the build artifacts. The deletion goes through the io module's deleteFile,
+// not a shell escape, so the tool stays one Simse program with the filesystem behind the
+// same FFI every other command uses.
+fun smtClean(opts: SmtOptions): Int {
+    val artifacts: List<Str> = List<Str>()
+    artifacts.append("out.cpp")
+    artifacts.append("out.obj")
+    artifacts.append("out.exe")
+    var removed: Int = 0
+    var failed: Int = 0
+    for (name in artifacts) {
+        val path: Str = opts.root + "/" + name
+        if (!pathExists(path)) {
+            continue
+        }
+        if (deleteFile(path)) {
+            removed = removed + 1
+            if (!opts.quiet) {
+                println("smt: removed " + path)
+            }
+        } else {
+            failed = failed + 1
+            eprintln("smt: could not remove " + path + " (is out.exe running?)")
+        }
+    }
+    if (failed > 0) {
+        return 1
+    }
+    if (!opts.quiet) {
+        if (removed == 0) {
+            println("smt: nothing to remove in " + opts.root)
+        } else {
+            println("smt: removed " + removed.toString() + " file(s)")
+        }
+    }
+    return 0
+}
+
+// The scaffold's two files. The manifest names `src` (specs/simse-md.md); the program is the
+// smallest main that prints.
+fun smtManifestTemplate(): Str {
+    return "# simse.md - the project manifest (specs/simse-md.md): the modules the project\n" +
+           "# is built from. Prose lines are ignored; a `module:` line names one module.\n" +
+           "\n" +
+           "module: src\n"
+}
+
+fun smtMainTemplate(): Str {
+    return "// main.kt - scaffolded by smt init. `smt run -- <args>` forwards <args> here.\n" +
+           "package app\n" +
+           "\n" +
+           "fun main(args: List<Str>): Int {\n" +
+           "    println(\"hello, Simse\")\n" +
+           "    return 0\n" +
+           "}\n"
+}
+
+// The one stub body (install): say what the command is for, echo what it was given, and
 // hand back a failure code. Nothing is written, so nothing can be half-done.
 fun smtNotImplemented(name: Str, opts: SmtOptions): Int {
     println("smt " + name + ": not implemented yet - " + smtCommandSummary(name) + ".")
@@ -372,6 +499,15 @@ fun main(args: List<Str>): Int {
     }
     if (opts.command == "run") {
         return smtRun(opts)
+    }
+    if (opts.command == "init") {
+        return smtInit(opts)
+    }
+    if (opts.command == "check") {
+        return smtCheck(opts)
+    }
+    if (opts.command == "clean") {
+        return smtClean(opts)
     }
     return smtNotImplemented(opts.command, opts)
 }

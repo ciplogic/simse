@@ -46,6 +46,7 @@ Bool simse_createDirectories(const Str& path);
 Str simse_pathCanonical(const Str& path);
 Bool simse_pathIsDirectory(const Str& path);
 Bool simse_pathExists(const Str& path);
+Bool simse_deleteFile(const Str& path);
 void simse_eprintln(const Str& text);
 ```
 bodies:
@@ -136,6 +137,14 @@ Bool simse_pathIsDirectory(const Str& path) {
 Bool simse_pathExists(const Str& path) {
     std::error_code ec;
     return std::filesystem::exists(simse_toStdString(path), ec);
+}
+
+// Removes the file at `path`; true when the path is gone afterwards (a file that was not
+// there is gone too; a directory or a protected file is not).
+Bool simse_deleteFile(const Str& path) {
+    std::error_code ec;
+    std::filesystem::remove(simse_toStdString(path), ec);
+    return !ec && !std::filesystem::exists(simse_toStdString(path), ec);
 }
 
 void simse_eprintln(const Str& text) {

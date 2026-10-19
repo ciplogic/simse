@@ -107,7 +107,8 @@ it with the source.
   own build scans them with `--root modules`, so their `generators/` sources are compiled in.
 - `bin/` — the `smt` toolset: `bin/smt.exe` (built) and its home `bin/smt-tool/` (`src/main.kt`
   plus the checked-in amalgamation `smt_src.cpp`). The compiler builds at the repository root
-  (`simse.exe`), not here.
+  (`simse.exe`), not here. `dx.bat` is the alias that runs it; `init`, `build`, `run`, `check`
+  and `clean` are implemented, `install` is a stub (`ai/dx.md` has the why).
 - `specs/` — the normative language specification. `impl_specs/` — per-subsystem design and
   the change log (`capability-matrix.md`).
 - `stress/` — the end-to-end corpus (`stress/README.md`). `examples/` — the runnable examples.
