@@ -832,6 +832,27 @@ fun Analyzer.iteratedType(expr: *AstXmlNode): AstXmlNode {
                 known = declared
             }
         }
+        // A generic callee's declared return names its own type parameters (`spanOf(xs)`
+        // is `Span<T>` until the call's arguments bind them): bind from the argument
+        // types and substitute, the way call inference answers a call's type. Without it
+        // the machine a `for` builds over the span carries the raw `T`, and the element -
+        // with it the promotion's deep-element test - reads as the parameter.
+        val params: List<Str> = xmlTypeParamNames(*overload)
+        if (params.size() == 0 || xmlIsEmpty(declared)) {
+            continue
+        }
+        var argTypes: List<AstXmlNode> = List<AstXmlNode>()
+        for (*arg in xmlChildren(expr, AstNodeKind.Arg)) {
+            argTypes.append(this.exprType(arg))
+        }
+        var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+        semBindCallArgs(*overload, xmlEmptyNode(), *argTypes, *params, *bindings)
+        if (bindings.size() > 0) {
+            val substituted: AstXmlNode = semSubstitute(declared, *bindings, *params)
+            if (!xmlIsEmpty(substituted)) {
+                return substituted
+            }
+        }
     }
     return known
 }

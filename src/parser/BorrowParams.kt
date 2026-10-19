@@ -99,13 +99,20 @@ fun bpCollectDecls(
         if (decl.name == AstNodeKind.DataClass) {
             types.insert(name, true)
             for (*method in xmlChildren(decl, AstNodeKind.Function)) {
+                val methodName: Str = xmlAttr(method, AstNodeAttributeKind.Name)
                 if (bpMarked(method)) {
-                    reads.insert(xmlAttr(method, AstNodeAttributeKind.Name), true)
+                    reads.insert(methodName, true)
+                }
+                if (bpIsSurfaceName(methodName)) {
+                    bpSurfaceShadowed.insert(methodName, true)
                 }
             }
         }
         if (decl.name == AstNodeKind.Function && bpMarked(decl)) {
             reads.insert(name, true)
+        }
+        if (decl.name == AstNodeKind.Function && bpIsSurfaceName(name)) {
+            bpSurfaceShadowed.insert(name, true)
         }
         if (decl.name == AstNodeKind.Function && bpMutatesMark(decl)) {
             mutates.insert(name, true)
@@ -122,6 +129,71 @@ fun bpBuiltinType(name: *Str): Bool {
         return true
     }
     return false
+}
+
+// ---- the Opt/Res member surface ----------------------------------------------
+
+// The `Opt`/`Res` member calls (`o.hasValue()`, `r.value()`, ...) are declared under their
+// collision-safe names (`simse_optHasValue`, ... - src/rtl/optres.kt), and the checker
+// renames a call onto the twin only at checking time - after this pass. The fixpoint is
+// name-keyed, so without help every function that reads an `Opt`/`Res` through the surface
+// is borrow-dirty by association, which is most of them: `Res` is the language's error
+// path. The answer is an alias, sound by construction: the surface name is trusted when
+// *every* twin it could resolve to is borrow-clean (both `Opt`'s and `Res`'s - the pass
+// does not know the receiver's type) and no declaration in the program shadows the name
+// (a shadowing declaration's own proof governs, whichever way it went).
+fun bpIsSurfaceName(name: *Str): Bool {
+    when (name) {
+        "hasValue", "isOk", "value", "error" -> {
+            return true
+        }
+    }
+    return false
+}
+
+// The twins a surface name can resolve to, every one of which must be borrow-clean for
+// the surface call to be trusted.
+fun bpSurfaceTwins(name: *Str, out: *List<Str>): Unit {
+    when (name) {
+        "hasValue", "isOk" -> {
+            out.append("simse_optHasValue")
+            out.append("simse_resHasValue")
+        }
+
+        "value" -> {
+            out.append("simse_optValue")
+            out.append("simse_resValue")
+        }
+
+        "error" -> {
+            out.append("simse_resError")
+        }
+    }
+}
+
+// Filled by `bpCollectDecls`: the surface names this program declares for itself, which the
+// alias above must not override.
+var bpSurfaceShadowed: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+
+// Whether a call named `callee` is borrow-trusted: proved under its own name, or a surface
+// call whose twins all proved and that no declaration shadows.
+fun bpCallTrusted(callee: *Str, reads: *Dictionary<Str, Bool>): Bool {
+    if (reads.has(callee)) {
+        return true
+    }
+    if (!bpIsSurfaceName(callee) || bpSurfaceShadowed.has(callee)) {
+        return false
+    }
+    var twins: List<Str> = List<Str>()
+    bpSurfaceTwins(callee, *twins)
+    var i: Int = 0
+    while (i < twins.size()) {
+        if (!reads.has(twins[i])) {
+            return false
+        }
+        i = i + 1
+    }
+    return twins.size() > 0
 }
 
 // A construction: `Name(args)` where `Name` is a type, `Opt<T>.none()` / `Res<T>.ok(x)`, or any
@@ -284,7 +356,7 @@ fun bpInferReads(
                 continue
             }
             for (*callee in fact.calls) {
-                if (!reads.has(*callee)) {
+                if (!bpCallTrusted(callee, reads)) {
                     dirty.insert(fact.name, true)
                     break
                 }
@@ -294,6 +366,27 @@ fun bpInferReads(
             if (!reads.has(fact.name) && !dirty.has(fact.name) && !blocked.has(fact.name)) {
                 reads.insert(fact.name, true)
                 changed = true
+            }
+        }
+    }
+    if (bpShow()) {
+        for (*fact in facts) {
+            if (!reads.has(fact.name)) {
+                var why: Str = ""
+                for (*callee in fact.calls) {
+                    if (!bpCallTrusted(callee, reads)) {
+                        val calleeName: Str = callee
+                        why = why + " " + calleeName
+                    }
+                }
+                if (fact.hasWrite) {
+                    why = why + " <write>"
+                }
+                if (fact.opaqueCall) {
+                    why = why + " <opaque>"
+                }
+                val dirtyName: Str = fact.name
+                bpNote(`borrow-dirty @dirtyName:@why`)
             }
         }
     }
@@ -489,7 +582,8 @@ data class BpFacts(
                 // A construction copies what it is given; see `bpIsConstruct`.
                 safe = true
             } else if (ck == AstNodeCategory.ExprName || ck == AstNodeCategory.ExprMember) {
-                safe = this.reads.has(xmlAttr(callee, AstNodeAttributeKind.Name))
+                val calleeName: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+                safe = this.reads.has(calleeName) || bpCallTrusted(calleeName, this.reads)
             }
             if (!safe && bpMachineStep(callee)) {
                 // The `for` machine's own step; see `bpMachineStep`.
@@ -693,6 +787,14 @@ fun bpLoopReadOnly(body: *List<AstXmlNode>, name: *Str): Bool {
         Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), List<Str>()
     )
     for (*stmt in body) {
+        // The template's own binding (`val <name> = <machine>.current`, the `for`'s first
+        // statement) is the declaration the promotion exists to retype - a `*T` place
+        // instead of a copy - so it is not a write that disqualifies the walk. Every other
+        // write to the name (a reassignment in the body) still is.
+        val declName: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
+        if (declName == name && xmlKind(stmt) == AstNodeCategory.StmtVarDecl) {
+            continue
+        }
         facts.walk(stmt)
     }
     if (facts.fieldWrite || facts.staticWrite || facts.impureCall) {

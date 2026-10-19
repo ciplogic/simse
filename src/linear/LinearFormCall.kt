@@ -177,6 +177,32 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
             // object is the base's fields and then the class's own
             // (specs/declarations.md, "Inheritance").
             paramNodes = semAllFields(*this.fn.facts.types, decl)
+        } else if (xmlKind(callee) == AstNodeCategory.ExprName) {
+            // A call through a callable *value* (`handler(hit, event)`, `f(x)` on a
+            // `Func<...>`): the value's own signature is the conversion truth, the way a
+            // resolved declaration's would be - a pointer parameter stays the pointer the
+            // C++ `std::function` wants, a value parameter reads its pointee. Without it
+            // every argument fell to the no-target default, which passes names as they
+            // stand - and an auto-borrowed `*T` reached a callable wanting `T` raw.
+            // Each `ParamType` child is wrapped as a `Param` carrying its `Type`, the
+            // shape `convertArgument` reads.
+            val at: Int = this.varIndex(calleeName)
+            if (at >= 0) {
+                val slotType: AstXmlNode = ilVarType(this.out, at)
+                if (xmlKind(slotType) == AstNodeCategory.TypeFunction) {
+                    paramOwner = slotType
+                    for (*pt in xmlChildren(slotType, AstNodeKind.ParamType)) {
+                        var holder: AstXmlNode = AstXmlNode(
+                            AstNodeKind.Param, AstNodeCategory.None,
+                            List<AstNodeAttribute>(), Array<AstXmlNode>()
+                        )
+                        var asType: AstXmlNode = pt
+                        asType.name = AstNodeKind.Type
+                        xmlAddChild(holder, asType)
+                        paramNodes.append(holder)
+                    }
+                }
+            }
         }
     }
     // A `union class` construction has no aggregate spelling and no plain-call form: it is

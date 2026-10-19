@@ -629,7 +629,7 @@ Int ns1_partLanguageTour();
 Opt<Int> ns1_half(Int n);
 Res<Str> ns1_labelOptionalResult(Int n);
 Res<Int> ns1_longError();
-Res<Int> ns1_echo(Res<Int> r);
+Res<Int> ns1_echo(Res<Int>* r);
 Int ns1_partOptionalResult();
 void ns1_bump(Int* value);
 void ns1_bumpCell(ns1_Cell* cell);
@@ -2102,12 +2102,12 @@ Res<Int> ns1_longError() {
     return _sm_expr1;
 }
 // stress/objects/src/main.kt
-Res<Int> ns1_echo(Res<Int> r) {
+Res<Int> ns1_echo(Res<Int>* r) {
     Str* _sm_base1, * _sm_base2;
     Int _sm_base3;
     Res<Int> copy, _sm_expr3;
     Bool _sm_expr1, _sm_expr2;
-    copy = r;
+    copy = *(r);
     _sm_expr1 = simse_resHasValue(simse_addressOf(copy));
     _sm_expr2 = !_sm_expr1;
     if (_sm_expr2) goto L1;
@@ -2125,8 +2125,9 @@ Res<Int> ns1_echo(Res<Int> r) {
 // stress/objects/src/main.kt
 Int ns1_partOptionalResult() {
     Str* _sm_base1;
-    Str _sm_base2, _sm_base5, _sm_expr5, _sm_expr8;
+    Str _sm_base2, _sm_base6, _sm_expr5, _sm_expr8;
     Opt<Int>* _sm_base3, * _sm_base4;
+    Res<Int>* _sm_base5, * _sm_base7;
     Opt<Int> empty, found, _sm_expr13, _sm_expr14;
     Bool _sm_expr1, _sm_expr3, _sm_expr7, _sm_expr10, _sm_expr12, _sm_expr16, _sm_expr17;
     Int _sm_expr2, _sm_expr4, _sm_expr6, _sm_expr9, _sm_expr11, _sm_expr15, _sm_expr20;
@@ -2182,11 +2183,13 @@ Int ns1_partOptionalResult() {
     failed = ns1_longError();
     _sm_expr17 = simse_resHasValue(simse_addressOf(failed));
     simse_println((_sm_expr17), stdout);
-    again = ns1_echo(failed);
-    _sm_base5 = again.Error;
-    simse_println((_sm_base5), stdout);
+    _sm_base5 = &failed;
+    again = ns1_echo(_sm_base5);
+    _sm_base6 = again.Error;
+    simse_println((_sm_base6), stdout);
     _sm_expr18 = simse_resOk<Int>(9);
-    _sm_expr19 = ns1_echo(_sm_expr18);
+    _sm_base7 = &_sm_expr18;
+    _sm_expr19 = ns1_echo(_sm_base7);
     _sm_expr20 = _sm_expr19.Value;
     simse_println((_sm_expr20), stdout);
     return 0;

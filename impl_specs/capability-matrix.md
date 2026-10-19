@@ -5447,3 +5447,39 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   extractor gaps (calls through callable values; ambiguous native overloads) are the
   follow-up.
   Verified: `bun tools/iterate.js --full` - **112/112** and both fixed points.
+
+- **Viral auto-borrow: the surface alias, the self-disqualifying loop, and `plus`.** Three
+  unlocks that make the borrow proof grow through ordinary code, not just read-only
+  helpers. (1) The `Opt`/`Res` member surface (`isOk`, `hasValue`, `value`, `error`) is
+  declared under collision-safe `simse_*` names, and the checker renames a call onto the
+  twin only after the borrow pass runs - so every function on the language's error path
+  was borrow-dirty by name. The pass now aliases: a surface call is trusted when *every*
+  twin it could resolve to proved and no declaration in the program shadows the name
+  (sound both directions: the twins' own proofs stand, and a shadowing name's own proof
+  governs). (2) The `for` promotion disqualified itself: the template's own first
+  statement (`val x = machine.current`) counted as "written", so `bpLoopReadOnly` never
+  passed and *no* value loop over a deep element ever promoted. The template's binding is
+  now skipped in the walk - every other write to the name still disqualifies. With it,
+  `iteratedType` also binds a generic wrap's return from its arguments (`spanOf(xs)` is
+  `Span<T>` until `xs` names the element), so the deep-element test sees `Str`, not `T`.
+  (3) `StrView.plus` is marked `borrow` (its parameters are read-only views; it writes
+  only the fresh result - the parser now stacks `borrow operator fun`, a modifier stack
+  the attribute-led form already had) - without it every `a + b`-returning function was
+  dirty through the unmarked natives the operator calls. The mark is interim: the
+  deduction - a call that writes only through arguments the body built fresh is safe - is
+  the per-argument refinement the pass still lacks. A call through a callable *value*
+  also converts against the callable's own signature now (the ABI pointerizes its
+  parameters; the previous no-target default passed raw), which is what the wider trust
+  needed to not break callback-style code.
+  The new case `stress/escape-viral` pins the shapes real code is made of: `Res`/`Opt`
+  paths, `+` chains, a `Point3D` by value, `List<Point3D>` and `List<Str>` walks, and
+  build-and-return for `Str` and `List` - every parameter in it borrows (`Str*`,
+  `Point3D*`, `List<...>*` in the emitted signatures), and both deep-element loops are
+  pointer machines. Verified: `bun tools/iterate.js --full` - **113/113** and both fixed
+  points. Still open, by size: the per-argument write refinement (deduce `plus` instead
+  of marking it), and the return-slot work - a function whose every `return` hands out a
+  freshly built value could take a hidden out-parameter (`void f(T* out)`), which is the
+  Simse-level expression of "the return never escapes" and works for any value type the
+  way the parameter borrow does; today the boundary is NRVO in the callee plus a move at
+  the call (`Str` and `List` both move-assign), which the C++ compiler provides but the
+  language does not yet claim.

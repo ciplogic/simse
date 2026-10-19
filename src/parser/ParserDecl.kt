@@ -141,9 +141,17 @@ fun Parser.parseDecl(): AstXmlNode {
             // writes through them, so a caller may hand it a pointer
             // (impl_specs/escape-analysis.md). The flag is the *borrowness* proof - weaker
             // than `data`, which also promises the result is a function of the arguments.
+            // `borrow operator fun` stacks with the operator modifier, the way the
+            // attribute-led stack in `parseAttributedDecl` lets `data`/`suspend`/`borrow`
+            // combine - an operator declaration can carry the proof too.
             if (this.peek(1).text == "fun") {
                 this.advance()
                 return this.parseFunction("", List<Str>(), false, false, true, false)
+            }
+            if (this.peek(1).text == "operator" && this.peek(2).text == "fun") {
+                this.advance()
+                this.advance()
+                return this.parseFunction("", List<Str>(), false, false, true, true)
             }
             if (this.peek(1).kind == TokenKind.Attribute) {
                 this.advance()
