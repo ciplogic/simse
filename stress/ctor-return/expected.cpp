@@ -468,9 +468,9 @@ Res<T> simse_resErr(Str* message);
 void initByValue(Str* self);
 void set(Str* self, Int index, Char value);
 void ns1_initByValue(ns1_Point* self, Int x, Int y);
-Opt<Int> ns1_three();
-Opt<Int> ns1_nothing();
-ns1_Point ns1_pair();
+void ns1_three(Opt<Int>* _sm_out);
+void ns1_nothing(Opt<Int>* _sm_out);
+void ns1_pair(ns1_Point* _sm_out);
 
 template <class T>
 Int size(Span<T>* self) {
@@ -556,22 +556,25 @@ void ns1_initByValue(ns1_Point* self, Int x, Int y) {
     self->y = y;
 }
 // stress/ctor-return/src/main.kt
-Opt<Int> ns1_three() {
+void ns1_three(Opt<Int>* _sm_out) {
     Opt<Int> _sm_ctor1;
     initByValue(simse_addressOf(_sm_ctor1), 3);
-    return _sm_ctor1;
+    *_sm_out = _sm_ctor1;
+    return;
 }
 // stress/ctor-return/src/main.kt
-Opt<Int> ns1_nothing() {
+void ns1_nothing(Opt<Int>* _sm_out) {
     Opt<Int> _sm_ctor2;
     initByValue(simse_addressOf(_sm_ctor2));
-    return _sm_ctor2;
+    *_sm_out = _sm_ctor2;
+    return;
 }
 // stress/ctor-return/src/main.kt
-ns1_Point ns1_pair() {
+void ns1_pair(ns1_Point* _sm_out) {
     ns1_Point _sm_ctor3;
     ns1_initByValue(simse_addressOf(_sm_ctor3), 4, 5);
-    return _sm_ctor3;
+    *_sm_out = _sm_ctor3;
+    return;
 }
 // stress/ctor-return/src/main.kt
 int main() {
@@ -580,8 +583,8 @@ int main() {
     Bool _sm_expr1, _sm_expr3;
     ns1_Point p, boxed;
     Str typedStr;
-    a = ns1_three();
-    b = ns1_nothing();
+    ns1_three(&a);
+    ns1_nothing(&b);
     _sm_expr1 = simse_optHasValue(simse_addressOf(a));
     if (_sm_expr1) goto L1;
     goto L2;
@@ -591,7 +594,7 @@ int main() {
     L2:;
     _sm_expr3 = simse_optHasValue(simse_addressOf(b));
     simse_println((_sm_expr3), stdout);
-    p = ns1_pair();
+    ns1_pair(&p);
     _sm_base1 = p.x;
     simse_println((_sm_base1), stdout);
     _sm_base2 = p.y;

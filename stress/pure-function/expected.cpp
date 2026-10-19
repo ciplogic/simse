@@ -508,8 +508,8 @@ Int ns1_bump(Str* self);
 Int ns1_pureTwice(Str* s);
 Int ns1_impureTwice(Str s);
 Int ns1_viaSum(ns1_Point* p);
-Str ns1_label(ns1_Point* p);
-Str ns1_viaLabel(ns1_Point* p);
+void ns1_label(Str* _sm_out, ns1_Point* p);
+void ns1_viaLabel(Str* _sm_out, ns1_Point* p);
 Int ns1_lenTwice(Str* s, List<Int>* xs);
 Int ns1_sum(ns1_Point* p);
 Int ns1_width(Str* s);
@@ -805,20 +805,22 @@ Int ns1_viaSum(ns1_Point* p) {
     return _sm_expr2;
 }
 // stress/pure-function/src/main.kt
-Str ns1_label(ns1_Point* p) {
+void ns1_label(Str* _sm_out, ns1_Point* p) {
     Int* _sm_base1;
     Str out, _sm_expr1;
     out = __sm_stringTable[4];
     _sm_base1 = simse_addressOf(p->x);
     _sm_expr1 = toString(_sm_base1);
     simse_str_appendStr(out, _sm_expr1);
-    return out;
+    *_sm_out = out;
+    return;
 }
 // stress/pure-function/src/main.kt
-Str ns1_viaLabel(ns1_Point* p) {
+void ns1_viaLabel(Str* _sm_out, ns1_Point* p) {
     Str _sm_expr1;
-    _sm_expr1 = ns1_label(p);
-    return _sm_expr1;
+    ns1_label(&_sm_expr1, p);
+    *_sm_out = _sm_expr1;
+    return;
 }
 // stress/pure-function/src/main.kt
 Int ns1_lenTwice(Str* s, List<Int>* xs) {
@@ -897,7 +899,7 @@ int main(int argc, char** argv) {
     _sm_expr7 = ns1_viaSum(_sm_base5);
     simse_println((_sm_expr7), stdout);
     _sm_base6 = &p;
-    _sm_expr8 = ns1_viaLabel(_sm_base6);
+    ns1_viaLabel(&_sm_expr8, _sm_base6);
     simse_println((_sm_expr8), stdout);
     w = __sm_stringTable[2];
     _sm_base7 = &w;

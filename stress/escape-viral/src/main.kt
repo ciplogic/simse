@@ -91,9 +91,11 @@ fun partViral(): Int {
 
 // ---- returns ----
 
-// Build-and-return, the shape the return-value question asks about: the callee builds
-// into a named local and returns it, and the boundary is a move (`Str` and `List` both
-// have move assignment), so the value is never deep-copied on its way out.
+// Build-and-return through the out-parameter ABI (`CgCore.kt`'s sret set): a free
+// function returning one heavy value is emitted `void f(T* _sm_out, ...)`, its returns
+// store into the parameter, and a call with a destination writes where the value is
+// going to live - no copy crosses the boundary, for a `Str`, a `List` or any user data
+// class alike (`Point3D` below is the same rule as `printName`).
 fun printName(first: Str, second: Str): Str {
     return "$first $second"
 }
@@ -105,11 +107,31 @@ fun buildList(): List<Int> {
     return out
 }
 
+fun makePoint(n: Int): Point3D {
+    return Point3D(n, n + 1, n + 2)
+}
+
+// Multiple returns, every path building: each stores at its own return.
+fun classify(n: Int): Str {
+    if (n < 0) {
+        return "negative"
+    }
+    if (n == 0) {
+        return "zero"
+    }
+    return "positive"
+}
+
 fun partReturns(): Int {
     println(printName("Ada", "Lovelace"))
     val nums: List<Int> = buildList()
     println(nums.size())
     println(printName("grace", "hop").size())
+    val p: Point3D = makePoint(5)
+    println(p.x + p.y + p.z)
+    println(classify(0 - 3))
+    println(classify(0))
+    println(classify(3))
     return 0
 }
 

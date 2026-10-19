@@ -741,18 +741,18 @@ Int ns1_partLambdaFor();
 Int ns1_addAll(List<Int>* values);
 Int ns1_sumValues(List<Int> values);
 Int ns1_countBoxed(Ref<List<Int>> values);
-Str ns1_format(Str shape, List<Str>* items);
+void ns1_format(Str* _sm_out, Str shape, List<Str>* items);
 Int ns1_count(List<Str>* values);
 Int ns1_partPackArgs();
 Int ns1_sum(List<Int>* items);
 Int ns1_tailSum(List<Int>* items);
 Int ns1_middleSum(List<Int>* items);
-Str ns1_afterColon(Str text);
+void ns1_afterColon(Str* _sm_out, Str text);
 void ns1_bumpSpan(Span<Int> span);
 Char* ns1_headByte(Str* text);
 Int ns1_partSpan();
 Int ns1_partForPromote();
-List<Str> ns1_makeWords();
+void ns1_makeWords(List<Str>* _sm_out);
 Int ns1_partForTemporary();
 Int ns1_partSpanConvert();
 Int ns1_rackTotal(ns1_Rack* rack);
@@ -2310,7 +2310,7 @@ Int ns1_countBoxed(Ref<List<Int>> values) {
     return _sm_expr1;
 }
 // stress/collections/src/main.kt
-Str ns1_format(Str shape, List<Str>* items) {
+void ns1_format(Str* _sm_out, Str shape, List<Str>* items) {
     Char* __sm_catP;
     Int __sm_catC0;
     Str out, _sm_expr4, _sm_expr7, _sm_expr8;
@@ -2348,7 +2348,8 @@ Str ns1_format(Str shape, List<Str>* items) {
     i = i + 1;
     goto L1;
     L2:;
-    return out;
+    *_sm_out = out;
+    return;
 }
 // stress/collections/src/main.kt
 Int ns1_count(List<Str>* values) {
@@ -2420,7 +2421,7 @@ Int ns1_partPackArgs() {
     simse_println((_sm_expr21), stdout);
     _sm_base15 = List<Str>{__sm_stringTable[26], __sm_stringTable[27]};
     _sm_base16 = &_sm_base15;
-    _sm_expr22 = ns1_format(__sm_stringTable[29], _sm_base16);
+    ns1_format(&_sm_expr22, __sm_stringTable[29], _sm_base16);
     simse_println((_sm_expr22), stdout);
     _sm_expr23 = List<Str>{};
     _sm_base17 = &_sm_expr23;
@@ -2500,7 +2501,7 @@ Int ns1_middleSum(List<Int>* items) {
     return total;
 }
 // stress/collections/src/main.kt
-Str ns1_afterColon(Str text) {
+void ns1_afterColon(Str* _sm_out, Str text) {
     Str* _sm_base1;
     Span<Char> bytes, _sm_expr6;
     Int at, _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr5;
@@ -2513,7 +2514,8 @@ Str ns1_afterColon(Str text) {
     if (_sm_expr1) goto L1;
     goto L2;
     L1:;
-    return __sm_stringTable[31];
+    *_sm_out = __sm_stringTable[31];
+    return;
     L2:;
     _sm_expr2 = at + 1;
     _sm_expr3 = size(simse_addressOf(bytes));
@@ -2521,7 +2523,8 @@ Str ns1_afterColon(Str text) {
     _sm_expr5 = _sm_expr4 - 1;
     _sm_expr6 = slice(simse_addressOf(bytes), _sm_expr2, _sm_expr5);
     _sm_expr7 = toString(simse_addressOf(_sm_expr6));
-    return _sm_expr7;
+    *_sm_out = _sm_expr7;
+    return;
 }
 // stress/collections/src/main.kt
 void ns1_bumpSpan(Span<Int> span) {
@@ -2569,7 +2572,7 @@ Int ns1_partSpan() {
     _sm_expr4 = size(simse_addressOf(all));
     simse_println((_sm_expr4), stdout);
     text = __sm_stringTable[0];
-    _sm_expr5 = ns1_afterColon(text);
+    ns1_afterColon(&_sm_expr5, text);
     simse_println((_sm_expr5), stdout);
     _sm_base5 = &text;
     _sm_expr6 = simse_spanOfStr(_sm_base5);
@@ -2682,7 +2685,7 @@ Int ns1_partForPromote() {
     return 0;
 }
 // stress/collections/src/main.kt
-List<Str> ns1_makeWords() {
+void ns1_makeWords(List<Str>* _sm_out) {
     List<Str> xs;
     xs = List<Str>();
     simse_list_append(xs, __sm_stringTable[3]);
@@ -2690,7 +2693,8 @@ List<Str> ns1_makeWords() {
     simse_list_append(xs, __sm_stringTable[6]);
     simse_list_append(xs, __sm_stringTable[4]);
     simse_list_append(xs, __sm_stringTable[1]);
-    return xs;
+    *_sm_out = xs;
+    return;
 }
 // stress/collections/src/main.kt
 Int ns1_partForTemporary() {
@@ -2702,7 +2706,7 @@ Int ns1_partForTemporary() {
     Bool _sm_expr3;
     Span_iter_yieldable<Str> _sm_for23;
     Str* _sm_word_2;
-    _sm_expr1 = ns1_makeWords();
+    ns1_makeWords(&_sm_expr1);
     _sm_base1 = &_sm_expr1;
     _sm_expr2 = simse_spanOf(_sm_base1);
     _sm_for22 = iterValues(simse_addressOf(_sm_expr2));
@@ -2713,7 +2717,7 @@ Int ns1_partForTemporary() {
     simse_println((word), stdout);
     goto L1;
     L2:;
-    _sm_expr4 = ns1_makeWords();
+    ns1_makeWords(&_sm_expr4);
     _sm_base2 = &_sm_expr4;
     _sm_expr5 = simse_spanOf(_sm_base2);
     _sm_for23 = iter(simse_addressOf(_sm_expr5));

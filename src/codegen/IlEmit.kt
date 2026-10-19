@@ -23,6 +23,62 @@ fun Emitter.ilLine(out: *Str, level: Int, text: Str): Unit {
 
 // One body, instruction by instruction: each instruction is one statement of the
 // emitted C++ (a `Declare` pairs with the instruction that writes it).
+// The callee text of a Call op when it names an out-parameter function (`sretFns`) - the
+// text `f(&dst, args)` spells - or "" when the by-value ABI stands. Built through
+// `ilCallNode`, so every callee shape (a free name, an extension's receiver member, a
+// static base) spells as the by-value call would; closures and indirect calls keep their
+// own ABI and answer "".
+fun Emitter.ilSretCallee(il: *IlBody, frame: *IlFrame, op: *IlOp): Str {
+    val hasDst: Bool = this.ilDst(op) >= 0
+    var methodAt: Int = 0
+    if (hasDst) {
+        methodAt = 1
+    }
+    if (methodAt >= op.operands.size()) {
+        return ""
+    }
+    val methodIndex: Int = this.ilOpOperand(op.operands, methodAt)
+    if (methodIndex < 0 || methodIndex >= il.methods.size()) {
+        return ""
+    }
+    val method: IlMethod = *il.methods[methodIndex]
+    if (method.kind != IlMethodKind.Function) {
+        return ""
+    }
+    if (this.ilClosureNameOf(method.name) != "") {
+        return ""
+    }
+    // The method table carries the name as the call spelled it (bare, most often), while
+    // the set is keyed by the qualified C++ name - the same resolution the expression
+    // path's qualification makes (`functionPackage`).
+    val qualifiedKey: Str = this.qualify(this.functionPackage(method.name), method.name)
+    if (!this.sretFns.has(qualifiedKey)) {
+        return ""
+    }
+    val call: AstXmlNode = this.ilCallNode(il, frame, op)
+    val callee: *AstXmlNode = xmlChildPtr(call, AstNodeKind.Callee)
+    if (xmlIsEmpty(callee)) {
+        return ""
+    }
+    return this.expr(callee, 0, xmlEmptyNode())
+}
+
+// The out-parameter return type's C++ text, for the scratch a dropped-value statement
+// call declares; "" when the call is not one.
+fun Emitter.ilSretCallType(il: *IlBody, op: *IlOp): Str {
+    val methodIndex: Int = this.ilOpOperand(op.operands, 0)
+    if (methodIndex < 0 || methodIndex >= il.methods.size()) {
+        return ""
+    }
+    val method: IlMethod = *il.methods[methodIndex]
+    val key: Str = this.qualify(this.functionPackage(method.name), method.name)
+    val text: *Str = this.sretRets.getPtr(key)
+    if (text == null) {
+        return ""
+    }
+    return *text
+}
+
 fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
     // A declaration a jump can cross needs a block of its own.
     var blockEnd: Dictionary<Int, IlCrossing> = Dictionary<Int, IlCrossing>()
@@ -276,6 +332,29 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             i++
             continue // inlined at its use
         }
+        if (dst >= 0 && kind == IlOpKind.Call) {
+            // The out-parameter ABI at the call: the value is written straight into the
+            // slot it was destined for - the return copy the by-value signature would
+            // make is not there to elide, it never happens.
+            val calleeTextS: Str = this.ilSretCallee(il, frame, op)
+            if (calleeTextS != "") {
+                var argTextsS: List<Str> = List<Str>()
+                val callS: AstXmlNode = this.ilCallNode(il, frame, op)
+                for (*argS in xmlChildren(callS, AstNodeKind.Arg)) {
+                    argTextsS.append(this.expr(argS, 0, xmlEmptyNode()))
+                }
+                val dstNameS: Str = il.vars[dst].name
+                var callPartsS: List<Str> = List<Str>()
+                callPartsS.append("&" + dstNameS)
+                for (*argTextOne in argTextsS) {
+                    callPartsS.append(argTextOne)
+                }
+                val argsTextS: Str = joinStrs(callPartsS, ", ")
+                this.ilLine(text, lvl, `@calleeTextS(@argsTextS);`)
+                i++
+                continue
+            }
+        }
         if (dst >= 0) {
             val slotType: AstXmlNode = ilVarType(il, dst)
             // An instruction that defines an untyped slot *is* that slot's declaration
@@ -417,6 +496,31 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                 }
                 return IlText(false, "", "cannot express " + this.ilWhy)
             }
+            // A call to an out-parameter function whose value the statement drops: the
+            // ABI still needs its destination, so a scoped scratch takes it.
+            if (kind == IlOpKind.CallVoid) {
+                val calleeTextV: Str = this.ilSretCallee(il, frame, op)
+                if (calleeTextV != "") {
+                    var argTextsV: List<Str> = List<Str>()
+                    for (*argV in xmlChildren(call, AstNodeKind.Arg)) {
+                        argTextsV.append(this.expr(argV, 0, xmlEmptyNode()))
+                    }
+                    val retTextV: Str = this.ilSretCallType(il, op)
+                    val scratchV: Str = "_sm_sret" + i.toString()
+                    var callPartsV: List<Str> = List<Str>()
+                    callPartsV.append("&" + scratchV)
+                    for (*argTextOneV in argTextsV) {
+                        callPartsV.append(argTextOneV)
+                    }
+                    val argsTextV: Str = joinStrs(callPartsV, ", ")
+                    this.ilLine(text, lvl, "{")
+                    this.ilLine(text, lvl + 1, `@retTextV @scratchV;`)
+                    this.ilLine(text, lvl + 1, `@calleeTextV(@argsTextV);`)
+                    this.ilLine(text, lvl, "}")
+                    i++
+                    continue
+                }
+            }
             this.ilLine(text, lvl, this.expr(call, 0, xmlEmptyNode()) + ";")
             i++
             continue
@@ -432,7 +536,15 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                 return IlText(false, "", "a return with no value")
             }
             val exprText7: Str = this.expr(value, 0, this.curReturnType)
-            this.ilLine(text, lvl, `return @exprText7;`)
+            if (this.curSretOut != "") {
+                // The out-parameter ABI: the return value is stored where the caller
+                // asked for it, and the body exits - nothing crosses the boundary.
+                val outName: Str = this.curSretOut
+                this.ilLine(text, lvl, `*@outName = @exprText7;`)
+                this.ilLine(text, lvl, "return;")
+            } else {
+                this.ilLine(text, lvl, `return @exprText7;`)
+            }
             i++
             continue
         }
@@ -535,6 +647,9 @@ fun Emitter.emitClosureBodyText(unit: *IlUnit, closure: *IlClosure, level: Int):
     if (closure.bodyIndex < 0 || closure.bodyIndex >= unit.lambdas.size()) {
         return IlText(false, "", "a closure with no body")
     }
+    // A closure's `invoke` returns by value (`std::function` converts against that
+    // signature): never the out-parameter ABI, whatever body was emitted before it.
+    this.curSretOut = ""
     val body: *IlBody = *unit.lambdas[closure.bodyIndex]
     val savedKinds: Dictionary<Str, NameKind> = this.nameKinds
     val savedTypes: Dictionary<Str, AstXmlNode> = this.localTypes

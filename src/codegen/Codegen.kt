@@ -288,6 +288,18 @@ data class Emitter(
     var selfKind: NameKind,
     var selfType: AstXmlNode,
     var curReturnType: AstXmlNode,
+    // The out-parameter ABI (`CgCore.kt`'s sret set, `CgEmitFn.kt`'s signature): a
+    // function whose every declaration returns a heavy value by value is emitted as
+    // `void f(T* _sm_out, ...)`, its `return e;` as `*_sm_out = e; return;`, and a call
+    // with a destination as `f(&dst, ...)` - the value is written where it is going to
+    // live, never copied across the boundary. The set is keyed by the *qualified* C++ name
+    // (`qualify(package, name)`), the name a call's method table carries. Empty string
+    // while a non-sret body is emitted.
+    var sretFns: Dictionary<Str, Bool>,
+    // The same names' return-type text, for the scratch a dropped-value statement call
+    // declares (the method table carries no return type for a dst-less call).
+    var sretRets: Dictionary<Str, Str>,
+    var curSretOut: Str,
     var nsPrefixes: Dictionary<Str, Str>,
     var typePackages: Dictionary<Str, Str>,
     var statics: List<CgStatic>,
@@ -391,6 +403,9 @@ fun newEmitter(inputs: *List<CgInput>, resourceStored: *List<Str>): Emitter {
         NameKind.Value,
         xmlEmptyNode(),
         xmlEmptyNode(),
+        Dictionary<Str, Bool>(),
+        Dictionary<Str, Str>(),
+        "",
         Dictionary<Str, Str>(),
         Dictionary<Str, Str>(),
         List<CgStatic>(),

@@ -1345,18 +1345,18 @@ void strAddInt(Char* target, Int64 value, Int count);
 Span<Char> strBoolView(Bool value);
 void set(Str* self, Int index, Char value);
 Int ns1_doubled(ns1_WithMethod* self);
-Str ns1_label(ns1_DoubleOrFloat* u);
-Str ns1_tagged(ns1_DoubleOrFloat* u);
-Str ns1_labelSide(ns1_SideOrSide* s);
+void ns1_label(Str* _sm_out, ns1_DoubleOrFloat* u);
+void ns1_tagged(Str* _sm_out, ns1_DoubleOrFloat* u);
+void ns1_labelSide(Str* _sm_out, ns1_SideOrSide* s);
 Str ns1_describe(ns1_DoubleOrFloat* self);
 Int ns1_strLen(ns1_IntOrStr* u);
-Str ns1_strKind(ns1_IntOrStr* u);
-ns1_IntOrStr ns1_mkStr();
+void ns1_strKind(Str* _sm_out, ns1_IntOrStr* u);
+void ns1_mkStr(ns1_IntOrStr* _sm_out);
 template <class T>
 ns1_Res2<T> ns1_ok2(T value);
 template <class T>
 ns1_Res2<T> ns1_err2(Str* message);
-ns1_Res2<Str> ns1_okStr2();
+void ns1_okStr2(ns1_Res2<Str>* _sm_out);
 template <class T>
 Bool ns1_isOk2(ns1_Res2<T>* r);
 template <class T>
@@ -1365,8 +1365,8 @@ Int ns1_partUnionClass();
 Int ns1_partSameType();
 Int ns1_partManaged();
 Int ns1_partConstructionReturn();
-ns1_DoubleOrFloat ns1_make();
-ns1_DoubleOrFloat ns1_makeParen();
+void ns1_make(ns1_DoubleOrFloat* _sm_out);
+void ns1_makeParen(ns1_DoubleOrFloat* _sm_out);
 Int ns1_partUnionGenerics();
 
 template <class T>
@@ -1651,7 +1651,7 @@ Int ns1_doubled(ns1_WithMethod* self) {
     return _sm_expr2;
 }
 // stress/unions/src/main.kt
-Str ns1_label(ns1_DoubleOrFloat* u) {
+void ns1_label(Str* _sm_out, ns1_DoubleOrFloat* u) {
     Str out;
     ns1_SmDoubleOrFloatTypes _sm_expr1;
     Bool _sm_expr2;
@@ -1674,10 +1674,11 @@ Str ns1_label(ns1_DoubleOrFloat* u) {
     L5:;
     out = __sm_stringTable[13];
     L6:;
-    return out;
+    *_sm_out = out;
+    return;
 }
 // stress/unions/src/main.kt
-Str ns1_tagged(ns1_DoubleOrFloat* u) {
+void ns1_tagged(Str* _sm_out, ns1_DoubleOrFloat* u) {
     Str out;
     ns1_SmDoubleOrFloatTypes _sm_expr1;
     Bool _sm_expr2;
@@ -1705,10 +1706,11 @@ Str ns1_tagged(ns1_DoubleOrFloat* u) {
     L7:;
     out = __sm_stringTable[9];
     L8:;
-    return out;
+    *_sm_out = out;
+    return;
 }
 // stress/unions/src/main.kt
-Str ns1_labelSide(ns1_SideOrSide* s) {
+void ns1_labelSide(Str* _sm_out, ns1_SideOrSide* s) {
     Str out;
     ns1_SmSideOrSideTypes _sm_when3, _sm_expr1;
     Bool _sm_expr2;
@@ -1732,7 +1734,8 @@ Str ns1_labelSide(ns1_SideOrSide* s) {
     L5:;
     out = __sm_stringTable[13];
     L6:;
-    return out;
+    *_sm_out = out;
+    return;
 }
 // stress/unions/src/main.kt
 Str ns1_describe(ns1_DoubleOrFloat* self) {
@@ -1740,7 +1743,7 @@ Str ns1_describe(ns1_DoubleOrFloat* self) {
     ns1_DoubleOrFloat* _sm_base1;
     Str _sm_expr1, _sm_expr2;
     _sm_base1 = self;
-    _sm_expr1 = ns1_label(_sm_base1);
+    ns1_label(&_sm_expr1, _sm_base1);
     _sm_expr2.resize(2 + _sm_expr1.size());
     __sm_catP = simse_str_data(&_sm_expr2);
     std::memcpy(__sm_catP, "d:", 2);
@@ -1765,7 +1768,7 @@ Int ns1_strLen(ns1_IntOrStr* u) {
     return _sm_expr2;
 }
 // stress/unions/src/main.kt
-Str ns1_strKind(ns1_IntOrStr* u) {
+void ns1_strKind(Str* _sm_out, ns1_IntOrStr* u) {
     Str out;
     ns1_SmIntOrStrTypes _sm_expr1;
     Bool _sm_expr2;
@@ -1788,15 +1791,17 @@ Str ns1_strKind(ns1_IntOrStr* u) {
     L5:;
     out = __sm_stringTable[13];
     L6:;
-    return out;
+    *_sm_out = out;
+    return;
 }
 // stress/unions/src/main.kt
-ns1_IntOrStr ns1_mkStr() {
+void ns1_mkStr(ns1_IntOrStr* _sm_out) {
     Str text;
     text = __sm_stringTable[2];
     ns1_IntOrStr _sm_ctor1;
     ns1_initByValue(simse_addressOf(_sm_ctor1), text);
-    return _sm_ctor1;
+    *_sm_out = _sm_ctor1;
+    return;
 }
 // stress/unions/src/main.kt
 template <class T>
@@ -1815,12 +1820,13 @@ ns1_Res2<T> ns1_err2(Str* message) {
     return _sm_ctor3;
 }
 // stress/unions/src/main.kt
-ns1_Res2<Str> ns1_okStr2() {
+void ns1_okStr2(ns1_Res2<Str>* _sm_out) {
     Str text;
     text = __sm_stringTable[4];
     ns1_Res2<Str> _sm_ctor4;
     ns1_initByValue(simse_addressOf(_sm_ctor4), text);
-    return _sm_ctor4;
+    *_sm_out = _sm_ctor4;
+    return;
 }
 // stress/unions/src/main.kt
 template <class T>
@@ -1870,7 +1876,7 @@ Int ns1_partUnionClass() {
     _sm_expr6 = _sm_expr5 != nullptr;
     simse_println((_sm_expr6), stdout);
     _sm_base3 = &a;
-    _sm_expr7 = ns1_tagged(_sm_base3);
+    ns1_tagged(&_sm_expr7, _sm_base3);
     simse_println((_sm_expr7), stdout);
     ns1_setIntValue(simse_addressOf(a), 5);
     i = ns1_getIntValue(simse_addressOf(a));
@@ -1892,10 +1898,10 @@ Int ns1_partUnionClass() {
     _sm_expr16 = a == _sm_expr15;
     simse_println((_sm_expr16), stdout);
     _sm_base7 = &a;
-    _sm_expr17 = ns1_label(_sm_base7);
+    ns1_label(&_sm_expr17, _sm_base7);
     simse_println((_sm_expr17), stdout);
     _sm_base8 = &a;
-    _sm_expr18 = ns1_tagged(_sm_base8);
+    ns1_tagged(&_sm_expr18, _sm_base8);
     simse_println((_sm_expr18), stdout);
     _sm_expr19 = ns1_describe(simse_addressOf(a));
     simse_println((_sm_expr19), stdout);
@@ -1907,13 +1913,13 @@ Int ns1_partUnionClass() {
     _sm_base10 = *d;
     simse_println((_sm_base10), stdout);
     _sm_base11 = &b;
-    _sm_expr21 = ns1_label(_sm_base11);
+    ns1_label(&_sm_expr21, _sm_base11);
     simse_println((_sm_expr21), stdout);
     five = 5;
     ns1_DoubleOrFloat c;
     ns1_initByValue(simse_addressOf(c), five);
     _sm_base12 = &c;
-    _sm_expr22 = ns1_label(_sm_base12);
+    ns1_label(&_sm_expr22, _sm_base12);
     simse_println((_sm_expr22), stdout);
     _sm_base13 = c.IntValue;
     simse_println((_sm_base13), stdout);
@@ -1921,14 +1927,14 @@ Int ns1_partUnionClass() {
     _sm_base14 = c.IntValue;
     simse_println((_sm_base14), stdout);
     _sm_base15 = &c;
-    _sm_expr23 = ns1_label(_sm_base15);
+    ns1_label(&_sm_expr23, _sm_base15);
     simse_println((_sm_expr23), stdout);
     ns1_setNone(simse_addressOf(c));
     _sm_base16 = &c;
-    _sm_expr24 = ns1_label(_sm_base16);
+    ns1_label(&_sm_expr24, _sm_base16);
     simse_println((_sm_expr24), stdout);
     _sm_base17 = &c;
-    _sm_expr25 = ns1_tagged(_sm_base17);
+    ns1_tagged(&_sm_expr25, _sm_base17);
     simse_println((_sm_expr25), stdout);
     ns1_SideOrSide s;
     _sm_base18 = ns1_Left::L;
@@ -1939,7 +1945,7 @@ Int ns1_partUnionClass() {
     _sm_base20 = ns1_Right::R;
     ns1_setR(simse_addressOf(s), _sm_base20);
     _sm_base21 = &s;
-    _sm_expr27 = ns1_labelSide(_sm_base21);
+    ns1_labelSide(&_sm_expr27, _sm_base21);
     simse_println((_sm_expr27), stdout);
     ns1_Marker m;
     ns1_initByValue(simse_addressOf(m));
@@ -2017,13 +2023,13 @@ Int ns1_partManaged() {
     _sm_expr1 = ns1_strLen(_sm_base1);
     simse_println((_sm_expr1), stdout);
     _sm_base2 = &u;
-    _sm_expr2 = ns1_strKind(_sm_base2);
+    ns1_strKind(&_sm_expr2, _sm_base2);
     simse_println((_sm_expr2), stdout);
     v = u;
     _sm_base3 = &v;
     _sm_expr3 = ns1_strLen(_sm_base3);
     simse_println((_sm_expr3), stdout);
-    _sm_expr4 = ns1_mkStr();
+    ns1_mkStr(&_sm_expr4);
     _sm_base4 = &_sm_expr4;
     _sm_expr5 = ns1_strLen(_sm_base4);
     simse_println((_sm_expr5), stdout);
@@ -2047,7 +2053,7 @@ Int ns1_partManaged() {
     _sm_expr11 = _sm_expr10 != nullptr;
     simse_println((_sm_expr11), stdout);
     _sm_base10 = &u;
-    _sm_expr12 = ns1_strKind(_sm_base10);
+    ns1_strKind(&_sm_expr12, _sm_base10);
     simse_println((_sm_expr12), stdout);
     numbers = List<Int>{1, 2, 3};
     ns1_IntOrList w;
@@ -2070,31 +2076,33 @@ Int ns1_partConstructionReturn() {
     ns1_DoubleOrFloat* _sm_base1, * _sm_base2;
     ns1_DoubleOrFloat _sm_expr1, _sm_expr3;
     Str _sm_expr2, _sm_expr4;
-    _sm_expr1 = ns1_make();
+    ns1_make(&_sm_expr1);
     _sm_base1 = &_sm_expr1;
-    _sm_expr2 = ns1_label(_sm_base1);
+    ns1_label(&_sm_expr2, _sm_base1);
     simse_println((_sm_expr2), stdout);
-    _sm_expr3 = ns1_makeParen();
+    ns1_makeParen(&_sm_expr3);
     _sm_base2 = &_sm_expr3;
-    _sm_expr4 = ns1_label(_sm_base2);
+    ns1_label(&_sm_expr4, _sm_base2);
     simse_println((_sm_expr4), stdout);
     return 0;
 }
 // stress/unions/src/main.kt
-ns1_DoubleOrFloat ns1_make() {
+void ns1_make(ns1_DoubleOrFloat* _sm_out) {
     Int v;
     v = 7;
     ns1_DoubleOrFloat _sm_expr1;
     ns1_initByValue(simse_addressOf(_sm_expr1), v);
-    return _sm_expr1;
+    *_sm_out = _sm_expr1;
+    return;
 }
 // stress/unions/src/main.kt
-ns1_DoubleOrFloat ns1_makeParen() {
+void ns1_makeParen(ns1_DoubleOrFloat* _sm_out) {
     Int v;
     v = 8;
     ns1_DoubleOrFloat _sm_ctor5;
     ns1_initByValue(simse_addressOf(_sm_ctor5), v);
-    return _sm_ctor5;
+    *_sm_out = _sm_ctor5;
+    return;
 }
 // stress/unions/src/main.kt
 Int ns1_partUnionGenerics() {
@@ -2207,7 +2215,7 @@ Int ns1_partUnionGenerics() {
     lv = ns1_getValue(simse_addressOf(l));
     _sm_expr19 = simse_lenOf((*lv));
     simse_println((_sm_expr19), stdout);
-    collided = ns1_okStr2();
+    ns1_okStr2(&collided);
     _sm_base18 = &collided;
     _sm_expr20 = ns1_isOk2(_sm_base18);
     simse_println((_sm_expr20), stdout);

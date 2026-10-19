@@ -128,7 +128,7 @@ inline void simse_println(const T& value, FILE* out) {
 }
 
 void set(Str* self, Int index, Char value);
-Str greeting(Str name);
+void greeting(Str* _sm_out, Str name);
 
 void set(Str* self, Int index, Char value) {
     Str* _sm_base1;
@@ -140,19 +140,20 @@ void set(Str* self, Int index, Char value) {
 // stress/smgen-kt/src/main.kt
 int main() {
     Str _sm_expr1, _sm_expr2;
-    _sm_expr1 = greeting(__sm_stringTable[1]);
+    greeting(&_sm_expr1, __sm_stringTable[1]);
     simse_println((_sm_expr1), stdout);
-    _sm_expr2 = greeting(__sm_stringTable[2]);
+    greeting(&_sm_expr2, __sm_stringTable[2]);
     simse_println((_sm_expr2), stdout);
     return 0;
 }
 // <generated>/kt.kt
-Str greeting(Str name) {
+void greeting(Str* _sm_out, Str name) {
     Str text;
     text = __sm_stringTable[0];
     simse_str_appendStr(text, name);
     simse_str_append(text, '!');
-    return text;
+    *_sm_out = text;
+    return;
 }
 
 template <class T>

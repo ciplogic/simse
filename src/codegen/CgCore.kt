@@ -338,6 +338,158 @@ fun Emitter.collect(): Unit {
         }
     }
     }
+    this.collectSretFns()
+}
+
+// Whether a return type is one the out-parameter ABI pays for: a *class* value (a user
+// `data class`, `Str`, a container, `Opt`/`Res`) whose return crosses the boundary as a
+// copy. A scalar returns in a register, a `Span`/`Array` view copies two words, a pointer
+// or a callable is one word - none of them is worth the out parameter.
+fun Emitter.sretHeavyReturn(node: *AstXmlNode): Bool {
+    val kind: AstNodeCategory = xmlKind(node)
+    if (kind == AstNodeCategory.TypeGeneric) {
+        val name: Str = xmlAttr(node, AstNodeAttributeKind.Name)
+        return name != "Span" && name != "Array"
+    }
+    if (kind != AstNodeCategory.TypeNamed) {
+        return false
+    }
+    val name: Str = xmlAttr(node, AstNodeAttributeKind.Name)
+    return name == "Str" || this.types.has(name)
+}
+
+// One function declaration's eligibility for the out-parameter ABI: a plain (non-generic,
+// non-operator, non-suspending, non-machine) function with a body, whose C++ the emitter
+// writes here, returning one heavy value - and whose name no code holds as a *value* (a
+// comparator, a `Func<...>` argument), because those calls must keep the C++ signature the
+// callable's type expects.
+fun Emitter.sretEligible(fn: *CgFn): Bool {
+    val decl: *AstXmlNode = *fn.decl
+    if (!fn.hasBody || fn.isNative) {
+        return false
+    }
+    // Prelude functions keep their authored signature: hand-written C++ (a `_res.md`
+    // section, a header) may call them, and it is compiled against the by-value form -
+    // the same guard the borrow pass makes with `bpCppCalled`.
+    if (fn.prelude) {
+        return false
+    }
+    // Free functions only, in this slice: a method's call site spells as a member call,
+    // and rewriting that into the out form is the emitter's member-call spelling, not
+    // the free-name text the IL path builds. A method keeps its by-value ABI.
+    if (!xmlIsEmpty(fn.receiver)) {
+        return false
+    }
+    if (xmlAttr(decl, AstNodeAttributeKind.IsOperator) == "true"
+        || xmlAttr(decl, AstNodeAttributeKind.IsSuspend) == "true"
+        || xmlAttr(decl, AstNodeAttributeKind.IsUnionGenerated) == "true"
+    ) {
+        return false
+    }
+    if (fn.name == "main" || fn.name.endsWith("_invoke")) {
+        return false
+    }
+    if (xmlCount(decl, AstNodeKind.TypeParam) > 0) {
+        return false
+    }
+    val returnNode: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.ReturnType)
+    if (xmlIsEmpty(returnNode) || !this.sretHeavyReturn(returnNode)) {
+        return false
+    }
+    return true
+}
+
+// Every name under `node`, whatever position: the static-initializer walk, whose callees
+// are spelled by a path the IL rewrite does not reach.
+fun Emitter.sretMarkAllNames(node: *AstXmlNode, used: *Dictionary<Str, Bool>): Unit {
+    if (xmlKind(node) == AstNodeCategory.ExprName) {
+        used.insert(xmlAttr(node, AstNodeAttributeKind.Name), true)
+    }
+    for (*child in node.Children) {
+        this.sretMarkAllNames(child, used)
+    }
+}
+
+// A bare name anywhere in the program or prelude that is not a call's callee: a function
+// held as a value. Held functions keep the by-value signature (`std::function` and the
+// emitter's forwarding overloads convert against it), so the ABI cannot change under them.
+fun Emitter.sretMarkValueUses(node: *AstXmlNode, used: *Dictionary<Str, Bool>): Unit {
+    if (xmlKind(node) == AstNodeCategory.ExprName && node.name != AstNodeKind.Callee) {
+        used.insert(xmlAttr(node, AstNodeAttributeKind.Name), true)
+    }
+    for (*child in node.Children) {
+        this.sretMarkValueUses(child, used)
+    }
+}
+
+// The out-parameter set, keyed by the qualified C++ name every call site's method table
+// carries. A name joins only when *every* declaration of it is eligible - a caller cannot
+// know which overload a call resolves to, so one ineligible twin keeps the name's ABI as
+// written (`collectNames` fills `this.functions` before this runs).
+fun Emitter.collectSretFns(): Unit {
+    var used: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    for (*input in this.inputs) {
+        this.sretMarkValueUses(input.module, used)
+        // A file-level static's initializer is spelled by the statics emitter, a path the
+        // IL call rewrite does not touch: a name a static initializer *calls* keeps its
+        // by-value ABI - every name in it, callee or not.
+        for (*decl in xmlDecls(input.module)) {
+            if (decl.name == AstNodeKind.Var) {
+                val init: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.Init)
+                if (!xmlIsEmpty(init)) {
+                    this.sretMarkAllNames(init, used)
+                }
+            }
+        }
+    }
+    var byName: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    var bareOf: Dictionary<Str, Str> = Dictionary<Str, Str>()
+    var retNodeOf: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+    var seen: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    for (*fn in this.functions) {
+        val key: Str = this.qualify(fn.packageName, fn.name)
+        if (!seen.has(key)) {
+            seen.insert(key, true)
+            byName.insert(key, this.sretEligible(fn))
+            bareOf.insert(key, fn.name)
+            val declReturn: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
+            if (!xmlIsEmpty(declReturn)) {
+                retNodeOf.insert(key, *declReturn)
+            }
+        } else {
+            if (byName.has(key) && !this.sretEligible(fn)) {
+                byName.insert(key, false)
+            }
+        }
+    }
+    val names: List<Str> = byName.keys()
+    for (*name in names) {
+        val eligible: *Bool = byName.getPtr(name)
+        if (eligible == null || !*eligible) {
+            continue
+        }
+        // A held value names the function unqualified (`items.sort(compareLessThan)`);
+        // the set is keyed qualified, so the bare name rides along.
+        val bare: *Str = bareOf.getPtr(name)
+        if (bare == null || used.has(*bare)) {
+            continue
+        }
+        this.sretFns.insert(name, true)
+        // The text is spelled here, for the eligible name only: `type` on an ineligible
+        // twin's return (a machine factory's, a generic's) is what this pass must never
+        // run, its context is the collect walk's, not the declaration's.
+        val retNode: *AstXmlNode = retNodeOf.getPtr(name)
+        if (retNode != null && !xmlIsEmpty(*retNode)) {
+            val savedFailed: Bool = this.failed
+            val savedError: Str = this.error
+            val text: Str = this.type(*retNode)
+            this.failed = savedFailed
+            this.error = savedError
+            if (!this.failed && text != "") {
+                this.sretRets.insert(name, text)
+            }
+        }
+    }
 }
 
 // The program-level facts the semantic step reads (sema/TypeInfer.kt), built from the

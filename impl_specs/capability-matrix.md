@@ -5483,3 +5483,31 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   way the parameter borrow does; today the boundary is NRVO in the callee plus a move at
   the call (`Str` and `List` both move-assign), which the C++ compiler provides but the
   language does not yet claim.
+
+- **The out-parameter ABI: a heavy return never crosses the boundary.** The return-value
+  escape analysis the glob pass wrote up, landed: a free function whose every declaration
+  returns one heavy value (a `Str`, a container, a user data class - a scalar returns in a
+  register, a `Span` view copies two words, and neither is worth the ABI) is emitted as
+  `void f(T* _sm_out, ...)`, its `return e;` as `*_sm_out = e; return;`, and a call with a
+  destination as `f(&dst, args)` - the value is *written where it is going to live*,
+  `printName`'s built string, `buildList`'s list and `makePoint`'s `Point3D` alike (the
+  by-value C++ ABI's NRVO-plus-move already made this cheap in the callee; the point is
+  the *language* now claims and provides it, type-generically). A statement call whose
+  value is dropped gets a scoped scratch; multiple returns each store at their own.
+  The eligibility is deliberately narrow: free functions with a body, non-generic (the
+  forwarding overloads' own ABI), non-operator, non-suspending, non-machine, not a
+  closure's `_invoke`, not prelude (hand-written C++ in a `_res.md` may call the authored
+  signature - the same guard the borrow pass makes), never held as a value (`sort(cmp)`
+  converts against the by-value `std::function`), never called from a file-level static's
+  initializer (the statics emitter spells those outside the IL), and a name joins only
+  when *every* declaration of it is eligible. Methods are excluded in this slice: their
+  call sites spell as member calls the free-name rewrite cannot express.
+  En route, the IL emitter's flag plumbing had to become leak-proof - the out-name state
+  is cleared at every body-emitting boundary (a closure's `invoke`, a machine class) so no
+  body inherits the previous one's ABI, and the scratch's return type comes from the
+  collected set (`sretRets`) because a dst-less call's method-table entry carries none.
+  `stress/escape-viral`'s `returns` part pins it: `printName`/`buildList`/`makePoint`/
+  `classify` (multiple returns) all take `_sm_out` and their call sites pass `&dst`.
+  Verified: `bun tools/iterate.js --full` - **113/113** and both fixed points; the
+  compiler self-hosts through the ABI (its own builders - `Sections`, the scanner tables,
+  the source-gen state - are sret'd or excluded by the guards above).

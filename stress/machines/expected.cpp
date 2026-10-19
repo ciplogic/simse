@@ -603,9 +603,9 @@ Str toString(Int64* self);
 Str toString(Char* self);
 Int ns1_compute();
 Int ns1_partDeadCode();
-Opt<Int> ns1_pick(Int i);
-Res<Str> ns1_parse(Int n);
-Str ns1_describe(Int n);
+void ns1_pick(Opt<Int>* _sm_out, Int i);
+void ns1_parse(Res<Str>* _sm_out, Int n);
+void ns1_describe(Str* _sm_out, Int n);
 Int ns1_countUntil(List<Str>* names);
 Int ns1_partFlatBlocks();
 // stress/machines/src/main.kt
@@ -1245,7 +1245,7 @@ Int ns1_partDeadCode() {
     return 0;
 }
 // stress/machines/src/main.kt
-Opt<Int> ns1_pick(Int i) {
+void ns1_pick(Opt<Int>* _sm_out, Int i) {
     Bool _sm_expr1;
     Opt<Int> _sm_expr2;
     _sm_expr1 = i < 0;
@@ -1253,20 +1253,23 @@ Opt<Int> ns1_pick(Int i) {
     goto L2;
     L1:;
     _sm_expr2 = simse_optNone<Int>();
-    return _sm_expr2;
+    *_sm_out = _sm_expr2;
+    return;
     L2:;
     _sm_expr1 = i >= 10;
     if (_sm_expr1) goto L3;
     goto L4;
     L3:;
     _sm_expr2 = simse_optNone<Int>();
-    return _sm_expr2;
+    *_sm_out = _sm_expr2;
+    return;
     L4:;
     _sm_expr2 = simse_optSome<Int>(i);
-    return _sm_expr2;
+    *_sm_out = _sm_expr2;
+    return;
 }
 // stress/machines/src/main.kt
-Res<Str> ns1_parse(Int n) {
+void ns1_parse(Res<Str>* _sm_out, Int n) {
     Str* _sm_base1;
     Str _sm_base2;
     Bool _sm_expr1;
@@ -1278,27 +1281,31 @@ Res<Str> ns1_parse(Int n) {
     _sm_base2 = __sm_stringTable[7];
     _sm_base1 = &_sm_base2;
     _sm_expr2 = simse_resErr<Str>(_sm_base1);
-    return _sm_expr2;
+    *_sm_out = _sm_expr2;
+    return;
     L2:;
     _sm_expr2 = simse_resOk<Str>(__sm_stringTable[9]);
-    return _sm_expr2;
+    *_sm_out = _sm_expr2;
+    return;
 }
 // stress/machines/src/main.kt
-Str ns1_describe(Int n) {
+void ns1_describe(Str* _sm_out, Int n) {
     Res<Str> r;
     Bool _sm_expr1, _sm_expr2;
     Str _sm_expr3;
-    r = ns1_parse(n);
+    ns1_parse(&r, n);
     _sm_expr1 = simse_resHasValue(simse_addressOf(r));
     _sm_expr2 = !_sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
     _sm_expr3 = r.Error;
-    return _sm_expr3;
+    *_sm_out = _sm_expr3;
+    return;
     L2:;
     _sm_expr3 = r.Value;
-    return _sm_expr3;
+    *_sm_out = _sm_expr3;
+    return;
 }
 // stress/machines/src/main.kt
 Int ns1_countUntil(List<Str>* names) {
@@ -1330,17 +1337,17 @@ Int ns1_partFlatBlocks() {
     Bool _sm_expr5;
     Str _sm_expr6, _sm_expr8;
     List<Str> names;
-    _sm_expr1 = ns1_pick(3);
+    ns1_pick(&_sm_expr1, 3);
     _sm_expr2 = simse_optValue(simse_addressOf(_sm_expr1));
     simse_println((_sm_expr2), stdout);
     _sm_expr3 = -1;
-    _sm_expr4 = ns1_pick(_sm_expr3);
+    ns1_pick(&_sm_expr4, _sm_expr3);
     _sm_expr5 = simse_optHasValue(simse_addressOf(_sm_expr4));
     simse_println((_sm_expr5), stdout);
-    _sm_expr6 = ns1_describe(2);
+    ns1_describe(&_sm_expr6, 2);
     simse_println((_sm_expr6), stdout);
     _sm_expr7 = -2;
-    _sm_expr8 = ns1_describe(_sm_expr7);
+    ns1_describe(&_sm_expr8, _sm_expr7);
     simse_println((_sm_expr8), stdout);
     names = List<Str>();
     simse_list_append(names, __sm_stringTable[18]);

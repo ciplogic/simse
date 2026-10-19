@@ -237,6 +237,9 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
     // Read-only here: borrow instead of copying the whole function AST out of the CgFn.
     val decl: *AstXmlNode = *fn.decl
     this.curDecl = * fn.decl
+    // Cleared before any early return can leave a previous body's ABI behind: the flag
+    // is re-set below when this function is one of the out-parameter ones.
+    this.curSretOut = ""
     if (fn.isNative) {
         return
     }
@@ -298,6 +301,15 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
     if (this.failed) {
         return
     }
+    // The out-parameter ABI (`CgCore.kt`'s sret set): a heavy value is returned through a
+    // hidden `T* _sm_out`, the body's returns store into it, and a call with a
+    // destination writes where the value is going to live - no copy crosses the boundary
+    // for any value type, `Str`, a container or a user data class alike.
+    val sretThis: Bool = !isMain && !yielding && this.sretFns.has(this.qualify(fn.packageName, fn.name))
+    val sretRetText: Str = ret
+    if (sretThis) {
+        ret = "void"
+    }
 
     var params: List<Str> = List<Str>()
     var hasSelf: Bool = false
@@ -349,7 +361,16 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
         fnName = this.qualify(fn.packageName, fn.name)
     }
     val cgJoinText2: Str = cgJoin(params, ", ")
-    var signature: Str = `@ret @fnName(@cgJoinText2)`
+    var outParams: List<Str> = params
+    if (sretThis) {
+        outParams = List<Str>()
+        outParams.append(sretRetText + "* _sm_out")
+        for (*oneParam in params) {
+            outParams.append(oneParam)
+        }
+    }
+    val cgJoinText3: Str = cgJoin(outParams, ", ")
+    var signature: Str = `@ret @fnName(@cgJoinText3)`
     if (mainArgs) {
         signature = "int main(int argc, char** argv)"
     }
@@ -398,6 +419,11 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
         this.line(1, "}")
     }
     this.curReturnType = returnNode
+    if (sretThis) {
+        this.curSretOut = "_sm_out"
+    } else {
+        this.curSretOut = ""
+    }
     // Structured control flow is lowered to labels/gotos and expressions extracted into
     // temporaries, in a loop because each stage leaves work for the others
     // (impl_specs/linear-lowering.md); the emitter below knows the linear forms only.
@@ -659,6 +685,7 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
     this.selfKind = savedSelfKind
     this.selfType = savedSelfType
     this.curReturnType = savedReturn
+    this.curSretOut = ""
     this.nameKinds = savedKinds
     this.localTypes = savedTypes
     if (this.failed) {

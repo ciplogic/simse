@@ -517,7 +517,7 @@ Str intToStr(Int64 value);
 Str toString(Int* self);
 Str toString(Int64* self);
 Str toString(Char* self);
-Str jsonQuoted(Str* value);
+void jsonQuoted(Str* _sm_out, Str* value);
 Str toJson(ns1_Point* self);
 Str toJson(Int* self);
 Str toJson(ns1_Label* self);
@@ -790,7 +790,7 @@ int main() {
     return 0;
 }
 // <generated>/kt.kt
-Str jsonQuoted(Str* value) {
+void jsonQuoted(Str* _sm_out, Str* value) {
     Str out;
     Int i, _sm_expr1;
     Bool _sm_expr2;
@@ -849,7 +849,8 @@ Str jsonQuoted(Str* value) {
     goto L1;
     L2:;
     simse_str_append(out, '"');
-    return out;
+    *_sm_out = out;
+    return;
 }
 // <generated>/kt.kt
 Str toJson(ns1_Point* self) {
@@ -909,7 +910,7 @@ Str toJson(Str* self) {
     Str* _sm_base1;
     Str _sm_expr1;
     _sm_base1 = self;
-    _sm_expr1 = jsonQuoted(_sm_base1);
+    jsonQuoted(&_sm_expr1, _sm_base1);
     return _sm_expr1;
 }
 // <generated>/kt.kt

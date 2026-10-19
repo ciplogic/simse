@@ -594,13 +594,13 @@ Int ns1_partStrIsEmpty();
 Int ns1_partStringEscapes();
 Int ns1_partStrings();
 Int ns1_partTextProcessing();
-Str ns1_pair(Str* a, Str* b);
+void ns1_pair(Str* _sm_out, Str* a, Str* b);
 Int ns1_partConcat();
 Int ns1_partRawStrings();
-Str ns1_classify(Str* op);
-Str ns1_classifyPtr(Str* op);
-Str ns1_viewKind(Span<Char> v);
-Str ns1_fixed(Str* op);
+void ns1_classify(Str* _sm_out, Str* op);
+void ns1_classifyPtr(Str* _sm_out, Str* op);
+void ns1_viewKind(Str* _sm_out, Span<Char> v);
+void ns1_fixed(Str* _sm_out, Str* op);
 Int ns1_partWhenStrings();
 
 template <class T>
@@ -1875,7 +1875,7 @@ Int ns1_partTextProcessing() {
     return 0;
 }
 // stress/strings/src/main.kt
-Str ns1_pair(Str* a, Str* b) {
+void ns1_pair(Str* _sm_out, Str* a, Str* b) {
     Char* __sm_catP;
     Str _sm_base1, _sm_base2, _sm_expr1, _sm_expr2;
     _sm_base1 = *(a);
@@ -1890,7 +1890,8 @@ Str ns1_pair(Str* a, Str* b) {
     std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
     __sm_catP = __sm_catP + _sm_expr1.size();
     std::memcpy(__sm_catP, _sm_base2.data(), _sm_base2.size());
-    return _sm_expr2;
+    *_sm_out = _sm_expr2;
+    return;
 }
 // stress/strings/src/main.kt
 Int ns1_partConcat() {
@@ -1937,7 +1938,7 @@ Int ns1_partConcat() {
     _sm_base1 = &_sm_base2;
     _sm_base4 = __sm_stringTable[94];
     _sm_base3 = &_sm_base4;
-    _sm_expr6 = ns1_pair(_sm_base1, _sm_base3);
+    ns1_pair(&_sm_expr6, _sm_base1, _sm_base3);
     _sm_expr7.resize(a.size() + _sm_expr6.size());
     __sm_catP = simse_str_data(&_sm_expr7);
     std::memcpy(__sm_catP, a.data(), a.size());
@@ -1946,7 +1947,7 @@ Int ns1_partConcat() {
     simse_println((_sm_expr7), stdout);
     _sm_base5 = &a;
     _sm_base6 = &b;
-    _sm_expr8 = ns1_pair(_sm_base5, _sm_base6);
+    ns1_pair(&_sm_expr8, _sm_base5, _sm_base6);
     simse_println((_sm_expr8), stdout);
     tag = ns1_Tag{__sm_stringTable[95], 3};
     _sm_expr9 = tag.name;
@@ -2231,7 +2232,7 @@ Int ns1_partRawStrings() {
     return 0;
 }
 // stress/strings/src/main.kt
-Str ns1_classify(Str* op) {
+void ns1_classify(Str* _sm_out, Str* op) {
     Span<Char> _sm_when2_v;
     Int _sm_when2_n;
     Bool _sm_expr1;
@@ -2242,7 +2243,8 @@ Str ns1_classify(Str* op) {
     if (_sm_expr1) goto L1;
     goto L2;
     L1:;
-    return __sm_stringTable[30];
+    *_sm_out = __sm_stringTable[30];
+    return;
     L2:;
     _sm_expr1 = _sm_when2_n == 1;
     if (_sm_expr1) goto L8;
@@ -2269,7 +2271,8 @@ Str ns1_classify(Str* op) {
     if (_sm_expr1) goto L4;
     goto L5;
     L4:;
-    return __sm_stringTable[15];
+    *_sm_out = __sm_stringTable[15];
+    return;
     L5:;
     _sm_expr1 = _sm_when2_n == 2;
     if (_sm_expr1) goto L15;
@@ -2286,7 +2289,8 @@ Str ns1_classify(Str* op) {
     if (_sm_expr1) goto L12;
     goto L13;
     L12:;
-    return __sm_stringTable[12];
+    *_sm_out = __sm_stringTable[12];
+    return;
     L13:;
     _sm_expr1 = _sm_when2_n == 1;
     if (_sm_expr1) goto L23;
@@ -2319,7 +2323,8 @@ Str ns1_classify(Str* op) {
     if (_sm_expr1) goto L18;
     goto L19;
     L18:;
-    return __sm_stringTable[9];
+    *_sm_out = __sm_stringTable[9];
+    return;
     L19:;
     _sm_expr1 = _sm_when2_n == 2;
     if (_sm_expr1) goto L30;
@@ -2329,12 +2334,14 @@ Str ns1_classify(Str* op) {
     if (_sm_expr1) goto L28;
     goto L29;
     L28:;
-    return __sm_stringTable[34];
+    *_sm_out = __sm_stringTable[34];
+    return;
     L29:;
-    return __sm_stringTable[32];
+    *_sm_out = __sm_stringTable[32];
+    return;
 }
 // stress/strings/src/main.kt
-Str ns1_classifyPtr(Str* op) {
+void ns1_classifyPtr(Str* _sm_out, Str* op) {
     Str* _sm_base1;
     Span<Char> _sm_when3_v;
     Int _sm_when3_n;
@@ -2354,7 +2361,8 @@ Str ns1_classifyPtr(Str* op) {
     if (_sm_expr1) goto L1;
     goto L2;
     L1:;
-    return __sm_stringTable[8];
+    *_sm_out = __sm_stringTable[8];
+    return;
     L2:;
     _sm_expr1 = _sm_when3_n == 2;
     if (_sm_expr1) goto L9;
@@ -2371,12 +2379,14 @@ Str ns1_classifyPtr(Str* op) {
     if (_sm_expr1) goto L6;
     goto L7;
     L6:;
-    return __sm_stringTable[56];
+    *_sm_out = __sm_stringTable[56];
+    return;
     L7:;
-    return __sm_stringTable[32];
+    *_sm_out = __sm_stringTable[32];
+    return;
 }
 // stress/strings/src/main.kt
-Str ns1_viewKind(Span<Char> v) {
+void ns1_viewKind(Str* _sm_out, Span<Char> v) {
     Span<Char> _sm_when4_v;
     Int _sm_when4_n;
     Bool _sm_expr1;
@@ -2400,7 +2410,8 @@ Str ns1_viewKind(Span<Char> v) {
     if (_sm_expr1) goto L1;
     goto L2;
     L1:;
-    return __sm_stringTable[20];
+    *_sm_out = __sm_stringTable[20];
+    return;
     L2:;
     _sm_expr1 = _sm_when4_n == 2;
     if (_sm_expr1) goto L9;
@@ -2410,12 +2421,14 @@ Str ns1_viewKind(Span<Char> v) {
     if (_sm_expr1) goto L7;
     goto L8;
     L7:;
-    return __sm_stringTable[42];
+    *_sm_out = __sm_stringTable[42];
+    return;
     L8:;
-    return __sm_stringTable[85];
+    *_sm_out = __sm_stringTable[85];
+    return;
 }
 // stress/strings/src/main.kt
-Str ns1_fixed(Str* op) {
+void ns1_fixed(Str* _sm_out, Str* op) {
     Str _sm_base1;
     Bool _sm_expr1;
     _sm_base1 = *(op);
@@ -2423,9 +2436,11 @@ Str ns1_fixed(Str* op) {
     if (_sm_expr1) goto L1;
     goto L2;
     L1:;
-    return __sm_stringTable[38];
+    *_sm_out = __sm_stringTable[38];
+    return;
     L2:;
-    return __sm_stringTable[32];
+    *_sm_out = __sm_stringTable[32];
+    return;
 }
 // stress/strings/src/main.kt
 Int ns1_partWhenStrings() {
@@ -2453,7 +2468,7 @@ Int ns1_partWhenStrings() {
     __sm_catP = __sm_catP + op.size();
     std::memcpy(__sm_catP, " -> ", 4);
     _sm_base2 = &op;
-    _sm_expr4 = ns1_classify(_sm_base2);
+    ns1_classify(&_sm_expr4, _sm_base2);
     _sm_expr5.resize(_sm_expr3.size() + _sm_expr4.size());
     __sm_catP = simse_str_data(&_sm_expr5);
     std::memcpy(__sm_catP, _sm_expr3.data(), _sm_expr3.size());
@@ -2462,13 +2477,13 @@ Int ns1_partWhenStrings() {
     simse_println((_sm_expr5), stdout);
     goto L1;
     L2:;
-    _sm_expr3 = ns1_viewKind(__sm_stringTable[91]);
+    ns1_viewKind(&_sm_expr3, __sm_stringTable[91]);
     _sm_expr4.resize(1 + _sm_expr3.size());
     __sm_catP = simse_str_data(&_sm_expr4);
     std::memcpy(__sm_catP, _sm_expr3.data(), _sm_expr3.size());
     __sm_catP = __sm_catP + _sm_expr3.size();
     *__sm_catP = (char) (' ');
-    _sm_expr8 = ns1_viewKind(__sm_stringTable[72]);
+    ns1_viewKind(&_sm_expr8, __sm_stringTable[72]);
     _sm_expr10.resize(1 + _sm_expr4.size() + _sm_expr8.size());
     __sm_catP = simse_str_data(&_sm_expr10);
     std::memcpy(__sm_catP, _sm_expr4.data(), _sm_expr4.size());
@@ -2476,7 +2491,7 @@ Int ns1_partWhenStrings() {
     std::memcpy(__sm_catP, _sm_expr8.data(), _sm_expr8.size());
     __sm_catP = __sm_catP + _sm_expr8.size();
     *__sm_catP = (char) (' ');
-    _sm_expr11 = ns1_viewKind(__sm_stringTable[49]);
+    ns1_viewKind(&_sm_expr11, __sm_stringTable[49]);
     _sm_expr12.resize(_sm_expr10.size() + _sm_expr11.size());
     __sm_catP = simse_str_data(&_sm_expr12);
     std::memcpy(__sm_catP, _sm_expr10.data(), _sm_expr10.size());
@@ -2498,7 +2513,7 @@ Int ns1_partWhenStrings() {
     std::memcpy(__sm_catP, " ~ ", 3);
     _sm_expr16 = makeRef<std::remove_cvref_t<decltype((word))>>(word);
     _sm_base4 = (_sm_expr16).get();
-    _sm_expr4 = ns1_classifyPtr(_sm_base4);
+    ns1_classifyPtr(&_sm_expr4, _sm_base4);
     _sm_expr18.resize(_sm_expr3.size() + _sm_expr4.size());
     __sm_catP = simse_str_data(&_sm_expr18);
     std::memcpy(__sm_catP, _sm_expr3.data(), _sm_expr3.size());
@@ -2509,7 +2524,7 @@ Int ns1_partWhenStrings() {
     L4:;
     _sm_base6 = __sm_stringTable[41];
     _sm_base5 = &_sm_base6;
-    _sm_expr3 = ns1_fixed(_sm_base5);
+    ns1_fixed(&_sm_expr3, _sm_base5);
     _sm_expr4.resize(1 + _sm_expr3.size());
     __sm_catP = simse_str_data(&_sm_expr4);
     std::memcpy(__sm_catP, _sm_expr3.data(), _sm_expr3.size());
@@ -2517,7 +2532,7 @@ Int ns1_partWhenStrings() {
     *__sm_catP = (char) (' ');
     _sm_base8 = __sm_stringTable[32];
     _sm_base7 = &_sm_base8;
-    _sm_expr8 = ns1_fixed(_sm_base7);
+    ns1_fixed(&_sm_expr8, _sm_base7);
     _sm_expr22.resize(_sm_expr4.size() + _sm_expr8.size());
     __sm_catP = simse_str_data(&_sm_expr22);
     std::memcpy(__sm_catP, _sm_expr4.data(), _sm_expr4.size());

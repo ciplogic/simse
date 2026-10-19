@@ -619,17 +619,17 @@ Int ns1_bump(ns1_CounterHello* self);
 Int ns1_partHello();
 Int ns1_apply(Func<Int(Int)> f, Int value);
 Int ns1_countIf(List<Int>* items, Func<Bool(Int)> predicate);
-Func<Int(Int)> ns1_makeAdder();
+void ns1_makeAdder(Func<Int(Int)>* _sm_out);
 Int ns1_partLambdas();
-Str ns1_label(ns1_Color c);
-Str ns1_describe(Int n);
+void ns1_label(Str* _sm_out, ns1_Color c);
+void ns1_describe(Str* _sm_out, Int n);
 Ref<ns1_Box> ns1_maybeRef(Bool flag);
 ns1_Box* ns1_maybePointer(Ref<ns1_Box> box, Bool flag);
 Int ns1_partLanguageTour();
-Opt<Int> ns1_half(Int n);
-Res<Str> ns1_labelOptionalResult(Int n);
-Res<Int> ns1_longError();
-Res<Int> ns1_echo(Res<Int>* r);
+void ns1_half(Opt<Int>* _sm_out, Int n);
+void ns1_labelOptionalResult(Res<Str>* _sm_out, Int n);
+void ns1_longError(Res<Int>* _sm_out);
+void ns1_echo(Res<Int>* _sm_out, Res<Int>* r);
 Int ns1_partOptionalResult();
 void ns1_bump(Int* value);
 void ns1_bumpCell(ns1_Cell* cell);
@@ -640,8 +640,8 @@ Int ns1_twice(ns1_CounterReceiverShapes* self);
 ns1_CounterReceiverShapes* ns1_self(ns1_CounterReceiverShapes* self);
 void ns1_bumpTwice(ns1_CounterReceiverShapes* counter);
 Int ns1_partReceiverShapes();
-Str ns1_mirror(Str* a, Ref<Str> b);
-Str ns1_parcel(Str* after, List<Str>* items);
+void ns1_mirror(Str* _sm_out, Str* a, Ref<Str> b);
+void ns1_parcel(Str* _sm_out, Str* after, List<Str>* items);
 Int ns1_partRtlSimse();
 Bool ns1_isEmpty(ns1_Shell* self);
 Str ns1_describeShapes(Str* self);
@@ -1805,12 +1805,13 @@ Int ns1_countIf(List<Int>* items, Func<Bool(Int)> predicate) {
     return count;
 }
 // stress/objects/src/main.kt
-Func<Int(Int)> ns1_makeAdder() {
+void ns1_makeAdder(Func<Int(Int)>* _sm_out) {
     ns1_makeAdder_closure1 _sm_base1;
     Int factor;
     factor = 10;
     _sm_base1 = ns1_makeAdder_closure1{factor};
-    return _sm_base1;
+    *_sm_out = _sm_base1;
+    return;
 }
 // stress/objects/src/main.kt
 Int ns1_partLambdas() {
@@ -1829,7 +1830,7 @@ Int ns1_partLambdas() {
     _sm_base1 = ns1_partLambdas_closure2{};
     _sm_expr3 = ns1_apply(_sm_base1, 41);
     simse_println((_sm_expr3), stdout);
-    add10 = ns1_makeAdder();
+    ns1_makeAdder(&add10);
     _sm_expr4 = add10(5);
     simse_println((_sm_expr4), stdout);
     items = List<Int>();
@@ -1851,7 +1852,7 @@ Int ns1_partLambdas() {
     return 0;
 }
 // stress/objects/src/main.kt
-Str ns1_label(ns1_Color c) {
+void ns1_label(Str* _sm_out, ns1_Color c) {
     ns1_Color _sm_expr1;
     Bool _sm_expr2;
     _sm_expr1 = ns1_Color::Red;
@@ -1859,33 +1860,39 @@ Str ns1_label(ns1_Color c) {
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    return __sm_stringTable[26];
+    *_sm_out = __sm_stringTable[26];
+    return;
     L2:;
     _sm_expr1 = ns1_Color::Green;
     _sm_expr2 = c == _sm_expr1;
     if (_sm_expr2) goto L4;
     goto L5;
     L4:;
-    return __sm_stringTable[10];
+    *_sm_out = __sm_stringTable[10];
+    return;
     L5:;
-    return __sm_stringTable[12];
+    *_sm_out = __sm_stringTable[12];
+    return;
 }
 // stress/objects/src/main.kt
-Str ns1_describe(Int n) {
+void ns1_describe(Str* _sm_out, Int n) {
     Bool _sm_expr1;
     _sm_expr1 = n == 0;
     if (_sm_expr1) goto L1;
     goto L2;
     L1:;
-    return __sm_stringTable[22];
+    *_sm_out = __sm_stringTable[22];
+    return;
     L2:;
     _sm_expr1 = n == 1;
     if (_sm_expr1) goto L4;
     goto L5;
     L4:;
-    return __sm_stringTable[25];
+    *_sm_out = __sm_stringTable[25];
+    return;
     L5:;
-    return __sm_stringTable[19];
+    *_sm_out = __sm_stringTable[19];
+    return;
 }
 // stress/objects/src/main.kt
 Ref<ns1_Box> ns1_maybeRef(Bool flag) {
@@ -1927,23 +1934,23 @@ Int ns1_partLanguageTour() {
     Opt<Float64> fraction;
     Int8 small;
     _sm_base1 = ns1_Color::Red;
-    _sm_expr1 = ns1_label(_sm_base1);
+    ns1_label(&_sm_expr1, _sm_base1);
     simse_println((_sm_expr1), stdout);
     _sm_base2 = ns1_Color::Green;
-    _sm_expr2 = ns1_label(_sm_base2);
+    ns1_label(&_sm_expr2, _sm_base2);
     simse_println((_sm_expr2), stdout);
     _sm_base3 = ns1_Color::Blue;
-    _sm_expr3 = ns1_label(_sm_base3);
+    ns1_label(&_sm_expr3, _sm_base3);
     simse_println((_sm_expr3), stdout);
-    _sm_expr4 = ns1_describe(0);
+    ns1_describe(&_sm_expr4, 0);
     simse_println((_sm_expr4), stdout);
-    _sm_expr5 = ns1_describe(5);
+    ns1_describe(&_sm_expr5, 5);
     simse_println((_sm_expr5), stdout);
     _sm_base4 = ns1_Color::Green;
     _sm_expr6 = static_cast<Int>(_sm_base4);
     simse_println((_sm_expr6), stdout);
     parsed = ns1_simse_Color_fromInt(4);
-    _sm_expr7 = ns1_label(parsed);
+    ns1_label(&_sm_expr7, parsed);
     simse_println((_sm_expr7), stdout);
     _sm_expr8 = ns1_simse_Color_fromInt(5);
     _sm_expr9 = static_cast<Int>(_sm_expr8);
@@ -2057,7 +2064,7 @@ Int ns1_partLanguageTour() {
     return 0;
 }
 // stress/objects/src/main.kt
-Opt<Int> ns1_half(Int n) {
+void ns1_half(Opt<Int>* _sm_out, Int n) {
     Int _sm_expr1, _sm_expr4;
     Bool _sm_expr2;
     Opt<Int> _sm_expr3;
@@ -2067,14 +2074,16 @@ Opt<Int> ns1_half(Int n) {
     goto L2;
     L1:;
     _sm_expr3 = simse_optNone<Int>();
-    return _sm_expr3;
+    *_sm_out = _sm_expr3;
+    return;
     L2:;
     _sm_expr4 = n / 2;
     _sm_expr3 = simse_optSome<Int>(_sm_expr4);
-    return _sm_expr3;
+    *_sm_out = _sm_expr3;
+    return;
 }
 // stress/objects/src/main.kt
-Res<Str> ns1_labelOptionalResult(Int n) {
+void ns1_labelOptionalResult(Res<Str>* _sm_out, Int n) {
     Str* _sm_base1;
     Str _sm_base2;
     Bool _sm_expr1;
@@ -2086,23 +2095,26 @@ Res<Str> ns1_labelOptionalResult(Int n) {
     _sm_base2 = __sm_stringTable[40];
     _sm_base1 = &_sm_base2;
     _sm_expr2 = simse_resErr<Str>(_sm_base1);
-    return _sm_expr2;
+    *_sm_out = _sm_expr2;
+    return;
     L2:;
     _sm_expr2 = simse_resOk<Str>(__sm_stringTable[5]);
-    return _sm_expr2;
+    *_sm_out = _sm_expr2;
+    return;
 }
 // stress/objects/src/main.kt
-Res<Int> ns1_longError() {
+void ns1_longError(Res<Int>* _sm_out) {
     Str* _sm_base1;
     Str _sm_base2;
     Res<Int> _sm_expr1;
     _sm_base2 = __sm_stringTable[0];
     _sm_base1 = &_sm_base2;
     _sm_expr1 = simse_resErr<Int>(_sm_base1);
-    return _sm_expr1;
+    *_sm_out = _sm_expr1;
+    return;
 }
 // stress/objects/src/main.kt
-Res<Int> ns1_echo(Res<Int>* r) {
+void ns1_echo(Res<Int>* _sm_out, Res<Int>* r) {
     Str* _sm_base1, * _sm_base2;
     Int _sm_base3;
     Res<Int> copy, _sm_expr3;
@@ -2116,11 +2128,13 @@ Res<Int> ns1_echo(Res<Int>* r) {
     _sm_base2 = simse_addressOf(copy.Error);
     _sm_base1 = _sm_base2;
     _sm_expr3 = simse_resErr<Int>(_sm_base1);
-    return _sm_expr3;
+    *_sm_out = _sm_expr3;
+    return;
     L2:;
     _sm_base3 = copy.Value;
     _sm_expr3 = simse_resOk<Int>(_sm_base3);
-    return _sm_expr3;
+    *_sm_out = _sm_expr3;
+    return;
 }
 // stress/objects/src/main.kt
 Int ns1_partOptionalResult() {
@@ -2138,10 +2152,10 @@ Int ns1_partOptionalResult() {
     empty = Opt<Int>();
     _sm_expr1 = simse_optHasValue(simse_addressOf(empty));
     simse_println((_sm_expr1), stdout);
-    found = ns1_half(8);
+    ns1_half(&found, 8);
     _sm_expr2 = simse_optValue(simse_addressOf(found));
     simse_println((_sm_expr2), stdout);
-    found = ns1_half(9);
+    ns1_half(&found, 9);
     _sm_expr3 = simse_optHasValue(simse_addressOf(found));
     simse_println((_sm_expr3), stdout);
     found = simse_optSome<Int>(3);
@@ -2158,21 +2172,21 @@ Int ns1_partOptionalResult() {
     _sm_expr8 = simse_optValue(simse_addressOf(copy));
     simse_println((_sm_expr8), stdout);
     _sm_expr9 = -1;
-    bad = ns1_labelOptionalResult(_sm_expr9);
+    ns1_labelOptionalResult(&bad, _sm_expr9);
     _sm_expr10 = simse_resHasValue(simse_addressOf(bad));
     simse_println((_sm_expr10), stdout);
     _sm_base1 = simse_addressOf(bad.Error);
     _sm_expr11 = simse_lenOf((*_sm_base1));
     simse_println((_sm_expr11), stdout);
-    good = ns1_labelOptionalResult(7);
+    ns1_labelOptionalResult(&good, 7);
     _sm_expr12 = simse_resHasValue(simse_addressOf(good));
     simse_println((_sm_expr12), stdout);
     _sm_base2 = good.Value;
     simse_println((_sm_base2), stdout);
     counts = List<Opt<Int>>();
-    _sm_expr13 = ns1_half(4);
+    ns1_half(&_sm_expr13, 4);
     simse_list_append(counts, _sm_expr13);
-    _sm_expr14 = ns1_half(5);
+    ns1_half(&_sm_expr14, 5);
     simse_list_append(counts, _sm_expr14);
     _sm_base3 = simse_addressOf(counts[0]);
     _sm_expr15 = simse_optValue(_sm_base3);
@@ -2180,16 +2194,16 @@ Int ns1_partOptionalResult() {
     _sm_base4 = simse_addressOf(counts[1]);
     _sm_expr16 = simse_optHasValue(_sm_base4);
     simse_println((_sm_expr16), stdout);
-    failed = ns1_longError();
+    ns1_longError(&failed);
     _sm_expr17 = simse_resHasValue(simse_addressOf(failed));
     simse_println((_sm_expr17), stdout);
     _sm_base5 = &failed;
-    again = ns1_echo(_sm_base5);
+    ns1_echo(&again, _sm_base5);
     _sm_base6 = again.Error;
     simse_println((_sm_base6), stdout);
     _sm_expr18 = simse_resOk<Int>(9);
     _sm_base7 = &_sm_expr18;
-    _sm_expr19 = ns1_echo(_sm_base7);
+    ns1_echo(&_sm_expr19, _sm_base7);
     _sm_expr20 = _sm_expr19.Value;
     simse_println((_sm_expr20), stdout);
     return 0;
@@ -2312,7 +2326,7 @@ Int ns1_partReceiverShapes() {
     return 0;
 }
 // stress/objects/src/main.kt
-Str ns1_mirror(Str* a, Ref<Str> b) {
+void ns1_mirror(Str* _sm_out, Str* a, Ref<Str> b) {
     Char* __sm_catP;
     Str _sm_base2, _sm_base3, _sm_expr1;
     _sm_base2 = *(a);
@@ -2328,10 +2342,11 @@ Str ns1_mirror(Str* a, Ref<Str> b) {
     std::memcpy(__sm_catP, _sm_base3.data(), _sm_base3.size());
     __sm_catP = __sm_catP + _sm_base3.size();
     *__sm_catP = (char) (']');
-    return _sm_expr1;
+    *_sm_out = _sm_expr1;
+    return;
 }
 // stress/objects/src/main.kt
-Str ns1_parcel(Str* after, List<Str>* items) {
+void ns1_parcel(Str* _sm_out, Str* after, List<Str>* items) {
     Char* __sm_catP;
     Str out, _sm_expr3, _sm_expr4;
     Int i, _sm_expr1;
@@ -2356,7 +2371,8 @@ Str ns1_parcel(Str* after, List<Str>* items) {
     i = i + 1;
     goto L1;
     L2:;
-    return out;
+    *_sm_out = out;
+    return;
 }
 // stress/objects/src/main.kt
 Int ns1_partRtlSimse() {
@@ -2438,7 +2454,7 @@ Int ns1_partRtlSimse() {
     borrowed = __sm_stringTable[17];
     ptr = &borrowed;
     boxed = makeRef<std::remove_cvref_t<decltype((borrowed))>>(borrowed);
-    _sm_expr17 = ns1_mirror(ptr, boxed);
+    ns1_mirror(&_sm_expr17, ptr, boxed);
     simse_println((_sm_expr17), stdout);
     _sm_base13 = *(ptr);
     _sm_base14 = *(boxed);
@@ -2454,7 +2470,7 @@ Int ns1_partRtlSimse() {
     _sm_base20 = *(boxed);
     _sm_base18 = List<Str>{_sm_base19, _sm_base20, __sm_stringTable[18]};
     _sm_base21 = &_sm_base18;
-    _sm_expr20 = ns1_parcel(_sm_base16, _sm_base21);
+    ns1_parcel(&_sm_expr20, _sm_base16, _sm_base21);
     simse_println((_sm_expr20), stdout);
     return 0;
 }
