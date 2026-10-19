@@ -15,6 +15,7 @@ Read the one file that matches the task, then the design doc it points at:
 | build, run, test, debug | [`ai/building.md`](ai/building.md) |
 | what works, what is deferred | [`ai/status.md`](ai/status.md) |
 | change the compiler | [`ai/contributing.md`](ai/contributing.md) |
+| scaffold or manage a Simse project (`dx` / `smt`) | [`ai/dx.md`](ai/dx.md) |
 | per-subsystem design | [`impl_specs/`](impl_specs/) — start at `transpilation.md`; [`specs/`](specs/) is the normative language |
 | history: what moved and what it cost | [`impl_specs/capability-matrix.md`](impl_specs/capability-matrix.md) |
 
