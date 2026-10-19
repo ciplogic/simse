@@ -464,7 +464,7 @@ Opt<T> simse_optNone();
 template <class T>
 Res<T> simse_resOk(T value);
 template <class T>
-Res<T> simse_resErr(Str message);
+Res<T> simse_resErr(Str* message);
 void initByValue(Str* self);
 void set(Str* self, Int index, Char value);
 void ns1_initByValue(ns1_Point* self, Int x, Int y);
@@ -533,10 +533,12 @@ Res<T> simse_resOk(T value) {
     return result;
 }
 template <class T>
-Res<T> simse_resErr(Str message) {
+Res<T> simse_resErr(Str* message) {
+    Str _sm_base1;
     Res<T> result;
     initByValue(simse_addressOf(result));
-    setError(simse_addressOf(result), message);
+    _sm_base1 = *(message);
+    setError(simse_addressOf(result), _sm_base1);
     return result;
 }
 void initByValue(Str* self) {

@@ -542,7 +542,7 @@ Opt<T> simse_optNone();
 template <class T>
 Res<T> simse_resOk(T value);
 template <class T>
-Res<T> simse_resErr(Str message);
+Res<T> simse_resErr(Str* message);
 template <class T>
 struct Span_iterValues_yieldable {
     Int branch{};
@@ -998,10 +998,12 @@ Res<T> simse_resOk(T value) {
     return result;
 }
 template <class T>
-Res<T> simse_resErr(Str message) {
+Res<T> simse_resErr(Str* message) {
+    Str _sm_base1;
     Res<T> result;
     initByValue(simse_addressOf(result));
-    setError(simse_addressOf(result), message);
+    _sm_base1 = *(message);
+    setError(simse_addressOf(result), _sm_base1);
     return result;
 }
 template <class T>
@@ -1265,13 +1267,17 @@ Opt<Int> ns1_pick(Int i) {
 }
 // stress/machines/src/main.kt
 Res<Str> ns1_parse(Int n) {
+    Str* _sm_base1;
+    Str _sm_base2;
     Bool _sm_expr1;
     Res<Str> _sm_expr2;
     _sm_expr1 = n < 0;
     if (_sm_expr1) goto L1;
     goto L2;
     L1:;
-    _sm_expr2 = simse_resErr<Str>(__sm_stringTable[7]);
+    _sm_base2 = __sm_stringTable[7];
+    _sm_base1 = &_sm_base2;
+    _sm_expr2 = simse_resErr<Str>(_sm_base1);
     return _sm_expr2;
     L2:;
     _sm_expr2 = simse_resOk<Str>(__sm_stringTable[9]);

@@ -5415,3 +5415,35 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   the `Func<>` wants the pointer). The three gaps are enumerated for the follow-up that
   lands the unlock with them.
   Verified: `bun tools/iterate.js --full` - **112/112** and both fixed points.
+
+- **Both matcher branches prove borrow-clean: the split is the proof.** The previous
+  entry's "not landed" is now half-landed, the half the glob sample needs. Two changes.
+  (1) The generated union surface (`getTypeOf`, `get<Field>`, `set<Field>`, `initByValue`,
+  `isOfType`, `setNone`) carries `IsBorrow` - sound for the parameters the fixpoint asks
+  about (the getters take nothing or a tag; the setters copy *into* the arm; a receiver is
+  never borrowed, the emitter passes `T* self` regardless). Without the mark every one of
+  them blocked the fixpoint by name, and every tag-dispatching function was borrow-dirty
+  by association. (2) The arm-constructor call whose C++ is an overload set (no single
+  Simse target to convert through) spells a name held as `*T` by the auto-borrow rewrite
+  as an explicit deref - the value read the arm copies in; raw, `err2<T>(message: Str)`
+  reached `initByValue(U*, Str)` holding a `Str*`.
+  With those, `modules/glob` restructured into the shape the proof wants:
+  `GlobParts.matchesText(text)` holds the walk (anchors as plain `Str` with `""` the
+  `*`-open marker - an empty literal segment matches everywhere, so the sentinel is free,
+  and no `Opt` surface calls remain in the hot path), and `Glob.matches` is the tag
+  dispatcher. The method names differ *on purpose*: the fixpoint is name-keyed, so a
+  dispatcher calling another method of the same name makes the name depend on itself -
+  never provable. Distinct names prove independently, and the borrow report shows both:
+  `borrow+ matches text`, `borrow+ matchesText text`; the emitted chain is
+  `matches(Glob*, Str*)` -> `matchesText(GlobParts*, Str*)` -> `findFrom(text, place, at)`,
+  with the middles walk a pointer machine - no copy, no allocation, anywhere between the
+  caller's element and the scans. The compiler self-hosts with the mark (the only
+  compiler-side callers of generated methods are `optres.kt`'s own bodies, which the mark
+  is what makes provable), and the corpus needed only golden refreshes (`unions` gained
+  the deref spelling; `json`/`machines`/`native-class`/`objects`/`protocols` and five more
+  gained borrowed signatures additively).
+  Still open, from the previous entry: the `Opt`/`Res` member-surface alias (`hasValue`
+  -> the `simse_*` names) - the unlock with the wider blast radius, and its two remaining
+  extractor gaps (calls through callable values; ambiguous native overloads) are the
+  follow-up.
+  Verified: `bun tools/iterate.js --full` - **112/112** and both fixed points.

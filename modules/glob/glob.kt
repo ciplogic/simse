@@ -10,13 +10,17 @@
 // The compiled shape is a **tagged union** - the pattern's own shape is the tag, and the
 // matcher reads the tag first, then runs that shape's rule:
 //
-//   - `Exact(Str)`   - the pattern held no `*` at all: the match is one `==` (the
-//                      exact-word specialization).
-//   - `Parts`        - everything else, as `GlobParts`: the anchored ends (`prefix` /
-//                      `suffix`, `Opt<Str>`, absent where the pattern is `*`-open) and the
-//                      middle segments between them (`middles`, empty segments dropped:
-//                      `a**b` is `a*b`), with `minLen` - the segments' total - for the
-//                      reject that runs before any byte is compared.
+//   - `Exact(Str)` - the pattern held no `*` at all: the match is one `==` (the
+//                   exact-word specialization).
+//   - `Parts`      - everything else, as `GlobParts`: the anchored ends and the middle
+//                   segments between them, with `minLen` for the reject that runs before
+//                   any byte is compared.
+//
+// The split is also the borrow proof: `Glob.matches` is a thin dispatcher whose only calls
+// are the generated tag getters and `GlobParts.matches`, and `GlobParts.matches` is a body
+// that only reads - the anchors and segments it holds, and the text through the prelude's
+// `borrow fun` scans (`startsWith`, `findFrom`, `endsWith`) - so both prove borrow-clean
+// and the text is never copied anywhere in the chain.
 //
 // The walk a `Parts` rule runs: one anchored `startsWith`, then each middle once, left to
 // right, by `findFrom` - a `memchr` jump to the segment's first byte, then one `memcmp`
@@ -32,21 +36,66 @@
 package glob
 
 // The segments of a `*`-carrying pattern: the anchored ends and the middle walk between
-// them. `prefix`/`suffix` are absent where the pattern is `*`-open on that side; `minLen`
-// is the segments' total, the cheapest reject there is.
-data class GlobParts(var prefix: Opt<Str>, var suffix: Opt<Str>, var middles: List<Str>, var minLen: Int) {
+// them. An anchor of `""` is the pattern being `*`-open on that side (an empty literal
+// segment matches everywhere, so the empty string is free as the marker); `minLen` is the
+// segments' total, the cheapest reject there is.
+data class GlobParts(var prefix: Str, var suffix: Str, var middles: List<Str>, var minLen: Int) {
+    // Whether `text` matches these segments. `at` is the first byte the remaining segments
+    // may occupy, `end` the first byte they may not (the suffix's wall); each middle must
+    // fit wholly before the wall, so the suffix always has its place.
+    //
+    // The body only reads: the fields it holds, and the text through the prelude's
+    // borrow-clean scans - the middles walk binds each segment's place (`*mid`), so a
+    // segment is scanned where it lies in the list. That is what lets the auto-borrow
+    // rewrite take `text` as `*Str`, and with it the whole match chain copy-free.
+    //
+    // The name is not `matches` on purpose: the borrow fixpoint is name-keyed, and a
+    // dispatcher that calls another method of the same name would make the name depend on
+    // itself - never provable, and with it neither method's `text` borrowed. Distinct
+    // names are what let both halves prove independently.
+    fun matchesText(text: Str): Bool {
+        if (text.size() < this.minLen) {
+            return false
+        }
+        var at: Int = 0
+        if (this.prefix.size() > 0) {
+            if (!text.startsWith(this.prefix)) {
+                return false
+            }
+            at = this.prefix.size()
+        }
+        var end: Int = text.size()
+        if (this.suffix.size() > 0) {
+            end = end - this.suffix.size()
+            if (at > end) {
+                return false
+            }
+        }
+        for (*mid in this.middles) {
+            val found: Int = text.findFrom(*mid, at)
+            if (found < 0) {
+                return false
+            }
+            val after: Int = found + mid.size()
+            if (after > end) {
+                return false
+            }
+            at = after
+        }
+        if (this.suffix.size() > 0) {
+            return text.endsWith(this.suffix)
+        }
+        return true
+    }
 }
 
 union class Glob(var Exact: Str, var Parts: GlobParts) {
-    // Whether `text` matches the compiled pattern. The tag decides the rule: an exact
-    // word is one view `==` (both operands are places - the arm's storage and the
-    // borrowed text - so nothing is copied), and a `Parts` rule walks. `at` is the first
-    // byte the remaining segments may occupy, `end` the first byte they may not (the
-    // suffix's wall); each middle must fit wholly before the wall, so the suffix always
-    // has its place.
+    // The tag decides the rule: an exact word is one view `==` (both operands are places -
+    // the arm's storage and the borrowed text - so nothing is copied), and a `Parts`
+    // pattern's rule lives in `GlobParts.matches`, whose own borrow proof this dispatcher
+    // inherits. `None` (`Glob()`) matches nothing: `globCompile` never builds one.
     fun matches(text: Str): Bool {
-        val tag: SmGlobTypes = this.getTypeOf()
-        when (tag) {
+        when (this.getTypeOf()) {
             SmGlobTypes.Exact -> {
                 val word: *Str = this.getExact()
                 return text == *word
@@ -54,49 +103,10 @@ union class Glob(var Exact: Str, var Parts: GlobParts) {
 
             SmGlobTypes.Parts -> {
                 val parts: *GlobParts = this.getParts()
-                if (text.size() < parts.minLen) {
-                    return false
-                }
-                var at: Int = 0
-                if (parts.prefix.hasValue()) {
-                    // The arm's place, not a copy: `getValue` answers the live `Str`'s
-                    // address, `startsWith` borrows it (`borrow fun`), so the segment is
-                    // read where it lies - once compiled, never copied out per match.
-                    val head: *Str = parts.prefix.getValue()
-                    if (!text.startsWith(*head)) {
-                        return false
-                    }
-                    at = head.size()
-                }
-                var end: Int = text.size()
-                if (parts.suffix.hasValue()) {
-                    val tail: *Str = parts.suffix.getValue()
-                    end = end - tail.size()
-                    if (at > end) {
-                        return false
-                    }
-                }
-                for (*mid in parts.middles) {
-                    val found: Int = text.findFrom(*mid, at)
-                    if (found < 0) {
-                        return false
-                    }
-                    val after: Int = found + mid.size()
-                    if (after > end) {
-                        return false
-                    }
-                    at = after
-                }
-                if (parts.suffix.hasValue()) {
-                    val tail: *Str = parts.suffix.getValue()
-                    return text.endsWith(*tail)
-                }
-                return true
+                return parts.matchesText(text)
             }
 
             else -> {
-                // The `None` arm: `globCompile` never builds one, and a `Glob()` default
-                // matches nothing rather than guessing.
                 return false
             }
         }
@@ -115,21 +125,21 @@ fun globCompile(pattern: Str): Glob {
         return (owned)
     }
     val parts: List<Str> = pattern.split("*")
-    var prefix: Opt<Str> = Opt<Str>.none()
-    var suffix: Opt<Str> = Opt<Str>.none()
+    var prefix: Str = ""
+    var suffix: Str = ""
     var middles: List<Str> = List<Str>()
     var minLen: Int = 0
     var first: Int = 0
     var last: Int = parts.size() - 1
     if (pattern[0] != '*') {
         val head: Str = parts[0]
-        prefix = Opt<Str>.some(head)
+        prefix = head
         minLen = minLen + head.size()
         first = first + 1
     }
     if (pattern[pattern.size() - 1] != '*') {
         val tail: Str = parts[last]
-        suffix = Opt<Str>.some(tail)
+        suffix = tail
         minLen = minLen + tail.size()
         last = last - 1
     }
@@ -142,7 +152,7 @@ fun globCompile(pattern: Str): Glob {
         }
         i = i + 1
     }
-    return Glob(GlobParts(prefix, suffix, middles, minLen))
+    return (GlobParts(prefix, suffix, middles, minLen))
 }
 
 // The one-shot spelling: compile, match, drop. The compiled form is thrown away, so a

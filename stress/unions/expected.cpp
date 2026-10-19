@@ -1338,7 +1338,7 @@ Opt<T> simse_optNone();
 template <class T>
 Res<T> simse_resOk(T value);
 template <class T>
-Res<T> simse_resErr(Str message);
+Res<T> simse_resErr(Str* message);
 void initByValue(Str* self);
 Int strCountDigits(Int64 value);
 void strAddInt(Char* target, Int64 value, Int count);
@@ -1347,20 +1347,20 @@ void set(Str* self, Int index, Char value);
 Int ns1_doubled(ns1_WithMethod* self);
 Str ns1_label(ns1_DoubleOrFloat* u);
 Str ns1_tagged(ns1_DoubleOrFloat* u);
-Str ns1_labelSide(ns1_SideOrSide s);
+Str ns1_labelSide(ns1_SideOrSide* s);
 Str ns1_describe(ns1_DoubleOrFloat* self);
-Int ns1_strLen(ns1_IntOrStr u);
+Int ns1_strLen(ns1_IntOrStr* u);
 Str ns1_strKind(ns1_IntOrStr* u);
 ns1_IntOrStr ns1_mkStr();
 template <class T>
 ns1_Res2<T> ns1_ok2(T value);
 template <class T>
-ns1_Res2<T> ns1_err2(Str message);
+ns1_Res2<T> ns1_err2(Str* message);
 ns1_Res2<Str> ns1_okStr2();
 template <class T>
-Bool ns1_isOk2(ns1_Res2<T> r);
+Bool ns1_isOk2(ns1_Res2<T>* r);
 template <class T>
-T* ns1_optValue2(ns1_Opt2<T> o);
+T* ns1_optValue2(ns1_Opt2<T>* o);
 Int ns1_partUnionClass();
 Int ns1_partSameType();
 Int ns1_partManaged();
@@ -1527,10 +1527,12 @@ Res<T> simse_resOk(T value) {
     return result;
 }
 template <class T>
-Res<T> simse_resErr(Str message) {
+Res<T> simse_resErr(Str* message) {
+    Str _sm_base1;
     Res<T> result;
     initByValue(simse_addressOf(result));
-    setError(simse_addressOf(result), message);
+    _sm_base1 = *(message);
+    setError(simse_addressOf(result), _sm_base1);
     return result;
 }
 void initByValue(Str* self) {
@@ -1706,12 +1708,12 @@ Str ns1_tagged(ns1_DoubleOrFloat* u) {
     return out;
 }
 // stress/unions/src/main.kt
-Str ns1_labelSide(ns1_SideOrSide s) {
+Str ns1_labelSide(ns1_SideOrSide* s) {
     Str out;
     ns1_SmSideOrSideTypes _sm_when3, _sm_expr1;
     Bool _sm_expr2;
     out = __sm_stringTable[23];
-    _sm_when3 = ns1_getTypeOf(simse_addressOf(s));
+    _sm_when3 = ns1_getTypeOf(s);
     _sm_expr1 = ns1_SmSideOrSideTypes::L;
     _sm_expr2 = _sm_when3 == _sm_expr1;
     if (_sm_expr2) goto L1;
@@ -1747,11 +1749,11 @@ Str ns1_describe(ns1_DoubleOrFloat* self) {
     return _sm_expr2;
 }
 // stress/unions/src/main.kt
-Int ns1_strLen(ns1_IntOrStr u) {
+Int ns1_strLen(ns1_IntOrStr* u) {
     Str* s;
     Bool _sm_expr1;
     Int _sm_expr2;
-    s = ns1_getS(simse_addressOf(u));
+    s = ns1_getS(u);
     _sm_expr1 = s != nullptr;
     if (_sm_expr1) goto L1;
     goto L2;
@@ -1805,9 +1807,11 @@ ns1_Res2<T> ns1_ok2(T value) {
 }
 // stress/unions/src/main.kt
 template <class T>
-ns1_Res2<T> ns1_err2(Str message) {
+ns1_Res2<T> ns1_err2(Str* message) {
+    Str _sm_base1;
     ns1_Res2<T> _sm_ctor3;
-    ns1_initByValue(simse_addressOf(_sm_ctor3), message);
+    _sm_base1 = *message;
+    ns1_initByValue(simse_addressOf(_sm_ctor3), _sm_base1);
     return _sm_ctor3;
 }
 // stress/unions/src/main.kt
@@ -1820,18 +1824,18 @@ ns1_Res2<Str> ns1_okStr2() {
 }
 // stress/unions/src/main.kt
 template <class T>
-Bool ns1_isOk2(ns1_Res2<T> r) {
+Bool ns1_isOk2(ns1_Res2<T>* r) {
     ns1_SmRes2Types _sm_base1;
     Bool _sm_expr1;
     _sm_base1 = ns1_SmRes2Types::Value;
-    _sm_expr1 = ns1_isOfType(simse_addressOf(r), _sm_base1);
+    _sm_expr1 = ns1_isOfType(r, _sm_base1);
     return _sm_expr1;
 }
 // stress/unions/src/main.kt
 template <class T>
-T* ns1_optValue2(ns1_Opt2<T> o) {
+T* ns1_optValue2(ns1_Opt2<T>* o) {
     T* _sm_expr1;
-    _sm_expr1 = ns1_getValue(simse_addressOf(o));
+    _sm_expr1 = ns1_getValue(o);
     return _sm_expr1;
 }
 // stress/unions/src/main.kt
@@ -1845,7 +1849,8 @@ Int ns1_partUnionClass() {
     ns1_Left _sm_base18;
     ns1_SmSideOrSideTypes _sm_base19;
     ns1_Right _sm_base20;
-    ns1_SmMarkerTypes _sm_base21;
+    ns1_SideOrSide* _sm_base21;
+    ns1_SmMarkerTypes _sm_base22;
     Bool _sm_expr1, _sm_expr4, _sm_expr6, _sm_expr9, _sm_expr10, _sm_expr12, _sm_expr14, _sm_expr16,
         _sm_expr20, _sm_expr26, _sm_expr28;
     Int* _sm_expr5, * i;
@@ -1933,12 +1938,13 @@ Int ns1_partUnionClass() {
     simse_println((_sm_expr26), stdout);
     _sm_base20 = ns1_Right::R;
     ns1_setR(simse_addressOf(s), _sm_base20);
-    _sm_expr27 = ns1_labelSide(s);
+    _sm_base21 = &s;
+    _sm_expr27 = ns1_labelSide(_sm_base21);
     simse_println((_sm_expr27), stdout);
     ns1_Marker m;
     ns1_initByValue(simse_addressOf(m));
-    _sm_base21 = ns1_SmMarkerTypes::None;
-    _sm_expr28 = ns1_isOfType(simse_addressOf(m), _sm_base21);
+    _sm_base22 = ns1_SmMarkerTypes::None;
+    _sm_expr28 = ns1_isOfType(simse_addressOf(m), _sm_base22);
     simse_println((_sm_expr28), stdout);
     ns1_WithMethod w;
     ns1_initByValue(simse_addressOf(w), 4);
@@ -1995,9 +2001,9 @@ Int ns1_partSameType() {
 }
 // stress/unions/src/main.kt
 Int ns1_partManaged() {
-    ns1_IntOrStr* _sm_base1, * _sm_base6;
-    Int _sm_base2, _sm_base8, _sm_expr1, _sm_expr3, _sm_expr5, _sm_expr9, _sm_expr13;
-    Str _sm_base4, _sm_expr2, _sm_expr12;
+    ns1_IntOrStr* _sm_base1, * _sm_base2, * _sm_base3, * _sm_base4, * _sm_base8, * _sm_base10;
+    Int _sm_base5, _sm_base12, _sm_expr1, _sm_expr3, _sm_expr5, _sm_expr9, _sm_expr13;
+    Str _sm_base7, _sm_expr2, _sm_expr12;
     ns1_IntOrStr v, _sm_expr4;
     Int* _sm_expr6, * _sm_expr16;
     Str* _sm_expr7, * s2, * _sm_expr10;
@@ -2007,37 +2013,41 @@ Int ns1_partManaged() {
     ns1_IntOrList x;
     ns1_IntOrStr u;
     ns1_initByValue(simse_addressOf(u), __sm_stringTable[0]);
-    _sm_expr1 = ns1_strLen(u);
-    simse_println((_sm_expr1), stdout);
     _sm_base1 = &u;
-    _sm_expr2 = ns1_strKind(_sm_base1);
+    _sm_expr1 = ns1_strLen(_sm_base1);
+    simse_println((_sm_expr1), stdout);
+    _sm_base2 = &u;
+    _sm_expr2 = ns1_strKind(_sm_base2);
     simse_println((_sm_expr2), stdout);
     v = u;
-    _sm_expr3 = ns1_strLen(v);
+    _sm_base3 = &v;
+    _sm_expr3 = ns1_strLen(_sm_base3);
     simse_println((_sm_expr3), stdout);
     _sm_expr4 = ns1_mkStr();
-    _sm_expr5 = ns1_strLen(_sm_expr4);
+    _sm_base4 = &_sm_expr4;
+    _sm_expr5 = ns1_strLen(_sm_base4);
     simse_println((_sm_expr5), stdout);
     ns1_setI(simse_addressOf(u), 7);
     _sm_expr6 = ns1_getI(simse_addressOf(u));
-    _sm_base2 = *_sm_expr6;
-    simse_println((_sm_base2), stdout);
+    _sm_base5 = *_sm_expr6;
+    simse_println((_sm_base5), stdout);
     _sm_expr7 = ns1_getS(simse_addressOf(u));
     _sm_expr8 = _sm_expr7 != nullptr;
     simse_println((_sm_expr8), stdout);
     ns1_setS(simse_addressOf(u), __sm_stringTable[5]);
     s2 = ns1_getS(simse_addressOf(u));
-    _sm_base4 = *s2;
-    simse_println((_sm_base4), stdout);
+    _sm_base7 = *s2;
+    simse_println((_sm_base7), stdout);
     v = u;
-    _sm_expr9 = ns1_strLen(v);
+    _sm_base8 = &v;
+    _sm_expr9 = ns1_strLen(_sm_base8);
     simse_println((_sm_expr9), stdout);
     ns1_setNone(simse_addressOf(u));
     _sm_expr10 = ns1_getS(simse_addressOf(u));
     _sm_expr11 = _sm_expr10 != nullptr;
     simse_println((_sm_expr11), stdout);
-    _sm_base6 = &u;
-    _sm_expr12 = ns1_strKind(_sm_base6);
+    _sm_base10 = &u;
+    _sm_expr12 = ns1_strKind(_sm_base10);
     simse_println((_sm_expr12), stdout);
     numbers = List<Int>{1, 2, 3};
     ns1_IntOrList w;
@@ -2051,8 +2061,8 @@ Int ns1_partManaged() {
     simse_println((_sm_expr15), stdout);
     x = w;
     _sm_expr16 = ns1_getI(simse_addressOf(x));
-    _sm_base8 = *_sm_expr16;
-    simse_println((_sm_base8), stdout);
+    _sm_base12 = *_sm_expr16;
+    simse_println((_sm_base12), stdout);
     return 0;
 }
 // stress/unions/src/main.kt
@@ -2088,14 +2098,17 @@ ns1_DoubleOrFloat ns1_makeParen() {
 }
 // stress/unions/src/main.kt
 Int ns1_partUnionGenerics() {
-    Int _sm_base1, _sm_base2, _sm_base7, _sm_expr14, _sm_expr18, _sm_expr19;
-    Str _sm_base3, _sm_base4, _sm_base5, _sm_base9, _sm_base10, out;
+    ns1_Res2<Int>* _sm_base1, * _sm_base8, * _sm_base11, * _sm_base13;
+    Int _sm_base2, _sm_base3, _sm_base16, _sm_expr14, _sm_expr18, _sm_expr19;
+    Str* _sm_base4, * _sm_base6, * e2e, * later, * sv, * _sm_expr21, * _sm_expr23;
+    Str _sm_base5, _sm_base7, _sm_base9, _sm_base10, _sm_base12, _sm_base19, _sm_base21, out;
+    ns1_Opt2<Int>* _sm_base14;
+    ns1_Res2<Str>* _sm_base18, * _sm_base20;
     Res<Int> a, e;
     ns1_Res2<Int> b, e2;
     Bool _sm_expr1, _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr6, _sm_expr9, _sm_expr10, _sm_expr13,
         _sm_expr15, _sm_expr17, _sm_expr20, _sm_expr22;
     Int* bv, * _sm_expr12, * o2v, * _sm_expr16;
-    Str* e2e, * later, * sv, * _sm_expr21, * _sm_expr23;
     ns1_SmRes2Types _sm_expr5;
     Opt<Int> o, empty;
     List<Int> numbers;
@@ -2106,24 +2119,30 @@ Int ns1_partUnionGenerics() {
     b = ns1_ok2(7);
     _sm_expr1 = simse_resHasValue(simse_addressOf(a));
     simse_println((_sm_expr1), stdout);
-    _sm_expr2 = ns1_isOk2(b);
+    _sm_base1 = &b;
+    _sm_expr2 = ns1_isOk2(_sm_base1);
     simse_println((_sm_expr2), stdout);
-    _sm_base1 = a.Value;
-    simse_println((_sm_base1), stdout);
-    bv = ns1_getValue(simse_addressOf(b));
-    _sm_base2 = *bv;
+    _sm_base2 = a.Value;
     simse_println((_sm_base2), stdout);
-    e = simse_resErr<Int>(__sm_stringTable[19]);
-    e2 = ns1_err2<Int>(__sm_stringTable[19]);
+    bv = ns1_getValue(simse_addressOf(b));
+    _sm_base3 = *bv;
+    simse_println((_sm_base3), stdout);
+    _sm_base5 = __sm_stringTable[19];
+    _sm_base4 = &_sm_base5;
+    e = simse_resErr<Int>(_sm_base4);
+    _sm_base7 = __sm_stringTable[19];
+    _sm_base6 = &_sm_base7;
+    e2 = ns1_err2<Int>(_sm_base6);
     _sm_expr3 = simse_resHasValue(simse_addressOf(e));
     simse_println((_sm_expr3), stdout);
-    _sm_expr4 = ns1_isOk2(e2);
+    _sm_base8 = &e2;
+    _sm_expr4 = ns1_isOk2(_sm_base8);
     simse_println((_sm_expr4), stdout);
-    _sm_base3 = e.Error;
-    simse_println((_sm_base3), stdout);
+    _sm_base9 = e.Error;
+    simse_println((_sm_base9), stdout);
     e2e = ns1_getError(simse_addressOf(e2));
-    _sm_base4 = *e2e;
-    simse_println((_sm_base4), stdout);
+    _sm_base10 = *e2e;
+    simse_println((_sm_base10), stdout);
     out = __sm_stringTable[23];
     _sm_expr5 = ns1_SmRes2Types::Value;
     _sm_expr6 = b == _sm_expr5;
@@ -2145,18 +2164,21 @@ Int ns1_partUnionGenerics() {
     L6:;
     simse_println((out), stdout);
     ns1_setError(simse_addressOf(b), __sm_stringTable[10]);
-    _sm_expr9 = ns1_isOk2(b);
+    _sm_base11 = &b;
+    _sm_expr9 = ns1_isOk2(_sm_base11);
     simse_println((_sm_expr9), stdout);
     later = ns1_getError(simse_addressOf(b));
-    _sm_base5 = *later;
-    simse_println((_sm_base5), stdout);
+    _sm_base12 = *later;
+    simse_println((_sm_base12), stdout);
     ns1_Res2<Int> none2;
     ns1_initByValue(simse_addressOf(none2));
-    _sm_expr10 = ns1_isOk2(none2);
+    _sm_base13 = &none2;
+    _sm_expr10 = ns1_isOk2(_sm_base13);
     simse_println((_sm_expr10), stdout);
     ns1_Opt2<Int> _sm_expr11;
     ns1_initByValue(simse_addressOf(_sm_expr11));
-    _sm_expr12 = ns1_optValue2(_sm_expr11);
+    _sm_base14 = &_sm_expr11;
+    _sm_expr12 = ns1_optValue2(_sm_base14);
     _sm_expr13 = _sm_expr12 != nullptr;
     simse_println((_sm_expr13), stdout);
     o = simse_optSome<Int>(9);
@@ -2165,8 +2187,8 @@ Int ns1_partUnionGenerics() {
     _sm_expr14 = simse_optValue(simse_addressOf(o));
     simse_println((_sm_expr14), stdout);
     o2v = ns1_getValue(simse_addressOf(o2));
-    _sm_base7 = *o2v;
-    simse_println((_sm_base7), stdout);
+    _sm_base16 = *o2v;
+    simse_println((_sm_base16), stdout);
     empty = simse_optNone<Int>();
     ns1_Opt2<Int> empty2;
     ns1_initByValue(simse_addressOf(empty2));
@@ -2186,17 +2208,19 @@ Int ns1_partUnionGenerics() {
     _sm_expr19 = simse_lenOf((*lv));
     simse_println((_sm_expr19), stdout);
     collided = ns1_okStr2();
-    _sm_expr20 = ns1_isOk2(collided);
+    _sm_base18 = &collided;
+    _sm_expr20 = ns1_isOk2(_sm_base18);
     simse_println((_sm_expr20), stdout);
     _sm_expr21 = ns1_getValue(simse_addressOf(collided));
-    _sm_base9 = *_sm_expr21;
-    simse_println((_sm_base9), stdout);
+    _sm_base19 = *_sm_expr21;
+    simse_println((_sm_base19), stdout);
     ns1_setError(simse_addressOf(collided), __sm_stringTable[12]);
-    _sm_expr22 = ns1_isOk2(collided);
+    _sm_base20 = &collided;
+    _sm_expr22 = ns1_isOk2(_sm_base20);
     simse_println((_sm_expr22), stdout);
     _sm_expr23 = ns1_getError(simse_addressOf(collided));
-    _sm_base10 = *_sm_expr23;
-    simse_println((_sm_base10), stdout);
+    _sm_base21 = *_sm_expr23;
+    simse_println((_sm_base21), stdout);
     return 0;
 }
 // stress/unions/src/main.kt

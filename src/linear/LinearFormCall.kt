@@ -336,6 +336,21 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
         if (paramOffset + i < paramNodes.size()) {
             param = xmlChildPtr(paramNodes[paramOffset + i], AstNodeKind.Type)
         }
+        var argNode: AstXmlNode = argNodes[i]
+        if (xmlIsEmpty(param) && xmlIsEmpty(paramOwner) && calleeName == "initByValue"
+            && xmlKind(argNode) == AstNodeCategory.ExprName
+        ) {
+            // The union arm constructor's C++ is an overload set the C++ compiler resolves
+            // (one arm per field type) - no single Simse target exists here to convert
+            // through - and every arm copies its value *in*. A name the auto-borrow
+            // rewrite holds as `*Str` (`return (message)` in `err2<T>(message: Str)`) is
+            // therefore spelled as the explicit deref, the value read the arm copies;
+            // raw, the pointer would reach an overload wanting `Str`.
+            val at: Int = this.varIndex(xmlAttr(argNode, AstNodeAttributeKind.Name))
+            if (at >= 0 && xmlKind(ilVarType(this.out, at)) == AstNodeCategory.TypePointer) {
+                argNode = ilDerefNode(argNode)
+            }
+        }
         if (xmlKind(argNodes[i]) == AstNodeCategory.ExprLambda && genericParams.size() > 0
             && !xmlIsEmpty(param)
         ) {
@@ -354,7 +369,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
                 paramType = mapped
             }
         }
-        val slot: Int = this.convertArgument(paramOwner, paramType, argNodes[i])
+        val slot: Int = this.convertArgument(paramOwner, paramType, argNode)
         args.append(slot)
         argTypes.append(this.operandType(slot, argNodes[i]))
         i++

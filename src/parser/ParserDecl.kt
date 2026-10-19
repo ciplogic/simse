@@ -740,7 +740,16 @@ fun Parser.unionMethod(
     attrs.append(AstNodeAttribute(AstNodeAttributeKind.HasReceiver, "false"))
     attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsPure, "false"))
     attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsSuspend, "false"))
-    attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsBorrow, "false"))
+    // The generated surface is marked `borrow` - the author's word, for declarations whose
+    // body no proof can read. It is sound for the *parameters*, which is the fact the
+    // auto-borrow fixpoint needs: `get<Field>`/`getTypeOf`/`isOfType`/`setNone` take nothing
+    // or an enum tag, and `set<Field>`/`initByValue` copy the value *into* the arm - none of
+    // them writes through a parameter it is handed. (The receiver is another matter - a
+    // setter moves the tag - but a receiver is never borrowed: the emitter passes it as
+    // `T* self` regardless.) Without the mark every generated method blocks the fixpoint by
+    // name, and every function that dispatches on a union tag - a `when` over
+    // `u.getTypeOf()` - is borrow-dirty by association.
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsBorrow, "true"))
     attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsOperator, "false"))
     attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsUnionGenerated, "true"))
     var node: AstXmlNode = AstXmlNode(AstNodeKind.Function, AstNodeCategory.Function, attrs, Array<AstXmlNode>())

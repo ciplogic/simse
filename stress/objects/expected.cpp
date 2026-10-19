@@ -582,7 +582,7 @@ Opt<T> simse_optNone();
 template <class T>
 Res<T> simse_resOk(T value);
 template <class T>
-Res<T> simse_resErr(Str message);
+Res<T> simse_resErr(Str* message);
 void initByValue(Str* self);
 Str fmtStr(Span<Char> fmt, List<Str>* items);
 Int strCountDigits(Int64 value);
@@ -1038,10 +1038,12 @@ Res<T> simse_resOk(T value) {
     return result;
 }
 template <class T>
-Res<T> simse_resErr(Str message) {
+Res<T> simse_resErr(Str* message) {
+    Str _sm_base1;
     Res<T> result;
     initByValue(simse_addressOf(result));
-    setError(simse_addressOf(result), message);
+    _sm_base1 = *(message);
+    setError(simse_addressOf(result), _sm_base1);
     return result;
 }
 void initByValue(Str* self) {
@@ -2073,13 +2075,17 @@ Opt<Int> ns1_half(Int n) {
 }
 // stress/objects/src/main.kt
 Res<Str> ns1_labelOptionalResult(Int n) {
+    Str* _sm_base1;
+    Str _sm_base2;
     Bool _sm_expr1;
     Res<Str> _sm_expr2;
     _sm_expr1 = n < 0;
     if (_sm_expr1) goto L1;
     goto L2;
     L1:;
-    _sm_expr2 = simse_resErr<Str>(__sm_stringTable[40]);
+    _sm_base2 = __sm_stringTable[40];
+    _sm_base1 = &_sm_base2;
+    _sm_expr2 = simse_resErr<Str>(_sm_base1);
     return _sm_expr2;
     L2:;
     _sm_expr2 = simse_resOk<Str>(__sm_stringTable[5]);
@@ -2087,14 +2093,18 @@ Res<Str> ns1_labelOptionalResult(Int n) {
 }
 // stress/objects/src/main.kt
 Res<Int> ns1_longError() {
+    Str* _sm_base1;
+    Str _sm_base2;
     Res<Int> _sm_expr1;
-    _sm_expr1 = simse_resErr<Int>(__sm_stringTable[0]);
+    _sm_base2 = __sm_stringTable[0];
+    _sm_base1 = &_sm_base2;
+    _sm_expr1 = simse_resErr<Int>(_sm_base1);
     return _sm_expr1;
 }
 // stress/objects/src/main.kt
 Res<Int> ns1_echo(Res<Int> r) {
-    Str _sm_base1;
-    Int _sm_base2;
+    Str* _sm_base1, * _sm_base2;
+    Int _sm_base3;
     Res<Int> copy, _sm_expr3;
     Bool _sm_expr1, _sm_expr2;
     copy = r;
@@ -2103,12 +2113,13 @@ Res<Int> ns1_echo(Res<Int> r) {
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    _sm_base1 = copy.Error;
+    _sm_base2 = simse_addressOf(copy.Error);
+    _sm_base1 = _sm_base2;
     _sm_expr3 = simse_resErr<Int>(_sm_base1);
     return _sm_expr3;
     L2:;
-    _sm_base2 = copy.Value;
-    _sm_expr3 = simse_resOk<Int>(_sm_base2);
+    _sm_base3 = copy.Value;
+    _sm_expr3 = simse_resOk<Int>(_sm_base3);
     return _sm_expr3;
 }
 // stress/objects/src/main.kt
