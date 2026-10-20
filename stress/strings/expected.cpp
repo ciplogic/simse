@@ -486,6 +486,8 @@ Bool isEmpty(Span<T>* self);
 template <class T>
 T at(Span<T>* self, Int index);
 template <class T>
+T* atPtr(Span<T>* self, Int index);
+template <class T>
 T get(Span<T>* self, Int index);
 template <class T>
 void set(Span<T>* self, Int index, T value);
@@ -563,6 +565,54 @@ Bool advance(Span_iterValues_yieldable<T>* self) {
 
 template <class T>
 Span_iterValues_yieldable<T> iterValues(Span<T>* self);
+template <class T>
+struct Span_iter_yieldable {
+    Int branch{};
+    T* current{};
+    Span<T>* _sm_self{};
+    Int i{};
+    Int len{};
+};
+
+template <class T>
+Bool advance(Span_iter_yieldable<T>* self) {
+    Bool _sm_base1, _sm_base3, _sm_expr1;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base10, _sm_base11, _sm_base12;
+    Span<T>* _sm_base6, * _sm_base9;
+    T* _sm_expr2;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto L2;
+    _sm_base4 = self->branch;
+    _sm_base3 = _sm_base4 == 1;
+    if (_sm_base3) goto LY1;
+    self->i = 0;
+    _sm_base6 = self->_sm_self;
+    _sm_base5 = size(_sm_base6);
+    self->len = _sm_base5;
+    L1:;
+    _sm_base7 = self->i;
+    _sm_base8 = self->len;
+    _sm_expr1 = _sm_base7 < _sm_base8;
+    if (!(_sm_expr1)) goto L2;
+    _sm_base9 = self->_sm_self;
+    _sm_base10 = self->i;
+    _sm_expr2 = atPtr(_sm_base9, _sm_base10);
+    self->current = _sm_expr2;
+    self->branch = 1;
+    return true;
+    LY1:;
+    _sm_base11 = self->i;
+    _sm_base12 = _sm_base11 + 1;
+    self->i = _sm_base12;
+    goto L1;
+    L2:;
+    self->branch = -1;
+    return false;
+}
+
+template <class T>
+Span_iter_yieldable<T> iter(Span<T>* self);
 Bool compareLessThan(Str* left, Str* right);
 void initByValue(Str* self);
 Str fmtStr(Span<Char> fmt, List<Str>* items);
@@ -622,6 +672,13 @@ T at(Span<T>* self, Int index) {
     T* _sm_base1;
     _sm_base1 = self->ptr;
     auto _sm_expr1 = _sm_base1[index];
+    return _sm_expr1;
+}
+template <class T>
+T* atPtr(Span<T>* self, Int index) {
+    T* _sm_base2;
+    _sm_base2 = self->ptr;
+    auto _sm_expr1 = simse_addressOf(_sm_base2[index]);
     return _sm_expr1;
 }
 template <class T>
@@ -895,6 +952,13 @@ Res<T> simse_resErr(Str* message) {
 template <class T>
 Span_iterValues_yieldable<T> iterValues(Span<T>* self) {
     Span_iterValues_yieldable<T> machine{};
+    machine._sm_self = self;
+    machine.branch = 0;
+    return machine;
+}
+template <class T>
+Span_iter_yieldable<T> iter(Span<T>* self) {
+    Span_iter_yieldable<T> machine{};
     machine._sm_self = self;
     machine.branch = 0;
     return machine;
@@ -2446,29 +2510,30 @@ void ns1_fixed(Str* _sm_out, Str* op) {
 Int ns1_partWhenStrings() {
     Char* __sm_catP;
     List<Str>* _sm_base1, * _sm_base3;
-    Str* _sm_base2, * _sm_base4, * _sm_base5, * _sm_base7;
-    Str _sm_base6, _sm_base8, op, _sm_expr3, _sm_expr4, _sm_expr5, _sm_expr8, _sm_expr10, _sm_expr11,
-        _sm_expr12, word, _sm_expr18, _sm_expr22;
+    Str _sm_base2, _sm_base6, _sm_base8, _sm_expr3, _sm_expr4, _sm_expr5, _sm_expr8, _sm_expr10,
+        _sm_expr11, _sm_expr12, word, _sm_expr18, _sm_expr22;
+    Str* _sm_base4, * _sm_base5, * _sm_base7, * op;
     List<Str> ops, words;
     Span<Str> _sm_expr1, _sm_expr13;
-    Span_iterValues_yieldable<Str> _sm_for6, _sm_for7;
+    Span_iter_yieldable<Str> _sm_for6;
     Bool _sm_expr2;
+    Span_iterValues_yieldable<Str> _sm_for7;
     Ref<Str> _sm_expr16;
     ops = List<Str>{__sm_stringTable[98], __sm_stringTable[97], __sm_stringTable[90], __sm_stringTable[79], __sm_stringTable[66], __sm_stringTable[63], __sm_stringTable[82], __sm_stringTable[84], __sm_stringTable[65], __sm_stringTable[67], __sm_stringTable[64], __sm_stringTable[75], __sm_stringTable[76]};
     _sm_base1 = &ops;
     _sm_expr1 = simse_spanOf(_sm_base1);
-    _sm_for6 = iterValues(simse_addressOf(_sm_expr1));
+    _sm_for6 = iter(simse_addressOf(_sm_expr1));
     L1:;
     _sm_expr2 = advance(&_sm_for6);
     if (!(_sm_expr2)) goto L2;
     op = _sm_for6.current;
-    _sm_expr3.resize(4 + op.size());
+    _sm_base2 = *(op);
+    _sm_expr3.resize(4 + _sm_base2.size());
     __sm_catP = simse_str_data(&_sm_expr3);
-    std::memcpy(__sm_catP, op.data(), op.size());
-    __sm_catP = __sm_catP + op.size();
+    std::memcpy(__sm_catP, _sm_base2.data(), _sm_base2.size());
+    __sm_catP = __sm_catP + _sm_base2.size();
     std::memcpy(__sm_catP, " -> ", 4);
-    _sm_base2 = &op;
-    ns1_classify(&_sm_expr4, _sm_base2);
+    ns1_classify(&_sm_expr4, op);
     _sm_expr5.resize(_sm_expr3.size() + _sm_expr4.size());
     __sm_catP = simse_str_data(&_sm_expr5);
     std::memcpy(__sm_catP, _sm_expr3.data(), _sm_expr3.size());

@@ -242,6 +242,16 @@ fun bpBuiltinType(name: *Str): Bool {
 // *every* twin it could resolve to is borrow-clean (both `Opt`'s and `Res`'s - the pass
 // does not know the receiver's type) and no declaration in the program shadows the name
 // (a shadowing declaration's own proof governs, whichever way it went).
+// The emitter-spelled builtins the borrow fixpoint trusts by seed (`print`/`println`;
+// `CgCall.kt` spells them as borrows, `EscapeParams.epBuiltinBorrow` is the retention
+// twin of this list).
+fun bpBorrowBuiltins(): List<Str> {
+    var out: List<Str> = List<Str>()
+    out.append("print")
+    out.append("println")
+    return out
+}
+
 fun bpIsSurfaceName(name: *Str): Bool {
     when (name) {
         "hasValue", "isOk", "value", "error" -> {
@@ -421,6 +431,11 @@ fun bpPurConsider(
         return
     }
     val name: Str = xmlAttr(fn, AstNodeAttributeKind.Name)
+    // `main`'s ABI is built-in (the argv form the emitter spells): its parameter is never
+    // a rewrite candidate, so its body proves nothing.
+    if (name == "main") {
+        return
+    }
     val body: *AstXmlNode = xmlChildPtr(fn, AstNodeKind.Body)
     if (xmlIsEmpty(body)) {
         return
@@ -1162,6 +1177,13 @@ fun bpBorrowParams(
     var statics: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var mutates: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var mutatesParams: Dictionary<Str, Str> = Dictionary<Str, Str>()
+    // The emitter-spelled builtins (`print`/`println`) take their argument by `const T&`
+    // and write it where it stands (`CgCall.kt`) - a borrow, the same shape
+    // `EscapeParams.epBuiltinBorrow` maps for the retention pass. Trusted by seed, so a
+    // body that only prints is not borrow-dirty through them.
+    for (builtin in bpBorrowBuiltins()) {
+        reads.insert(builtin, true)
+    }
     for (*pre in preludeModules) {
         bpCollectDecls(pre, *types, *reads, *statics, *mutates, *mutatesParams)
     }

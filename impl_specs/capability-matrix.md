@@ -5534,3 +5534,13 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Verified: `bun tools/iterate.js --full` - **113/113** and both fixed points; golden
   refreshes additive (borrowed signatures in protocols/res-comments/strings/uninit/
   unions and five more).
+
+- **Step 2 of the EA plan: `print`/`println` trusted by the borrow fixpoint.** The
+  emitter-spelled builtins are seeded into `reads` (`bpBorrowBuiltins`, the borrow twin
+  of `EscapeParams.epBuiltinBorrow`), so a body that only prints alongside reads is no
+  longer borrow-dirty through them. Two guards the roll-out earned: `main` is skipped in
+  `bpPurConsider` (its argv-form ABI is built-in; with `println` trusted, `main` proved
+  for the first time and the rewrite broke the built-in signature — `bpConsider` already
+  skipped it, the fact walk did not), and the seeded list is exactly `print`/`println`
+  (there is no `eprintln` builtin). Verified: `bun tools/iterate.js --full` - **113/113**
+  and both fixed points; golden refreshes additive (`strings` gained borrowed helpers).
