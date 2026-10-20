@@ -3,3 +3,4 @@
 # line with trailing spaces and a final line with no newline, and the program
 # prints the file's size), so git must not rewrite their line endings.
 stress/**/data.txt -text
+stress/native-read-file/native_data.txt -text
