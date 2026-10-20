@@ -7,8 +7,14 @@
 
 package rtl
 
-@SmGen("cpp", "simse_mem_copy")
+// `mutates:0` - the positional mark (writes only parameter 0, the destination): a body
+// may hand it a pointer derived from a local it built, and the call stays borrow-clean
+// (`BorrowParams.kt`'s fresh-argument relaxation). `memFill` is the same shape.
+@SmGen("cpp", "simse_mem_copy", "mutates:0")
 fun memCopy(dst: *Char, dstIndex: Int, src: *Char, srcIndex: Int, count: Int): Unit
+
+@SmGen("cpp", "simse_mem_fill", "mutates:0")
+fun memFill(dst: *Char, from: Int, count: Int, value: Char): Unit
 
 @SmGen("cpp", "simse_mem_fill")
 fun memFill(dst: *Char, from: Int, count: Int, value: Char): Unit
@@ -37,3 +43,8 @@ data fun strBytes(text: *Str): *Char
 // resize and one block copy (`memCopy`), where a per-byte `append` would walk the bytes.
 @SmGen("cpp", "simse_str_setBytes", "mutates")
 fun setBytes(this: Str, src: *Char, srcIndex: Int, count: Int): Unit
+
+// Grows or shrinks the text to `count` bytes (NUL-padded), in place - the resize half of
+// a builder that follows with a tail `memCopy` (`StrView.plus` is the shape).
+@SmGen("cpp", "simse_str_resize", "mutates")
+fun resize(this: Str, count: Int): Unit

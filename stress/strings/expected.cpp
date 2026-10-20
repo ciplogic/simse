@@ -821,7 +821,7 @@ Str plus(Span<Char>* self, Span<Char> other) {
     {
         auto _sm_expr3 = other.len;
         _sm_expr4 = at + _sm_expr3;
-        result.resize(_sm_expr4);
+        simse_str_resize(result, _sm_expr4);
         _sm_base3 = &result;
         _sm_expr5 = simse_str_data(_sm_base3);
         simse_mem_copy(_sm_expr5, at, other.ptr, 0, other.len);

@@ -482,6 +482,13 @@ inline void simse_str_setBytes(Str& out, const Char* src, Int srcIndex, Int coun
     simse_mem_copy(reinterpret_cast<Char*>(out.data()), 0, src, srcIndex, count);
 }
 
+// Grows (or shrinks) a string to `count` bytes, padding with NUL - the `resize` the
+// builder-shaped bodies call between a `setBytes` and a tail `memCopy` (`StrView.plus`
+// is the shape). The Simse declaration is `mutates`-marked: it writes only its receiver.
+inline void simse_str_resize(Str& out, Int count) {
+    out.resize((Str::size_type) count);
+}
+
 // Native-code boundary helpers (impl_specs/rtl-abi.md): standard-library APIs
 // take/return `std::string` - the filesystem, `<fstream>`, `std::getline` - while
 // the language works in `Str`. These are the only sanctioned conversions, and they

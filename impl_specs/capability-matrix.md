@@ -5511,3 +5511,26 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Verified: `bun tools/iterate.js --full` - **113/113** and both fixed points; the
   compiler self-hosts through the ABI (its own builders - `Sections`, the scanner tables,
   the source-gen state - are sret'd or excluded by the guards above).
+
+- **Deduced `plus`: the positional mutates mark and the fresh-argument relaxation.** The
+  plan's Step 1, landed. `memCopy`/`memFill` carry the positional mark —
+  `@SmGen("cpp", "simse_mem_copy", "mutates:0")`: writes only parameter 0 — parsed by
+  `bpMutatesPositions` into a second set (`mutatesParams`, name -> positions), beside the
+  receiver-only `mutates` set. A `resize(this: Str, count: Int)` declaration joins the
+  prelude (`simse_str_resize` beside `simse_str_setBytes` in `smstring.hpp`; `resize` had
+  no Simse declaration at all, which is why `plus` needed the hand mark). The relaxation,
+  in both the rewrite walk and the pure walk: a positionally-marked callee is safe when
+  every written position takes an argument `bpArgIsFresh` derives from the body's own
+  storage — a declared-or-assigned local with no borrowed address in it, the deref of
+  such, or a trusted (`data`) call of fresh arguments. `StrView.plus`'s hand `borrow`
+  mark is **removed**: its `resize` (receiver-only mutates on a fresh local) and
+  `memCopy` (positional, `strBytes(*result)` — a `data` call of a fresh deref) now
+  deduce, and `shout(a, m) { return a + m + "!" }` proves `mark` borrowed through it.
+  Two correctness notes: the relaxation refuses when a written position's argument is a
+  parameter, a field, or an untrusted call (sound refusal), and the pure walk passes an
+  empty `taken` set — its freshness taint is `fresh.remove` at the rebind, so sharing the
+  fresh set for both roles made every fresh local look taken (the bug the first probe
+  caught).
+  Verified: `bun tools/iterate.js --full` - **113/113** and both fixed points; golden
+  refreshes additive (borrowed signatures in protocols/res-comments/strings/uninit/
+  unions and five more).

@@ -152,13 +152,7 @@ operator fun StrView.equals(other: StrView): Bool {
 // `a + b`: one owned `Str` of both views, a block copy each - the first is placed by
 // `setBytes`, the second is appended into the tail `resize` made. The result type is what
 // an unannotated local infers (`val joined = view + "!"`).
-// `borrow` because its parameters are read-only views and it writes only the fresh result
-// it returns (through `setBytes`/`resize`, both `mutates`-marked on that fresh local, and
-// `memCopy`, whose destination is that same local's bytes) - the mark lets every
-// `a + b`-returning function prove borrow-clean. The mark is the interim: the deduction
-// (a call that writes only through arguments the body built fresh is safe) is the
-// per-argument refinement this pass still lacks.
-borrow operator fun StrView.plus(other: StrView): Str {
+operator fun StrView.plus(other: StrView): Str {
     var result: Str
     result.setBytes(this.ptr, 0, this.len)
     if (other.len > 0) {
