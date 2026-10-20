@@ -1,6 +1,6 @@
 // Driver.kt
 //
-// The compiler's driver and CLI (`src/simse_bootstrap.cpp` is one amalgamation of these
+// The compiler's driver and CLI (the published bootstrap is one amalgamation of these
 // sources): loads the RTL prelude, scans the module roots, analyzes the whole compilation
 // and amalgamates it into one C++ translation unit. Modules and packages: specs/modules.md.
 //

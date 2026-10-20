@@ -1,6 +1,6 @@
 # Reusing values the body already computed
 
-Evidence: `ns12_semaBuiltinGenericArity` in `src/simse_bootstrap.cpp` (the `when (name)` over a
+Evidence: `ns12_semaBuiltinGenericArity` in the published bootstrap (the `when (name)` over a
 `Str*`, ~L41988). It performs **eight deep `Str` copies of one expression**:
 
 ```cpp

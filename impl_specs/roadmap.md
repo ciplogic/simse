@@ -9,9 +9,10 @@ The executable breakdown of `impl_specs/plan-to-selfhost.md` and
 
 ## Current state
 
-The compiler is written in Simse (`src/**/*.kt` plus the `modules/**` its build scans) and self-hosts: `src/simse_bootstrap.cpp`
-is one amalgamation of those sources, and the compiler it builds transpiles them back into that
-same file byte for byte (`bun tools/bootstrap.js`). `build.js` / `build.bat` drive the build.
+The compiler is written in Simse (`src/**/*.kt` plus the `modules/**` its build scans) and self-hosts:
+the published bootstrap is one amalgamation of those sources, and the compiler it builds transpiles
+them back into that same file byte for byte (`bun tools/bootstrap.js`). `build.js` / `build.bat`
+drive the build.
 Per-component status: `impl_specs/capability-matrix.md`.
 
 ## Conventions
@@ -52,7 +53,7 @@ Spec of record: `impl_specs/generators.md`; log: `impl_specs/capability-matrix.m
   end, last-write-wins `add`, render text-then-items; byte-neutral.
 - `@SmGen("res", section)` reads the compiler's own resources: `stress/smgen-res` (generated
   declaration and definition), `stress/smgen-res-collision` (the double-creation hazard).
-- `src/simse_bootstrap.cpp` refreshed; `bun tools/bootstrap.js` reports the fixed point byte
+- the published bootstrap refreshed; `bun tools/bootstrap.js` reports the fixed point byte
   for byte.
 - `spanOf`: declaration and definition moved from `src/rtl/span.hpp` into
   `src/rtl/_res.md`, referenced by `@SmGen("res", "spanOf")` in `src/rtl/Span.kt`; call
@@ -149,8 +150,8 @@ Trap: in Simse `*p` where `p: *Sections` *reads through*, so `sourceGenEmit(*thi
 ...)` filled a copy of the sink and emitted a file with no generated text. The pointer is
 passed, never dereferenced.
 
-Verified: `bun tools/bootstrap.js` fixed point (after one refresh of
-`src/simse_bootstrap.cpp`), `bun tools/stress.js` 56/56, `bun tools/smgen.js` 1/1.
+Verified: `bun tools/bootstrap.js` fixed point (after one refresh of the published
+bootstrap), `bun tools/stress.js` 56/56, `bun tools/smgen.js` 1/1.
 
 ### T31 - `simse.md`: module-declared source generators - Not started
 

@@ -299,17 +299,18 @@ modules' `_res.md`: the clocks, the prelude's primitives, file I/O) - so a progr
 itself, is one translation unit.
 
 That leaves the bootstrap question - how do you build a compiler written in its own
-language, on a machine that has no Simse? The answer is **`src/simse_bootstrap.cpp`:
-the transpiled compiler, checked in**. It is the *output* of the compiler, published; a
-fresh checkout compiles it with `cl.exe` alone and gets a working transpiler, which then
-transpiles the tree again.
+language, on a machine that has no Simse? The answer is **the published bootstrap: the
+transpiled compiler, generated into the sibling `simse_bootstrap` repository**
+(`../simse_bootstrap/builds/simse_bootstrap.cpp`). It is the *output* of the compiler,
+published; a fresh checkout compiles it with `cl.exe` alone and gets a working
+transpiler, which then transpiles the tree again.
 
-Because the file is checked in, it is also a **proof**: the compiler must reproduce it
-byte for byte. `bun tools/bootstrap.js` rebuilds the published file, runs both compilers
-over the sources, and compares - so a change that made the output depend on which
-compiler emitted it fails the build rather than drifting. The corpus
-(`stress/`, one folder per program with its expected output and, where it matters, its
-expected `.cpp`) keeps the rest honest.
+Because the bootstrap is published rather than hand-written, it is also a **proof**: the
+compiler must reproduce it byte for byte. `bun tools/bootstrap.js` rebuilds the published
+file, runs both compilers over the sources, and compares - so a change that made the
+output depend on which compiler emitted it fails the build rather than drifting. The
+corpus (`stress/`, one folder per program with its expected output and, where it matters,
+its expected `.cpp.out`) keeps the rest honest.
 
 ## Quick start
 
@@ -368,7 +369,7 @@ best of a few runs while idle):
 | | |
 | --- | --- |
 | the compiler transpiling its own source tree | **19,600 lines of Simse in ~0.85 s** (48,800 lines of C++ out, ~24k lines/s) |
-| compiling the published `src/simse_bootstrap.cpp` with `cl.exe` | ~16 s release (`/O2 /Ob3` with LTO) |
+| compiling the published bootstrap with `cl.exe` | ~16 s release (`/O2 /Ob3` with LTO) |
 | **from the published file to a compiler that reproduces it** | **~17 s**, then under a second per self-transpile |
 
 The whole corpus - **99 end-to-end programs**, one folder each with its expected output -
@@ -378,7 +379,8 @@ runs green on every build, alongside the bootstrap fixed point.
 
 | Path | Contents |
 | --- | --- |
-| `src/` | the compiler in Simse (`lex/`, `parser/`, `sema/`, `linear/`, `codegen/`, `compiler/` - the source generators' package too), plus `src/rtl/` (the prelude `.kt` files, the runtime headers, and the resource file `_res.md`, which holds the runtime's C++) and `src/simse_bootstrap.cpp` - the published transpiled compiler, the output proof |
+| `src/` | the compiler in Simse (`lex/`, `parser/`, `sema/`, `linear/`, `codegen/`, `compiler/` - the source generators' package too), plus `src/rtl/` (the prelude `.kt` files, the runtime headers, and the resource file `_res.md`, which holds the runtime's C++) |
+| `../simse_bootstrap/` | the published bootstrap (the compiler as generated C++), in its own checkout; `bun build.js --release --no-compile --bootstrap` refreshes `builds/simse_bootstrap.cpp` |
 | `modules/` | the reusable modules a program (and the compiler itself) names: `json` (with its `generators/`), `jsonnode`, `compiler` (the AST and the generator interface), `io`, `streams`, `process` (run a command, capture its output), `linq`, `glob` (`*` pattern matching over `Str`), `xml`, `http`, `unsafe` (the unsigned integer types), `gzip` (Gzip encoding and decoding), `zip` (Zip extraction) - a module's hand-written C++ lives in its `_res.md` |
 | `bin/` | the `smt` toolset: its built `smt.exe` and its home `bin/smt-tool/` (`src/main.kt` plus the checked-in amalgamation `smt_src.cpp`); the compiler itself builds at the repository root (`simse.exe`) |
 | `specs/` | the language specification (normative): types, declarations, functions, memory model, generics, containers, modules, statics, resources |

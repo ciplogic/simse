@@ -36,7 +36,7 @@ happens in between.
         |
         v
    simse_out.cpp    one amalgamated translation unit (published as
-                    src/simse_bootstrap.cpp: the compiler as C++, checked in)
+                    builds/simse_bootstrap.cpp in `simse_bootstrap`)
 ```
 
 Details worth knowing:
@@ -164,11 +164,11 @@ The compiler is its Simse sources; there is one implementation.
 | --- | --- | --- |
 | Compiler | `src/**/*.kt` | lexer, parser, sema, linear lowering, codegen and driver |
 | Runtime | `src/rtl/` | the headers, the prelude `.kt` files, and the resource file `_res.md` that holds the runtime's C++ |
-| Published bootstrap | `src/simse_bootstrap.cpp` | the amalgamation of the compiler sources; it is what a checkout with only a C++ compiler builds |
+| Published bootstrap | `../simse_bootstrap/builds/simse_bootstrap.cpp` | the amalgamation of the compiler sources; it is what a checkout with only a C++ compiler builds |
 
 The invariant is a **fixed point**, and machines check it, not discipline:
 
-1. **`tools/bootstrap.js`** compiles the published `src/simse_bootstrap.cpp`
+1. **`tools/bootstrap.js`** compiles the published bootstrap
    with `cl.exe` alone, then has the resulting binary transpile `src` again.
    The output must equal the published
    file **byte for byte** (and so must `./simse.exe`'s output, when one exists).
@@ -178,13 +178,13 @@ The invariant is a **fixed point**, and machines check it, not discipline:
    --full` is this whole loop in one command - the release build, the corpus and
    the fixed point - which is what to run before committing.
 2. **The stress corpus** - `stress/<name>/` is a complete program with its
-   expected stdout (and optional args, stdin, expected `.cpp`, or an expected
+   expected stdout (and optional args, stdin, expected `.cpp.out`, or an expected
    transpile error). The harness transpiles, compiles and runs each one with the
    compiler under test; 71 cases today.
 
 Any change to compiler behavior has to keep the fixed point intact: rebuild the
 compiler with itself, refresh the published file
-(`bun build.js --release --out src/simse_bootstrap.cpp`), and keep the stress
+   (`bun build.js --release --bootstrap`), and keep the stress
 corpus green - which is why the project can move fast without breaking its own
 foundation.
 

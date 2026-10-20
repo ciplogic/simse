@@ -3,7 +3,9 @@
 //   bun tools/_strtable_runs.mjs
 import { readFileSync } from "node:fs";
 
-const text = readFileSync("src/simse_bootstrap.cpp", "utf8");
+import { bootstrapFile } from "./bootstrap-path.mjs";
+
+const text = readFileSync(bootstrapFile(), "utf8");
 const stream = (name) => {
   const match = text.match(new RegExp(`static const Int16 ${name}\\[\\] = \\{([^}]*)\\};`));
   if (!match) throw new Error(`no ${name}`);

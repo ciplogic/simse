@@ -7,20 +7,20 @@
 //           without it a difference is a failure ("STALE"). The full two-way fixed point
 //           is the run without --quick.
 //
-// "Bootstrapping" Simse means: `src/simse_bootstrap.cpp` - the published amalgamation of
-// the compiler source tree - is checked in, so Simse can be built with a C++ compiler alone;
-// and the compiler that comes out of it must transpile the same sources back into the same
-// bytes. This tool times each step and checks that fixed point:
+// "Bootstrapping" Simse means: the published bootstrap - the generated amalgamation of the
+// compiler source tree, kept in the `simse_bootstrap` repository - lets Simse be built with
+// a C++ compiler alone; and the compiler that comes out of it must transpile the same
+// sources back into the same bytes. This tool times each step and checks that fixed point:
 //
-//   1. compile     the published `src/simse_bootstrap.cpp` into `simse_boot.exe`, with
-//                  cl.exe only - no build system, nothing generated, and no second file to
-//                  link (docs/getting-started.md, "Building the compiler without a
-//                  compiler")
+//   1. compile     the published `builds/simse_bootstrap.cpp` (resolved by
+//                  `tools/bootstrap-path.mjs`) into `simse_boot.exe`, with cl.exe only - no
+//                  build system, nothing generated, and no second file to link
+//                  (docs/getting-started.md, "Building the compiler without a compiler")
 //   2. transpile   `simse_boot.exe` compiling `src` and `modules`, and - when a working
 //                  compiler exists - that compiler doing the same, so the two can be compared
-//   3. fixed point the regenerated file must equal `src/simse_bootstrap.cpp` byte for
-//                  byte, whichever compiler produced it. That is what makes the published
-//                  file a *bootstrap* and not a snapshot
+//   3. fixed point the regenerated file must equal the published bootstrap byte for byte,
+//                  whichever compiler produced it. That is what makes the published file a
+//                  *bootstrap* and not a snapshot
 //
 // Timings are wall-clock, best and median of `--runs` (default 3, compiles run once
 // because they dominate). Everything lands in `build/<mode>/bootstrap/`.
@@ -30,11 +30,13 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from "nod
 import * as path from "node:path";
 
 import { developerEnv, fail as failTool, hostArch, normalizeArch, REPO, whichCl } from "./msvc.mjs";
+import { bootstrapFile } from "./bootstrap-path.mjs";
 import { compilerRootArgs } from "./roots.mjs";
 
 const TOOL = "bootstrap";
 const fail = (message) => failTool(TOOL, message);
-const BOOTSTRAP = path.join("src", "simse_bootstrap.cpp");
+const BOOTSTRAP = bootstrapFile();
+const BOOTSTRAP_LABEL = path.relative(REPO, BOOTSTRAP) || BOOTSTRAP;
 
 function parseArgs(argv) {
   const opts = { runs: 3, debug: false, fast: false, simse: null, quick: false, write: false };
@@ -101,7 +103,7 @@ function main() {
   const work = path.join(REPO, "build", mode, "bootstrap");
   mkdirSync(work, { recursive: true });
 
-  const bootstrap = path.join(REPO, BOOTSTRAP);
+  const bootstrap = BOOTSTRAP;
   const bootExe = path.join(work, "simse_boot.exe");
   const bootOut = path.join(work, "simse_boot_out.cpp");
   const workingOut = path.join(work, "simse_working_out.cpp");
@@ -129,15 +131,15 @@ function main() {
       return 1;
     }
     if (sameBytes(bootstrap, quickOut)) {
-      console.log(`bootstrap: in sync (${path.relative(REPO, working)} reproduces ${BOOTSTRAP}, ${seconds}s)`);
+      console.log(`bootstrap: in sync (${path.relative(REPO, working)} reproduces ${BOOTSTRAP_LABEL}, ${seconds}s)`);
       return 0;
     }
     if (opts.write) {
       copyFileSync(quickOut, bootstrap);
-      console.log(`bootstrap: refreshed ${BOOTSTRAP} (the emission moved, ${seconds}s)`);
+      console.log(`bootstrap: refreshed ${BOOTSTRAP_LABEL} (the emission moved, ${seconds}s)`);
       return 0;
     }
-    console.log(`bootstrap: STALE - the working compiler's output differs from ${BOOTSTRAP}`);
+    console.log(`bootstrap: STALE - the working compiler's output differs from ${BOOTSTRAP_LABEL}`);
     console.log(`           refresh it: bun tools/bootstrap.js --quick --write`);
     return 1;
   }
@@ -161,11 +163,11 @@ function main() {
 
   console.log(`${TOOL}: ${mode} build, ${opts.runs} run(s) for the transpiles`);
   console.log(`  sources    ${lines} lines of Simse under src + modules`);
-  console.log(`  bootstrap  ${BOOTSTRAP}: ${outLines} lines, ` +
-              `${(statSync(bootstrap).size / 1048576).toFixed(2)} MB (checked in, do not edit)`);
+  console.log(`  bootstrap  ${BOOTSTRAP_LABEL}: ${outLines} lines, ` +
+              `${(statSync(bootstrap).size / 1048576).toFixed(2)} MB (published, do not edit)`);
   console.log("");
   console.log("1. compile the published bootstrap (cl.exe only, no build system)");
-  const compile = timed(`${BOOTSTRAP} -> simse_boot.exe`, cl, [
+  const compile = timed(`${BOOTSTRAP_LABEL} -> simse_boot.exe`, cl, [
     // `/bigobj` is not optional here either (build.js says why): the amalgamation is one
     // translation unit, and the object file outgrew the COFF section limit.
     "/nologo", "/std:c++20", "/EHsc", "/bigobj", "/W3", "/I" + REPO,

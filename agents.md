@@ -4,8 +4,8 @@ Simse is a small, statically typed language (Kotlin/.NET influenced) that transp
 single amalgamated C++20 file. The compiler is written **in Simse** (`src/**/*.kt` plus the
 modules it names, `modules/**/*.kt`); the only
 hand-written C++ is the runtime (`src/rtl/*.hpp`) plus the published bootstrap
-(`src/simse_bootstrap.cpp`). Everything else a program needs is generated from `_res.md`
-resource sections.
+(`../simse_bootstrap/builds/simse_bootstrap.cpp`, a sibling checkout). Everything else a
+program needs is generated from `_res.md` resource sections.
 
 Read the one file that matches the task, then the design doc it points at:
 

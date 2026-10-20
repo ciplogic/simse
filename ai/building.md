@@ -2,9 +2,10 @@
 
 Toolchain: MSVC (arm64) + `cl.exe`, C++20, and the `bun` runtime for the harnesses. There is
 no build system to configure: the compiler is Simse, the only hand-written C++ is the runtime
-headers (`src/rtl/*.hpp`) and the published bootstrap (`src/simse_bootstrap.cpp`), and
-everything else a program needs is generated into its own translation unit from `_res.md`
-files — so a build is one `cl.exe` invocation over one file, with nothing to link.
+headers (`src/rtl/*.hpp`), the published bootstrap is generated C++ in the sibling
+`simse_bootstrap` checkout, and everything else a program needs is generated into its own
+translation unit from `_res.md` files — so a build is one `cl.exe` invocation over one file,
+with nothing to link.
 
 ## The loop
 
@@ -45,11 +46,11 @@ bun tools/stress.js --list               # what the corpus contains
 bun tools/stress.js --filter modules --jobs 4
 bun tools/stress.js --simse ./other.exe  # test another compiler build
 
-# the published bootstrap: the same amalgamation, checked in so the compiler can be built
-# with a C++ compiler alone (docs/getting-started.md). Refresh it whenever emitted C++ moves
-# (the file is generated, never hand-edited):
-bun build.js --release --out src/simse_bootstrap.cpp               # also builds ./simse.exe
-bun build.js --release --no-compile --out src/simse_bootstrap.cpp  # ... without recompiling
+# the published bootstrap: the same amalgamation, kept in the sibling `simse_bootstrap`
+# checkout so the compiler can be built with a C++ compiler alone (docs/getting-started.md).
+# Refresh it whenever emitted C++ moves (the file is generated, never hand-edited):
+bun build.js --release --bootstrap               # also builds ./simse.exe
+bun build.js --release --no-compile --bootstrap  # ... without recompiling
 
 # does the fixed point hold? compile the bootstrap, transpile, compare the bytes
 bun tools/bootstrap.js                   # add --debug / --fast for cheaper builds
@@ -89,7 +90,7 @@ it with the source.
   asked to, so a build killed mid-link leaves a truncated `simse.exe`, and the next build fails
   with `bun: unknown error:` (or `Exec format error`) because the transpiler is not a program.
   The way back is the published bootstrap:
-  `./build.bat --release --cpp src/simse_bootstrap.cpp --exe simse.exe`.
+  `./build.bat --release --cpp ../simse_bootstrap/builds/simse_bootstrap.cpp --exe simse.exe`.
 - A compiler change the *running* compiler cannot apply to its own sources is the **two-build
   rule** (`ai/contributing.md`).
 - The same bootstrap builds with GCC 12+ / Clang 15+ on Linux (`docs/building-on-linux.md`);

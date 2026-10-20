@@ -3,8 +3,9 @@
 //   bun tools/vscheck.mjs [Debug|Release]
 //
 // `simse.vcxproj` + `simse.slnx` are the profiling project: they compile the published
-// bootstrap `src/simse_bootstrap.cpp` - one translation unit, the runtime generated into
-// it - into `profile\<Configuration>\simse.exe`, with the debugger arguments already set for running the
+// bootstrap - `builds/simse_bootstrap.cpp` in the sibling `simse_bootstrap` checkout, one
+// translation unit with the runtime generated into it - into
+// `profile\<Configuration>\simse.exe`, with the debugger arguments already set for running the
 // compiler over its own tree. This tool exists because nothing else in the harness touches
 // those files: without it, a change to the RTL's includes or to the amalgamation's shape could
 // break the project without any check noticing. It runs MSBuild with the same Visual Studio
@@ -13,14 +14,16 @@
 // Exit code 0 when MSBuild succeeded; the last lines of its output are printed either way.
 // The built compiler is the project's own, so it is worth one functional check by hand after a
 // change that moved the amalgamation: `profile/Release/simse.exe --root src --root modules -o out.cpp`
-// reproduces `src/simse_bootstrap.cpp` byte for byte.
+// reproduces the published bootstrap byte for byte.
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import * as path from "node:path";
 
 import { developerEnv, hostArch, normalizeArch, REPO } from "./msvc.mjs";
+import { bootstrapFile } from "./bootstrap-path.mjs";
 
 const env = developerEnv(normalizeArch(hostArch()), "build");
+const bootstrap = bootstrapFile();
 
 function findMsbuild() {
   const candidates = [];
@@ -47,7 +50,8 @@ if (config !== "Debug" && config !== "Release") {
 }
 console.log(`vscheck: ${msbuild} (Configuration=${config}, Platform=ARM64)`);
 const result = spawnSync(msbuild, [
-  "simse.vcxproj", `/p:Configuration=${config}`, "/p:Platform=ARM64", "/v:m", "/nologo",
+  "simse.vcxproj", `/p:Configuration=${config}`, "/p:Platform=ARM64",
+  `/p:SimseBootstrap=${bootstrap}`, "/v:m", "/nologo",
 ], { cwd: REPO, env, encoding: "utf8" });
 console.log(`vscheck: exit ${result.status}`);
 const out = `${result.stdout || ""}${result.stderr || ""}`.trim().split("\n");

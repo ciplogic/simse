@@ -18,10 +18,10 @@ which is, by hand: `./build.bat --release` (or `--fast` while iterating; the emi
 not depend on the optimizer), `bun tools/stress.js` and `bun tools/bootstrap.js`
 (`--quick` for the one-direction check the fast loop uses).
 
-**Never weaken the fixed point** and **never hand-edit `src/simse_bootstrap.cpp`** — it is
+**Never weaken the fixed point** and **never hand-edit the published bootstrap** — it is
 generated, and it is the one file that has to keep building the compiler. When the change is
-visible in the emitted C++, refresh the published file
-(`bun build.js --release --out src/simse_bootstrap.cpp`) and commit it with the source.
+visible in the emitted C++, refresh it in the sibling `simse_bootstrap` checkout
+(`bun build.js --release --bootstrap`) and commit it there with the source.
 
 **Commit every validated change, one commit each** (imperative subject, no meta-request
 needed). Work that is red, or whose validation has not run, is not committed: report what
@@ -36,8 +36,9 @@ build again. The same shape applies to `@` itself: it landed in the scanner/pars
 compiler's own sources stayed `@`-free, and only a compiler built *from* those changes could
 parse an `@` in the prelude. The published bootstrap never needs a hand-patch: refreshing it
 carries the new scanner and parser. If the running compiler cannot compile the tree at all,
-stage a compiler from the published file first (`./build.bat --cpp src/simse_bootstrap.cpp
---exe simse.exe`), then build normally.
+stage a compiler from the published file first
+(`./build.bat --cpp ../simse_bootstrap/builds/simse_bootstrap.cpp --exe simse.exe`), then
+build normally.
 
 A `_res.md` under `src` or a module is part of the compiler's own build, not of a program: the `res` generator reads it
 *first* while the tree is being compiled, and at run time the compiler reads it from disk for
@@ -46,10 +47,9 @@ changes, so refresh the bootstrap too.
 
 ## Invariants
 
-- **The bootstrap fixed point**: the compiler built from the published
-  `src/simse_bootstrap.cpp` transpiles `src` and `modules` back into that same file, byte for
-  byte. This is
-  the strongest invariant in the repo.
+- **The bootstrap fixed point**: the compiler built from the published bootstrap
+  (`../simse_bootstrap/builds/simse_bootstrap.cpp`) transpiles `src` and `modules` back into
+  that same file, byte for byte. This is the strongest invariant in the repo.
 - **Determinism**: transpiling the same inputs twice is byte-identical.
 - **The stress corpus stays green**; a case is a folder under `stress/` with `src/`,
   `expected.stdout`, and optional `args`/`stdin`/`expected.exit`/`expected.cpp.out`/

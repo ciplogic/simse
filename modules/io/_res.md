@@ -23,7 +23,7 @@ forward:
 // and a build that left it out failed in the linker rather than in the compiler. The bodies
 // are this section's now: a program that reaches one of these symbols has the prototype and
 // the definition emitted into its own translation unit, which is what makes
-// `src/simse_bootstrap.cpp` buildable on its own.
+// the published bootstrap buildable on its own.
 //
 // `emit: always`, for the reason `timeops` is: a *program* may name any of these symbols
 // with a declaration of its own - `native("simse_native_readFile") fun readFile(...)`, which

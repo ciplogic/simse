@@ -89,7 +89,7 @@ async function main() {
       ? [
         ["build", ["build.js", "--release", "--no-lto", "--quiet"]],
         ["stress", ["tools/stress.js", "--quiet", ...filterArgs]],
-        ["refresh", ["build.js", "--release", "--no-compile", "--out", "src/simse_bootstrap.cpp", "--quiet"]],
+        ["refresh", ["build.js", "--release", "--no-compile", "--bootstrap", "--quiet"]],
         ["bootstrap", ["tools/bootstrap.js", "--fast"]],
       ]
       : [

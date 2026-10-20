@@ -276,8 +276,8 @@ the published bootstrap cannot do for itself, so the order matters:
 1. The scanner and parser changes land while the compiler's own sources stay `@`-free: the
    bootstrap still parses them, and the resulting compiler understands `@`.
 2. `@` may then appear in the compiler's own sources - including the prelude - and
-   `bun build.js --out src/simse_bootstrap.cpp` refreshes the published file, which carries
-   the new scanner and parser. No hand-patch of `simse_bootstrap.cpp` is needed;
+   `bun build.js --bootstrap` refreshes the published file, which carries
+   the new scanner and parser. No hand-patch of the bootstrap is needed;
    `bun tools/bootstrap.js` is the check.
 3. A change the *running* compiler cannot emit yet (the prelude's own declarations, the
    parser's own attribute layout) needs the two-phase build: build once with the old spelling,

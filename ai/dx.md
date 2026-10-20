@@ -34,8 +34,8 @@ without one. `deleteFile` went into `modules/io` the same way as its siblings
 (`@SmGen("res", "fileio", "simse_deleteFile")`), but the `fileio` section is
 `emit: always` — every program carries the section's C++ so a hand-named native resolves —
 which means one six-line body moved the compiler's own emitted amalgamation, which moved the
-published bootstrap (`src/simse_bootstrap.cpp`), which meant the full fixed-point loop, not
-just a rebuild. That is the price structure of a module surface change: the *language* cost
+published bootstrap (in the sibling `simse_bootstrap` checkout), which meant the full
+fixed-point loop, not just a rebuild. That is the price structure of a module surface change: the *language* cost
 is a declaration, the *repo* cost is a bootstrap refresh.
 
 **`check` still writes `out.cpp`.** The compiler's CLI is file-shaped (`-o <file>`); there

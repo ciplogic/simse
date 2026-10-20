@@ -72,7 +72,7 @@ ask: precision, not new marks.
 
 **Two-build rule.** The prelude edits (`intrinsics.kt`, `_res.md`) are visible to the
 running compiler: stage first
-(`./build.bat --fast --cpp src/simse_bootstrap.cpp --exe simse.exe`), then build, or the
+(`./build.bat --fast --cpp ../simse_bootstrap/builds/simse_bootstrap.cpp --exe simse.exe`), then build, or the
 build dies mid-flight (`ai/contributing.md`, "The two-build rule").
 
 **Verify.** The loop; `--showBorrow` on the escape-viral probe; a new part in

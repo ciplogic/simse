@@ -195,9 +195,9 @@ and adds its own `stress/<name>` case.
 - `simse_tests.exe`: goldens regenerate only where the emission changed on
   purpose (`--update`, then review, then check mode).
 - `bun tools/stress.js` on both rings, including the slice's new case.
-- `src/simse_bootstrap.cpp` regenerated when the compiler's own emission changes
-  (the tracked amalgamation is the stage-1 output; `bun build.js --release --out
-  src/simse_bootstrap.cpp` writes it and compiles it).
+- the published bootstrap regenerated when the compiler's own emission changes
+  (it is the stage-1 output; `bun build.js --release --bootstrap` writes it and
+  compiles it).
 
 `tools/statics_probe.cpp` pins the runtime shape of the design - the empty
 storage, the pass, and the per-instantiation generic accessor - before the

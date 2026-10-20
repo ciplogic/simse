@@ -28,9 +28,9 @@ shared library's symbol resolved at run time (`native` - the P/Invoke shape:
 `examples/sdl2` a window, `examples/http` a blocking socket library and an HTTP/1.1
 server).
 
-**The compiler.** Self-hosted to a fixed point: the published
-`src/simse_bootstrap.cpp` builds a compiler with a C++ compiler alone, and
-that compiler transpiles the sources back into the same file byte for byte. One
+**The compiler.** Self-hosted to a fixed point: the published bootstrap
+(`../simse_bootstrap/builds/simse_bootstrap.cpp`) builds a compiler with a C++ compiler
+alone, and that compiler transpiles the sources back into the same file byte for byte. One
 implementation, checked by `bun tools/iterate.js --full` - the bootstrap fixed
 point and the end-to-end stress corpus (71 programs) in one command, with
 `tools/bootstrap.js` and `tools/stress.js` as the tools underneath.

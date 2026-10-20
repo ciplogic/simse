@@ -2,16 +2,18 @@
 <!--
   simse.vcxproj - the profiling project (`simse.slnx` is its solution).
 
-  It compiles the *published bootstrap*, `src\simse_bootstrap.cpp` - the one file
-  `build.js` compiles - so Visual Studio's profiler (Debug > Performance Profiler, Alt+F2) or
-  a debugger can be pointed at the compiler itself. The runtime is generated into that file
-  (`src\rtl\_res.md`), so there is no second translation unit to add.
+  It compiles the *published bootstrap*, `builds\simse_bootstrap.cpp` in the sibling
+  `simse_bootstrap` checkout - the one file `build.js` compiles - so Visual Studio's profiler
+  (Debug > Performance Profiler, Alt+F2) or a debugger can be pointed at the compiler itself.
+  The runtime is generated into that file (`src\rtl\_res.md`), so there is no second
+  translation unit to add.
 
-  Why the bootstrap rather than the file `build.js` generates (`simse_out.cpp`): the bootstrap
-  is checked in, so this project always has a source and needs no generation step. The
-  repository refreshes it on every change (`build.js`, with the bootstrap as the output file);
-  to profile the very newest tree instead, point `ClCompile` below at `simse_out.cpp` after a
-  release build.
+  Why the bootstrap rather than the file `build.js` generates (`simse_out.cpp`): it is
+  published, so this project always has a source and needs no generation step. The Simse
+  tooling refreshes it on every change (the `bootstrap` option of `build.js`); to profile the
+  very newest tree instead, point `ClCompile` below at `simse_out.cpp` after a release build.
+  The `SimseBootstrap` property names the file; `bun tools/vscheck.mjs` fills in the path the
+  rest of the tools resolve (`SIMSE_BOOTSTRAP`).
 
   - **Release is the default**: /O2 /Ob3 with debug information, which is the pair a profiler
     wants (optimized code, full symbols). Whole-program optimization is off on purpose, like
@@ -49,6 +51,11 @@
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>simse</RootNamespace>
     <ProjectName>simse</ProjectName>
+  </PropertyGroup>
+  <PropertyGroup>
+    <!-- The published bootstrap lives outside this tree. `vscheck.mjs` overrides this with
+         the path the rest of the tools resolve (SIMSE_BOOTSTRAP / SIMSE_BOOTSTRAP_REPO). -->
+    <SimseBootstrap Condition="'$(SimseBootstrap)' == ''">..\simse_bootstrap\builds\simse_bootstrap.cpp</SimseBootstrap>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
@@ -148,7 +155,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <!-- The published amalgamation: one file, the runtime included. -->
-    <ClCompile Include="src\simse_bootstrap.cpp" />
+    <ClCompile Include="$(SimseBootstrap)" />
   </ItemGroup>
   <ItemGroup>
     <!-- For navigation only: the amalgamation includes the RTL through simse.hpp. -->

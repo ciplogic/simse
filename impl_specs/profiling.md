@@ -139,7 +139,7 @@ bun build.js --release --profile --profile-nanos          # ... in nanoseconds
 
 `bun build.js --profile` passes the flags (and a `--profile-file`) through to the transpile step,
 so the compiler's own source set is transpiled with the runtime and the timers. The published
-bootstrap (`src/simse_bootstrap.cpp`) is **not** profiled, so a profiled compiler is a local
+bootstrap is **not** profiled, so a profiled compiler is a local
 artifact, never published - and a report is never committed (it is large and one machine's; the
 names in both are gitignored). Regenerate one for a given source tree with:
 

@@ -17,8 +17,8 @@ works; a `cl.exe` already on your `PATH` is used only as a fallback.
 `build.js` transpiles the compiler's own Simse sources (`src/**/*.kt`) into
 one `simse_out.cpp` and compiles that one file into `./simse.exe`. It uses
 `./simse.exe` as the transpiler when one exists; on a fresh checkout there is
-none yet, so it first compiles the published `src/simse_bootstrap.cpp` and
-uses that (section 2).
+none yet, so it first compiles the published bootstrap
+(`../simse_bootstrap/builds/simse_bootstrap.cpp`) and uses that (section 2).
 
 ```bat
 build.bat                                   :: debug: ./simse_out.cpp -> ./simse.exe
@@ -49,15 +49,15 @@ includes `"src/rtl/simse.hpp"`, so the repository root is the include path.
 
 ## 2. Build the compiler *without* a compiler
 
-The amalgamation is checked in as **`src/simse_bootstrap.cpp`**: the compiler
-source tree as one C++ file, kept in the repository so that Simse can be built by
-someone who has a C++ compiler and nothing else - no `simse.exe`, no previous
-build, no build script. That is what makes the language self-hosting rather than
-a claims file.
+The amalgamation is published as **`builds/simse_bootstrap.cpp` in the sibling
+`simse_bootstrap` repository**: the compiler source tree as one C++ file, kept outside
+this repository so that Simse can be built by someone who has a C++ compiler and
+nothing else - no `simse.exe`, no previous build, no build script. That is what makes
+the language self-hosting rather than a claims file.
 
 ```bat
 cl /nologo /std:c++20 /EHsc /O2 /Ob3 /DNDEBUG /MD /W3 /I. ^
-   src/simse_bootstrap.cpp ^
+   ..\simse_bootstrap\builds\simse_bootstrap.cpp ^
    /Fe:simse.exe
 ```
 
@@ -76,7 +76,7 @@ To refresh the published file after changing the compiler (it is generated, neve
 hand-edited):
 
 ```bat
-bun build.js --release --out src/simse_bootstrap.cpp   :: also builds ./simse.exe
+bun build.js --release --bootstrap   :: also builds ./simse.exe
 ```
 
 `bun tools/bootstrap.js` measures the whole story and checks the fixed point - the
@@ -88,11 +88,11 @@ loop. This is what the check prints on its own:
 ```console
 $ bun tools/bootstrap.js
 bootstrap: release build, 3 run(s) for the transpiles
-  sources    37744 lines of Simse under src + modules
-  bootstrap  src\simse_bootstrap.cpp: 89696 lines, 2.96 MB (checked in, do not edit)
+  sources    45043 lines of Simse under src + modules
+  bootstrap  ..\simse_bootstrap\builds\simse_bootstrap.cpp: 100630 lines, 3.31 MB (published, do not edit)
 
 1. compile the published bootstrap (cl.exe only, no build system)
-  src\simse_bootstrap.cpp -> simse_boot.exe            best 18607 ms, median 18607 ms
+  ..\simse_bootstrap\builds\simse_bootstrap.cpp -> simse_boot.exe best 26634 ms, median 26634 ms
 
 2. transpile the compiler's own source trees
   simse_boot.exe (just built) --root src --root modules best 1720 ms, median 1752 ms
@@ -102,16 +102,16 @@ bootstrap: release build, 3 run(s) for the transpiles
   simse_boot.exe's output == the bootstrap             yes, byte for byte
   the working compiler's output == the bootstrap       yes, byte for byte
 
-  from the published file to a working compiler: 18.61 s
-  and that compiler reproduces itself in:        1720 ms
-  full cycle (compile + self-transpile):         20.33 s
-  throughput: 21941 lines/s of Simse (52142 lines/s of C++ out)
-  the working compiler transpiles the same tree in: 1724 ms
+  from the published file to a working compiler: 26.63 s
+  and that compiler reproduces itself in:        2463 ms
+  full cycle (compile + self-transpile):         29.10 s
+  throughput: 18287 lines/s of Simse (40855 lines/s of C++ out)
+  the working compiler transpiles the same tree in: 2429 ms
 ```
 
-So: **~20 s from the published file to a compiler that reproduces it**, almost
-all of it `cl.exe` optimizing 89.7k lines of generated C++; the compiler's own
-share - transpiling its whole source tree - is **~1.7 s** (the machine's load
+So: **~27 s from the published file to a compiler that reproduces it**, almost
+all of it `cl.exe` optimizing 100.6k lines of generated C++; the compiler's own
+share - transpiling its whole source tree - is **~2.5 s** (the machine's load
 moves it up from there).
 
 ## 3. Compile and run a program

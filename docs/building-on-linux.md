@@ -1,7 +1,8 @@
 # Building Simse with GCC/Clang on Linux
 
-The compiler's C++ is standard C++20, so the **bootstrap** — `src/simse_bootstrap.cpp`,
-the one translation unit the whole compiler is — builds with a C++ compiler alone. This page
+The compiler's C++ is standard C++20, so the **bootstrap** —
+`../simse_bootstrap/builds/simse_bootstrap.cpp`, the one translation unit the whole
+compiler is — builds with a C++ compiler alone. This page
 says which compiler, the exact command, and what is still Windows-only. The Windows/MSVC
 build is unchanged and remains the reference toolchain (`docs/getting-started.md`).
 
@@ -21,16 +22,16 @@ From the repository root:
 
 ```sh
 # the bootstrap is one translation unit; the repo root is the include path
-g++ -std=c++20 -O2 -DNDEBUG -I. src/simse_bootstrap.cpp -o simse
+g++ -std=c++20 -O2 -DNDEBUG -I. ../simse_bootstrap/builds/simse_bootstrap.cpp -o simse
 ```
 
 That `simse` is a complete compiler. Check the fixed point (the property that makes the
-checked-in file a *bootstrap* and not a snapshot): the compiler it produced must transpile
+published file a *bootstrap* and not a snapshot): the compiler it produced must transpile
 `src` and `modules` back into the same bytes.
 
 ```sh
 ./simse --root src --root modules -o /tmp/out.cpp
-cmp src/simse_bootstrap.cpp /tmp/out.cpp && echo "fixed point holds"
+cmp ../simse_bootstrap/builds/simse_bootstrap.cpp /tmp/out.cpp && echo "fixed point holds"
 ```
 
 ## What was made portable
