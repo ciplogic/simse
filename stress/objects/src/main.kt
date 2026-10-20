@@ -9,7 +9,7 @@ package objects
 //
 // `stress/language-tour` covers the rest of the operator: null handles, the null tests, and
 // `*T` taken from a handle. This case also pins the `Ref<T>` spelling the emitter writes for
-// `&T` in a *program* (its `expected.cpp`), which no other case does.
+// `&T` in a *program* (its `expected.cpp.out`), which no other case does.
 
 data class Counter(var value: Int) {
     fun bump(): Int {
@@ -431,7 +431,7 @@ fun partPointerPlace(): Int {
 //     must reach the caller's storage.
 //
 // The program is trivial on purpose - what this case decides is the shape of the
-// emitted C++ at those call sites, which `expected.cpp` locks byte for byte.
+// emitted C++ at those call sites, which `expected.cpp.out` locks byte for byte.
 
 data class CounterReceiverShapes(var n: Int) {
     fun bump(): Unit {

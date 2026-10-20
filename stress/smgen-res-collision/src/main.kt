@@ -6,7 +6,7 @@ package fixtures
 // src/rtl/_res.md, the decoy second. Both calls below reach `simse_spanOf`, so both
 // spans come from the decoy - that is the documented hazard, and this case pins it: a
 // generator that does not check `has` first overwrites another's implementation, and
-// an `expected.cpp` shows the single definition the amalgamation ends up with.
+// an `expected.cpp.out` shows the single definition the amalgamation ends up with.
 
 @SmGen("res", "spanOf")
 fun realSpan<T>(items: *List<T>): Span<T>

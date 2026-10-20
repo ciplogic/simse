@@ -15,7 +15,7 @@
 //   expected.stdout           the program's stdout (required; else see below)
 //   expected.stderr           the program's stderr
 //   expected.exit             the program's exit code (default 0)
-//   expected.cpp              the transpiled amalgamation, byte for byte
+//   expected.cpp.out          the transpiled amalgamation, byte for byte
 //   expected.transpile-error  substring of the transpiler's stderr; the case
 //                             passes when the transpile fails and prints it
 //                             (no compile or run happens)
@@ -36,7 +36,7 @@
 //   --quiet           print only the failures and the summary line (the iterate loop's
 //                     output: a run that passes says one line)
 //   --update          rewrite `expected.stdout`/`.stderr`/`.exit` from this run
-//                     (`expected.cpp` is not machine-updated: a changed amalgamation is
+//                     (`expected.cpp.out` is not machine-updated: a changed amalgamation is
 //                     read, then copied over by hand from `stress/.work/<case>/out.cpp`)
 //   --list            list the cases and their expectations, then exit
 //   --keep-going      report every failure instead of stopping at the first
@@ -187,7 +187,7 @@ async function runCase(build, study) {
   rmSync(work, { recursive: true, force: true });
   mkdirSync(work, { recursive: true });
 
-  const expectedCpp = readIfPresent(path.join(dir, "expected.cpp"));
+  const expectedCpp = readIfPresent(path.join(dir, "expected.cpp.out"));
   const expectedTranspileError = readIfPresent(path.join(dir, "expected.transpile-error"));
   const expectedOut = readIfPresent(path.join(dir, "expected.stdout"));
   const expectedErr = readIfPresent(path.join(dir, "expected.stderr"));
@@ -221,7 +221,7 @@ async function runCase(build, study) {
   if (expectedCpp !== null && normalize(readIfPresent(outCpp)) !== normalize(expectedCpp)) {
     return {
       name, ok: false,
-      detail: `the emitted C++ differs from expected.cpp\n${firstDifference(readIfPresent(outCpp), expectedCpp)}`,
+      detail: `the emitted C++ differs from expected.cpp.out\n${firstDifference(readIfPresent(outCpp), expectedCpp)}`,
     };
   }
 
@@ -283,7 +283,7 @@ async function runCase(build, study) {
 function describe(caseDir) {
   const marks = [];
   if (existsSync(path.join(caseDir, "expected.transpile-error"))) marks.push("transpile-error");
-  if (existsSync(path.join(caseDir, "expected.cpp"))) marks.push("cpp-golden");
+  if (existsSync(path.join(caseDir, "expected.cpp.out"))) marks.push("cpp-golden");
   if (existsSync(path.join(caseDir, "args"))) marks.push("args");
   if (existsSync(path.join(caseDir, "compiler-args"))) marks.push("compiler-args");
   if (existsSync(path.join(caseDir, "stdin"))) marks.push("stdin");

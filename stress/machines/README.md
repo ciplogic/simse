@@ -3,7 +3,7 @@
 Four parts in one project, one per case merged into it (`stress/README.md` has the
 convention): `dead-code`, `flat-blocks`, `generic-yield`, `yield` - the state-machine
 cases and the two that pin emitted shapes, together because all four are read as
-emitted C++ (the category carries `expected.cpp`). One `main` calls `partDeadCode()`,
+emitted C++ (the category carries `expected.cpp.out`). One `main` calls `partDeadCode()`,
 `partFlatBlocks()`, `partGenericYield()`, `partYield()` in that order, so
 `expected.stdout` is those four cases' output concatenated, and
 `bun tools/stress.js --filter machines` runs the lot.

@@ -8,7 +8,7 @@ import json
 // (`compiler-args` holds `--module modules/json`), which is what makes it reusable;
 // `import json` is what makes the generator act on this program's classes.
 //
-// `expected.cpp` is the point: `Point` is named by two classes and `Int`/`Str` are fields of
+// `expected.cpp.out` is the point: `Point` is named by two classes and `Int`/`Str` are fields of
 // three, and each serializer appears **once** however many classes name it.
 
 data class Point(var x: Int, var y: Int)

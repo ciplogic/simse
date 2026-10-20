@@ -28,7 +28,7 @@ stress/<name>/
   expected.stdout           what the program prints (the one required file)
   expected.stderr           optional: what it writes to stderr
   expected.exit             optional: its exit code (default 0)
-  expected.cpp              optional: the emitted C++ must match byte for byte
+  expected.cpp.out         optional: the emitted C++ must match byte for byte
   expected.transpile-error  optional: the transpile must fail and its stderr must
                             contain this text; nothing is compiled or run
   args                      optional: one line of arguments for the program
@@ -42,7 +42,7 @@ passing one: the harness fails it and tells you to capture the output with
 `--update`. `--update` writes the expectations from a run — use it after
 reading what the program printed, never as a way to make a red case green.
 
-`expected.cpp` is the emission golden: it pins the generated C++ for a program,
+`expected.cpp.out` is the emission golden: it pins the generated C++ for a program,
 which is how the old fixture goldens pinned it. `stress/objects` and
 `stress/machines` carry one each (they replaced the cases that pinned the emitted
 shapes); drop one into any case by copying `stress/.work/<name>/out.cpp` after the
@@ -60,7 +60,7 @@ used to run the part of it that was a case.
 stress/<category>/
   src/main.kt   `// ---- <case> ----` per merged case, then `main` calling each part
   expected.stdout
-  expected.cpp  where the merged cases pinned the emitted C++
+  expected.cpp.out  where the merged cases pinned the emitted C++
 ```
 
 A case is a project, and what a project costs is `cl.exe`: the transpile is ~15 ms,

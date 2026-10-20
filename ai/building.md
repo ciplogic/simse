@@ -119,9 +119,8 @@ it with the source.
   A/B timing), `_strtable_runs.mjs`, `_check_tree.mjs` (verifies a `--profile` report: the two
   summaries against the tree, and the nesting), `_cost.mjs` (a report's true per-method cost,
   recursion folded out), `_profile_ab.mjs` (round-robin A/B of profiled
-  builds by their reports' `main():` line), `_pe_sections.mjs` (`impl_specs/rtl-abi.md`),
-  `array_layout_probe.cpp`, `smallvector_stress.cpp`, `statics_probe.cpp`
-  (`impl_specs/statics.md`) and `memrun.cpp` (`benchmarks/onebrc/benchmark.md`). The `smt`
+  builds by their reports' `main():` line), `_pe_sections.mjs` (`impl_specs/rtl-abi.md`) and
+  `array_layout_probe.cpp`. The `smt`
   toolset is not part of this harness: it is a Simse program under `bin/smt-tool/`, built and
   run by `smt.bat`, and its `build`/`run` commands drive the native toolchain themselves
   (`simse.exe` + `cl`, through the `process` module) with no script runtime.

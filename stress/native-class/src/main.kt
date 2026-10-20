@@ -6,7 +6,7 @@ package fixtures
 // `&Handle(...)` and held by `&Handle`/`*Handle` (a value construction is the diagnostic
 // `stress/diagnostic-ref-value` pins).
 //
-// The point is in the emitted C++ (`expected.cpp`): `SockAddr` is written outside
+// The point is in the emitted C++ (`expected.cpp.out`): `SockAddr` is written outside
 // SIMSE_PACK_PUSH/POP and `Handle` inside them; the stdout only proves the values round-trip.
 
 native class SockAddr(var family: Int16, var port: Int16, var address: Int, var extra: Int64)

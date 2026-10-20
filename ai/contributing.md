@@ -52,9 +52,9 @@ changes, so refresh the bootstrap too.
   the strongest invariant in the repo.
 - **Determinism**: transpiling the same inputs twice is byte-identical.
 - **The stress corpus stays green**; a case is a folder under `stress/` with `src/`,
-  `expected.stdout`, and optional `args`/`stdin`/`expected.exit`/`expected.cpp`/
+  `expected.stdout`, and optional `args`/`stdin`/`expected.exit`/`expected.cpp.out`/
   `expected.transpile-error` (`stress/README.md`). A case with no expectations is unfinished,
-  not passing. `expected.cpp` is an emission golden: `--update` never rewrites it — copy
+  not passing. `expected.cpp.out` is an emission golden: `--update` never rewrites it — copy
   `stress/.work/<case>/out.cpp` after the case passes.
 - **One declaration, one spelling**: `@SmGen("cpp", "sym")` names hand-written C++,
   `@SmGen("res", section, sym)` a resource section; the old `native("sym")` keyword is gone.
@@ -109,7 +109,7 @@ changes, so refresh the bootstrap too.
 - **A resource's comments do not reach the program**: `resGenAddSection` filters the text as
   it places it (`ResComments.kt`); `//` inside a string, character or raw-string literal is
   data and is kept. The emitter's own comments (banner, `// <file>` markers) stay.
-- **Golden `expected.cpp` files are byte-compared** and `--update` never rewrites them; copy
+- **Golden `expected.cpp.out` files are byte-compared** and `--update` never rewrites them; copy
   from `stress/.work/<case>/out.cpp` after reading the output.
 - **`Dictionary.getPtr(key)`** is the value's place (or `null`); `get` copies and `has` is the
   pointer test - use `getPtr` for lookups whose values are big (an `AstXmlNode`, a `List`).

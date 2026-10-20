@@ -8,7 +8,7 @@ package foldconstparams
 //   Str.tag  - reached only through its receiver form, so there is no plain-name call site
 //   markIt   - its name is also passed as a value, so its signature is part of a function type
 //
-// The stdout proves the semantics are unchanged; `expected.cpp` is what proves the fold actually
+// The stdout proves the semantics are unchanged; `expected.cpp.out` is what proves the fold actually
 // happened, since the point of the pass is invisible in a program's stdout - the folded
 // `logMe` is emitted as `void ns1_logMe()` with `val isDebug: Bool = false;` inside.
 

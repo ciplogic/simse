@@ -4,3 +4,7 @@
 # prints the file's size), so git must not rewrite their line endings.
 stress/**/data.txt -text
 stress/native-read-file/native_data.txt -text
+
+# Emission goldens are test fixtures, not C++ the project ships. The `.cpp.out` name
+# already keeps them out of GitHub's language statistics; this keeps it true by rule.
+stress/**/expected.cpp.out linguist-detectable=false
