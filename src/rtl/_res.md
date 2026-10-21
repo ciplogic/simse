@@ -149,6 +149,42 @@ Int64 simse_nowNanos() {
 }
 ```
 
+!fatal
+====
+emit: reached
+forward:
+```cpp
+#include <cstdio>
+#include <cstdlib>
+
+// The fatal-error natives (the Simse surface is src/rtl/fatal.kt, specs/functions.md
+// "Fatal errors"). `panic` reports a bug and aborts; `assert` panics unless its condition
+// holds. Nothing unwinds and no destructors run - the process dies where it stands - so
+// `Res<T>` remains the shape for failures a caller may handle. The symbols carry their
+// `simse_` spelling because a prelude function is bare in the emitted C++ and `assert`
+// would otherwise meet the C macro of that name. Both flush stdout before aborting, so
+// output buffered ahead of the failure still reaches the console - a test runner's
+// progress lines, for one (specs/testing.md).
+void simse_panic(const Str& message);
+void simse_assert(Bool cond, const Str& message);
+```
+bodies:
+```cpp
+void simse_panic(const Str& message) {
+    std::fprintf(stderr, "panic: %s\n", message.c_str());
+    std::fflush(stdout);
+    std::abort();
+}
+
+void simse_assert(Bool cond, const Str& message) {
+    if (!cond) {
+        std::fprintf(stderr, "panic: assert failed: %s\n", message.c_str());
+        std::fflush(stdout);
+        std::abort();
+    }
+}
+```
+
 !listops
 ====
 forward:

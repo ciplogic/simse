@@ -393,6 +393,26 @@ The exact symbol naming, linkage, and build integration are in
 `impl_specs/native-interop.md`; the generators themselves are
 `impl_specs/generators.md`.
 
+## Fatal errors
+
+Status: required for the first implementation.
+
+`panic(message)` and `assert(cond, message)` are prelude functions, the bug path a
+program cannot handle. `panic` writes `panic: <message>` to stderr; `assert` writes
+`panic: assert failed: <message>` unless `cond` holds. Both then flush stdout and
+abort the process: nothing unwinds, no destructors run, and the exit code is the
+platform's abort code (3 under MSVC). Expected failures are `Res<T>`/`Opt<T>` values;
+programmer errors are `panic`/`assert`; there is no third category.
+
+```kt
+fun main(): Int {
+    val n: Opt<Int> = "42".toInt()
+    assert(n.hasValue(), "the literal must parse")
+    panic("unreachable by construction")
+    return 0
+}
+```
+
 ## Control flow: `break` and `continue`
 
 Status: required for the first implementation.
