@@ -27,6 +27,14 @@ fun attrLiteralText(text: Str): Str {
     return unquoteLiteral(text)
 }
 
+// A *marker* attribute annotates a declaration rather than naming a C++ source generator
+// (specs/attributes.md, "Marker attributes"): it takes no arguments, the function keeps
+// its body, nothing is native, and a later pass reads the mark off the `Attribute`
+// attribute. `Test` is the first (specs/testing.md).
+fun attrIsMarker(name: *Str): Bool {
+    return name == "Test"
+}
+
 // `data`: a pure function - no side effects, the result a function of `value` - so the
 // reuse pass may merge two `boolText(x)` calls with the same unchanged `x`
 // (`linear/ReusePure.kt`).

@@ -33,6 +33,18 @@ generator owns the C++ (diagnostic: "a method whose C++ is generated must not ha
 body"). The converse holds: a body-less method that is not attributed has no
 implementation ("a body-less method needs an attribute").
 
+## Marker attributes
+
+Beside the generator attributes there are **marker attributes** - `@Test`
+(`specs/testing.md`) is the first - which annotate a declaration instead of naming a
+C++ source generator. A marker takes no arguments (diagnostic: "'@Test' takes no
+arguments"), marks a function only, not a type ("'@Test' marks a function"), and the
+marked function keeps its body ("a function marked '@Test' needs a body"): it is an
+ordinary function whose `Attribute` records the mark and whose `Generator` is empty, so
+no generator, native symbol, or materialization is involved. A build that does not read
+the mark ignores it - `@Test` compiles in an ordinary program and the function is never
+called unless something calls it.
+
 ## What the parser records
 
 The parser records on the `Function` node: `Attribute` (the attribute's own name),

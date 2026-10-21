@@ -269,6 +269,14 @@ fun Parser.parseAttributedDecl(
             return this.emptyNode()
         }
     }
+    // A marker attribute annotates rather than generates (specs/attributes.md, "Marker
+    // attributes"), so it carries no arguments and marks a function only.
+    if (attrIsMarker(attrName)) {
+        if (args.size() > 0) {
+            this.fail("'@" + attrName + "' takes no arguments")
+            return this.emptyNode()
+        }
+    }
     // An attribute rides on its own line, so the separator before the declaration is skipped.
     this.skipSeparators()
     // `@SmGen(...) data fun f(...)` marks a pure function and `@SmGen(...) suspend fun f(...)`
@@ -278,6 +286,10 @@ fun Parser.parseAttributedDecl(
     // hand-written (a header, or a resource section) so the emitter must not generate
     // the struct; an unmarked prelude type is generated from its declaration.
     if (this.checkText("data") && this.peek(1).text == "class") {
+        if (attrIsMarker(attrName)) {
+            this.fail("'@" + attrName + "' marks a function")
+            return this.emptyNode()
+        }
         val node: AstXmlNode = this.parseDataClass()
         if (this.failed) {
             return this.emptyNode()
@@ -286,6 +298,10 @@ fun Parser.parseAttributedDecl(
         return node
     }
     if (this.checkText("enum") && this.peek(1).text == "class") {
+        if (attrIsMarker(attrName)) {
+            this.fail("'@" + attrName + "' marks a function")
+            return this.emptyNode()
+        }
         val node: AstXmlNode = this.parseEnum()
         if (this.failed) {
             return this.emptyNode()

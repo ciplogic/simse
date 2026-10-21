@@ -172,17 +172,25 @@ fun Parser.parseFunction(
 
     // The attribute's C++ is the generator's, so there is no body to emit and the
     // generator names the symbol; `@SmGen("cpp", sym)` and `native(sym)` fill the same
-    // attributes. The arguments are kept as written (a string keeps its quotes).
+    // attributes. The arguments are kept as written (a string keeps its quotes). A
+    // *marker* attribute is the other shape: no generator, no symbol - the body is the
+    // point of the mark (specs/attributes.md, "Marker attributes").
+    val marker: Bool = attrIsMarker(attrName)
     var attributeName: Str = attrName
     var generatorName: Str = ""
-    if (attrName.size() > 0) {
+    if (attrName.size() > 0 && !marker) {
         if (attrArgs.size() > 0) {
             generatorName = attrLiteralText(attrArgs[0])
         }
     }
     val generatorArgs: Str = generatorArgsText(attrArgs)
     var isNative: Bool = false
-    if (attributeName.size() > 0) {
+    if (marker) {
+        if (!hasBody) {
+            this.setError(pos, "a function marked '@" + attrName + "' needs a body")
+            return this.emptyNode()
+        }
+    } else if (attributeName.size() > 0) {
         isNative = true
         if (hasBody) {
             this.setError(pos, "a method whose C++ is generated must not have a body")
