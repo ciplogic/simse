@@ -6,11 +6,12 @@
 //   smt <command> [options] [-- <args>...]
 //
 // Commands:
-//   init [<dir>]           scaffold a project: simse.md + src/main.kt
+//   init [<dir>]           scaffold a project: simse.md + src/main.kt + test/smoke_test.kt
 //   build                  transpile the project, then compile it
 //   run [-- <args>...]     build the project, then run its program
+//   test                   build the @Test suite from test/, then run it
 //   check                  transpile the project only: the fast front-end check
-//   clean                  remove the build artifacts (out.cpp, out.obj, out.exe)
+//   clean                  remove the build artifacts (out.*, test.*)
 //   install [<module>...]  resolve the project's modules                   (stub)
 //   help [<command>]       the command list, or one command's
 //   version                the toolset's version
@@ -56,8 +57,9 @@ data class SmtOptions(
 )
 
 fun smtKnown(name: Str): Bool {
-    return name == "init" || name == "build" || name == "run" || name == "check"
-            || name == "clean" || name == "install" || name == "help" || name == "version"
+    return name == "init" || name == "build" || name == "run" || name == "test"
+            || name == "check" || name == "clean" || name == "install" || name == "help"
+            || name == "version"
 }
 
 // The commands that are still stubs: everything else is implemented.
@@ -71,6 +73,9 @@ fun smtCommandUsage(name: Str): Str {
     }
     if (name == "run") {
         return "run [-- <args>...]"
+    }
+    if (name == "test") {
+        return "test"
     }
     if (name == "install") {
         return "install [<module>...]"
@@ -90,6 +95,9 @@ fun smtCommandSummary(name: Str): Str {
     }
     if (name == "run") {
         return "build the project, then run its program"
+    }
+    if (name == "test") {
+        return "build the @Test suite from <root>/test, then run it"
     }
     if (name == "check") {
         return "transpile the project only: the fast front-end check"
@@ -121,10 +129,14 @@ fun smtCommandPlan(name: Str): Unit {
     } else if (name == "check") {
         println("    - simse.exe --root <root> [--module <dir>]... -o <root>/out.cpp (transpile only)")
     } else if (name == "clean") {
-        println("    - remove <root>/out.cpp, <root>/out.obj and <root>/out.exe when they exist")
+        println("    - remove <root>/out.cpp, <root>/out.obj, <root>/out.exe and the test artifacts (test.cpp, test.obj, test.exe) when they exist")
     } else if (name == "run") {
         println("    - build (above)")
         println("    - <root>/out.exe, forwarding -- <args>... to main(args)")
+    } else if (name == "test") {
+        println("    - simse.exe --root <root> [--module <dir>]... --module <root>/test --tests -o <root>/test.cpp")
+        println("    - cl ... /Fo:<root>/test.obj /Fe:<root>/test.exe <root>/test.cpp")
+        println("    - <root>/test.exe (a failing assert aborts; the exit code is the suite's)")
     }
 }
 
@@ -134,11 +146,12 @@ fun smtUsage(): Unit {
     println("  smt <command> [options] [-- <args>...]")
     println("")
     println("Commands:")
-    println("  init [<dir>]           scaffold a project: simse.md + src/main.kt")
+    println("  init [<dir>]           scaffold a project: simse.md + src/main.kt + test/smoke_test.kt")
     println("  build                  transpile the project, then compile it")
     println("  run [-- <args>...]     build the project, then run its program")
+    println("  test                   build the @Test suite from test/, then run it")
     println("  check                  transpile the project only: the fast front-end check")
-    println("  clean                  remove the build artifacts (out.cpp, out.obj, out.exe)")
+    println("  clean                  remove the build artifacts (out.*, test.*)")
     println("  install [<module>...]  resolve the project's modules                   (stub)")
     println("  help [<command>]       the command list, or one command's")
     println("  version                the toolset's version")
@@ -165,7 +178,7 @@ fun smtCommandHelp(name: Str): Int {
         println("")
         println("not implemented yet; it will:")
         smtCommandPlan(name)
-    } else if (name == "build" || name == "run" || name == "check" || name == "clean") {
+    } else if (name == "build" || name == "run" || name == "test" || name == "check" || name == "clean") {
         println("")
         println("it runs:")
         smtCommandPlan(name)
@@ -322,9 +335,48 @@ fun smtRun(opts: SmtOptions): Int {
     return run(command)
 }
 
-// init: scaffold a project at <dir> (or the root) - a manifest naming `src`, and a main.kt
-// that prints hello. It never overwrites: either file already there is a refusal, so an init
-// on an existing project writes nothing.
+// test: the suite build (specs/testing.md). The project's tree plus its named modules plus
+// `<root>/test` (when it exists - the manifest's `module: src` keeps that folder out of
+// build and run) go to the compiler with `--tests`, which swaps the program's main for the
+// generated suite; the suite's own exit code - 0 when every test passed, the abort code
+// when an assert fired - is the command's.
+fun smtTest(opts: SmtOptions): Int {
+    val outCpp: Str = opts.root + "/test.cpp"
+    val obj: Str = opts.root + "/test.obj"
+    val exe: Str = opts.root + "/test.exe"
+    var command: Str = "simse.exe --root " + smtQuote(opts.root)
+    var i: Int = 0
+    while (i < opts.modules.size()) {
+        command = command + " --module " + smtQuote(opts.modules[i])
+        i = i + 1
+    }
+    val testDir: Str = opts.root + "/test"
+    if (pathIsDirectory(testDir)) {
+        command = command + " --module " + smtQuote(testDir)
+    }
+    command = command + " --tests -o " + smtQuote(outCpp)
+    var code: Int = 0
+    val diagnostics: Str = capture(command, *code)
+    if (code != 0) {
+        print(diagnostics)
+        eprintln("smt: transpiling failed (exit " + code.toString() + ")")
+        return code
+    }
+    val compiled: Int = run(smtCompile(opts, outCpp, obj, exe))
+    if (compiled != 0) {
+        eprintln("smt: compiling failed (exit " + compiled.toString() + ")")
+        return compiled
+    }
+    if (!opts.quiet) {
+        println("smt: built " + exe)
+    }
+    return run(smtQuote(smtCommandPath(exe)))
+}
+
+// init: scaffold a project at <dir> (or the root) - a manifest naming `src` (which keeps
+// `test/` out of build and run), a main.kt that prints hello, and one smoke test under
+// `test/`. It never overwrites: any file already there is a refusal, so an init on an
+// existing project writes nothing.
 fun smtInit(opts: SmtOptions): Int {
     var target: Str = opts.root
     if (opts.rest.size() > 0) {
@@ -332,6 +384,7 @@ fun smtInit(opts: SmtOptions): Int {
     }
     val manifest: Str = target + "/simse.md"
     val mainKt: Str = target + "/src/main.kt"
+    val testKt: Str = target + "/test/smoke_test.kt"
     if (pathExists(manifest)) {
         eprintln("smt: " + manifest + " already exists - refusing to overwrite it")
         return 1
@@ -340,8 +393,16 @@ fun smtInit(opts: SmtOptions): Int {
         eprintln("smt: " + mainKt + " already exists - refusing to overwrite it")
         return 1
     }
+    if (pathExists(testKt)) {
+        eprintln("smt: " + testKt + " already exists - refusing to overwrite it")
+        return 1
+    }
     if (!createDirectories(target + "/src")) {
         eprintln("smt: could not create " + target + "/src")
+        return 1
+    }
+    if (!createDirectories(target + "/test")) {
+        eprintln("smt: could not create " + target + "/test")
         return 1
     }
     if (!writeFile(manifest, smtManifestTemplate())) {
@@ -352,10 +413,15 @@ fun smtInit(opts: SmtOptions): Int {
         eprintln("smt: could not write " + mainKt)
         return 1
     }
+    if (!writeFile(testKt, smtTestTemplate())) {
+        eprintln("smt: could not write " + testKt)
+        return 1
+    }
     if (!opts.quiet) {
         println("smt: wrote " + manifest)
         println("smt: wrote " + mainKt)
-        println("next: smt build --root " + target + ", then smt run --root " + target)
+        println("smt: wrote " + testKt)
+        println("next: smt build --root " + target + ", then smt test --root " + target)
     }
     return 0
 }
@@ -387,6 +453,9 @@ fun smtClean(opts: SmtOptions): Int {
     artifacts.append("out.cpp")
     artifacts.append("out.obj")
     artifacts.append("out.exe")
+    artifacts.append("test.cpp")
+    artifacts.append("test.obj")
+    artifacts.append("test.exe")
     var removed: Int = 0
     var failed: Int = 0
     for (name in artifacts) {
@@ -401,7 +470,7 @@ fun smtClean(opts: SmtOptions): Int {
             }
         } else {
             failed = failed + 1
-            eprintln("smt: could not remove " + path + " (is out.exe running?)")
+            eprintln("smt: could not remove " + path + " (is it running?)")
         }
     }
     if (failed > 0) {
@@ -433,6 +502,19 @@ fun smtMainTemplate(): Str {
            "fun main(args: List<Str>): Int {\n" +
            "    println(\"hello, Simse\")\n" +
            "    return 0\n" +
+           "}\n"
+}
+
+// The smoke test: one @Test function (specs/testing.md), so `smt test` works on the
+// scaffold out of the box. The manifest's `module: src` keeps this folder out of build
+// and run; only `smt test` compiles it in.
+fun smtTestTemplate(): Str {
+    return "// smoke_test.kt - scaffolded by smt init. `smt test` builds the suite from the\n" +
+           "// @Test functions under test/ (specs/testing.md).\n" +
+           "package tests\n" +
+           "\n" +
+           "@Test fun smoke(): Unit {\n" +
+           "    assert(1 + 1 == 2, \"one and one\")\n" +
            "}\n"
 }
 
@@ -499,6 +581,9 @@ fun main(args: List<Str>): Int {
     }
     if (opts.command == "run") {
         return smtRun(opts)
+    }
+    if (opts.command == "test") {
+        return smtTest(opts)
     }
     if (opts.command == "init") {
         return smtInit(opts)
