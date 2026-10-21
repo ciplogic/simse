@@ -1,0 +1,1 @@
+duplicate test name 'same' (packages 'alpha' and 'beta'; the suite imports both, so rename one)

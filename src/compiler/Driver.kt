@@ -254,6 +254,12 @@ fun main(args: List<Str>): Int {
                 extraTrees.append(false)
             }
 
+            // `--tests`: build a test suite from the `@Test` functions (specs/testing.md)
+            // - the generated suite's `main` replaces the program's own entry point.
+            "--tests" -> {
+                tgSetTests(true)
+            }
+
             "--showLinearRepresentation" -> {
                 ilSetShow(true)
             }
@@ -329,7 +335,7 @@ fun main(args: List<Str>): Int {
 
             "-h", "--help" -> {
                 println("simse " + simseVersion)
-                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>]... [--module <dir>]... [--no-concat] [--no-borrow] [--no-escape] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showBorrow] [--showEscape] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos] [--version]")
+                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>]... [--module <dir>]... [--tests] [--no-concat] [--no-borrow] [--no-escape] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showBorrow] [--showEscape] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos] [--version]")
                 return 0
             }
 
@@ -468,6 +474,26 @@ fun main(args: List<Str>): Int {
         // Added to the generators' state too: the second pass runs after this one, and a
         // generator walking the program should see everything it was compiled with.
         sourceGenAddModule("<generated>/kt.kt", parsedGenerated.Value)
+    }
+
+    // `--tests` (src/compiler/TestGen.kt, specs/testing.md): the `@Test` functions become a
+    // generated suite whose `main` replaces the program's own - the program's `main` is
+    // dropped from the tree and the suite is parsed here as one more module, so the
+    // rewrites, the checker and the emitter all see it like any the program wrote.
+    if (tgTests()) {
+        val suite: Res<Str> = tgSuite(*modules, *fileNames)
+        if (!suite.isOk()) {
+            eprintln(suite.Error)
+            return 1
+        }
+        val parsedSuite: Res<AstXmlNode> = driverParseSource(suite.Value, "<generated>/tests.kt")
+        if (!parsedSuite.isOk()) {
+            eprintln(parsedSuite.Error)
+            return 1
+        }
+        fileNames.append("<generated>/tests.kt")
+        modules.append(parsedSuite.Value)
+        sourceGenAddModule("<generated>/tests.kt", parsedSuite.Value)
     }
 
     // `--showAsync`: the coloring the machine lowering will act on (src/sema/Async.kt). It
