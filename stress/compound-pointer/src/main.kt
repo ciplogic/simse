@@ -31,6 +31,7 @@ fun main(): Int {
     bump(*n)
     println(n)
     part2()
+    part3()
     return 0
 }
 
@@ -56,5 +57,27 @@ fun part2(): Int {
     addAll(*nums, 8)
     println(nums.size())
     println(nums[1])
+    return 0
+}
+
+// A plain assignment on a handle-typed parameter is the same place rule: `out = x` on an
+// `out: *Int` writes the pointee (`*out = x`), the uniformity member access already has -
+// the position does not spell whether a name is the value or its address. A `Str`'s
+// store-through moves the heap-owning value the same way a by-value return would.
+fun storeInt(target: *Int, value: Int): Unit {
+    target = value
+}
+
+fun storeText(out: *Str, text: Str): Unit {
+    out = text
+}
+
+fun part3(): Int {
+    var n: Int = 7
+    storeInt(*n, 9)
+    println(n)
+    var text: Str = "abc"
+    storeText(*text, "stored")
+    println(text)
     return 0
 }

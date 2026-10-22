@@ -163,6 +163,37 @@ fun IlExtractor.assign(stmt: *AstXmlNode, target: *AstXmlNode, value: *AstXmlNod
                 )
                 return
             }
+            // A parameter of handle type is its *pointee* for a plain assignment as well:
+            // `out = x` on an `out: *T` writes through the pointer - the short spelling of
+            // `*out = x`, the same place-ness `out += x` gives a handle below, and the one
+            // `p.x` already reads with ("Automatic dereference": a handle in a position
+            // whose type is known is the value it denotes). A value that is itself the
+            // handle type still rebinds the borrow, so the guard compares the pointee.
+            var handleAt: Int = 0
+            while (handleAt < this.fn.paramNames.size()) {
+                if (this.fn.paramNames[handleAt] == name) {
+                    val paramType: AstXmlNode = this.fn.paramTypes[handleAt]
+                    val paramKind: AstNodeCategory = xmlKind(paramType)
+                    if (paramKind == AstNodeCategory.TypePointer
+                        || paramKind == AstNodeCategory.TypeReference
+                    ) {
+                        val pointee: AstXmlNode = semPointeeOf(paramType)
+                        val valueType: AstXmlNode = this.exprType(value)
+                        if (!xmlIsEmpty(pointee) && !xmlIsEmpty(valueType)
+                            && ilTypeText(pointee) == ilTypeText(valueType)
+                        ) {
+                            this.emit(
+                                IlOpKind.Store, ilOps2(
+                                    this.operandOf(target), this.operandOf(value)
+                                )
+                            )
+                            return
+                        }
+                    }
+                    break
+                }
+                handleAt++
+            }
             val slot: Int = this.varIndex(name)
             if (slot >= 0) {
                 this.into(slot, value)
