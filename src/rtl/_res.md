@@ -158,13 +158,16 @@ forward:
 #include <cstdlib>
 
 // The fatal-error natives (the Simse surface is src/rtl/fatal.kt, specs/functions.md
-// "Fatal errors"). `panic` reports a bug and aborts; `assert` panics unless its condition
-// holds. Nothing unwinds and no destructors run - the process dies where it stands - so
-// `Res<T>` remains the shape for failures a caller may handle. The symbols carry their
-// `simse_` spelling because a prelude function is bare in the emitted C++ and `assert`
-// would otherwise meet the C macro of that name. Both flush stdout before aborting, so
-// output buffered ahead of the failure still reaches the console - a test runner's
-// progress lines, for one (specs/testing.md).
+// "Fatal errors"). `panic` reports a bug and stops the program; `assert` panics unless
+// its condition holds. Nothing unwinds and no destructors run - the process ends where
+// it stands, with exit code 3 - so `Res<T>` remains the shape for failures a caller may
+// handle. The symbols carry their `simse_` spelling because a prelude function is bare
+// in the emitted C++ and `assert` would otherwise meet the C macro of that name. The
+// exit is `std::_Exit`, not the CRT's `std::abort`: abort asks the platform to report
+// the fault, and that report is a dialog box on Windows - one per failing test, in
+// debug and release builds alike. Both streams are flushed first, so output buffered
+// ahead of the failure still reaches the console - a test runner's progress lines, for
+// one (specs/testing.md).
 void simse_panic(const Str& message);
 void simse_assert(Bool cond, const Str& message);
 ```
@@ -173,14 +176,16 @@ bodies:
 void simse_panic(const Str& message) {
     std::fprintf(stderr, "panic: %s\n", message.c_str());
     std::fflush(stdout);
-    std::abort();
+    std::fflush(stderr);
+    std::_Exit(3);
 }
 
 void simse_assert(Bool cond, const Str& message) {
     if (!cond) {
         std::fprintf(stderr, "panic: assert failed: %s\n", message.c_str());
         std::fflush(stdout);
-        std::abort();
+        std::fflush(stderr);
+        std::_Exit(3);
     }
 }
 ```

@@ -48,10 +48,10 @@ The suite prints a `running <package>.<name>` line ahead of each call, then the 
 after the last test it prints `<N> tests passed` and exits 0. A failure inside a test is
 the fatal path (`specs/functions.md`, "Fatal errors"): `assert` writes
 `panic: assert failed: <message>` to stderr, flushes stdout - which is what makes the
-`running` line of the failing test visible - and aborts the process. Nothing unwinds, no
-destructors run, later tests are not run, and the exit code is the platform's abort code
-(3 under MSVC). The line ahead of each call is what says which test died; there is no
-per-test isolation in this baseline.
+`running` line of the failing test visible - and ends the process. Nothing unwinds, no
+destructors run, later tests are not run, and the exit code is 3 (a `std::_Exit`, not
+the CRT's `abort` - whose fault report is a dialog box on Windows). The line ahead of
+each call is what says which test died; there is no per-test isolation in this baseline.
 
 ## Where tests live
 
