@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- tools/iterate: the one-command iteration loop, the C# twin of tools/iterate.js.
+       Run it with `dotnet run` from that project directory (see Iterate.cs for the
+       options), or publish it once as a native binary (NativeAOT) and run that:
+
+         dotnet publish tools/iterate -c Release -r win-arm64 -p:PublishAot=true
+         tools/iterate/bin/Release/net8.0/win-arm64/publish/simse-iterate.exe
+
+       PublishAot is an option, not the default, so a plain `dotnet run` needs only the
+       SDK and no native toolchain. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AssemblyName>simse-iterate</AssemblyName>
+    <RootNamespace>SimseIterate</RootNamespace>
+    <PublishAot Condition="'$(PublishAot)' == ''">false</PublishAot>
+  </PropertyGroup>
+
+</Project>

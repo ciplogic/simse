@@ -25,6 +25,20 @@ checks the published file with a single transpile, refreshing it when the emissi
 `--full` is the commit loop: the release build, the corpus, the refresh, and the two-step fixed
 point. The commands below are what it runs.
 
+The same loop exists as a C# tool (`tools/iterate/`, .NET 8+) whose corpus runs through a pool
+of Tasks, 16 cases at a time by default — the whole corpus in ~9 s where the sequential JS run
+takes ~60 s, and none of bun's overlapping-spawn flakes (`uv_spawn EUNKNOWN`, the reason
+stress.js runs one case at a time). The build, refresh and fixed-point steps spawn the same bun
+tools, so the build logic stays in one place; the fast loop's bootstrap check is native too.
+`--serial` is the old one-case-at-a-time corpus.
+
+```sh
+dotnet run --project tools/iterate -- --full   # the C# loop, same options as iterate.js
+# or published once as a native binary (NativeAOT - no runtime startup):
+dotnet publish tools/iterate -c Release -r win-arm64 -p:PublishAot=true
+tools/iterate/bin/Release/net8.0/win-arm64/publish/simse-iterate.exe --full
+```
+
 ## The commands
 
 ```sh
