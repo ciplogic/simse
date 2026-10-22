@@ -374,12 +374,9 @@ fun Emitter.sretEligible(fn: *CgFn): Bool {
     if (fn.prelude) {
         return false
     }
-    // Free functions only, in this slice: a method's call site spells as a member call,
-    // and rewriting that into the out form is the emitter's member-call spelling, not
-    // the free-name text the IL path builds. A method keeps its by-value ABI.
-    if (!xmlIsEmpty(fn.receiver)) {
-        return false
-    }
+    // Methods are eligible too: their C++ is the free function `qualify(pkg, name)`
+    // taking the receiver first, and the call-site rewrite spells the by-value text with
+    // the destination inserted before the arguments (`IlEmit.ilSretKey` resolves the call).
     if (xmlAttr(decl, AstNodeAttributeKind.IsOperator) == "true"
         || xmlAttr(decl, AstNodeAttributeKind.IsSuspend) == "true"
         || xmlAttr(decl, AstNodeAttributeKind.IsUnionGenerated) == "true"

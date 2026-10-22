@@ -513,7 +513,7 @@ Str toString(Int* self);
 Str toString(Int16* self);
 Str toString(Int64* self);
 Str toString(Char* self);
-Str ns1_toString(ns1_Crate* self);
+void ns1_toString(Str* _sm_out, ns1_Crate* self);
 Int ns1_countItems(ns1_Crate* self);
 template <class TOther>
 Bool ns1_equalsWith(ns1_Crate* self, TOther* other);
@@ -970,8 +970,9 @@ Str toString(Char* self) {
     return _sm_expr1;
 }
 // stress/protocols/src/main.kt
-Str ns1_toString(ns1_Crate* self) {
-    return __sm_stringTable[3];
+void ns1_toString(Str* _sm_out, ns1_Crate* self) {
+    *_sm_out = __sm_stringTable[3];
+    return;
 }
 // stress/protocols/src/main.kt
 Int ns1_countItems(ns1_Crate* self) {
@@ -1069,7 +1070,9 @@ Str ns1_Printable_proto_toString(Bool* self) {
     return simse_bool_toString((*self));
 }
 Str ns1_Printable_proto_toString(ns1_Crate* self) {
-    return ns1_toString(self);
+    Str _sm_proto;
+    ns1_toString(&_sm_proto, self);
+    return _sm_proto;
 }
 Int ns1_Countable_proto_countItems(ns1_Crate* self) {
     return ns1_countItems(self);

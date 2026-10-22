@@ -518,12 +518,12 @@ Str toString(Int* self);
 Str toString(Int64* self);
 Str toString(Char* self);
 void jsonQuoted(Str* _sm_out, Str* value);
-Str toJson(ns1_Point* self);
-Str toJson(Int* self);
-Str toJson(ns1_Label* self);
-Str toJson(Str* self);
-Str toJson(Bool* self);
-Str toJson(ns1_Shape* self);
+void toJson(Str* _sm_out, ns1_Point* self);
+void toJson(Str* _sm_out, Int* self);
+void toJson(Str* _sm_out, ns1_Label* self);
+void toJson(Str* _sm_out, Str* self);
+void toJson(Str* _sm_out, Bool* self);
+void toJson(Str* _sm_out, ns1_Shape* self);
 
 template <class T>
 Int size(Span<T>* self) {
@@ -777,15 +777,15 @@ int main() {
     ns1_Label label, _sm_expr4;
     ns1_Shape shape;
     p = ns1_Point{1, 2};
-    _sm_expr1 = toJson(simse_addressOf(p));
+    toJson(&_sm_expr1, simse_addressOf(p));
     simse_println((_sm_expr1), stdout);
     label = ns1_Label{__sm_stringTable[0], true};
-    _sm_expr2 = toJson(simse_addressOf(label));
+    toJson(&_sm_expr2, simse_addressOf(label));
     simse_println((_sm_expr2), stdout);
     _sm_expr3 = ns1_Point{3, 4};
     _sm_expr4 = ns1_Label{__sm_stringTable[4], false};
     shape = ns1_Shape{__sm_stringTable[8], _sm_expr3, _sm_expr4};
-    _sm_expr5 = toJson(simse_addressOf(shape));
+    toJson(&_sm_expr5, simse_addressOf(shape));
     simse_println((_sm_expr5), stdout);
     return 0;
 }
@@ -853,7 +853,7 @@ void jsonQuoted(Str* _sm_out, Str* value) {
     return;
 }
 // <generated>/kt.kt
-Str toJson(ns1_Point* self) {
+void toJson(Str* _sm_out, ns1_Point* self) {
     Int* _sm_base1, * _sm_base2;
     Str out, _sm_expr1, _sm_expr2;
     out = __sm_stringTable[12];
@@ -862,7 +862,7 @@ Str toJson(ns1_Point* self) {
     simse_str_append(out, '"');
     simse_str_append(out, ':');
     _sm_base1 = simse_addressOf(self->x);
-    _sm_expr1 = toJson(_sm_base1);
+    toJson(&_sm_expr1, _sm_base1);
     simse_str_appendStr(out, _sm_expr1);
     simse_str_append(out, ',');
     simse_str_append(out, '"');
@@ -870,19 +870,21 @@ Str toJson(ns1_Point* self) {
     simse_str_append(out, '"');
     simse_str_append(out, ':');
     _sm_base2 = simse_addressOf(self->y);
-    _sm_expr2 = toJson(_sm_base2);
+    toJson(&_sm_expr2, _sm_base2);
     simse_str_appendStr(out, _sm_expr2);
     simse_str_append(out, '}');
-    return out;
+    *_sm_out = out;
+    return;
 }
 // <generated>/kt.kt
-Str toJson(Int* self) {
+void toJson(Str* _sm_out, Int* self) {
     Str _sm_expr1;
     _sm_expr1 = toString(self);
-    return _sm_expr1;
+    *_sm_out = _sm_expr1;
+    return;
 }
 // <generated>/kt.kt
-Str toJson(ns1_Label* self) {
+void toJson(Str* _sm_out, ns1_Label* self) {
     Str* _sm_base1;
     Bool* _sm_base2;
     Str out, _sm_expr1, _sm_expr2;
@@ -892,7 +894,7 @@ Str toJson(ns1_Label* self) {
     simse_str_append(out, '"');
     simse_str_append(out, ':');
     _sm_base1 = simse_addressOf(self->text);
-    _sm_expr1 = toJson(_sm_base1);
+    toJson(&_sm_expr1, _sm_base1);
     simse_str_appendStr(out, _sm_expr1);
     simse_str_append(out, ',');
     simse_str_append(out, '"');
@@ -900,30 +902,34 @@ Str toJson(ns1_Label* self) {
     simse_str_append(out, '"');
     simse_str_append(out, ':');
     _sm_base2 = simse_addressOf(self->flagged);
-    _sm_expr2 = toJson(_sm_base2);
+    toJson(&_sm_expr2, _sm_base2);
     simse_str_appendStr(out, _sm_expr2);
     simse_str_append(out, '}');
-    return out;
+    *_sm_out = out;
+    return;
 }
 // <generated>/kt.kt
-Str toJson(Str* self) {
+void toJson(Str* _sm_out, Str* self) {
     Str* _sm_base1;
     Str _sm_expr1;
     _sm_base1 = self;
     jsonQuoted(&_sm_expr1, _sm_base1);
-    return _sm_expr1;
+    *_sm_out = _sm_expr1;
+    return;
 }
 // <generated>/kt.kt
-Str toJson(Bool* self) {
+void toJson(Str* _sm_out, Bool* self) {
     if ((*self)) goto L1;
     goto L2;
     L1:;
-    return __sm_stringTable[7];
+    *_sm_out = __sm_stringTable[7];
+    return;
     L2:;
-    return __sm_stringTable[3];
+    *_sm_out = __sm_stringTable[3];
+    return;
 }
 // <generated>/kt.kt
-Str toJson(ns1_Shape* self) {
+void toJson(Str* _sm_out, ns1_Shape* self) {
     Str* _sm_base1;
     ns1_Point* _sm_base2;
     ns1_Label* _sm_base3;
@@ -934,7 +940,7 @@ Str toJson(ns1_Shape* self) {
     simse_str_append(out, '"');
     simse_str_append(out, ':');
     _sm_base1 = simse_addressOf(self->name);
-    _sm_expr1 = toJson(_sm_base1);
+    toJson(&_sm_expr1, _sm_base1);
     simse_str_appendStr(out, _sm_expr1);
     simse_str_append(out, ',');
     simse_str_append(out, '"');
@@ -942,7 +948,7 @@ Str toJson(ns1_Shape* self) {
     simse_str_append(out, '"');
     simse_str_append(out, ':');
     _sm_base2 = simse_addressOf(self->corner);
-    _sm_expr2 = toJson(_sm_base2);
+    toJson(&_sm_expr2, _sm_base2);
     simse_str_appendStr(out, _sm_expr2);
     simse_str_append(out, ',');
     simse_str_append(out, '"');
@@ -950,10 +956,11 @@ Str toJson(ns1_Shape* self) {
     simse_str_append(out, '"');
     simse_str_append(out, ':');
     _sm_base3 = simse_addressOf(self->tag);
-    _sm_expr3 = toJson(_sm_base3);
+    toJson(&_sm_expr3, _sm_base3);
     simse_str_appendStr(out, _sm_expr3);
     simse_str_append(out, '}');
-    return out;
+    *_sm_out = out;
+    return;
 }
 
 template <class T>

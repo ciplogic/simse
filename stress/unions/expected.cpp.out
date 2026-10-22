@@ -1348,7 +1348,7 @@ Int ns1_doubled(ns1_WithMethod* self);
 void ns1_label(Str* _sm_out, ns1_DoubleOrFloat* u);
 void ns1_tagged(Str* _sm_out, ns1_DoubleOrFloat* u);
 void ns1_labelSide(Str* _sm_out, ns1_SideOrSide* s);
-Str ns1_describe(ns1_DoubleOrFloat* self);
+void ns1_describe(Str* _sm_out, ns1_DoubleOrFloat* self);
 Int ns1_strLen(ns1_IntOrStr* u);
 void ns1_strKind(Str* _sm_out, ns1_IntOrStr* u);
 void ns1_mkStr(ns1_IntOrStr* _sm_out);
@@ -1738,7 +1738,7 @@ void ns1_labelSide(Str* _sm_out, ns1_SideOrSide* s) {
     return;
 }
 // stress/unions/src/main.kt
-Str ns1_describe(ns1_DoubleOrFloat* self) {
+void ns1_describe(Str* _sm_out, ns1_DoubleOrFloat* self) {
     Char* __sm_catP;
     ns1_DoubleOrFloat* _sm_base1;
     Str _sm_expr1, _sm_expr2;
@@ -1749,7 +1749,8 @@ Str ns1_describe(ns1_DoubleOrFloat* self) {
     std::memcpy(__sm_catP, "d:", 2);
     __sm_catP = __sm_catP + 2;
     std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
-    return _sm_expr2;
+    *_sm_out = _sm_expr2;
+    return;
 }
 // stress/unions/src/main.kt
 Int ns1_strLen(ns1_IntOrStr* u) {
@@ -1903,7 +1904,7 @@ Int ns1_partUnionClass() {
     _sm_base8 = &a;
     ns1_tagged(&_sm_expr18, _sm_base8);
     simse_println((_sm_expr18), stdout);
-    _sm_expr19 = ns1_describe(simse_addressOf(a));
+    ns1_describe(&_sm_expr19, simse_addressOf(a));
     simse_println((_sm_expr19), stdout);
     ns1_DoubleOrFloat b;
     ns1_initByValue(simse_addressOf(b), 2.5);

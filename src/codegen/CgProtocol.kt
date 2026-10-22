@@ -249,7 +249,15 @@ fun Emitter.emitProtocolDispatch(impl: *CgProtocolImpl, prototypeOnly: Bool): Un
     }
     this.line(0, signature + " {")
     val argsText: Str = cgJoin(args, ", ")
-    if (ret == "void") {
+    // An implementation on the out-parameter ABI is called through it: the thunk keeps
+    // the protocol's by-value shape and hands the call the local it writes (`sretFns`
+    // keys the declaration the same way the definition side did).
+    val implKey: Str = this.qualify(fn.packageName, fn.name)
+    if (ret != "void" && !fn.isNative && this.sretFns.has(implKey)) {
+        this.line(1, ret + " _sm_proto;")
+        this.line(1, target + "(&_sm_proto, " + argsText + ");")
+        this.line(1, "return _sm_proto;")
+    } else if (ret == "void") {
         this.line(1, target + "(" + argsText + ");")
     } else {
         this.line(1, "return " + target + "(" + argsText + ");")
