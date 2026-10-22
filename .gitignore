@@ -109,3 +109,4 @@ _simse/
 
 # bench harness outputs
 bench/.work/
+bench/.work-linux/

@@ -22,6 +22,9 @@ or with trivial fixes - see "State of the port" for what that left.
   own arrangement; Simse has no preprocessor).
 - `simse/kit/kit.kt` - shared u64-over-`Int64` support (below).
 - `run.js` - the harness; `results.md` - the current numbers.
+- `run-linux.js` - the Linux twin: every row built twice, with g++ and clang++
+  (Simse transpiles once - the two compiler builds emit byte-identical C++ - and
+  both compile it); `results-linux-i3.md` - its numbers (i3-N305).
 
 ## Running
 
