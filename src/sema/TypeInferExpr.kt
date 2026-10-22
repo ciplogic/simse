@@ -292,10 +292,118 @@ fun SemInfer.stmts(list: *List<AstXmlNode>): List<AstXmlNode> {
     while (i < list.size()) {
         if (!drop[i]) {
             if (xmlIsEmpty(rewrite[i])) {
-                out.append(this.stmt(list[i]))
+                if (xmlKind(list[i]) == AstNodeCategory.StmtVarDecl
+                    && xmlAttr(list[i], AstNodeAttributeKind.Destructures) != ""
+                ) {
+                    val spread: List<AstXmlNode> = this.destructureStmt(list[i])
+                    for (spreadStmt in spread) {
+                        out.append(spreadStmt)
+                    }
+                } else {
+                    out.append(this.stmt(list[i]))
+                }
             } else {
                 out.append(rewrite[i])
             }
+        }
+        i++
+    }
+    return out
+}
+
+// `val (a, b, _) = e` (specs/declarations.md, "Destructuring bind"): the parser's one temp
+// declaration becomes the temp plus one ordinary declaration per binder, each initialized
+// by a field read of the temp - the shape `for`'s desugar leaves, which the lowering
+// already lowers (`DeclareInit` and the member read). The checker validated the shape
+// (analyzeDestructuring); a shape it could not resolve passes through unchanged and keeps
+// its diagnostic.
+fun SemInfer.destructureStmt(stmtNode: AstXmlNode): List<AstXmlNode> {
+    var out: List<AstXmlNode> = List<AstXmlNode>()
+    val init: *AstXmlNode = xmlChildPtr(stmtNode, AstNodeKind.Init)
+    var typeNode: AstXmlNode = xmlEmptyNode()
+    if (!xmlIsEmpty(init)) {
+        typeNode = this.infer(init)
+    }
+    if (xmlIsEmpty(typeNode)) {
+        out.append(this.stmt(stmtNode))
+        return out
+    }
+    // The value's class, aliases walked the way `Analyzer.unionResolveAlias` walks them
+    // (`facts.types` here - the fan-out runs at lowering, where the checker's tables are
+    // the facts).
+    var resolved: AstXmlNode = typeNode
+    var guard: Int = 0
+    while (!xmlIsEmpty(resolved) && guard < 16) {
+        guard++
+        if (xmlKind(resolved) != AstNodeCategory.TypeNamed) {
+            break
+        }
+        val alias: *AstXmlNode = this.facts.types.getPtr(xmlAttr(resolved, AstNodeAttributeKind.Name))
+        if (alias == null || alias.name != AstNodeKind.TypeAlias) {
+            break
+        }
+        resolved = xmlChildPtr(alias, AstNodeKind.TargetType)
+    }
+    if (xmlIsEmpty(resolved)) {
+        out.append(this.stmt(stmtNode))
+        return out
+    }
+    val decl: *AstXmlNode = this.facts.types.getPtr(xmlAttr(resolved, AstNodeAttributeKind.Name))
+    if (decl == null || decl.name != AstNodeKind.DataClass) {
+        out.append(this.stmt(stmtNode))
+        return out
+    }
+    val fields: List<AstXmlNode> = semAllFields(*this.facts.types, *decl)
+    var binders: List<Str> = xmlAttr(stmtNode, AstNodeAttributeKind.Destructures).split(",")
+    if (fields.size() != binders.size()) {
+        out.append(this.stmt(stmtNode))
+        return out
+    }
+
+    // The temp first, typed and marked like any declaration its initializer can prove.
+    out.append(this.stmt(stmtNode))
+    val tempName: Str = xmlAttr(stmtNode, AstNodeAttributeKind.Name)
+    val isVarText: Str = xmlAttr(stmtNode, AstNodeAttributeKind.IsVar)
+    val lineText: Str = xmlLine(stmtNode).toString()
+    val columnText: Str = xmlColumn(stmtNode).toString()
+    var i: Int = 0
+    while (i < fields.size()) {
+        val binder: Str = binders[i]
+        if (binder != "_") {
+            var binderAttrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+            binderAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, lineText))
+            binderAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, columnText))
+            binderAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, binder))
+            binderAttrs.append(AstNodeAttribute(AstNodeAttributeKind.IsVar, isVarText))
+            var binderNode: AstXmlNode = AstXmlNode(
+                AstNodeKind.Stmt, AstNodeCategory.StmtVarDecl, binderAttrs, Array<AstXmlNode>()
+            )
+            val fieldType: *AstXmlNode = xmlChildPtr(*fields[i], AstNodeKind.Type)
+            if (!xmlIsEmpty(fieldType)) {
+                xmlAddChild(binderNode, semReRole(*fieldType, AstNodeKind.Type))
+            }
+            // `temp.field`, built the way the parser's `memberExprAt` builds one.
+            var receiverAttrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+            receiverAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, lineText))
+            receiverAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, columnText))
+            receiverAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, tempName))
+            var receiver: AstXmlNode = AstXmlNode(
+                AstNodeKind.Expr, AstNodeCategory.ExprName, receiverAttrs, Array<AstXmlNode>()
+            )
+            var memberAttrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+            memberAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, lineText))
+            memberAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, columnText))
+            memberAttrs.append(
+                AstNodeAttribute(AstNodeAttributeKind.Name, xmlAttr(*fields[i], AstNodeAttributeKind.Name))
+            )
+            var member: AstXmlNode = AstXmlNode(
+                AstNodeKind.Expr, AstNodeCategory.ExprMember, memberAttrs, Array<AstXmlNode>()
+            )
+            receiver.name = AstNodeKind.Receiver
+            xmlAddChild(member, receiver)
+            member.name = AstNodeKind.Init
+            xmlAddChild(binderNode, member)
+            out.append(this.stmt(binderNode))
         }
         i++
     }

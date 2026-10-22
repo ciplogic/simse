@@ -691,11 +691,153 @@ fun Analyzer.checkProtocolCall(call: *AstXmlNode, callee: *AstXmlNode): Unit {
     }
 }
 
+// The type of a destructuring initializer, as far as the checker can spell it: the
+// `exprType` arms (constructions, extension calls, member reads, names), plus the two
+// call shapes those miss - a receiver-less function with one candidate, and a class-body
+// method found on the receiver's class or its base chain. Empty for anything else; the
+// binders then defer like an ordinary inferred `val`, and SemInfer gives them the field
+// types at lowering.
+fun Analyzer.destructureInitType(init: *AstXmlNode): AstXmlNode {
+    val direct: AstXmlNode = this.exprType(init)
+    if (!xmlIsEmpty(direct)) {
+        return direct
+    }
+    if (xmlKind(init) != AstNodeCategory.ExprCall) {
+        return xmlEmptyNode()
+    }
+    val callee: *AstXmlNode = xmlChildPtr(init, AstNodeKind.Callee)
+    if (xmlKind(callee) == AstNodeCategory.ExprName) {
+        // A receiver-less function's declared return type, when one candidate spells it.
+        val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+        var overloads: *List<AstXmlNode> = this.functions.getPtr(name)
+        if (overloads == null) {
+            overloads = this.globalFunctions.getPtr(name)
+        }
+        if (overloads != null && overloads.size() == 1) {
+            for (*candidate in *overloads) {
+                if (xmlAttr(candidate, AstNodeAttributeKind.HasReceiver) != "true"
+                    && xmlTypeParamNames(candidate).size() == 0
+                ) {
+                    return semReRole(xmlChildPtr(candidate, AstNodeKind.ReturnType), AstNodeKind.Type)
+                }
+            }
+        }
+        return xmlEmptyNode()
+    }
+    if (xmlKind(callee) == AstNodeCategory.ExprMember) {
+        // A class-body method: the name on the receiver's class, its base chain included,
+        // with the call's argument count as the arity.
+        val receiverType: AstXmlNode = this.exprType(xmlChildPtr(callee, AstNodeKind.Receiver))
+        if (xmlIsEmpty(receiverType)) {
+            return xmlEmptyNode()
+        }
+        val outer: AstXmlNode = this.semaReceiverOuter(receiverType)
+        if (xmlKind(outer) != AstNodeCategory.TypeNamed && xmlKind(outer) != AstNodeCategory.TypeGeneric) {
+            return xmlEmptyNode()
+        }
+        var decl: *AstXmlNode = this.types.getPtr(xmlAttr(outer, AstNodeAttributeKind.Name))
+        if (decl == null) {
+            decl = this.globalTypes.getPtr(xmlAttr(outer, AstNodeAttributeKind.Name))
+        }
+        val method: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+        val argCount: Int = xmlCount(init, AstNodeKind.Arg)
+        var guard: Int = 0
+        while (decl != null && guard < 64) {
+            guard++
+            for (*methodDecl in xmlChildren(*decl, AstNodeKind.Function)) {
+                if (xmlAttr(methodDecl, AstNodeAttributeKind.Name) == method
+                    && xmlCount(*methodDecl, AstNodeKind.Param) == argCount
+                    && xmlTypeParamNames(methodDecl).size() == 0
+                ) {
+                    return semReRole(xmlChildPtr(*methodDecl, AstNodeKind.ReturnType), AstNodeKind.Type)
+                }
+            }
+            decl = semaBaseDecl(*this.types, *decl)
+        }
+        return xmlEmptyNode()
+    }
+    return xmlEmptyNode()
+}
+
+// `val (a, b, _) = e` (specs/declarations.md, "Destructuring bind"): the temp declaration
+// is analyzed like any `val` - the initializer, then its type - and each binder is declared
+// with the field its position names, `_` skipping a slot. The value must be a plain data
+// class, inheritance included (`semAllFields` is the base-fields-first order the source
+// spells); a union class, a generic class, anything else, or a count mismatch is a
+// diagnostic when the checker can spell the value's type. When it cannot - a plain call,
+// say - the binders defer like an ordinary inferred `val` (declared with the empty type,
+// uses pass here), and SemInfer fans them out with the field types at lowering.
+fun Analyzer.analyzeDestructuring(stmt: *AstXmlNode, init: *AstXmlNode, destructures: *Str): Unit {
+    if (!xmlIsEmpty(init)) {
+        this.analyzeExpr(init)
+    }
+    var binders: List<Str> = destructures.split(",")
+    val isVar: Bool = xmlAttr(stmt, AstNodeAttributeKind.IsVar) == "true"
+    val type: AstXmlNode = this.destructureInitType(init)
+    if (xmlIsEmpty(type)) {
+        this.declareValue(xmlAttr(stmt, AstNodeAttributeKind.Name), isVar, true, xmlEmptyNode())
+        var i: Int = 0
+        while (i < binders.size()) {
+            val binder: Str = binders[i]
+            if (binder != "_") {
+                this.declareValue(binder, isVar, true, xmlEmptyNode())
+            }
+            i++
+        }
+        return
+    }
+    val resolved: AstXmlNode = this.unionResolveAlias(type)
+    val typeText: Str = semaTypeText(type)
+    if ((xmlKind(resolved) != AstNodeCategory.TypeNamed && xmlKind(resolved) != AstNodeCategory.TypeGeneric)) {
+        this.diag(xmlLine(stmt), xmlColumn(stmt), `'@typeText' is not destructurable: the pattern needs a data class value`)
+        return
+    }
+    var decl: *AstXmlNode = this.types.getPtr(xmlAttr(resolved, AstNodeAttributeKind.Name))
+    if (decl == null) {
+        decl = this.globalTypes.getPtr(xmlAttr(resolved, AstNodeAttributeKind.Name))
+    }
+    if (decl == null || decl.name != AstNodeKind.DataClass) {
+        this.diag(xmlLine(stmt), xmlColumn(stmt), `'@typeText' is not destructurable: the pattern needs a data class value`)
+        return
+    }
+    val className: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+    if (xmlAttr(decl, AstNodeAttributeKind.IsUnionClass) == "true") {
+        this.diag(xmlLine(stmt), xmlColumn(stmt), `'@className' is a union class: match its arms with when, do not destructure it`)
+        return
+    }
+    if (xmlTypeParamNames(decl).size() > 0) {
+        this.diag(xmlLine(stmt), xmlColumn(stmt), `the generic class '@className' is not destructurable yet`)
+        return
+    }
+    val fields: List<AstXmlNode> = semAllFields(*this.types, *decl)
+    val binderCount: Int = binders.size()
+    val fieldCount: Int = fields.size()
+    if (binderCount != fieldCount) {
+        this.diag(xmlLine(stmt), xmlColumn(stmt), `pattern '@destructures' has @binderCount elements, '@className' has @fieldCount fields`)
+        return
+    }
+    this.declareValue(xmlAttr(stmt, AstNodeAttributeKind.Name), isVar, true, type)
+    var i: Int = 0
+    while (i < fields.size()) {
+        val binder: Str = binders[i]
+        if (binder != "_") {
+            val fieldType: *AstXmlNode = xmlChildPtr(*fields[i], AstNodeKind.Type)
+            this.declareValue(binder, isVar, true, fieldType)
+        }
+        i++
+    }
+}
+
 fun Analyzer.analyzeStmt(stmt: *AstXmlNode): Unit {
     val kind: AstNodeCategory = xmlKind(stmt)
     when (kind) {
         AstNodeCategory.StmtVarDecl -> {
             val init: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Init)
+            val destructures: Str = xmlAttr(stmt, AstNodeAttributeKind.Destructures)
+            if (destructures != "") {
+                this.analyzeDestructuring(stmt, init, destructures)
+                return
+            }
             if (!xmlIsEmpty(init)) {
                 this.analyzeExpr(init)
             }

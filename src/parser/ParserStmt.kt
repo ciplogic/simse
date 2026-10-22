@@ -30,7 +30,9 @@ fun Parser.parseBlock(): List<AstXmlNode> {
 }
 
 // One source statement appended to `out`, but a statement may expand to several: `for`
-// is a declaration plus its loop, and the declaration must sit outside the loop.
+// is a declaration plus its loop, and the declaration must sit outside the loop. A
+// destructuring `val (a, b) = e` is intercepted the same way - the plain `parseStmt`
+// would read `(` as a parenthesized expression.
 fun Parser.parseStmtInto(out: *List<AstXmlNode>): Bool {
     val text: Str = this.peek(0).text
     when (text) {
@@ -40,6 +42,12 @@ fun Parser.parseStmtInto(out: *List<AstXmlNode>): Bool {
 
         "when" -> {
             return this.parseWhen(out)
+        }
+
+        "val", "var" -> {
+            if (this.peek(1).text == "(") {
+                return this.parseDestructuringDecl(out)
+            }
         }
     }
     val stmt: AstXmlNode = this.parseStmt()
@@ -176,6 +184,61 @@ fun Parser.parseVarDecl(): AstXmlNode {
         this.attach(node, AstNodeKind.Init, init.node)
     }
     return node
+}
+
+// `val (a, b, _) = vals()` (specs/declarations.md, "Destructuring bind"): Go's `a, b :=`
+// bind, as one declaration the later passes fan out. The node is a plain `StmtVarDecl`
+// whose name is the compiler's temp (`_sm_destr<N>`, the `for` template's counter) and
+// whose `Destructures` attribute carries the binders in order, `_` for a position that
+// binds nothing - SemInfer reads the attribute, checks the shape against the value's data
+// class, and splices one ordinary declaration per binder. No `Type` child: the type is
+// the initializer's, and the temp is never a user-visible name.
+fun Parser.parseDestructuringDecl(out: *List<AstXmlNode>): Bool {
+    val pos: SourcePos = this.peek(0).pos
+    val isVar: Bool = this.matchText("var")
+    if (!isVar) {
+        if (!this.expectText("val")) {
+            return false
+        }
+    }
+    if (!this.expectText("(")) {
+        return false
+    }
+    var binders: List<Str> = List<Str>()
+    while (!this.checkText(")") && !this.atEnd() && !this.failed) {
+        val binder: Str = this.expectName()
+        if (this.failed) {
+            return false
+        }
+        binders.append(binder)
+        this.skipNewlines()
+        if (!this.matchText(",")) {
+            break
+        }
+        this.skipNewlines()
+    }
+    if (!this.expectText(")")) {
+        return false
+    }
+    if (!this.expectText("=")) {
+        return false
+    }
+    this.skipNewlines()
+    val init: ExprNode = this.parseExpr(0)
+    if (this.failed) {
+        return false
+    }
+
+    val id: Int = this.nextTemplateId
+    this.nextTemplateId++
+    var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, "_sm_destr" + id.toString()))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsVar, boolText(isVar)))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Destructures, joinStrs(binders, ",")))
+    var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtVarDecl, attrs, Array<AstXmlNode>())
+    this.attach(node, AstNodeKind.Init, init.node)
+    out.append(node)
+    return true
 }
 
 fun Parser.parseIf(): AstXmlNode {

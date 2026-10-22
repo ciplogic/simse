@@ -137,7 +137,14 @@ enum class AstNodeAttributeKind {
     // the base class - one plain identifier, as every type name is spelled - so the field
     // list, the layout and the constructor are the base's fields followed by the class's
     // own. `sema.Inherit.kt` owns the relation; the emitter flattens it into the struct.
-    Base
+    Base,
+
+    // `val (a, b) = e` (specs/declarations.md, "Destructuring bind"): the binders of a
+    // destructuring `val`/`var`, joined by a comma, `_` for a position that binds nothing
+    // (`a,b,_`). The declaration's name is the compiler's temp (`_sm_destr<N>`) holding the
+    // value; SemInfer fans the binders out as ordinary declarations. Appended last, so the
+    // values already in use do not move.
+    Destructures
 }
 
 // What a node is - the schema's `kind` - as against its role (`AstNodeKind`, where it

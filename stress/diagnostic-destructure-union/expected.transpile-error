@@ -1,0 +1,1 @@
+'DoubleOrFloat' is a union class: match its arms with when, do not destructure it
