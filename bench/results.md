@@ -34,16 +34,15 @@ pointer-heavy benchmarks.
 
 ## Rows not compared
 
-- **records, sexp, calc, respond** - the Simse port runs and prints, but its
-  checksum disagrees with C++ at both sizes; per the agreed scope these were
-  not debugged further. C++ reference times for context: records 79/448 ms,
-  sexp 384/1876 ms, calc 169/592 ms, respond 97 ms (small).
-- **graph, blur** - the exes were policy-blocked at run time on this machine
-  (Smart App Control denies fresh unsigned binaries intermittently); the
-  harness retries but these sizes did not complete a clean interleaved pass.
-- **scene** - build error in the generated C++: `0.0 - s` promotes to
-  `Float64` and the braced initializer refuses the narrowing into `Float32`
-  fields; one-line fix, not applied within this pass's scope.
+- **records, sexp** - checksums now agree at small size after the
+  logical-shift fix (see bench/README.md); timings still pending a clean
+  harness pass. C++ reference times for context: records 79/448 ms,
+  sexp 384/1876 ms (small/medium).
+- **calc, respond, scene, graph, blur** - carry fixes (calc: static-`resize`
+  workaround; scene: Float32 narrowing; respond/graph: logical shift) but a
+  clean verification pass was cut short by the executable policy blocks this
+  machine intermittently applies to freshly linked binaries. C++ reference
+  times for context: calc 169/592 ms, respond 97 ms (small/medium).
 
 ## Reading
 

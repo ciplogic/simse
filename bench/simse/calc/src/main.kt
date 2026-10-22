@@ -40,7 +40,7 @@ fun gen(depth: Int, seed: Int64): Int64 {
     var r: Int64 = xsNext(seed)
     val k: Int64 = xsMod(r, 8)
     if (depth == 0 || k == Int64(0)) {
-        emitNum(1 + Int(xsMod(r >> 8, 99)))
+        emitNum(1 + Int(xsMod(uShr(r, 8), 99)))
         return r
     }
     if (k == 1) {
@@ -54,7 +54,7 @@ fun gen(depth: Int, seed: Int64): Int64 {
         return r
     }
     r = gen(depth - 1, r)
-    val op: Int64 = xsMod(r >> 16, 4)
+    val op: Int64 = xsMod(uShr(r, 16), 4)
     text.append(' ')
     if (op == 0) {
         text.append('+')
@@ -85,11 +85,14 @@ fun corrupt(seed: Int64): Unit {
         return
     }
     if (kind == 1) {
-        text[Int(xsMod(seed >> 8, Int64(text.size())))] = '#'
+        text[Int(xsMod(uShr(seed, 8), Int64(text.size())))] = '#'
         return
     }
     if (kind == 2) {
-        resize(text, text.size() / 2)
+        // Reassignment, not `resize`: shrinking a static `Str` through the
+        // resize intrinsic does not land on the static (the appends do), so
+        // the halving goes through a fresh copy instead.
+        text = text.substr(0, text.size() / 2)
         return
     }
     if (kind == 3) {
@@ -266,7 +269,9 @@ fun main(): Int {
     var i: Int = 0
     while (i < N) {
         seed = xsNext(seed)
-        resize(text, 0)
+        // A fresh buffer per input: the one visible cost of the static-resize
+        // gap above; the C++ arena row keeps its text capacity instead.
+        text = Str()
         val depth: Int = 3 + Int(xsMod(seed, 4))
         val s: Int64 = gen(depth, seed >> 8)
         corrupt(s)

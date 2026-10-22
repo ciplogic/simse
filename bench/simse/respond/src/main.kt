@@ -19,7 +19,7 @@ fun nameOf(seed: Int64): Str {
     var s: Str = Str()
     var r: Int64 = xsNext(seed)
     val n: Int = 3 + Int(xsMod(r, 8))
-    val odd: Bool = xsMod(r >> 8, 8) == Int64(0)
+    val odd: Bool = xsMod(uShr(r, 8), 8) == Int64(0)
     var i: Int = 0
     while (i < n) {
         r = xsNext(r)
@@ -42,7 +42,7 @@ fun skuOf(seed: Int64): Str {
     var s: Str = Str()
     var r: Int64 = xsNext(seed)
     s.append(Char(65 + Int(xsMod(r, 26))))
-    s.append(Char(65 + Int(xsMod(r >> 8, 26))))
+    s.append(Char(65 + Int(xsMod(uShr(r, 8), 26))))
     var i: Int = 0
     while (i < 4) {
         r = xsNext(r)
@@ -58,7 +58,7 @@ fun makeItems(seed: Int64, n: Int): List<Item> {
     var i: Int = 0
     while (i < n) {
         r = xsNext(r)
-        t.append(Item(skuOf(r), 1 + Int(xsMod(r >> 8, 5)), 100 + Int(xsMod(r >> 16, 99900))))
+        t.append(Item(skuOf(r), 1 + Int(xsMod(uShr(r, 8), 5)), 100 + Int(xsMod(uShr(r, 16), 99900))))
         i++
     }
     return t
@@ -142,7 +142,7 @@ fun fnv(s: *Str): Int64 {
 fun handle(seed: Int64): HOut {
     val r: Int64 = xsNext(seed)
     val n: Int = 1 + Int(xsMod(r, 8))
-    val resp: Resp = Resp(Int64(xsMod(r >> 4, 1000000)), nameOf(r >> 8), makeItems(r >> 16, n))
+    val resp: Resp = Resp(Int64(xsMod(uShr(r, 4), 1000000)), nameOf(r >> 8), makeItems(r >> 16, n))
     var out: Str = Str()
     render(out, resp)
     return HOut(fnv(out), out.size())

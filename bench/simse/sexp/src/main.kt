@@ -55,16 +55,16 @@ fun emitNum(v: Int): Unit {
 fun gen(depth: Int, seed: Int64): Int64 {
     var r: Int64 = xsNext(seed)
     if (depth == 0 || xsMod(r, 4) == Int64(0)) {
-        if (xsMod(r >> 8, 2) == Int64(0)) {
+        if (xsMod(uShr(r, 8), 2) == Int64(0)) {
             emitSym(r)
         } else {
-            emitNum(Int(xsMod(r >> 16, 100000)))
+            emitNum(Int(xsMod(uShr(r, 16), 100000)))
         }
         text.append(' ')
         return r
     }
     text.append('(')
-    val kids: Int = 2 + Int(xsMod(r >> 24, 4))
+    val kids: Int = 2 + Int(xsMod(uShr(r, 24), 4))
     var k: Int = 0
     while (k < kids) {
         r = gen(depth - 1, r)

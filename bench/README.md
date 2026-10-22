@@ -89,13 +89,29 @@ loops.)
 ## State of the port
 
 Checksums verified against C++ at small and medium sizes: **sum, push,
-strlist, tree, interp, words, particles, lru, bintrees**. Numbers and the
+strlist, tree, interp, words, particles, lru, bintrees**, and at small size
+**records** and **sexp** after the fix described below. Numbers and the
 reading are in [results.md](results.md).
 
-Not yet compared: `records`, `sexp`, `calc`, `respond` run but their checksums
-disagree (each prints some lines correctly - the divergence is in the middle
-of the stream; not debugged within this pass's scope); `scene` hits a
-Float64->Float32 narrowing rejection in the generated C++ (`0.0 - s` promotes
-through the `Float64` literal - a one-line source fix); `graph` and `blur`
-compiled but their measurement passes were cut short by the policy blocks
-described above.
+Two port-wide bugs were found and fixed while reconciling checksums:
+
+- **Logical shift before unsigned mod.** `xsMod(r >> s, k)` reads the
+  arithmetic shift, where C++ shifts a `uint64_t` logically; the sign
+  extension changes the value by `2^(64-s) * (2^s - 1)`, which is a multiple
+  of `k` only when `k` is a power of two (why the power-of-two benchmarks
+  passed while `records`, `sexp`, `graph`, `scene` drifted). Every shifted
+  modulus now goes `xsMod(uShr(r, s), k)`.
+- **`resize` on a static `Str` does not land.** Appends to a file-level
+  static stick; a `resize` of one silently operates on a copy (compiler gap,
+  probe in bench/.work history). `calc` was the one benchmark that cleared a
+  static text per input; it now reassigns (`text = Str()`,
+  `text = text.substr(...)`) at the cost of the reused capacity the C++ arena
+  row keeps.
+
+Still open: `respond` agrees on request count but its byte total and FNV
+checksum drift slightly (65 bytes in 100k requests) with no shifted modulus
+or resize left in the file - cause not found; `calc` and `scene` carry the
+fixes above but a clean verification run was cut short by the executable
+policy blocks described under Running; `graph` and `blur` are believed
+correct (no known-broken construct remains) and equally unverified for the
+same reason.

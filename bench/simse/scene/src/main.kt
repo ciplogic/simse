@@ -29,10 +29,13 @@ fun ident(): Xf {
     return Xf(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0)
 }
 
-// One of twelve axis-aligned rotations, from the seed.
+// One of twelve axis-aligned rotations, from the seed. `zf` keeps the
+// negations in Float32: `0.0 - s` would promote through the Float64 literal
+// and the braced initializer rejects the narrowing.
 fun rotation(seed: Int64): Xf {
+    val zf: Float32 = 0.0
     val axis: Int64 = xsMod(seed, 3)
-    val quarter: Int64 = xsMod(seed >> 8, 4)
+    val quarter: Int64 = xsMod(uShr(seed, 8), 4)
     var c: Float32 = 1.0
     var s: Float32 = 0.0
     if (quarter == 1) {
@@ -46,12 +49,12 @@ fun rotation(seed: Int64): Xf {
         s = -1.0
     }
     if (axis == 0) {
-        return Xf(1.0, 0.0, 0.0, 0.0, c, 0.0 - s, 0.0, s, c, 0.0, 0.0, 0.0)
+        return Xf(1.0, 0.0, 0.0, 0.0, c, zf - s, 0.0, s, c, 0.0, 0.0, 0.0)
     }
     if (axis == 1) {
-        return Xf(c, 0.0, s, 0.0, 1.0, 0.0, 0.0 - s, 0.0, c, 0.0, 0.0, 0.0)
+        return Xf(c, 0.0, s, 0.0, 1.0, 0.0, zf - s, 0.0, c, 0.0, 0.0, 0.0)
     }
-    return Xf(c, 0.0 - s, 0.0, s, c, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0)
+    return Xf(c, zf - s, 0.0, s, c, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0)
 }
 
 fun kidAt(n: SNode, k: Int): Int {
@@ -74,13 +77,13 @@ fun build(depth: Int, seed: Int64): Int {
     val r: Int64 = xsNext(seed)
     val self: Int = pool.size()
     pool.append(SNode(self, rotation(r), ident(), 0, 0, 0, 0, 0))
-    pool[self].local.tx = Float32(xsMod(r >> 16, 9))
-    pool[self].local.ty = Float32(xsMod(r >> 24, 9))
-    pool[self].local.tz = Float32(xsMod(r >> 32, 9))
+    pool[self].local.tx = Float32(xsMod(uShr(r, 16), 9))
+    pool[self].local.ty = Float32(xsMod(uShr(r, 24), 9))
+    pool[self].local.tz = Float32(xsMod(uShr(r, 32), 9))
     if (depth == 0) {
         return self
     }
-    val n: Int = 1 + Int(xsMod(r >> 40, MAXKIDS))
+    val n: Int = 1 + Int(xsMod(uShr(r, 40), MAXKIDS))
     var i: Int = 0
     while (i < n) {
         val c: Int = build(depth - 1, xsNext(r + Int64(i)))

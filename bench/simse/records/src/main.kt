@@ -40,15 +40,15 @@ fun main(): Int {
     while (i < N) {
         r = xsNext(r)
         val k: Int64 = xsMod(r, 8)
-        val id: Int = Int(xsMod(r >> 3, 100000))
+        val id: Int = Int(xsMod(uShr(r, 3), 100000))
         if (k < 4) {
-            val dx: Int = Int(xsMod(r >> 20, 201)) - 100
-            val dy: Int = Int(xsMod(r >> 40, 201)) - 100
+            val dx: Int = Int(xsMod(uShr(r, 20), 201)) - 100
+            val dy: Int = Int(xsMod(uShr(r, 40), 201)) - 100
             log.append(Event(MoveK(id, dx, dy)))
         } else if (k < 6) {
             log.append(Event(SayK(id, word(r))))
         } else if (k < 7) {
-            log.append(Event(QuitK(id, Int(xsMod(r >> 20, 256)))))
+            log.append(Event(QuitK(id, Int(xsMod(uShr(r, 20), 256)))))
         } else {
             log.append(Event(TickK()))
         }

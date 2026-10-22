@@ -31,7 +31,7 @@ fun main(): Int {
     while (e < ne) {
         r = xsNext(r)
         val u: Int = Int(xsMod(r, Int64(V)))
-        val w: Int = Int(xsMod(r >> 24, Int64(V)))
+        val w: Int = Int(xsMod(uShr(r, 24), Int64(V)))
         pool.append(Edge(w, pool[u].next))
         pool[u].next = pool.size() - 1
         e++
