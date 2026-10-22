@@ -31,8 +31,10 @@
 //   --release         compile the generated programs with /O2 /Ob3 (default: /MDd)
 //   --define <d[=v]>  extra preprocessor define for the compile (repeatable)
 //   --arch <arch>     vcvarsall target architecture (default: the host's)
-//   --jobs <n>        cases to run at once (default: auto - one per CPU, capped at 12;
-//                     0 is auto too, 1 runs them one at a time)
+//   --jobs <n>        cases to run at once (default: 1 - one at a time, because the
+//                     worker pool's overlapping spawns flake on some machines
+//                     (`uv_spawn` EUNKNOWN, a different case each run); pass a
+//                     count to overlap on a machine where they hold)
 //   --quiet           print only the failures and the summary line (the iterate loop's
 //                     output: a run that passes says one line)
 //   --update          rewrite `expected.stdout`/`.stderr`/`.exit` from this run
@@ -42,6 +44,11 @@
 //   --keep-going      report every failure instead of stopping at the first
 //   --verbose         print the commands, and each program's output
 //   -h, --help        this text
+//
+// One case at a time by default, and a case whose *harness* plumbing failed (a process
+// that would not spawn) is retried once: the machine's process spawner fails at random,
+// and the corpus must not fail on its own plumbing. A comparison failure is never
+// retried - that result is the program's.
 //
 // The compiler under test is the point: the harness runs `./simse.exe`, the compiler
 // built from the published bootstrap, and every program it compiles is one translation
@@ -100,7 +107,11 @@ function parseArgs(argv) {
       default: fail(`unknown option '${argv[i]}' (try --help)`);
     }
   }
-  if (opts.jobs === 0) opts.jobs = Math.min(12, Math.max(2, (Bun.env.NUMBER_OF_PROCESSORS || 4) - 1));
+  // One at a time by default. The pool's overlapping spawns flake on some machines -
+  // `uv_spawn` fails with EUNKNOWN mid-run, a different case every time, each fine on a
+  // rerun - and a harness that fails at random is worse than a slower one. `--jobs <n>`
+  // opts back into the overlap.
+  if (opts.jobs === 0) opts.jobs = 1;
   if (opts.jobs < 0 || !Number.isFinite(opts.jobs)) fail("--jobs wants a count");
   return opts;
 }
@@ -292,6 +303,24 @@ function describe(caseDir) {
   return marks.length > 0 ? ` [${marks.join(", ")}]` : "";
 }
 
+// One case, steadily: a *harness* error - the case never reached a comparison - is
+// retried once, because the machine's process spawner fails at random (`uv_spawn`
+// EUNKNOWN, a different case every run, sequential or not) and a validation harness
+// must not fail on its own plumbing. A comparison failure is never retried: that
+// result is the program's, not the harness's. `runCase` rebuilds the work directory
+// from scratch, so a rerun starts clean.
+async function runCaseSteady(build, study) {
+  for (let attempt = 0; ; attempt++) {
+    let result;
+    try {
+      result = await runCase(build, study);
+    } catch (error) {
+      result = { name: study.name, ok: false, detail: `harness error: ${error.message}` };
+    }
+    if (result.ok || attempt > 0 || !result.detail.startsWith("harness error:")) return result;
+  }
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (opts.help) {
@@ -327,7 +356,7 @@ async function main() {
       const study = cases[at];
       let result;
       try {
-        result = await runCase(build, study);
+        result = await runCaseSteady(build, study);
       } catch (error) {
         result = { name: study.name, ok: false, detail: `harness error: ${error.message}` };
       }
