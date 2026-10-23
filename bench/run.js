@@ -8,7 +8,7 @@
 // same flags, so the comparison is the data structure and memory strategy, not
 // the backend.
 //
-//   bun bench/run.js                       # small and medium sizes, 3 reps
+//   bun bench/run.js                       # medium size, 3 reps, ratio report
 //   bun bench/run.js --sizes small,medium,large
 //   bun bench/run.js --filter blur --reps 5
 //
@@ -96,7 +96,9 @@ function runProcess(command, options = {}) {
 }
 
 function parseArgs(argv) {
-    const opts = { filters: [], sizes: ["small", "medium"], reps: 3, simse: null };
+    // Medium only by default: the small sizes sit on the process-startup floor and move
+    // with core scheduling, so their ratios are noise; ask for them with --sizes.
+    const opts = { filters: [], sizes: ["medium"], reps: 3, simse: null };
     const value = (i) => {
         if (i + 1 >= argv.length) fail(`missing value for ${argv[i]}`);
         return argv[i + 1];
@@ -313,51 +315,47 @@ async function main() {
 
 function writeResults(opts, selected, results) {
     let md = `# Results: Simse vs C++ over the Goose benchmark suite\n\n`;
-    md += `Process wall time, median of ${opts.reps} runs, same cl.exe and flags for both\n`;
-    md += `(/O2 /Ob3 /GL /MD). Sizes: ${opts.sizes.join(", ")}. Checksums verified across rows.\n\n`;
-    const ratios = [];
+    md += `Ratios of process wall time (median of ${opts.reps} interleaved runs, same cl.exe and\n`;
+    md += `flags for every row): the idiomatic C++ row (VARIANT 0) is the 1.00 baseline, and each\n`;
+    md += `other column is that row's time divided by it - so the reading is machine-independent\n`;
+    md += `to first order, a slower or busier core slowing both sides together. Sizes:\n`;
+    md += `${opts.sizes.join(", ")}. Checksums verified across rows; a row that disagrees is a\n`;
+    md += `mismatch, never timed.\n\n`;
+    md += `| benchmark | Simse / std | hand-tuned / std |\n`;
+    md += `| --- | --- | --- |\n`;
+    const problemsByBench = [];
     for (const bench of selected) {
         const r = results[bench.name];
-        md += `## ${bench.name}\n\n${r.what}\n\n`;
-        md += `| implementation | ${opts.sizes.map((s) => `${s} (${r.param}=${bench.sizes[SIZE_NAMES.indexOf(s)]})`).join(" | ")} |\n`;
-        md += `| --- | ${opts.sizes.map(() => "---").join(" | ")} |\n`;
-        const rowNames = new Set();
-        for (const sizeName of opts.sizes) {
-            for (const row of Object.keys(r.sizes[sizeName] ?? {})) rowNames.add(row);
-        }
-        let haveAll = true;
-        for (const row of rowNames) {
-            const cells = opts.sizes.map((s) => {
-                const cell = (r.sizes[s] ?? {})[row];
-                if (!cell) return "-";
-                if (cell.error) return `failed`;
-                return `${cell.ms.toFixed(0)} ms`;
-            });
-            md += `| ${row} | ${cells.join(" | ")} |\n`;
-            if (!(r.sizes[opts.sizes[0]]?.[row]?.ms)) haveAll = false;
-        }
-        if (r.sizes[opts.sizes[0]]?.simse?.ms && r.sizes[opts.sizes[0]]?.["cpp variant " + bench.cpp[0]]?.ms) {
-            ratios.push({ bench, r });
-        }
+        const stdLabel = "cpp variant " + bench.cpp[0];
+        const cells = opts.sizes.map((sizeName) => {
+            const at = r.sizes[sizeName] ?? {};
+            const std = at[stdLabel];
+            if (!std?.ms) return { simse: "-", expert: "-" };
+            let simse = "-";
+            if (at.simse?.ms) simse = (at.simse.ms / std.ms).toFixed(2);
+            else if (at.simse?.error) simse = "mismatch";
+            let expert = "-";
+            let best = null;
+            for (const variant of bench.cpp) {
+                if (variant === bench.cpp[0]) continue;
+                const row = at["cpp variant " + variant];
+                if (row?.ms && (best === null || row.ms < best)) best = row.ms;
+            }
+            if (best !== null) expert = (best / std.ms).toFixed(2);
+            return { simse, expert };
+        });
+        const simseCell = cells.map((c) => c.simse).join(", ");
+        const expertCell = cells.map((c) => c.expert).join(", ");
+        md += `| ${bench.name} | ${simseCell} | ${expertCell} |\n`;
         const problems = Object.entries(r.checks);
         if (problems.length > 0) {
-            md += `\nChecksum problems: ${problems.map(([s, why]) => `${s}: ${why}`).join("; ")}\n`;
+            problemsByBench.push(`- **${bench.name}** - ${problems.map(([s, why]) => `${s}: ${why}`).join("; ")}`);
         }
-        md += "\n";
     }
-    if (ratios.length > 0) {
-        md += `## Simse / C++ (idiomatic variant) ratio\n\n`;
-        md += `| benchmark | ${opts.sizes.join(" | ")} |\n| --- | ${opts.sizes.map(() => "---").join(" | ")} |\n`;
-        for (const { bench, r } of ratios) {
-            const cells = opts.sizes.map((s) => {
-                const simse = (r.sizes[s] ?? {}).simse;
-                const cpp = (r.sizes[s] ?? {})["cpp variant " + bench.cpp[0]];
-                return cpp?.ms && simse?.ms ? (simse.ms / cpp.ms).toFixed(2) + "x" : "-";
-            });
-            md += `| ${bench.name} | ${cells.join(" | ")} |\n`;
-        }
-        md += "\n";
+    if (problemsByBench.length > 0) {
+        md += `\nChecksum problems:\n\n${problemsByBench.join("\n")}\n`;
     }
+    md += "\n";
     writeFileSync(path.join(HERE, "results.md"), md);
 }
 

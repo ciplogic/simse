@@ -21,7 +21,8 @@ or with trivial fixes - see "State of the port" for what that left.
   baked in by rewriting the one line carrying `// BENCH_N` (the goose suite's
   own arrangement; Simse has no preprocessor).
 - `simse/kit/kit.kt` - shared u64-over-`Int64` support (below).
-- `run.js` - the harness; `results.md` - the current numbers.
+- `run.js` - the harness; `results.md` - the current ratios (the idiomatic C++ row is
+  the 1.00 baseline; small sizes are startup-floor noise and run only with --sizes).
 - `run-linux.js` - the Linux twin: every row built twice, with g++ and clang++
   (Simse transpiles once - the two compiler builds emit byte-identical C++ - and
   both compile it); `results-linux-i3.md` - its numbers (i3-N305).
@@ -29,7 +30,7 @@ or with trivial fixes - see "State of the port" for what that left.
 ## Running
 
 ```sh
-bun bench/run.js                                  # small+medium, 3 reps, ./simse.exe
+bun bench/run.js                                  # medium only, 3 reps, ./simse.exe
 bun bench/run.js --sizes small,medium,large       # the goose suite's full schedule
 bun bench/run.js --filter tree --filter blur      # a subset
 bun bench/run.js --simse some/other/simse.exe     # another compiler build
