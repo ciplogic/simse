@@ -18,6 +18,14 @@
 // changes the key. Both slots must be written exactly once in the body, since the local merge reuses
 // a slot whose live ranges do not overlap.
 //
+// **An element address dies at a call**: `&xs[i]` names the buffer's storage, and a callee may
+// move it (an `append` reallocs), so an element address never merges with an equal twin computed
+// before the block's most recent call - the address classes before and after the call are
+// separate. Field addresses are untouched by this: a call cannot move a struct, and a field of a
+// killed element address cannot match its pre-call twin (the base slot's key already moved), so
+// the `self->out` collapse below survives. Scalar arithmetic and static addresses cannot move at
+// all.
+//
 // Runs before `ilReusePure` (both are `ilReuseUnit`'s): merging the addresses makes a later read name
 // the same slot a mutation's argument names, so the purity rule sees the alias.
 
@@ -30,6 +38,23 @@ fun ilReuseExprOp(kind: IlOpKind): Bool {
     return kind == IlOpKind.BinaryOp || kind == IlOpKind.UnaryOp
             || kind == IlOpKind.FieldAddr || kind == IlOpKind.IndexAddr
             || kind == IlOpKind.GetStaticAddr
+}
+
+// The call opcodes: a callee may mutate a container, and a mutating call moves its buffer
+// (an append reallocs), so an address computed before one does not name the same storage
+// after it - `append` borrows the list, it is not pure.
+fun ilReuseCallOp(kind: IlOpKind): Bool {
+    return kind == IlOpKind.Call || kind == IlOpKind.CallVoid
+            || kind == IlOpKind.CallIndirect || kind == IlOpKind.CallIndirectVoid
+            || kind == IlOpKind.CallCtor
+}
+
+// The container-element addresses: `&xs[i]` names the buffer's storage, and a callee may
+// move that buffer (an append reallocs), so it never merges across one. A field address
+// keeps its validity across calls - its base is the slot chain the key already tracks, so
+// a field on a killed element address cannot match its pre-call twin anyway.
+fun ilReuseAddrOp(kind: IlOpKind): Bool {
+    return kind == IlOpKind.IndexAddr
 }
 
 // Whether the body has an op this pass could reuse at all: the cheap gate in front of the scans.
@@ -95,6 +120,9 @@ fun ilReuseExprs(il: *IlBody): Bool {
         var drop: Dictionary<Int, Bool> = Dictionary<Int, Bool>()
         var replace: Dictionary<Int, Int> = Dictionary<Int, Int>()
         var i: Int = 0
+        // Where the block's most recent call sits (-1 before one): an address older than it
+        // names storage the callee may have moved, so it is not a reusable twin.
+        var lastCallAt: Int = -1
         while (i < il.ops.size()) {
             val op: *IlOp = *il.ops[i]
             val kind: IlOpKind = op.kind
@@ -103,12 +131,23 @@ fun ilReuseExprs(il: *IlBody): Bool {
             ) {
                 firstDst = Dictionary<Str, Int>()
                 firstAt = Dictionary<Str, Int>()
+                lastCallAt = -1
+            } else if (ilReuseCallOp(kind)) {
+                lastCallAt = i
             } else if (ilReuseExprOp(kind) && op.operands.size() >= 2) {
                 val dst: Int = op.operands[0]
                 if (dst >= 0 && dst < slots) {
                     val key: Str = ilReuseExprKey(op, lastWrite)
                     val keep: *Int = firstDst.getPtr(key)
                     if (keep == null) {
+                        firstDst.insert(key, dst)
+                        firstAt.insert(key, i)
+                    } else if (ilReuseAddrOp(kind) && *firstAt.getPtr(key) < lastCallAt) {
+                        // A call sat between the kept address and this one: the callee may
+                        // have moved the container's buffer (an append reallocs), so the
+                        // kept address names storage that may be gone. The classes before
+                        // and after the call stay separate - this occurrence becomes the
+                        // kept one.
                         firstDst.insert(key, dst)
                         firstAt.insert(key, i)
                     } else if (defCount[dst] == 1 && defCount[ * keep] == 1

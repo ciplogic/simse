@@ -131,9 +131,18 @@ blocks the reuse of its arguments.
 
 | class | numbered? | killed by a write? | examples |
 | --- | --- | --- | --- |
-| pure, memory-independent | yes | no | `a + b`, `a - 1`, `&x.f`, `&x[i]`, `&Static.m` |
+| pure, memory-independent | yes | an *element* address dies at a call | `a + b`, `a - 1`, `&x.f`, `&x[i]`, `&Static.m` |
 | pure, memory-reading | yes | yes, when the written location may alias | `x.f`, `x[i]`, `size(x)`, `spanOfStr(x)`, `*p` |
 | impure / writes / fresh identity | no - a new value each time | - | `setArray(...)`, `Store`, `x = ...`, `Pack`, `toArray()` |
+
+**An element address dies at a call.** `&xs[i]` names the *buffer's* storage, and a callee may
+move that buffer - an `append` reallocs - so an element address never numbers together with an
+equal twin computed before the block's most recent call; the classes before and after the call
+are separate. A field address carries no such hazard (`&x.f` on a struct the call cannot move),
+and a field of a moved element address cannot match its pre-call twin anyway: the base slot's
+number already moved with the kill. This is the `place-reuse` case in the stress corpus, and the
+shape that crashed the `graph` benchmark - the second `&pool[u]` merged with the first across
+the append, and the store went through the freed allocation.
 
 **One pass: value numbering.** A pure op's number is `(op, operand numbers, constants)` - the
 constants are part of the key, so `&x.a` and `&x.b` differ - and an impure op gets a fresh number.

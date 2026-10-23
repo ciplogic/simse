@@ -2297,7 +2297,7 @@ void ns2_paintNode(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node, Func<
 }
 // modules/minui/paint.kt
 void ns2_paintSelf(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node, Func<void(Int)> custom) {
-    ns2_Node* _sm_base1, * _sm_base3, * _sm_base10;
+    ns2_Node* _sm_base1, * _sm_base3, * _sm_base6, * _sm_base10;
     List<ns2_Node>* _sm_base2, * _sm_base4, * _sm_base11;
     ns2_Color _sm_base5, _sm_base9;
     ns2_Palette _sm_base8;
@@ -2318,7 +2318,8 @@ void ns2_paintSelf(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node, Func<
     rect = _sm_base3->rect;
     _sm_base5 = theme->panel;
     ns2_uiRoundFill(ui, rect, 8, _sm_base5);
-    _sm_expr3 = _sm_base3->palette;
+    _sm_base6 = simse_addressOf((*_sm_base4)[node]);
+    _sm_expr3 = _sm_base6->palette;
     _sm_base8 = ns2_Palette::Emphasized;
     _sm_expr4 = static_cast<Int>(_sm_base8);
     _sm_expr2 = _sm_expr3 == _sm_expr4;
@@ -3049,7 +3050,7 @@ void ns2_newFrame(ns2_Frame* _sm_out, ns2_Size size) {
 // modules/minui/tree.kt
 Int ns2_addNode(ns2_Frame* f, Int parent, ns2_NodeKind kind, Int x, Int y, Int width, Int height) {
     List<ns2_Node>* _sm_base1;
-    ns2_Node* _sm_base3;
+    ns2_Node* _sm_base3, * _sm_base5;
     ns2_Rect _sm_expr1;
     List<Int> _sm_expr2, kids;
     Int _sm_expr3, index;
@@ -3064,7 +3065,8 @@ Int ns2_addNode(ns2_Frame* f, Int parent, ns2_NodeKind kind, Int x, Int y, Int w
     _sm_base3 = simse_addressOf((*_sm_base1)[parent]);
     kids = _sm_base3->children;
     simse_list_append(kids, index);
-    _sm_base3->children = kids;
+    _sm_base5 = simse_addressOf((*_sm_base1)[parent]);
+    _sm_base5->children = kids;
     return index;
 }
 // modules/minui/tree.kt

@@ -2201,8 +2201,8 @@ Int ns1_spanSumPointer(List<Int>* items) {
 // stress/collections/src/main.kt
 Int ns1_partForPointer() {
     List<ns1_Cell>* _sm_base1, * _sm_base2, * _sm_base5;
-    Int* _sm_base3;
-    ns1_Cell* _sm_base4;
+    Int* _sm_base3, * _sm_base6;
+    ns1_Cell* _sm_base4, * _sm_base7;
     List<Int>* _sm_base8;
     List<ns1_Cell> cells;
     ns1_Cell _sm_expr1, _sm_expr2, _sm_expr3;
@@ -2230,7 +2230,9 @@ Int ns1_partForPointer() {
     _sm_expr7 = ns1_arrayBump(_sm_base5);
     _sm_expr8 = toString(simse_addressOf(_sm_expr7));
     simse_println((_sm_expr8), stdout);
-    _sm_expr9 = toString(_sm_base3);
+    _sm_base7 = simse_addressOf(cells[0]);
+    _sm_base6 = simse_addressOf(_sm_base7->value);
+    _sm_expr9 = toString(_sm_base6);
     simse_println((_sm_expr9), stdout);
     numbers = List<Int>();
     simse_list_append(numbers, 4);
