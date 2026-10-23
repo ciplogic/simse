@@ -223,8 +223,9 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             if (def != i + 1) {
                 if (def < 0) {
                     val nameText2: Str = il.vars[slot].name
+                    val at: Str = ilLineOf(il, i)
                     return IlText(
-                        false, "", `the slot '@nameText2' has neither a type nor an initializer`
+                        false, "", `the slot '@nameText2' has neither a type nor an initializer - line @at`
                     )
                 }
                 i++
@@ -651,10 +652,67 @@ fun Emitter.ilClosureTypeOfNode(typeNode: AstXmlNode): Str {
     return this.type(typeNode)
 }
 
+// The permissive verifier (impl_specs/typed-il.md, step 1): the failures that are certain
+// whichever emitter path reaches them, reported before emission with the op's line named.
+// Today that is the jump targets - a jump to a label the body never defines used to reach
+// cl.exe as a `goto` with nothing to jump to. The typed-IL steps grow this body: each shape
+// that gains a typed op moves from "fails late with a generic message" to "verified here".
+// Answers "" when the body verifies.
+fun Emitter.ilVerifyBody(il: *IlBody): Str {
+    var defined: Dictionary<Int, Bool> = Dictionary<Int, Bool>()
+    var i: Int = 0
+    while (i < il.ops.size()) {
+        val op: IlOp = *il.ops[i]
+        if (op.kind == IlOpKind.Label) {
+            val label: Int = this.ilOpOperand(op.operands, 0)
+            if (label < 0 || label >= il.labels.size()) {
+                val at: Str = ilLineOf(il, i)
+                return `a label with no name - line @at`
+            }
+            defined.insert(label, true)
+        }
+        i++
+    }
+    i = 0
+    while (i < il.ops.size()) {
+        val op: IlOp = *il.ops[i]
+        if (op.kind == IlOpKind.Goto || op.kind == IlOpKind.IfTrue || op.kind == IlOpKind.IfFalse) {
+            var labelAt: Int = 1
+            if (op.kind == IlOpKind.Goto) {
+                labelAt = 0
+            }
+            val label: Int = this.ilOpOperand(op.operands, labelAt)
+            if (label < 0 || label >= il.labels.size()) {
+                val at: Str = ilLineOf(il, i)
+                return `a jump with no label - line @at`
+            }
+            if (!defined.has(label)) {
+                val target: Str = il.labels[label]
+                val at: Str = ilLineOf(il, i)
+                return `a jump to '@target', which the body never defines - line @at`
+            }
+        }
+        i++
+    }
+    return ""
+}
+
+// The source line an op carries, for the verifier's messages.
+fun ilLineOf(il: *IlBody, opIndex: Int): Str {
+    if (opIndex < 0 || opIndex >= il.lines.size()) {
+        return "?"
+    }
+    return il.lines[opIndex].toString()
+}
+
 // The C++ of one function body, from its IL. The frame's types are installed for the
 // spelling helpers, and nothing from a previous body is left behind.
 fun Emitter.emitIlBodyText(unit: *IlUnit, level: Int): IlText {
     val il: *IlBody = *unit.body
+    val verified: Str = this.ilVerifyBody(il)
+    if (verified != "") {
+        return IlText(false, "", verified)
+    }
     val savedKinds: Dictionary<Str, NameKind> = this.nameKinds
     val savedTypes: Dictionary<Str, AstXmlNode> = this.localTypes
     val savedClosures: Dictionary<Str, Str> = this.closureTypes
@@ -677,6 +735,10 @@ fun Emitter.emitClosureBodyText(unit: *IlUnit, closure: *IlClosure, level: Int):
     // signature): never the out-parameter ABI, whatever body was emitted before it.
     this.curSretOut = ""
     val body: *IlBody = *unit.lambdas[closure.bodyIndex]
+    val verified: Str = this.ilVerifyBody(body)
+    if (verified != "") {
+        return IlText(false, "", verified)
+    }
     val savedKinds: Dictionary<Str, NameKind> = this.nameKinds
     val savedTypes: Dictionary<Str, AstXmlNode> = this.localTypes
     val savedSelfKind: NameKind = this.selfKind
