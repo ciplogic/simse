@@ -34,6 +34,15 @@ borrow fun memFindByte(a: *Char, from: Int, count: Int, value: Char): Int
 @SmGen("cpp", "simse_bit_width64")
 data fun bitWidth64(value: Int64): Int
 
+// A value converted to the named scalar type - the uniform spelling of the built-in
+// conversions (`Int64(x)`, `Char(c)`), generic so a scalar the language adds later needs no
+// new case anywhere: the type argument is the destination, and the C++ argument conversion
+// is the cast (the body is the identity over the destination's own type). `data` marks it
+// pure, which implies borrow-clean - the escape analysis needs no rule of its own for it,
+// and a generic-name callee is already a fresh-value construction in its eyes.
+@SmGen("cpp", "simse_cast_as")
+data fun castAs<T>(value: T): T
+
 // A `Str`'s bytes, borrowed: valid until the string changes. It is the one place a `Str`'s
 // internals are reached, and the reason the text operations can be written in the language.
 @SmGen("cpp", "simse_str_data")

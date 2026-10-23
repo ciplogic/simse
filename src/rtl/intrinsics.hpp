@@ -49,6 +49,13 @@ inline Int simse_mem_findByte(const Char* a, Int from, Int count, Char value) {
 }
 
 // The bit width of the magnitude: the unsigned negation of `INT64_MIN` is the one step the
+// The uniform scalar conversion (`castAs<T>(value)`, src/rtl/intrinsics.kt): the identity
+// over the destination's own type - the conversion is the C++ argument conversion at the
+// call, spelled with the type argument by the emitter, never deduced from the argument
+// (deduction would name the source type and answer it back).
+template <class T>
+inline T simse_cast_as(const std::type_identity_t<T>& value) { return value; }
+
 // language cannot spell (src/rtl/intrinsics.kt, `bitWidth64`).
 inline Int simse_bit_width64(Int64 value) {
     const unsigned long long magnitude =

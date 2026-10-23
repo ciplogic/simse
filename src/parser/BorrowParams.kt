@@ -221,10 +221,17 @@ fun bpCollectDecls(
 }
 
 // The language's built-in type names (specs/built-in-types.md, specs/core-types.md): a call to
-// one is a construction or a conversion, which copies what it is given.
+// one is a construction or a conversion, which copies what it is given. The scalars are the
+// conversions (`Int64(x)`, `Char(c)`) - a value computed from the argument, no body for the
+// fixpoint to prove and no write through anything it is handed - and a body full of them is one
+// every numeric loop writes (the strlist scan's `Int64(w.size())` is what used to keep the `for`
+// promotion from firing).
 fun bpBuiltinType(name: *Str): Bool {
     if ( * name == "Str" || * name == "List" || *name == "Dictionary" || *name == "Opt"
     || *name == "Res" || *name == "Array" || *name == "Span"
+    || *name == "Int" || *name == "Int8" || *name == "Int16" || *name == "Int32"
+    || *name == "Int64" || *name == "Float32" || *name == "Float64"
+    || *name == "Char" || *name == "Bool"
     ) {
         return true
     }

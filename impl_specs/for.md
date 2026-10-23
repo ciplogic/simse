@@ -272,7 +272,11 @@ The parser picks the wrap before types are known, so the choice is made in sema
 - the element is *deep* - a `Str`, or a data class with a `Str` field (`bpDeepElement`, from
   the borrow pass's `bpDeepClasses` fixpoint) - and
 - the body only reads `x` (`bpLoopReadOnly`, the parameter rule: no write through it, no
-  `&`/`*`, no capture, no call the fixpoint cannot trust), and `--no-borrow` is off.
+  `&`/`*`, no capture, no call the fixpoint cannot trust), and `--no-borrow` is off. A
+  built-in scalar conversion (`Int64(x)`, `Char(c)`) and the generic `castAs<T>(x)` are
+  conversions, not calls - a value computed from what it is given, no body to prove and no
+  write through anything - so a numeric scan promotes like any other read-only walk
+  (`stress/for-promote` pins both the promotion and the `&x` refusal).
 
 The gate matters. On `List<Cell>` (a class with a `Str` field) the value form deep-copies — and
 allocates — per element; a read-only walk in the harness probe goes **1,255,621 us -> 27,897 us**
@@ -283,9 +287,10 @@ not promoted (the pointer form would mutate the list). The rewrite is invisible:
 the same values, one fewer copy. `--no-borrow` disables it with the rest of the rewrite.
 
 Reach is the same coarse one the parameter rule has: a body that calls something the fixpoint
-cannot trust (an `append`, an emitter helper) keeps the value form, which is most of the
-compiler's own loops — so the promotion is a win for a program's read-only walks, not a
-compiler-wide speedup.
+cannot trust (an `append`, an emitter helper) keeps the value form — conversions used to sit
+in that set, which is what kept the strlist benchmark's scan (`Int64(w.size())` per word) on
+the copying form; `bpBuiltinType` now names every scalar, so the set is only the calls that
+really may write.
 
 ## Status
 
