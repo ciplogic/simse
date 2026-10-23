@@ -607,6 +607,15 @@ fun Emitter.inferType(e: *AstXmlNode): AstXmlNode {
                 return this.namedType("Char")
             }
             if (xmlKind(base) != AstNodeCategory.TypeGeneric) {
+                val pointee: *AstXmlNode = xmlChildPtr(baseType, AstNodeKind.Inner)
+                // The emitter's mirror of the type rules' pointer-index rule (sema
+                // TypeInferCall): a raw pointer indexed with no container underneath is C
+                // pointer arithmetic - the element is the pointee, one handle layer off
+                // (impl_specs/typed-il.md, step 2). A pointer to a container never reaches
+                // this arm: the generic arms above answered.
+                if (xmlKind(baseType) == AstNodeCategory.TypePointer && !xmlIsEmpty(pointee)) {
+                    return *pointee
+                }
                 return xmlEmptyNode()
             }
             val typeArgs: List<AstXmlNode> = xmlChildren(base, AstNodeKind.TypeArg)

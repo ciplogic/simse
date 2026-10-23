@@ -1384,22 +1384,25 @@ Int size(Span<T>* self) {
 template <class T>
 T at(Span<T>* self, Int index) {
     T* _sm_base1;
+    T _sm_expr1;
     _sm_base1 = self->ptr;
-    auto _sm_expr1 = _sm_base1[index];
+    _sm_expr1 = _sm_base1[index];
     return _sm_expr1;
 }
 template <class T>
 T* atPtr(Span<T>* self, Int index) {
-    T* _sm_base2;
+    T* _sm_base1, * _sm_base2, * _sm_expr1;
     _sm_base2 = self->ptr;
-    auto _sm_expr1 = simse_addressOf(_sm_base2[index]);
+    _sm_base1 = simse_addressOf(_sm_base2[index]);
+    _sm_expr1 = _sm_base1;
     return _sm_expr1;
 }
 template <class T>
 T get(Span<T>* self, Int index) {
     T* _sm_base1;
+    T _sm_expr1;
     _sm_base1 = self->ptr;
-    auto _sm_expr1 = _sm_base1[index];
+    _sm_expr1 = _sm_base1[index];
     return _sm_expr1;
 }
 template <class T>
@@ -1409,6 +1412,7 @@ void set(Span<T>* self, Int index, T value) {
     _sm_base1[index] = value;
 }
 Int find(Span<Char>* self, Str* sub) {
+    Char _sm_base2, _sm_base5;
     Int needle, len, _sm_expr3, i, _sm_expr10, _sm_expr12;
     Bool _sm_expr1;
     Char* subBytes;
@@ -1428,7 +1432,8 @@ Int find(Span<Char>* self, Str* sub) {
     return _sm_expr3;
     L4:;
     subBytes = simse_str_data(sub);
-    i = simse_mem_findByte(self->ptr, 0, len, subBytes[0]);
+    _sm_base2 = subBytes[0];
+    i = simse_mem_findByte(self->ptr, 0, len, _sm_base2);
     L5:;
     _sm_expr1 = i >= 0;
     if (_sm_expr1) goto L11;
@@ -1451,7 +1456,8 @@ Int find(Span<Char>* self, Str* sub) {
     _sm_expr10 = i + 1;
     _sm_expr3 = len - i;
     _sm_expr12 = _sm_expr3 - 1;
-    i = simse_mem_findByte(self->ptr, _sm_expr10, _sm_expr12, subBytes[0]);
+    _sm_base5 = subBytes[0];
+    i = simse_mem_findByte(self->ptr, _sm_expr10, _sm_expr12, _sm_base5);
     goto L5;
     L6:;
     _sm_expr3 = -1;
@@ -1645,7 +1651,7 @@ void resourcesInstall(Span<Char>* table, Int tableCount, Int* index, Int count) 
     Span<Char> _sm_base1, _sm_base2;
     List<ResourceEntry>* _sm_base3;
     Span<Span<Char>> views;
-    Int i, _sm_expr2, _sm_expr5;
+    Int i, _sm_expr2, _sm_expr3, _sm_expr5, _sm_expr6;
     Bool _sm_expr1;
     ResourceEntry entry;
     views = Span<Span<Char>>{table, tableCount};
@@ -1654,18 +1660,16 @@ void resourcesInstall(Span<Char>* table, Int tableCount, Int* index, Int count) 
     _sm_expr1 = i < count;
     if (!(_sm_expr1)) goto L2;
     _sm_expr2 = i * 2;
-    {
-        auto _sm_expr3 = index[_sm_expr2];
-        _sm_expr5 = _sm_expr2 + 1;
-        auto _sm_expr6 = index[_sm_expr5];
-        _sm_base1 = get(simse_addressOf(views), _sm_expr3);
-        _sm_base2 = get(simse_addressOf(views), _sm_expr6);
-        entry = ResourceEntry{_sm_base1, _sm_base2};
-        _sm_base3 = &resourceStore;
-        simse_list_append((*_sm_base3), entry);
-        i = i + 1;
-        goto L1;
-    }
+    _sm_expr3 = index[_sm_expr2];
+    _sm_expr5 = _sm_expr2 + 1;
+    _sm_expr6 = index[_sm_expr5];
+    _sm_base1 = get(simse_addressOf(views), _sm_expr3);
+    _sm_base2 = get(simse_addressOf(views), _sm_expr6);
+    entry = ResourceEntry{_sm_base1, _sm_base2};
+    _sm_base3 = &resourceStore;
+    simse_list_append((*_sm_base3), entry);
+    i = i + 1;
+    goto L1;
     L2:;
 }
 template <class T>
@@ -1816,6 +1820,7 @@ Span<Char> strBoolView(Bool value) {
 }
 Int findFrom(Str* self, Str* sub, Int from) {
     Str* _sm_base1;
+    Char _sm_base2, _sm_base3;
     Int len, needle, _sm_expr5, _sm_expr8, i, _sm_expr15, _sm_expr17;
     Bool _sm_expr1;
     Char* bytes, * subBytes;
@@ -1847,7 +1852,8 @@ Int findFrom(Str* self, Str* sub, Int from) {
     bytes = simse_str_data(_sm_base1);
     subBytes = simse_str_data(sub);
     _sm_expr8 = len - from;
-    i = simse_mem_findByte(bytes, from, _sm_expr8, subBytes[0]);
+    _sm_base2 = subBytes[0];
+    i = simse_mem_findByte(bytes, from, _sm_expr8, _sm_base2);
     L8:;
     _sm_expr1 = i >= 0;
     if (_sm_expr1) goto L14;
@@ -1870,7 +1876,8 @@ Int findFrom(Str* self, Str* sub, Int from) {
     _sm_expr15 = i + 1;
     _sm_expr5 = len - i;
     _sm_expr17 = _sm_expr5 - 1;
-    i = simse_mem_findByte(bytes, _sm_expr15, _sm_expr17, subBytes[0]);
+    _sm_base3 = subBytes[0];
+    i = simse_mem_findByte(bytes, _sm_expr15, _sm_expr17, _sm_base3);
     goto L8;
     L9:;
     _sm_expr5 = -1;
@@ -2010,7 +2017,8 @@ List<Str> split(Str* self, Char separator) {
     List<Str> parts;
     Char* bytes;
     Int len, count, i, _sm_expr4, pos, _sm_expr5, found, _sm_expr7, _sm_expr9;
-    Bool _sm_expr1, _sm_expr3;
+    Bool _sm_expr1;
+    Char _sm_expr2;
     Str _sm_expr8, _sm_expr10;
     parts = List<Str>(0);
     _sm_base1 = self;
@@ -2021,17 +2029,15 @@ List<Str> split(Str* self, Char separator) {
     L1:;
     _sm_expr1 = i < len;
     if (!(_sm_expr1)) goto L2;
-    {
-        auto _sm_expr2 = bytes[i];
-        _sm_expr3 = _sm_expr2 == separator;
-        if (_sm_expr3) goto L3;
-        goto L4;
-        L3:;
-        count = count + 1;
-        L4:;
-        i = i + 1;
-        goto L1;
-    }
+    _sm_expr2 = bytes[i];
+    _sm_expr1 = _sm_expr2 == separator;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    count = count + 1;
+    L4:;
+    i = i + 1;
+    goto L1;
     L2:;
     _sm_expr4 = count + 1;
     parts.reserve(_sm_expr4);
@@ -2062,8 +2068,8 @@ Opt<Int> toInt(Str* self) {
     Bool _sm_expr1, negative, overflow;
     Opt<Int> _sm_expr2;
     Char* bytes;
+    Char _sm_expr3, ch;
     Int64 value, _sm_expr14;
-    Char ch;
     len = simse_lenOf((*self));
     _sm_expr1 = len == 0;
     if (_sm_expr1) goto L1;
@@ -2076,7 +2082,7 @@ Opt<Int> toInt(Str* self) {
     bytes = simse_str_data(_sm_base1);
     i = 0;
     negative = false;
-    auto _sm_expr3 = bytes[0];
+    _sm_expr3 = bytes[0];
     _sm_expr1 = _sm_expr3 == '-';
     if (_sm_expr1) goto L3;
     goto L4;

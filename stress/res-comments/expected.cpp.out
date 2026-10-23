@@ -539,15 +539,17 @@ Int size(Span<T>* self) {
 template <class T>
 T at(Span<T>* self, Int index) {
     T* _sm_base1;
+    T _sm_expr1;
     _sm_base1 = self->ptr;
-    auto _sm_expr1 = _sm_base1[index];
+    _sm_expr1 = _sm_base1[index];
     return _sm_expr1;
 }
 template <class T>
 T get(Span<T>* self, Int index) {
     T* _sm_base1;
+    T _sm_expr1;
     _sm_base1 = self->ptr;
-    auto _sm_expr1 = _sm_base1[index];
+    _sm_expr1 = _sm_base1[index];
     return _sm_expr1;
 }
 template <class T>
@@ -744,7 +746,7 @@ void resourcesInstall(Span<Char>* table, Int tableCount, Int* index, Int count) 
     Span<Char> _sm_base1, _sm_base2;
     List<ResourceEntry>* _sm_base3;
     Span<Span<Char>> views;
-    Int i, _sm_expr2, _sm_expr5;
+    Int i, _sm_expr2, _sm_expr3, _sm_expr5, _sm_expr6;
     Bool _sm_expr1;
     ResourceEntry entry;
     views = Span<Span<Char>>{table, tableCount};
@@ -753,18 +755,16 @@ void resourcesInstall(Span<Char>* table, Int tableCount, Int* index, Int count) 
     _sm_expr1 = i < count;
     if (!(_sm_expr1)) goto L2;
     _sm_expr2 = i * 2;
-    {
-        auto _sm_expr3 = index[_sm_expr2];
-        _sm_expr5 = _sm_expr2 + 1;
-        auto _sm_expr6 = index[_sm_expr5];
-        _sm_base1 = get(simse_addressOf(views), _sm_expr3);
-        _sm_base2 = get(simse_addressOf(views), _sm_expr6);
-        entry = ResourceEntry{_sm_base1, _sm_base2};
-        _sm_base3 = &resourceStore;
-        simse_list_append((*_sm_base3), entry);
-        i = i + 1;
-        goto L1;
-    }
+    _sm_expr3 = index[_sm_expr2];
+    _sm_expr5 = _sm_expr2 + 1;
+    _sm_expr6 = index[_sm_expr5];
+    _sm_base1 = get(simse_addressOf(views), _sm_expr3);
+    _sm_base2 = get(simse_addressOf(views), _sm_expr6);
+    entry = ResourceEntry{_sm_base1, _sm_base2};
+    _sm_base3 = &resourceStore;
+    simse_list_append((*_sm_base3), entry);
+    i = i + 1;
+    goto L1;
     L2:;
 }
 void initByValue(Str* self) {

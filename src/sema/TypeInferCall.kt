@@ -766,6 +766,18 @@ fun SemInfer.infer(e: *AstXmlNode): AstXmlNode {
                 return semNamedType("Char")
             }
             if (xmlKind(base) != AstNodeCategory.TypeGeneric) {
+                val pointee: *AstXmlNode = xmlChildPtr(baseType, AstNodeKind.Inner)
+                // A raw pointer indexed with no container underneath is C pointer
+                // arithmetic: the element is the pointee, one handle layer off - `ps[i]`
+                // over a `ps: *Cell` is a `Cell`, over a `**Cell` it is the `*Cell`. A
+                // pointer to a container never reaches this arm: its element is the
+                // container's (the generic arms above answered). The typed-IL step-2 rule
+                // (impl_specs/typed-il.md): the element's type comes from the pointee, so
+                // a place over it (`ps[i].v = ...`) is typed all the way down, and the
+                // emitter spells the member access through the address (`->`, not `.`).
+                if (xmlKind(baseType) == AstNodeCategory.TypePointer && !xmlIsEmpty(pointee)) {
+                    return semReRole(*pointee, AstNodeKind.Type)
+                }
                 return xmlEmptyNode()
             }
             val typeArgs: List<AstXmlNode> = xmlChildren(base, AstNodeKind.TypeArg)

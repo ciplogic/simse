@@ -760,34 +760,40 @@ Bool isEmpty(Span<T>* self) {
 template <class T>
 T at(Span<T>* self, Int index) {
     T* _sm_base1;
+    T _sm_expr1;
     _sm_base1 = self->ptr;
-    auto _sm_expr1 = _sm_base1[index];
+    _sm_expr1 = _sm_base1[index];
     return _sm_expr1;
 }
 template <class T>
 Span<T> slice(Span<T>* self, Int start) {
-    T* _sm_base3;
+    T* _sm_base1, * _sm_base2, * _sm_base3;
     Int _sm_expr1, _sm_expr2;
     Span<T> _sm_expr3;
     _sm_expr1 = self->len;
     _sm_expr2 = _sm_expr1 - start;
     _sm_base3 = self->ptr;
-    _sm_expr3 = Span<T>{simse_addressOf(_sm_base3[start]), _sm_expr2};
+    _sm_base2 = simse_addressOf(_sm_base3[start]);
+    _sm_base1 = _sm_base2;
+    _sm_expr3 = Span<T>{_sm_base1, _sm_expr2};
     return _sm_expr3;
 }
 template <class T>
 Span<T> slice(Span<T>* self, Int start, Int count) {
-    T* _sm_base3;
+    T* _sm_base1, * _sm_base2, * _sm_base3;
     Span<T> _sm_expr1;
     _sm_base3 = self->ptr;
-    _sm_expr1 = Span<T>{simse_addressOf(_sm_base3[start]), count};
+    _sm_base2 = simse_addressOf(_sm_base3[start]);
+    _sm_base1 = _sm_base2;
+    _sm_expr1 = Span<T>{_sm_base1, count};
     return _sm_expr1;
 }
 template <class T>
 T get(Span<T>* self, Int index) {
     T* _sm_base1;
+    T _sm_expr1;
     _sm_base1 = self->ptr;
-    auto _sm_expr1 = _sm_base1[index];
+    _sm_expr1 = _sm_base1[index];
     return _sm_expr1;
 }
 template <class T>
@@ -814,6 +820,7 @@ Bool startsWith(Span<Char>* self, Str* text) {
     return _sm_expr1;
 }
 Int find(Span<Char>* self, Str* sub) {
+    Char _sm_base2, _sm_base5;
     Int needle, len, _sm_expr3, i, _sm_expr10, _sm_expr12;
     Bool _sm_expr1;
     Char* subBytes;
@@ -833,7 +840,8 @@ Int find(Span<Char>* self, Str* sub) {
     return _sm_expr3;
     L4:;
     subBytes = simse_str_data(sub);
-    i = simse_mem_findByte(self->ptr, 0, len, subBytes[0]);
+    _sm_base2 = subBytes[0];
+    i = simse_mem_findByte(self->ptr, 0, len, _sm_base2);
     L5:;
     _sm_expr1 = i >= 0;
     if (_sm_expr1) goto L11;
@@ -856,7 +864,8 @@ Int find(Span<Char>* self, Str* sub) {
     _sm_expr10 = i + 1;
     _sm_expr3 = len - i;
     _sm_expr12 = _sm_expr3 - 1;
-    i = simse_mem_findByte(self->ptr, _sm_expr10, _sm_expr12, subBytes[0]);
+    _sm_base5 = subBytes[0];
+    i = simse_mem_findByte(self->ptr, _sm_expr10, _sm_expr12, _sm_base5);
     goto L5;
     L6:;
     _sm_expr3 = -1;
@@ -1209,6 +1218,7 @@ Span<Char> strBoolView(Bool value) {
 }
 Int findFrom(Str* self, Str* sub, Int from) {
     Str* _sm_base1;
+    Char _sm_base2, _sm_base3;
     Int len, needle, _sm_expr5, _sm_expr8, i, _sm_expr15, _sm_expr17;
     Bool _sm_expr1;
     Char* bytes, * subBytes;
@@ -1240,7 +1250,8 @@ Int findFrom(Str* self, Str* sub, Int from) {
     bytes = simse_str_data(_sm_base1);
     subBytes = simse_str_data(sub);
     _sm_expr8 = len - from;
-    i = simse_mem_findByte(bytes, from, _sm_expr8, subBytes[0]);
+    _sm_base2 = subBytes[0];
+    i = simse_mem_findByte(bytes, from, _sm_expr8, _sm_base2);
     L8:;
     _sm_expr1 = i >= 0;
     if (_sm_expr1) goto L14;
@@ -1263,7 +1274,8 @@ Int findFrom(Str* self, Str* sub, Int from) {
     _sm_expr15 = i + 1;
     _sm_expr5 = len - i;
     _sm_expr17 = _sm_expr5 - 1;
-    i = simse_mem_findByte(bytes, _sm_expr15, _sm_expr17, subBytes[0]);
+    _sm_base3 = subBytes[0];
+    i = simse_mem_findByte(bytes, _sm_expr15, _sm_expr17, _sm_base3);
     goto L8;
     L9:;
     _sm_expr5 = -1;
@@ -1435,8 +1447,8 @@ Opt<Int> toInt(Str* self) {
     Bool _sm_expr1, negative, overflow;
     Opt<Int> _sm_expr2;
     Char* bytes;
+    Char _sm_expr3, ch;
     Int64 value, _sm_expr14;
-    Char ch;
     len = simse_lenOf((*self));
     _sm_expr1 = len == 0;
     if (_sm_expr1) goto L1;
@@ -1449,7 +1461,7 @@ Opt<Int> toInt(Str* self) {
     bytes = simse_str_data(_sm_base1);
     i = 0;
     negative = false;
-    auto _sm_expr3 = bytes[0];
+    _sm_expr3 = bytes[0];
     _sm_expr1 = _sm_expr3 == '-';
     if (_sm_expr1) goto L3;
     goto L4;

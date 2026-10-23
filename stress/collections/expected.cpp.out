@@ -900,41 +900,48 @@ Bool isEmpty(Span<T>* self) {
 template <class T>
 T at(Span<T>* self, Int index) {
     T* _sm_base1;
+    T _sm_expr1;
     _sm_base1 = self->ptr;
-    auto _sm_expr1 = _sm_base1[index];
+    _sm_expr1 = _sm_base1[index];
     return _sm_expr1;
 }
 template <class T>
 Span<T> slice(Span<T>* self, Int start) {
-    T* _sm_base3;
+    T* _sm_base1, * _sm_base2, * _sm_base3;
     Int _sm_expr1, _sm_expr2;
     Span<T> _sm_expr3;
     _sm_expr1 = self->len;
     _sm_expr2 = _sm_expr1 - start;
     _sm_base3 = self->ptr;
-    _sm_expr3 = Span<T>{simse_addressOf(_sm_base3[start]), _sm_expr2};
+    _sm_base2 = simse_addressOf(_sm_base3[start]);
+    _sm_base1 = _sm_base2;
+    _sm_expr3 = Span<T>{_sm_base1, _sm_expr2};
     return _sm_expr3;
 }
 template <class T>
 Span<T> slice(Span<T>* self, Int start, Int count) {
-    T* _sm_base3;
+    T* _sm_base1, * _sm_base2, * _sm_base3;
     Span<T> _sm_expr1;
     _sm_base3 = self->ptr;
-    _sm_expr1 = Span<T>{simse_addressOf(_sm_base3[start]), count};
+    _sm_base2 = simse_addressOf(_sm_base3[start]);
+    _sm_base1 = _sm_base2;
+    _sm_expr1 = Span<T>{_sm_base1, count};
     return _sm_expr1;
 }
 template <class T>
 T* atPtr(Span<T>* self, Int index) {
-    T* _sm_base2;
+    T* _sm_base1, * _sm_base2, * _sm_expr1;
     _sm_base2 = self->ptr;
-    auto _sm_expr1 = simse_addressOf(_sm_base2[index]);
+    _sm_base1 = simse_addressOf(_sm_base2[index]);
+    _sm_expr1 = _sm_base1;
     return _sm_expr1;
 }
 template <class T>
 T get(Span<T>* self, Int index) {
     T* _sm_base1;
+    T _sm_expr1;
     _sm_base1 = self->ptr;
-    auto _sm_expr1 = _sm_base1[index];
+    _sm_expr1 = _sm_base1[index];
     return _sm_expr1;
 }
 template <class T>
@@ -964,6 +971,7 @@ Bool startsWith(Span<Char>* self, Str text) {
 }
 Int find(Span<Char>* self, Str sub) {
     Str* _sm_base1;
+    Char _sm_base3, _sm_base6;
     Int needle, len, _sm_expr3, i, _sm_expr10, _sm_expr12;
     Bool _sm_expr1;
     Char* subBytes;
@@ -984,7 +992,8 @@ Int find(Span<Char>* self, Str sub) {
     L4:;
     _sm_base1 = &sub;
     subBytes = simse_str_data(_sm_base1);
-    i = simse_mem_findByte(self->ptr, 0, len, subBytes[0]);
+    _sm_base3 = subBytes[0];
+    i = simse_mem_findByte(self->ptr, 0, len, _sm_base3);
     L5:;
     _sm_expr1 = i >= 0;
     if (_sm_expr1) goto L11;
@@ -1007,7 +1016,8 @@ Int find(Span<Char>* self, Str sub) {
     _sm_expr10 = i + 1;
     _sm_expr3 = len - i;
     _sm_expr12 = _sm_expr3 - 1;
-    i = simse_mem_findByte(self->ptr, _sm_expr10, _sm_expr12, subBytes[0]);
+    _sm_base6 = subBytes[0];
+    i = simse_mem_findByte(self->ptr, _sm_expr10, _sm_expr12, _sm_base6);
     goto L5;
     L6:;
     _sm_expr3 = -1;
@@ -1443,6 +1453,7 @@ Span<Char> strBoolView(Bool value) {
 }
 Int findFrom(Str* self, Str sub, Int from) {
     Str* _sm_base1, * _sm_base2;
+    Char _sm_base3, _sm_base4;
     Int len, needle, _sm_expr5, _sm_expr8, i, _sm_expr15, _sm_expr17;
     Bool _sm_expr1;
     Char* bytes, * subBytes;
@@ -1475,7 +1486,8 @@ Int findFrom(Str* self, Str sub, Int from) {
     _sm_base2 = &sub;
     subBytes = simse_str_data(_sm_base2);
     _sm_expr8 = len - from;
-    i = simse_mem_findByte(bytes, from, _sm_expr8, subBytes[0]);
+    _sm_base3 = subBytes[0];
+    i = simse_mem_findByte(bytes, from, _sm_expr8, _sm_base3);
     L8:;
     _sm_expr1 = i >= 0;
     if (_sm_expr1) goto L14;
@@ -1498,7 +1510,8 @@ Int findFrom(Str* self, Str sub, Int from) {
     _sm_expr15 = i + 1;
     _sm_expr5 = len - i;
     _sm_expr17 = _sm_expr5 - 1;
-    i = simse_mem_findByte(bytes, _sm_expr15, _sm_expr17, subBytes[0]);
+    _sm_base4 = subBytes[0];
+    i = simse_mem_findByte(bytes, _sm_expr15, _sm_expr17, _sm_base4);
     goto L8;
     L9:;
     _sm_expr5 = -1;
@@ -2530,12 +2543,13 @@ void ns1_afterColon(Str* _sm_out, Str text) {
 }
 // stress/collections/src/main.kt
 void ns1_bumpSpan(Span<Int> span) {
-    Int index;
+    Int _sm_base1, index, _sm_expr1;
     Int* slot;
     index = 1;
     slot = atPtr(simse_addressOf(span), index);
-    auto _sm_expr1 = slot[0];
-    slot[0] = _sm_expr1 + 100;
+    _sm_expr1 = slot[0];
+    _sm_base1 = _sm_expr1 + 100;
+    slot[0] = _sm_base1;
 }
 // stress/collections/src/main.kt
 Char* ns1_headByte(Str* text) {
@@ -2556,6 +2570,7 @@ Int ns1_partSpan() {
     Span<Char> _sm_expr6;
     Bool _sm_expr7;
     Char* _sm_expr9;
+    Char _sm_expr10;
     items = List<Int>();
     simse_list_append(items, 4);
     simse_list_append(items, 7);
@@ -2588,7 +2603,7 @@ Int ns1_partSpan() {
     word = __sm_stringTable[13];
     _sm_base7 = &word;
     _sm_expr9 = ns1_headByte(_sm_base7);
-    auto _sm_expr10 = _sm_expr9[0];
+    _sm_expr10 = _sm_expr9[0];
     simse_println((_sm_expr10), stdout);
     return 0;
 }
