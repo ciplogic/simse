@@ -18,6 +18,7 @@ Read the one file that matches the task, then the design doc it points at:
 | scaffold or manage a Simse project (`dx` / `smt`) | [`ai/dx.md`](ai/dx.md) |
 | per-subsystem design | [`impl_specs/`](impl_specs/) — start at `transpilation.md`; [`specs/`](specs/) is the normative language |
 | history: what moved and what it cost | [`impl_specs/capability-matrix.md`](impl_specs/capability-matrix.md) |
+| module and FFI work, and the rough edges it hit | [`limitations.md`](limitations.md) |
 
 The loop that verifies any compiler change, and the only one that counts:
 

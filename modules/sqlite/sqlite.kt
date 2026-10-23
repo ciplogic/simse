@@ -1,0 +1,334 @@
+package sqlite
+
+// The friendly layer over the raw bindings (api.kt): every fallible operation is a
+// `Res`, binds travel as `SqlValue`, rows reach a lambda as a borrowed `Row` or come
+// back materialized as `RowValue` lists the `linq` module can pipeline over. The query
+// builder is `builder.kt`, a layer of its own.
+
+// ---- the constants a caller spells -------------------------------------------
+
+val SQLITE_OK: Int = 0
+val SQLITE_ERROR: Int = 1
+val SQLITE_ROW: Int = 100
+val SQLITE_DONE: Int = 101
+
+// sqlite3_column_type answers.
+val SQLITE_INTEGER: Int = 1
+val SQLITE_FLOAT: Int = 2
+val SQLITE_TEXT: Int = 3
+val SQLITE_BLOB: Int = 4
+val SQLITE_NULL: Int = 5
+
+// sqlite3_open_v2 flags.
+val SQLITE_OPEN_READONLY: Int = 1
+val SQLITE_OPEN_READWRITE: Int = 2
+val SQLITE_OPEN_CREATE: Int = 4
+val SQLITE_OPEN_URI: Int = 64
+
+// ---- the database ---------------------------------------------------------------
+
+// Opens (creating if needed) and answers the handle, or the failure's message.
+fun open(path: Str): Res<RawPtr> {
+    val flags: Int = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
+    val opened: Res<RawPtr> = openFlags(path, flags)
+    return opened
+}
+
+fun openFlags(path: Str, flags: Int): Res<RawPtr> {
+    val db: RawPtr = sqliteOpen(path, flags)
+    if (db == null) {
+        return Res<RawPtr>.err(sqliteLastError(null))
+    }
+    return Res<RawPtr>.ok(db)
+}
+
+// Runs the script (any number of statements) and answers the rows the last of them
+// touched. Schema setup, PRAGMAs and transactions go through here.
+fun exec(db: RawPtr, sql: Str): Res<Int> {
+    val rc: Int = sqliteExec(db, sql)
+    if (rc != SQLITE_OK) {
+        return Res<Int>.err(sqliteLastError(db))
+    }
+    return Res<Int>.ok(sqliteChanges(db))
+}
+
+// The polite close: `sqlite3_close_v2` defers past the statements that are still in
+// use, so a close failure has no better audience than a log - and reports none.
+fun close(db: RawPtr): Unit {
+    sqliteClose(db)
+}
+
+// The engine's version string ("3.45.1"), for a banner or a log line.
+fun version(): Str {
+    return sqliteLibVersion()
+}
+
+// ---- the statement ---------------------------------------------------------------
+
+fun prepare(db: RawPtr, sql: Str): Res<RawPtr> {
+    val stmt: RawPtr = sqlitePrepare(db, sql)
+    if (stmt == null) {
+        return Res<RawPtr>.err(sqliteLastError(db))
+    }
+    return Res<RawPtr>.ok(stmt)
+}
+
+// Binds every value at its list position: the first `?` takes `values[0]`, and so on.
+fun bindAll(stmt: RawPtr, values: List<SqlValue>): Res<Int> {
+    var i: Int = 0
+    while (i < values.size()) {
+        val v: SqlValue = values[i]
+        var rc: Int = SQLITE_ERROR
+        when (v) {
+            I -> {
+                rc = sqliteBindInt(stmt, i + 1, v.I)
+            }
+
+            F -> {
+                rc = sqliteBindDouble(stmt, i + 1, v.F)
+            }
+
+            T -> {
+                rc = sqliteBindText(stmt, i + 1, v.T)
+            }
+
+            None -> {
+                rc = sqliteBindNull(stmt, i + 1)
+            }
+        }
+        if (rc != SQLITE_OK) {
+            return Res<Int>.err("sqlite: bind #" + (i + 1).toString() + " failed")
+        }
+        i++
+    }
+    return Res<Int>.ok(values.size())
+}
+
+// Prepares, binds and runs a statement to completion, calling `row` for every row of
+// the result with a borrowed view. The statement is finalized on every path; the answer
+// is the row count. The one call most readers want.
+fun query(db: RawPtr, sql: Str, values: List<SqlValue>, row: (*Row) -> Unit): Res<Int> {
+    val stmt: Res<RawPtr> = prepare(db, sql)
+    if (!stmt.isOk()) {
+        return Res<Int>.err(stmt.error())
+    }
+    val bound: Res<Int> = bindAll(stmt.value(), values)
+    if (!bound.isOk()) {
+        sqliteFinalize(stmt.value())
+        return bound
+    }
+    var rows: Int = 0
+    while (true) {
+        val rc: Int = sqliteStep(stmt.value())
+        if (rc == SQLITE_ROW) {
+            var view: Row = Row(stmt.value(), sqliteColumnCount(stmt.value()))
+            row(view)
+            rows++
+            continue
+        }
+        if (rc == SQLITE_DONE) {
+            break
+        }
+        val message: Str = sqliteLastError(db)
+        sqliteFinalize(stmt.value())
+        return Res<Int>.err(message)
+    }
+    sqliteFinalize(stmt.value())
+    return Res<Int>.ok(rows)
+}
+
+// One bound statement run to completion: INSERT / UPDATE / DELETE with `?` placeholders,
+// answering the rows the statement touched.
+fun execBind(db: RawPtr, sql: Str, values: List<SqlValue>): Res<Int> {
+    val stmt: Res<RawPtr> = prepare(db, sql)
+    if (!stmt.isOk()) {
+        return Res<Int>.err(stmt.error())
+    }
+    val bound: Res<Int> = bindAll(stmt.value(), values)
+    if (!bound.isOk()) {
+        sqliteFinalize(stmt.value())
+        return bound
+    }
+    val rc: Int = sqliteStep(stmt.value())
+    if (rc != SQLITE_DONE) {
+        val message: Str = sqliteLastError(db)
+        sqliteFinalize(stmt.value())
+        return Res<Int>.err(message)
+    }
+    sqliteFinalize(stmt.value())
+    return Res<Int>.ok(sqliteChanges(db))
+}
+
+// ---- the row views and values -----------------------------------------------------
+
+// A borrowed view of the row `sqlite3_step` is sitting on: valid inside the `query`
+// lambda, no copies. The getters convert the way SQLite does - an INTEGER column reads
+// as text and a TEXT column reads as a number without complaint.
+data class Row(var stmt: RawPtr, var width: Int)
+
+fun Row.getInt(index: Int): Int64 {
+    return sqliteColumnInt(this.stmt, index)
+}
+
+fun Row.getFloat(index: Int): Float64 {
+    return sqliteColumnDouble(this.stmt, index)
+}
+
+fun Row.getStr(index: Int): Str {
+    return sqliteColumnText(this.stmt, index)
+}
+
+fun Row.isNull(index: Int): Bool {
+    return sqliteColumnType(this.stmt, index) == SQLITE_NULL
+}
+
+fun Row.columnCount(): Int {
+    return this.width
+}
+
+// `SqlValue` is a bind value and a materialized cell: one arm live, `SqlValue()` the SQL
+// NULL. Construction picks the arm by the value's type - `SqlValue(7)`,
+// `SqlValue(2.5)`, `SqlValue("text")` - and a `when (v)` over `I`/`F`/`T`/`None`
+// reads it back.
+union class SqlValue(var I: Int64, var F: Float64, var T: Str)
+
+// The cell as text: an integer or a float prints, a null is the empty string, a text is
+// itself. What `Row.getStr` answers for any column.
+fun SqlValue.asText(): Str {
+    val tag: SmSqlValueTypes = this.getTypeOf()
+    if (tag == SmSqlValueTypes.I) {
+        return this.I.toString()
+    }
+    if (tag == SmSqlValueTypes.F) {
+        return this.F.toString()
+    }
+    if (tag == SmSqlValueTypes.T) {
+        return this.T
+    }
+    return ""
+}
+
+// A materialized row: the column names and the cells of one step, valid after the
+// statement is gone. What `queryRows` answers a list of, and what the `linq` module
+// pipelines over.
+data class RowValue(var names: List<Str>, var values: List<SqlValue>)
+
+fun RowValue.columnCount(): Int {
+    return this.names.size()
+}
+
+// The cell of column `name`, or none: the by-name read.
+fun RowValue.cell(name: Str): Opt<SqlValue> {
+    var i: Int = 0
+    while (i < this.names.size()) {
+        if (this.names[i] == name) {
+            return Opt<SqlValue>.some(this.values[i])
+        }
+        i++
+    }
+    return Opt<SqlValue>.none()
+}
+
+fun RowValue.text(name: Str): Str {
+    val cell: Opt<SqlValue> = this.cell(name)
+    if (cell.hasValue()) {
+        return cell.value().asText()
+    }
+    return ""
+}
+
+// The by-name reads answer zero for a column that is not there - `cell(name)` is the
+// checking read, these are the table-walking ones.
+fun RowValue.int64(name: Str): Int64 {
+    val cell: Opt<SqlValue> = this.cell(name)
+    if (!cell.hasValue()) {
+        return 0
+    }
+    val tag: SmSqlValueTypes = cell.value().getTypeOf()
+    if (tag == SmSqlValueTypes.I) {
+        return cell.value().I
+    }
+    if (tag == SmSqlValueTypes.F) {
+        return Int64(cell.value().F)
+    }
+    return 0
+}
+
+fun RowValue.float64(name: Str): Float64 {
+    val cell: Opt<SqlValue> = this.cell(name)
+    if (!cell.hasValue()) {
+        return 0.0
+    }
+    val tag: SmSqlValueTypes = cell.value().getTypeOf()
+    if (tag == SmSqlValueTypes.F) {
+        return cell.value().F
+    }
+    if (tag == SmSqlValueTypes.I) {
+        return Float64(cell.value().I)
+    }
+    return 0.0
+}
+
+fun RowValue.isNull(name: Str): Bool {
+    val cell: Opt<SqlValue> = this.cell(name)
+    if (cell.hasValue()) {
+        return cell.value().getTypeOf() == SmSqlValueTypes.None
+    }
+    return true
+}
+
+// The whole result set, materialized: rows outlive the statement and can be filtered,
+// mapped and sorted by the `linq` operators. The breadth a `query` lambda does not need
+// and a report does.
+fun queryRows(db: RawPtr, sql: Str, values: List<SqlValue>): Res<List<RowValue>> {
+    val stmt: Res<RawPtr> = prepare(db, sql)
+    if (!stmt.isOk()) {
+        return Res<List<RowValue>>.err(stmt.error())
+    }
+    val bound: Res<Int> = bindAll(stmt.value(), values)
+    if (!bound.isOk()) {
+        sqliteFinalize(stmt.value())
+        return Res<List<RowValue>>.err(bound.error())
+    }
+    var names: List<Str> = List<Str>()
+    val width: Int = sqliteColumnCount(stmt.value())
+    var i: Int = 0
+    while (i < width) {
+        names.append(sqliteColumnName(stmt.value(), i))
+        i++
+    }
+    var rows: List<RowValue> = List<RowValue>()
+    while (true) {
+        val rc: Int = sqliteStep(stmt.value())
+        if (rc == SQLITE_ROW) {
+            var cells: List<SqlValue> = List<SqlValue>()
+            var c: Int = 0
+            while (c < width) {
+                val type: Int = sqliteColumnType(stmt.value(), c)
+                if (type == SQLITE_INTEGER) {
+                    val n: Int64 = sqliteColumnInt(stmt.value(), c)
+                    cells.append(SqlValue(n))
+                } else if (type == SQLITE_FLOAT) {
+                    val x: Float64 = sqliteColumnDouble(stmt.value(), c)
+                    cells.append(SqlValue(x))
+                } else if (type == SQLITE_NULL) {
+                    cells.append(SqlValue())
+                } else {
+                    val t: Str = sqliteColumnText(stmt.value(), c)
+                    cells.append(SqlValue(t))
+                }
+                c++
+            }
+            rows.append(RowValue(names, cells))
+            continue
+        }
+        if (rc == SQLITE_DONE) {
+            break
+        }
+        val message: Str = sqliteLastError(db)
+        sqliteFinalize(stmt.value())
+        return Res<List<RowValue>>.err(message)
+    }
+    sqliteFinalize(stmt.value())
+    return Res<List<RowValue>>.ok(rows)
+}

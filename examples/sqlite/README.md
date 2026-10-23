@@ -1,0 +1,36 @@
+# examples/sqlite - the sqlite module, three small programs
+
+Each folder is one self-contained program against the same five-book table: `basics`
+opens, creates, inserts with bound parameters, reads through a lambda, and watches an
+error come back as a value; `builder` spells the reads (and the UPDATE/DELETE) as
+builder chains; `linq` materializes a result set with `queryRows` and shapes it with
+the `linq` module's operators.
+
+The module (`modules/sqlite`) resolves the platform's SQLite at run time - nothing is
+linked, no header is needed - so the only prerequisite is that the library exists where
+the program runs: on Linux the runtime `libsqlite3.so.0` (installed nearly everywhere),
+on Windows `sqlite3.dll` beside the executable.
+
+## Run (Linux)
+
+From the repository root, with the compiler built (`docs/building-on-linux.md`):
+
+```sh
+g++ -std=c++20 -O2 -DNDEBUG -I. ../simse_bootstrap/builds/simse_bootstrap.cpp -o simse
+./simse --root examples/sqlite/basics/src --module modules/sqlite -o /tmp/basics.cpp
+g++ -std=c++20 -O2 -DNDEBUG -I. /tmp/basics.cpp -o /tmp/basics && /tmp/basics
+```
+
+`./run.sh` does that for all three, with g++ and then clang++ when both are present.
+
+## The layer map
+
+- `modules/sqlite/api.kt` - the raw C ABI, one body-less declaration per C function;
+  the `_res.md` beside it is the C++ glue that owns the loader, the out-parameters and
+  the text conversions.
+- `modules/sqlite/sqlite.kt` - `open`/`exec`/`query`/`execBind`/`queryRows`, the
+  `SqlValue` bind values, the borrowed `Row` and the materialized `RowValue`.
+- `modules/sqlite/builder.kt` - `select`/`select2`/`select3` chains, `whereBind`,
+  `insert`/`insertCols`, `Query.rows`.
+
+A program imports `sqlite` alone; the `linq` example adds `import linq`.

@@ -1,0 +1,13 @@
+parse ok: true
+version: 2
+first book: Kotlin & XML
+books named book: 2
+elements: book book 
+round trip stable: true
+cdata: [if (a<b) {x();}]
+refs: ABC
+unclosed: xml: </a> closes <b> opened at line 1
+mismatch: xml: </b> closes <a> opened at line 1
+bad entity: xml: unknown entity &nope; at line 1
+no quote: xml: an attribute value at line 1 is not quoted
+after root: xml: content after the root element at line 1
