@@ -7893,10 +7893,11 @@ void ns2_parseXmlText(Res<ns3_XmlNode>* _sm_out, Str text) {
 // stress/minui-layout/src/main.kt
 void ns1_nameOf(Str* _sm_out, ns2_Frame* f, Int node) {
     Char* __sm_catP;
-    ns2_Node* _sm_base1;
-    List<ns2_Node>* _sm_base2;
+    Str* _sm_base1, * name;
+    ns2_Node* _sm_base2;
+    List<ns2_Node>* _sm_base3;
+    Str _sm_base4, _sm_expr4, _sm_expr5, _sm_expr6;
     Bool _sm_expr1;
-    Str name, _sm_expr4, _sm_expr5, _sm_expr6;
     Int _sm_expr2;
     _sm_expr1 = node < 0;
     if (_sm_expr1) goto L1;
@@ -7905,18 +7906,20 @@ void ns1_nameOf(Str* _sm_out, ns2_Frame* f, Int node) {
     *_sm_out = __sm_stringTable[159];
     return;
     L2:;
-    _sm_base2 = simse_addressOf(f->nodes);
-    _sm_base1 = simse_addressOf((*_sm_base2)[node]);
-    name = _sm_base1->name;
-    _sm_expr2 = simse_lenOf(name);
+    _sm_base3 = simse_addressOf(f->nodes);
+    _sm_base2 = simse_addressOf((*_sm_base3)[node]);
+    _sm_base1 = simse_addressOf(_sm_base2->name);
+    name = _sm_base1;
+    _sm_expr2 = simse_lenOf((*name));
     _sm_expr1 = _sm_expr2 > 0;
     if (_sm_expr1) goto L3;
     goto L4;
     L3:;
-    _sm_expr4.resize(1 + name.size());
+    _sm_base4 = *(name);
+    _sm_expr4.resize(1 + _sm_base4.size());
     __sm_catP = simse_str_data(&_sm_expr4);
-    std::memcpy(__sm_catP, name.data(), name.size());
-    __sm_catP = __sm_catP + name.size();
+    std::memcpy(__sm_catP, _sm_base4.data(), _sm_base4.size());
+    __sm_catP = __sm_catP + _sm_base4.size();
     *__sm_catP = (char) ('#');
     _sm_expr5 = toString(simse_addressOf(node));
     _sm_expr6.resize(_sm_expr4.size() + _sm_expr5.size());

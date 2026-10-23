@@ -652,7 +652,13 @@ data class BpFacts(
 
     // The callee names that made a call untrusted, for `--showBorrow`. The decision itself
     // reads only `impureCall`.
-    var blocked: List<Str>
+    var blocked: List<Str>,
+
+    // The name of the place a *binding promotion* borrows into ("" for the parameter rule):
+    // a `mutates`-marked callee on a receiver that is a plain name other than this root
+    // writes storage the borrowed element cannot live in, so the call is safe for the
+    // promotion however the parameter rule treats it.
+    var placeRoot: Str
 ) {
     // Every name under `node`: an over-approximation is what the rule wants, since it is asked only
     // about names it already cares about.
@@ -738,6 +744,12 @@ data class BpFacts(
                     if (xmlKind(receiver) == AstNodeCategory.ExprName) {
                         val receiverName: Str = xmlAttr(receiver, AstNodeAttributeKind.Name)
                         if (this.written.has(receiverName) && !this.taken.has(receiverName)) {
+                            safe = true
+                        }
+                        // Under a place promotion, any other named receiver is equally out of
+                        // reach: the callee moves that receiver's buffer alone, and the borrowed
+                        // element lives in the place root's storage (`placeRoot` above).
+                        if (this.placeRoot != "" && receiverName != this.placeRoot) {
                             safe = true
                         }
                     }
@@ -941,7 +953,8 @@ fun bpLoopReadOnly(body: *List<AstXmlNode>, name: *Str): Bool {
     var facts: BpFacts = BpFacts(
         false, false, false, *bpStaticNames, *bpTrustedNames, *bpKnownTypes, *bpMutatesNames,
         bpMutatesParamsNames,
-        Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), List<Str>()
+        Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), List<Str>(),
+        ""
     )
     for (*stmt in body) {
         // The template's own binding (`val <name> = <machine>.current`, the `for`'s first
@@ -958,6 +971,37 @@ fun bpLoopReadOnly(body: *List<AstXmlNode>, name: *Str): Bool {
         return false
     }
     if (facts.written.has(*name) || facts.taken.has(*name) || facts.inLambda.has(*name)) {
+        return false
+    }
+    return true
+}
+
+// Whether `body` only reads the place named `name`, borrowed out of the storage rooted at
+// `root` (a `val x = c[i]` promotion's two names): the rule `bpLoopReadOnly` applies to the
+// element, plus the root itself - a rebind of the root (`c = ...`) frees the storage the
+// borrowed place lives in, and a capture of either name could carry the pointer out.
+fun bpPlaceReadOnly(body: *List<AstXmlNode>, name: *Str, root: *Str): Bool {
+    var facts: BpFacts = BpFacts(
+        false, false, false, *bpStaticNames, *bpTrustedNames, *bpKnownTypes, *bpMutatesNames,
+        bpMutatesParamsNames,
+        Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), List<Str>(),
+        *root
+    )
+    for (*stmt in body) {
+        // The promoted declaration itself is the binding being retyped, not a write.
+        val declName: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
+        if (declName == name && xmlKind(stmt) == AstNodeCategory.StmtVarDecl) {
+            continue
+        }
+        facts.walk(stmt)
+    }
+    if (facts.fieldWrite || facts.staticWrite || facts.impureCall) {
+        return false
+    }
+    if (facts.written.has(*name) || facts.taken.has(*name) || facts.inLambda.has(*name)) {
+        return false
+    }
+    if (facts.written.has(*root) || facts.taken.has(*root) || facts.inLambda.has(*root)) {
         return false
     }
     return true
@@ -1051,7 +1095,8 @@ fun bpBorrowDecl(
     }
     var facts: BpFacts = BpFacts(
         false, false, false, statics, reads, types, *bpMutatesNames, bpMutatesParamsNames,
-        Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), List<Str>()
+        Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), List<Str>(),
+        ""
     )
     for (*stmt in body.Children) {
         facts.walk(stmt)

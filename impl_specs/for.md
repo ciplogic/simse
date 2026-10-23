@@ -278,6 +278,15 @@ The parser picks the wrap before types are known, so the choice is made in sema
   write through anything - so a numeric scan promotes like any other read-only walk
   (`stress/for-promote` pins both the promotion and the `&x` refusal).
 
+The **binding form** is the same rule for a place-initialized `val` (`promotePlaceAt`): a
+`val it = c[i]` (or a member chain rooted at a name) over a deep element becomes `*(c[i])`
+bound at `*T` - the `while` loop's spelling of the read-only walk, which the `for` form
+already borrows. The proof covers the binding's name *and the place's root* (a rebind of
+the root frees the borrowed storage), and under it a `mutates`-marked callee on any other
+named receiver is trusted: the callee moves that receiver's buffer alone, and the borrowed
+element lives in the root's storage - so the emit-into-a-buffer loop (`out.appendStr(it.sku)`)
+still promotes. The same stress case pins it, appends to the other buffer included.
+
 The gate matters. On `List<Cell>` (a class with a `Str` field) the value form deep-copies — and
 allocates — per element; a read-only walk in the harness probe goes **1,255,621 us -> 27,897 us**
 (~45x) once promoted. On `List<Small>` (four `Int`s) the two forms are a wash, and on

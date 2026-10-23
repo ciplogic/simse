@@ -40,5 +40,37 @@ fun main(): Int {
     words.append("gamma!")
     println(partPromoted(words))
     println(partEscaped(words))
+    main2()
+    return 0
+}
+
+// The same promotion for a place-initialized binding (the `while` loop's spelling of the
+// read-only walk): `val it = items[i]` over a deep element binds the element's place - no
+// copy (and no `Str` allocation) per binding - while the appends to the *other* buffer
+// stay trusted (a `mutates` callee cannot reach storage its receiver does not name). A
+// binding that would escape (`&it`) keeps the copying value form.
+data class Offer(var sku: Str, var qty: Int)
+
+fun renderOffers(items: List<Offer>, out: *Str): Int {
+    var i: Int = 0
+    while (i < items.size()) {
+        val it: Offer = items[i]
+        out.append('[')
+        out.appendStr(it.sku)
+        out.append(':')
+        out.append(Char(48 + it.qty))
+        out.append(']')
+        i++
+    }
+    return items.size()
+}
+
+fun main2(): Int {
+    var items: List<Offer> = List<Offer>(0)
+    items.append(Offer("ab", 1))
+    items.append(Offer("cdef", 2))
+    var out: Str = Str()
+    renderOffers(items, out)
+    println(out)
     return 0
 }

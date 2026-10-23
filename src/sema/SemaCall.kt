@@ -954,6 +954,7 @@ fun Analyzer.promoteForLoops(stmts: *List<AstXmlNode>): Unit {
         this.spanForAt(stmts, i)
         if (!bpNoBorrow()) {
             this.promoteForAt(stmts, i)
+            this.promotePlaceAt(stmts, i)
         }
         i++
     }
@@ -1071,6 +1072,127 @@ fun Analyzer.loopElementName(body: *List<AstXmlNode>, machineName: Str): Str {
         ) {
             return xmlAttr(stmt, AstNodeAttributeKind.Name)
         }
+    }
+    return ""
+}
+
+// The place promotion (impl_specs/for.md, "Auto-promotion", the binding form): a
+// `val x = <place>` whose initializer is a member/index chain rooted at a plain name - the
+// `val it = r.items[i]` a `while` loop writes, the shape the `for` promotion already
+// borrows - becomes the element's *place* when the element is deep and the rest of the
+// block only reads it. The value form deep-copies (and, when a `Str` is anywhere in the
+// element, allocates) per binding; the place form is one address the block's reads go
+// through. `--no-borrow` turns it off with the rest of the rewrite.
+fun Analyzer.promotePlaceAt(stmts: *List<AstXmlNode>, index: Int): Unit {
+    val decl: *AstXmlNode = *stmts[index]
+    if (xmlKind(decl) != AstNodeCategory.StmtVarDecl) {
+        return
+    }
+    if (xmlAttr(decl, AstNodeAttributeKind.IsVar) == "true") {
+        return
+    }
+    val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+    if (name == "" || name.startsWith("_sm_")) {
+        return
+    }
+    val init: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.Init)
+    if (xmlIsEmpty(init)) {
+        return
+    }
+    val initKind: AstNodeCategory = xmlKind(init)
+    if (initKind != AstNodeCategory.ExprIndex && initKind != AstNodeCategory.ExprMember) {
+        return
+    }
+    val root: Str = this.placeRootName(init)
+    if (root == "") {
+        return
+    }
+    val elementType: AstXmlNode = this.iteratedType(init)
+    if (xmlIsEmpty(elementType) || !bpDeepElement(elementType)) {
+        return
+    }
+    if (index + 1 >= stmts.size()) {
+        return
+    }
+    var rest: List<AstXmlNode> = List<AstXmlNode>()
+    var j: Int = index + 1
+    while (j < stmts.size()) {
+        rest.append(*stmts[j])
+        j++
+    }
+    if (!bpPlaceReadOnly(*rest, *name, *root)) {
+        return
+    }
+    // The declaration's initializer becomes `*(place)` - `*x` is the address of a value,
+    // so the binding is the element's place - and the declared type wraps the element in
+    // a pointer. The Init child is replaced whole (the node itself is shared with the
+    // facts the proof read).
+    var place: AstXmlNode = *init
+    place.name = AstNodeKind.Operand
+    var wrap: AstXmlNode = AstXmlNode(
+        AstNodeKind.Expr, AstNodeCategory.ExprDeref, List<AstNodeAttribute>(), Array<AstXmlNode>()
+    )
+    xmlAddChild(wrap, place)
+    wrap.name = AstNodeKind.Init
+    var replaced: Bool = false
+    var at: Int = 0
+    while (at < decl.Children.count()) {
+        if (decl.Children[at].name == AstNodeKind.Init) {
+            decl.Children[at] = wrap
+            replaced = true
+            break
+        }
+        at++
+    }
+    if (!replaced) {
+        xmlAddChild(decl, wrap)
+    }
+
+    val typeChild: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.Type)
+    var pointee: AstXmlNode = elementType
+    if (!xmlIsEmpty(typeChild)) {
+        pointee = *typeChild
+    }
+    var pointer: AstXmlNode = semPointerOf(pointee)
+    pointer.name = AstNodeKind.Type
+    if (xmlIsEmpty(typeChild)) {
+        xmlAddChild(decl, pointer)
+    } else {
+        var swapped: Bool = false
+        var atType: Int = 0
+        while (atType < decl.Children.count()) {
+            if (decl.Children[atType].name == AstNodeKind.Type) {
+                decl.Children[atType] = pointer
+                swapped = true
+                break
+            }
+            atType++
+        }
+        if (!swapped) {
+            xmlAddChild(decl, pointer)
+        }
+    }
+}
+
+// The plain name a member/index place chain is rooted at, or "" when the expression is
+// not a place: every link must be a field read or an index, and the root a name.
+fun Analyzer.placeRootName(place: *AstXmlNode): Str {
+    var walk: *AstXmlNode = place
+    var guard: Int = 0
+    while (guard < 32) {
+        guard++
+        val kind: AstNodeCategory = xmlKind(walk)
+        if (kind == AstNodeCategory.ExprName) {
+            return xmlAttr(walk, AstNodeAttributeKind.Name)
+        }
+        if (kind == AstNodeCategory.ExprMember || kind == AstNodeCategory.ExprIndex) {
+            walk = xmlChildPtr(walk, AstNodeKind.Receiver)
+            if (xmlIsEmpty(walk)) {
+                return ""
+            }
+            continue
+        }
+        return ""
     }
     return ""
 }

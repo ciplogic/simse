@@ -14,6 +14,7 @@ template <class T>
 struct Opt;
 template <class T>
 struct Res;
+struct ns1_Offer;
 // src/rtl
 SIMSE_PACK_PUSH
 struct Range {
@@ -299,17 +300,24 @@ requires (!std::is_same_v<Str, T>)
 inline void initByValue(Res<T>* self, Str value) {
     self->setError(std::move(value));
 }
+// stress/for-promote/src/main.kt
+SIMSE_PACK_PUSH
+struct ns1_Offer {
+    Str sku;
+    Int qty;
+};
+SIMSE_PACK_POP
 
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 5;
+static const Int __sm_stringCount = 7;
 static const char __sm_stringPool[] =
-    "gamma!" "alpha" "false" "true" "be" 
+    "gamma!" "alpha" "false" "cdef" "true" "ab" "be" 
 ;
-static const Int16 __sm_stringStarts[] = {5,5,0,-6,1,0,1};
-static const Int16 __sm_stringLens[] = {5,5,-6,1,0,1,2};
-static_assert(sizeof(__sm_stringPool) - 1 == 22, "the string pool and its length index disagree");
+static const Int16 __sm_stringStarts[] = {7,7,0,-6,1,0,1,0,2};
+static const Int16 __sm_stringLens[] = {7,7,-6,1,0,1,0,2,0};
+static_assert(sizeof(__sm_stringPool) - 1 == 28, "the string pool and its length index disagree");
 static Span<Char> __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
@@ -647,6 +655,8 @@ void set(Str* self, Int index, Char value);
 Int64 ns1_partPromoted(List<Str>* words);
 Int ns1_partEscaped(List<Str>* words);
 Int ns1_firstByte(Str* w);
+Int ns1_renderOffers(List<ns1_Offer> items, Str* out);
+Int ns1_main2();
 
 Range_iterValues_yieldable iterValues(Range* self) {
     Range_iterValues_yieldable machine{};
@@ -854,7 +864,7 @@ Span<Char> strBoolView(Bool value) {
     if (value) goto L1;
     goto L2;
     L1:;
-    return __sm_stringTable[3];
+    return __sm_stringTable[4];
     L2:;
     return __sm_stringTable[2];
 }
@@ -939,7 +949,7 @@ int main() {
     Int _sm_expr2;
     words = List<Str>(0);
     simse_list_append(words, __sm_stringTable[1]);
-    simse_list_append(words, __sm_stringTable[4]);
+    simse_list_append(words, __sm_stringTable[6]);
     simse_list_append(words, __sm_stringTable[0]);
     _sm_base1 = &words;
     _sm_expr1 = ns1_partPromoted(_sm_base1);
@@ -947,6 +957,53 @@ int main() {
     _sm_base2 = &words;
     _sm_expr2 = ns1_partEscaped(_sm_base2);
     simse_println((_sm_expr2), stdout);
+    ns1_main2();
+    return 0;
+}
+// stress/for-promote/src/main.kt
+Int ns1_renderOffers(List<ns1_Offer> items, Str* out) {
+    ns1_Offer* _sm_base1, * it;
+    Str _sm_base2;
+    Int i, _sm_expr1, _sm_expr4;
+    Bool _sm_expr2;
+    Char _sm_expr5;
+    i = 0;
+    L1:;
+    _sm_expr1 = simse_lenOf(items);
+    _sm_expr2 = i < _sm_expr1;
+    if (!(_sm_expr2)) goto L2;
+    _sm_base1 = simse_addressOf(items[i]);
+    it = _sm_base1;
+    simse_str_append((*out), '[');
+    _sm_base2 = it->sku;
+    simse_str_appendStr((*out), _sm_base2);
+    simse_str_append((*out), ':');
+    _sm_expr1 = it->qty;
+    _sm_expr4 = 48 + _sm_expr1;
+    _sm_expr5 = Char(_sm_expr4);
+    simse_str_append((*out), _sm_expr5);
+    simse_str_append((*out), ']');
+    i = i + 1;
+    goto L1;
+    L2:;
+    _sm_expr1 = simse_lenOf(items);
+    return _sm_expr1;
+}
+// stress/for-promote/src/main.kt
+Int ns1_main2() {
+    Str* _sm_base1;
+    List<ns1_Offer> items;
+    ns1_Offer _sm_expr1, _sm_expr2;
+    Str out;
+    items = List<ns1_Offer>(0);
+    _sm_expr1 = ns1_Offer{__sm_stringTable[5], 1};
+    simse_list_append(items, _sm_expr1);
+    _sm_expr2 = ns1_Offer{__sm_stringTable[3], 2};
+    simse_list_append(items, _sm_expr2);
+    out = Str();
+    _sm_base1 = &out;
+    ns1_renderOffers(items, _sm_base1);
+    simse_println((out), stdout);
     return 0;
 }
 
