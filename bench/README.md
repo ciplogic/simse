@@ -92,9 +92,9 @@ loops.)
 ## State of the port
 
 Checksums verified against C++ at small and medium sizes: **sum, push,
-strlist, tree, interp, words, particles, lru, bintrees**, and at small size
-**records** and **sexp** after the fix described below. Numbers and the
-reading are in [results.md](results.md).
+strlist, records, tree, interp, words, particles, sexp, lru, scene,
+bintrees, blur**. Numbers are in [results.md](results.md), one table per
+benchmark as the harness writes it from a run.
 
 Two port-wide bugs were found and fixed while reconciling checksums:
 
@@ -111,10 +111,8 @@ Two port-wide bugs were found and fixed while reconciling checksums:
   `text = text.substr(...)`) at the cost of the reused capacity the C++ arena
   row keeps.
 
-Still open: `respond` agrees on request count but its byte total and FNV
-checksum drift slightly (65 bytes in 100k requests) with no shifted modulus
-or resize left in the file - cause not found; `calc` and `scene` carry the
-fixes above but a clean verification run was cut short by the executable
-policy blocks described under Running; `graph` and `blur` are believed
-correct (no known-broken construct remains) and equally unverified for the
-same reason.
+Still open: `calc` and `respond` print most lines correctly and disagree on
+one checksum line at both sizes (`respond` agrees on the request count but
+its byte total and FNV checksum drift - 65 bytes in 100k requests at the
+small size); no shifted-modulus or resize construct remains in either file.
+Their rows in results.md carry the mismatch, never timings.

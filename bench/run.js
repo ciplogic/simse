@@ -121,7 +121,10 @@ function parseArgs(argv) {
 // program has no preprocessor, so the one `// BENCH_N` line is rewritten in a
 // copy of the source (the goose suite's own arrangement).
 function writeSized(src, dst, n) {
-    const lines = readFileSync(src, "utf8").split("\n");
+    // CRLF-tolerant: a fresh Windows checkout materializes the sources with \r\n
+    // endings, and `.` in a JS regex does not match \r - the anchored tail below would
+    // miss every line. The sized copy joins back with plain \n.
+    const lines = readFileSync(src, "utf8").split(/\r?\n/);
     let hit = false;
     const out = lines.map((line) => {
         const match = line.match(/^(\s*val\s+\w+:\s*Int\s*=\s*)(\d+)(\s*\/\/ BENCH_N.*)$/);
@@ -325,7 +328,7 @@ function writeResults(opts, selected, results) {
             if (!(r.sizes[opts.sizes[0]]?.[row]?.ms)) haveAll = false;
         }
         if (r.sizes[opts.sizes[0]]?.simse?.ms && r.sizes[opts.sizes[0]]?.["cpp variant " + bench.cpp[0]]?.ms) {
-            ratios.push({ bench: bench.name, r });
+            ratios.push({ bench, r });
         }
         const problems = Object.entries(r.checks);
         if (problems.length > 0) {
@@ -342,7 +345,7 @@ function writeResults(opts, selected, results) {
                 const cpp = (r.sizes[s] ?? {})["cpp variant " + bench.cpp[0]];
                 return cpp?.ms && simse?.ms ? (simse.ms / cpp.ms).toFixed(2) + "x" : "-";
             });
-            md += `| ${bench} | ${cells.join(" | ")} |\n`;
+            md += `| ${bench.name} | ${cells.join(" | ")} |\n`;
         }
         md += "\n";
     }
