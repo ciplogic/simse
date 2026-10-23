@@ -191,8 +191,13 @@ function startRun(build, exe) {
 function runInterleaved(build, exes, reps) {
     const outputs = exes.map(() => null);
     const times = exes.map(() => []);
+    // The row order rotates with the rep: whichever position in the round the machine
+    // favors (the first runner meets a ramping clock, the last a warm one), every row
+    // takes every position exactly once when reps divides the row count - and never
+    // keeps one.
     for (let rep = 0; rep < reps; rep++) {
-        for (let e = 0; e < exes.length; e++) {
+        for (let i = 0; i < exes.length; i++) {
+            const e = (rep + i) % exes.length;
             const run = startRun(build, exes[e]);
             if (run.exit !== 0) {
                 return { error: `exit ${run.exit} on rep ${rep}` };
@@ -241,23 +246,27 @@ async function main() {
             const labels = [];
             const exes = [];
 
-            // Build every row first, then measure the interleaved runs.
+            // Build every row first, then measure the interleaved runs. The Simse row is
+            // first: the interleave spreads the turbo/thermal history across the rows of
+            // a rep, but the row order inside the rep still leans on the machine - the
+            // first runner gets the boost and the last the heat, and the row under test
+            // should not be the one paying for the references.
             let buildError = null;
-            for (const variant of bench.cpp) {
-                try {
-                    exes.push(buildCpp(build, bench, variant, n, work));
-                    labels.push(`cpp variant ${variant}`);
-                } catch (e) {
-                    buildError = `cpp variant ${variant}: ${e.message}`;
-                    break;
-                }
+            try {
+                exes.push(buildSimse(build, bench, n, work));
+                labels.push("simse");
+            } catch (e) {
+                buildError = `simse: ${e.message}`;
             }
             if (!buildError) {
-                try {
-                    exes.push(buildSimse(build, bench, n, work));
-                    labels.push("simse");
-                } catch (e) {
-                    buildError = `simse: ${e.message}`;
+                for (const variant of bench.cpp) {
+                    try {
+                        exes.push(buildCpp(build, bench, variant, n, work));
+                        labels.push(`cpp variant ${variant}`);
+                    } catch (e) {
+                        buildError = `cpp variant ${variant}: ${e.message}`;
+                        break;
+                    }
                 }
             }
             if (buildError) {
