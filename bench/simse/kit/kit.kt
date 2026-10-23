@@ -80,6 +80,42 @@ fun uToString(x: Int64): Str {
     return out
 }
 
+// Whether pattern `a` is at least pattern `b`, the u64 order: the patterns with the
+// top bit clear (the non-negative `Int64`s) sort below the ones with it set, and
+// within each half the signed order is the pattern order.
+fun uGe(a: Int64, b: Int64): Bool {
+    val aHigh: Bool = a < Int64(0)
+    val bHigh: Bool = b < Int64(0)
+    if (aHigh != bHigh) {
+        return aHigh
+    }
+    return a >= b
+}
+
+// The C++ references' unsigned division: the operands' patterns as u64, the
+// quotient's pattern back as an `Int64`. Both operands non-negative is the
+// common case and the machine's own division; otherwise one binary long
+// division over the 64 bits (uToString's pass shape - `rem - b` wraps, which is
+// the u64 subtraction).
+fun uDiv(a: Int64, b: Int64): Int64 {
+    if (a >= Int64(0) && b >= Int64(0)) {
+        return a / b
+    }
+    var q: Int64 = 0
+    var rem: Int64 = 0
+    var i: Int = 63
+    while (i >= 0) {
+        rem = rem * 2 + (uShr(a, i) & Int64(1))
+        q = q << 1
+        if (uGe(rem, b)) {
+            rem = rem - b
+            q = q | Int64(1)
+        }
+        i--
+    }
+    return q
+}
+
 // One byte of a `Str` or a view of one, 0..255: the unsigned read every C++
 // row gets from `uint8_t`/`unsigned char`.
 fun byteAt(s: *Str, i: Int): Int {

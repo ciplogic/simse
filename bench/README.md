@@ -62,6 +62,9 @@ of Simse's scalars are signed. `simse/kit/kit.kt` carries the bits in an
   general case adds 2^64 mod k, built from 2^32 mod k;
 - addition, subtraction and multiplication need no helper: the generated C++
   computes them in two's complement, which is the u64 wrap bit for bit;
+- `uDiv`/`uGe` - the unsigned division `calc`'s evaluator needs over the bit
+  patterns (a signed `/` answers a different quotient for negative patterns);
+  both non-negative operands take the machine's own division;
 - `uToString` - the `%llu` spelling, by binary long division;
 - `byteAt` - a `Str` byte as 0..255: `Char` is a *signed* `Int8`, so every
   byte read the C++ rows get from `uint8_t` needs the mask.
@@ -91,12 +94,11 @@ loops.)
 
 ## State of the port
 
-Checksums verified against C++ at small and medium sizes: **sum, push,
-strlist, records, tree, interp, words, particles, sexp, lru, scene,
-bintrees, blur**. Numbers are in [results.md](results.md), one table per
+Checksums verified against C++ at small and medium sizes: **all sixteen
+benchmarks**. Numbers are in [results.md](results.md), one table per
 benchmark as the harness writes it from a run.
 
-Two port-wide bugs were found and fixed while reconciling checksums:
+Four bugs were found and fixed while reconciling checksums:
 
 - **Logical shift before unsigned mod.** `xsMod(r >> s, k)` reads the
   arithmetic shift, where C++ shifts a `uint64_t` logically; the sign
@@ -104,15 +106,20 @@ Two port-wide bugs were found and fixed while reconciling checksums:
   of `k` only when `k` is a power of two (why the power-of-two benchmarks
   passed while `records`, `sexp`, `graph`, `scene` drifted). Every shifted
   modulus now goes `xsMod(uShr(r, s), k)`.
-- **`resize` on a static `Str` does not land.** Appends to a file-level
-  static stick; a `resize` of one silently operates on a copy (compiler gap,
-  probe in bench/.work history). `calc` was the one benchmark that cleared a
-  static text per input; it now reassigns (`text = Str()`,
-  `text = text.substr(...)`) at the cost of the reused capacity the C++ arena
-  row keeps.
-
-Still open: `calc` and `respond` print most lines correctly and disagree on
-one checksum line at both sizes (`respond` agrees on the request count but
-its byte total and FNV checksum drift - 65 bytes in 100k requests at the
-small size); no shifted-modulus or resize construct remains in either file.
-Their rows in results.md carry the mismatch, never timings.
+- **A seed shifted arithmetically.** `calc` feeds `gen` with `seed >> 8` and
+  `respond` builds its request from `r >> 8`/`r >> 16` - arithmetic shifts of
+  an `Int64`, where C++ shifts its `uint64_t` logically, so every value with
+  the top bit set generated different text (`respond` drifted only bytes:
+  the lengths matched, the letters did not).
+- **Division in wrapping u64.** `calc` evaluates with `/` over `uint64_t`;
+  a signed `Int64` division answers a different quotient whenever an operand
+  is negative. The kit gains `uDiv` (and `uGe`, the pattern order it needs)
+  beside `uShr`/`xsMod`.
+- **A place address reused across a call.** The `graph` benchmark crashed:
+  the expression-reuse pass merged the two `&pool[u]` computations across an
+  `append`, and the store went through the freed buffer. An element address
+  no longer merges across a call (impl_specs/expr-reuse.md); the
+  `place-reuse` case in the stress corpus pins it. `resize` on a static
+  `Str` also does not land (a compiler gap; `calc` reassigns instead -
+  `text = Str()`, `text = text.substr(...)` - at the cost of the reused
+  capacity the C++ arena row keeps).

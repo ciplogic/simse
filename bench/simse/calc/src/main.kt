@@ -239,7 +239,7 @@ fun evalExpr(i: Int): EOut {
     if (b.value == Int64(0)) {
         return EOut(0, E_DIV0)
     }
-    return EOut(a.value / b.value, 0)
+    return EOut(uDiv(a.value, b.value), 0)
 }
 
 // One input: the tree occupies the pool's front, reset by the next input.
@@ -273,7 +273,7 @@ fun main(): Int {
         // gap above; the C++ arena row keeps its text capacity instead.
         text = Str()
         val depth: Int = 3 + Int(xsMod(seed, 4))
-        val s: Int64 = gen(depth, seed >> 8)
+        val s: Int64 = gen(depth, uShr(seed, 8))
         corrupt(s)
         chars += Int64(text.size())
         val out: EOut = runOne()

@@ -142,7 +142,7 @@ fun fnv(s: *Str): Int64 {
 fun handle(seed: Int64): HOut {
     val r: Int64 = xsNext(seed)
     val n: Int = 1 + Int(xsMod(r, 8))
-    val resp: Resp = Resp(Int64(xsMod(uShr(r, 4), 1000000)), nameOf(r >> 8), makeItems(r >> 16, n))
+    val resp: Resp = Resp(Int64(xsMod(uShr(r, 4), 1000000)), nameOf(uShr(r, 8)), makeItems(uShr(r, 16), n))
     var out: Str = Str()
     render(out, resp)
     return HOut(fnv(out), out.size())
