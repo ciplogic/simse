@@ -96,14 +96,16 @@ fun XmlNode.elementList(): List<XmlNode> {
 
 // Every descendant element with this name, in document order - the recursive find. The
 // matches are *copies* (a `List` value), since a machine cannot recurse; a subtree that
-// must be kept is already a value.
-fun XmlNode.collect(name: Str): List<XmlNode> {
+// must be kept is already a value. Named `descendants`, not `collect`: the compiler's
+// own build scans this module, and a name this generic meets the emitter's `collect`
+// halfway to a collision (limitations.md).
+fun XmlNode.descendants(name: Str): List<XmlNode> {
     var out: List<XmlNode> = List<XmlNode>()
-    xmlCollectInto(this, name, *out)
+    xmlDescendantsInto(this, name, *out)
     return out
 }
 
-fun xmlCollectInto(node: XmlNode, name: Str, out: *List<XmlNode>): Unit {
+fun xmlDescendantsInto(node: XmlNode, name: Str, out: *List<XmlNode>): Unit {
     var i: Int = 0
     while (i < node.Children.count()) {
         val child: XmlNode = node.Children[i]
@@ -111,7 +113,7 @@ fun xmlCollectInto(node: XmlNode, name: Str, out: *List<XmlNode>): Unit {
             if (child.name == name) {
                 out.append(child)
             }
-            xmlCollectInto(child, name, out)
+            xmlDescendantsInto(child, name, out)
         }
         i++
     }

@@ -18,7 +18,7 @@ fun main(): Int {
     println("version: " + catalog.value().attributeOr("version", "missing"))
     val book1: Opt<XmlNode> = catalog.value().child("book")
     println("first book: " + book1.value().textOf())
-    println("books named book: " + catalog.value().collect("book").size().toString())
+    println("books named book: " + catalog.value().descendants("book").size().toString())
     val kids: List<XmlNode> = catalog.value().elementList()
     var names: Str = Str()
     for (kid in kids) {

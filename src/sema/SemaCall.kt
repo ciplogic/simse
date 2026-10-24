@@ -198,6 +198,105 @@ fun Analyzer.checkCallArity(call: *AstXmlNode): Unit {
     )
 }
 
+// The declared return type of a plain call `f(args)`: the arity-matching overload's,
+// with the type parameters bound - explicitly from the callee's type arguments when it
+// names some (`optOf<Int>(...)`), otherwise shallowly from the arguments' own types
+// (`listOf(xs)` binds `T` to the element). A type parameter nothing bound - or a
+// trailing-pack match, whose element type the call site alone knows - answers empty,
+// exactly what the checker saw before calls resolved.
+fun Analyzer.semaPlainCallReturn(call: *AstXmlNode): AstXmlNode {
+    val callee: *AstXmlNode = xmlChildPtr(call, AstNodeKind.Callee)
+    val generic: Bool = xmlKind(callee) == AstNodeCategory.ExprGenericName
+    if (xmlKind(callee) != AstNodeCategory.ExprName && !generic) {
+        return xmlEmptyNode()
+    }
+    val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+    if (this.lookupValue(name).hasValue()) {
+        return xmlEmptyNode() // shadowed by a local/param: not a function call
+    }
+    val overloads: *List<AstXmlNode> = this.functions.getPtr(name)
+    if (overloads == null) {
+        return xmlEmptyNode()
+    }
+    val argCount: Int = xmlCount(call, AstNodeKind.Arg)
+    var typeArgCount: Int = 0
+    if (generic) {
+        typeArgCount = xmlCount(callee, AstNodeKind.TypeArg)
+    }
+    val args: List<AstXmlNode> = xmlChildren(call, AstNodeKind.Arg)
+    for (*overload in overloads) {
+        if (generic && xmlCount(overload, AstNodeKind.TypeParam) != typeArgCount) {
+            continue
+        }
+        val paramCount: Int = xmlCount(overload, AstNodeKind.Param)
+        if (paramCount != argCount) {
+            // A trailing-pack match answers empty: the packed element type is the call
+            // site's knowledge, not the declaration's.
+            if (paramCount > 0) {
+                val packParams: List<AstXmlNode> = xmlChildren(overload, AstNodeKind.Param)
+                val lastType: *AstXmlNode = xmlChildPtr(packParams[paramCount-1], AstNodeKind.Type)
+                if (semIsPackTarget(lastType) && argCount >= paramCount - 1) {
+                    return xmlEmptyNode()
+                }
+            }
+            continue
+        }
+        val typeParams: List<Str> = xmlTypeParamNames(overload)
+        var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+        if (generic) {
+            val typeArgs: List<AstXmlNode> = xmlChildren(callee, AstNodeKind.TypeArg)
+            var t: Int = 0
+            while (t < typeParams.size() && t < typeArgs.size()) {
+                bindings.insert(typeParams[t], typeArgs[t])
+                t++
+            }
+        } else if (typeParams.size() > 0) {
+            // Infer from the arguments: a parameter whose type names a type parameter
+            // binds it to the argument's type, when the argument's type is known.
+            val declParams: List<AstXmlNode> = xmlChildren(overload, AstNodeKind.Param)
+            var a: Int = 0
+            while (a < argCount && a < declParams.size()) {
+                val paramType: *AstXmlNode = xmlChildPtr(declParams[a], AstNodeKind.Type)
+                val argType: AstXmlNode = this.unionArgType(args[a])
+                if (!xmlIsEmpty(argType)) {
+                    semBindTypes(paramType, argType, typeParams, bindings)
+                }
+                a++
+            }
+        }
+        val ret: AstXmlNode = semSubstitute(xmlChildPtr(overload, AstNodeKind.ReturnType), bindings, typeParams)
+        if (xmlIsEmpty(ret)) {
+            return xmlEmptyNode() // Unit: absence, like every unresolved type here
+        }
+        if (!semTypeParamsAllBound(ret, typeParams, bindings)) {
+            return xmlEmptyNode()
+        }
+        return ret
+    }
+    return xmlEmptyNode()
+}
+
+// Whether every type parameter `ret` mentions is bound: a `List<T>` with a `T` nothing
+// bound is not a type the caller can name.
+fun semTypeParamsAllBound(ret: *AstXmlNode, typeParams: *List<Str>, bindings: *Dictionary<Str, AstXmlNode>): Bool {
+    if (xmlIsEmpty(ret)) {
+        return true
+    }
+    val kind: AstNodeCategory = xmlKind(ret)
+    if (kind == AstNodeCategory.TypeNamed || kind == AstNodeCategory.TypeGeneric) {
+        val name: Str = xmlAttr(ret, AstNodeAttributeKind.Name)
+        if (xmlIsTypeParam(name, typeParams) && !bindings.has(name)) {
+            return false
+        }
+    }
+    for (*child in ret.Children) {
+        if (!semTypeParamsAllBound(child, typeParams, bindings)) {
+            return false
+        }
+    }
+    return true
+}
+
 // A `union class` construction (`specs/declarations.md`): at most one value, chosen by its
 // type, because only one arm can be live. Zero arguments construct `None`; one argument
 // must match a field's type - the call is then routed through that field's generated
@@ -423,6 +522,11 @@ fun Analyzer.exprType(expr: *AstXmlNode): AstXmlNode {
             if (this.types.has(builtName)) {
                 return semNamedType(builtName)
             }
+            // A plain call answers the arity-matching overload's declared return type,
+            // type parameters bound - what a union construction's arm match and a `for`
+            // over a call's result both need (`Xml.descendants(name)` used to be a type
+            // the checker could not see through).
+            return this.semaPlainCallReturn(expr)
         }
         return xmlEmptyNode()
     }
