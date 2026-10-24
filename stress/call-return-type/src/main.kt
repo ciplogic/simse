@@ -16,7 +16,7 @@ fun probeFlag(): Bool
 @SmGen("res", "probecall", "simse_probe_list")
 fun probeList(): List<Int>
 
-union class Value(var I: Int64, var F: Float64, var T: Str)
+union class Value(var I: Int64, var N: Int, var F: Float64, var T: Str)
 
 fun okSeven(): Res<Int> {
     val r: Res<Int> = Res<Int>.ok(7)
@@ -48,10 +48,34 @@ fun forOverCall(): Int {
     return total
 }
 
+// The construction's argument by spelling: a conversion names its result, a `Str`
+// literal is a `Str`, an `Int` literal an `Int` - the three shapes a bound value
+// arrives by.
+fun unionBySpelling(): Str {
+    val fromCall: Value = Value(probeInt())
+    val fromConversion: Value = Value(Int64(7))
+    val fromStr: Value = Value("text")
+    val fromInt: Value = Value(5)
+    if (fromCall.getTypeOf() != SmValueTypes.I) {
+        return "call"
+    }
+    if (fromConversion.getTypeOf() != SmValueTypes.I) {
+        return "conversion"
+    }
+    if (fromStr.getTypeOf() != SmValueTypes.T) {
+        return "str"
+    }
+    if (fromInt.getTypeOf() != SmValueTypes.N) {
+        return "int"
+    }
+    return "all"
+}
+
 fun main(): Int {
     val direct: Res<Int> = returnDirect()
     println("direct: " + direct.value().toString())
     println("union: " + unionFromCall())
+    println("spelling: " + unionBySpelling())
     println("loop: " + forOverCall().toString())
     println("flag: " + probeFlag().toString())
     return 0

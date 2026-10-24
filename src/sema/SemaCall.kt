@@ -378,6 +378,25 @@ fun Analyzer.unionArgType(arg: *AstXmlNode): AstXmlNode {
     if (kind == AstNodeCategory.ExprBoolLit) {
         return semNamedType("Bool")
     }
+    if (kind == AstNodeCategory.ExprStrLit) {
+        return semNamedType("Str")
+    }
+    if (kind == AstNodeCategory.ExprCall) {
+        // A scalar conversion names its result: `Int64(x)` is an Int64 whatever `x`
+        // was - the spelling a bound value arrives at a union construction by.
+        val callee: *AstXmlNode = xmlChildPtr(arg, AstNodeKind.Callee)
+        if (xmlKind(callee) == AstNodeCategory.ExprName) {
+            val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+            if (name == "Int" || name == "Int32" || name == "Int8" || name == "Int16"
+                || name == "Int64" || name == "Float32" || name == "Float64"
+                || name == "Char" || name == "Bool") {
+                if (name == "Int32") {
+                    return semNamedType("Int")
+                }
+                return semNamedType(name)
+            }
+        }
+    }
     if (kind == AstNodeCategory.ExprMember) {
         val recv: *AstXmlNode = xmlChildPtr(arg, AstNodeKind.Receiver)
         if (xmlKind(recv) == AstNodeCategory.ExprName) {
