@@ -359,6 +359,22 @@ fun nativeInvokeSupportText(): Str {
                     module = (void *)::LoadLibraryA(library);
             #else
             module = ::dlopen(library, RTLD_NOW | RTLD_LOCAL);
+            if (module == nullptr) {
+                // The macOS spelling of the same runtime library: a declaration that
+                // names the Linux SONAME ("libsqlite3.so.0") loads there as
+                // "libsqlite3.dylib". Derived from the name, so one declaration serves
+                // both, and a name that never held ".so" is tried as written only.
+                const char* so = std::strstr(library, ".so");
+                if (so != nullptr) {
+                    char dylib[256];
+                    int head = (int)(so - library);
+                    if (head > 0 && head < 248) {
+                        std::memcpy(dylib, library, (size_t)head);
+                        std::memcpy(dylib + head, ".dylib", 7);
+                        module = ::dlopen(dylib, RTLD_NOW | RTLD_LOCAL);
+                    }
+                }
+            }
             #endif
             if (module != nullptr && count < 16) {
                 table[count].library = library;
