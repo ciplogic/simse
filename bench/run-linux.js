@@ -131,10 +131,12 @@ function median(times) {
     return sorted[Math.floor(sorted.length / 2)];
 }
 
-// Both compilers get the same flag set; the references are standalone TUs, the
-// Simse-generated C++ additionally includes runtime headers from the repo root.
+// Both compilers get the same flag set - `-flto` the analog of the Windows harness's
+// `/GL` (whose link-time codegen is LTCG), so the two files stay comparable. The
+// references are standalone TUs, the Simse-generated C++ additionally includes
+// runtime headers from the repo root.
 function compile(compiler, flags, source, exe, extraIncludes = []) {
-    const argv = [compiler, "-std=c++20", "-O2", "-DNDEBUG", ...extraIncludes, ...flags, "-o", exe, source];
+    const argv = [compiler, "-std=c++20", "-O2", "-DNDEBUG", "-flto", ...extraIncludes, ...flags, "-o", exe, source];
     const compiled = runProcess(argv);
     if (compiled.exit !== 0) {
         throw new Error(`${compiler} failed: ${(compiled.stderr || compiled.stdout).split("\n").filter((l) => /error/i.test(l)).slice(0, 2).join(" | ")}`);
@@ -295,8 +297,9 @@ async function main() {
 function writeResults(opts, versions, selected, results) {
     let md = `# Results: Simse vs C++ over the Goose benchmark suite - Linux\n\n`;
     md += `Machine: Linux on ${cpuModel()}, 8 cores/8 threads. Same flags for every row\n`;
-    md += `(\`-std=c++20 -O2 -DNDEBUG\`; the Simse-generated C++ adds \`-I<repo>\` for the runtime\n`;
-    md += `headers). Compilers: g++ ${versions.gxx}, clang++ ${versions.cxx.replace(/^Ubuntu clang version /, "")}.\n`;
+    md += `(\`-std=c++20 -O2 -DNDEBUG -flto\`, the \`-flto\` the analog of the Windows run's\n`;
+    md += `\`/GL\`; the Simse-generated C++ adds \`-I<repo>\` for the runtime headers).\n`;
+    md += `Compilers: g++ ${versions.gxx}, clang++ ${versions.cxx.replace(/^Ubuntu clang version /, "")}.\n`;
     md += `Process wall time, median of ${opts.reps} runs, interleaved round-robin over all rows.\n`;
     md += `Sizes: ${opts.sizes.join(", ")}. Every row of a benchmark must print the same checksum\n`;
     md += `or the size is failed, never timed. Small sizes sit near the process-startup floor -\n`;
@@ -324,7 +327,7 @@ function writeResults(opts, versions, selected, results) {
         }
         const idiomatic = "cpp" + bench.cpp[0];
         if (opts.sizes.some((s) => r.sizes[s]?.[`simse g++`]?.ms || r.sizes[s]?.[`simse clang++`]?.ms)) {
-            ratios.push({ bench: bench.name, r, idiomatic });
+            ratios.push({ bench, r, idiomatic });
         }
         const problems = Object.entries(r.checks);
         if (problems.length > 0) {
@@ -333,17 +336,29 @@ function writeResults(opts, versions, selected, results) {
         md += "\n";
     }
     if (ratios.length > 0) {
-        md += `## Ratios (median over sizes with both rows timed)\n\n`;
-        md += `| benchmark | simse g++ / cpp${""} idiomatic g++ | simse clang++ / idiomatic clang++ | cpp clang++ / g++ | simse clang++ / g++ |\n`;
+        // The Windows template (run.js): ratios against the idiomatic C++ row at
+        // the medium size only - the small sizes sit on the process-startup
+        // floor, so their ratios are noise. Here split per compiler, and the
+        // hand-tuned column is the best of the expert variants, as on Windows.
+        const at = opts.sizes.includes("medium") ? "medium" : opts.sizes[opts.sizes.length - 1];
+        md += `## Ratios (${at} size, the Windows template)\n\n`;
+        md += `| benchmark | simse g++ / std | simse clang++ / std | hand-tuned g++ / std | hand-tuned clang++ / std |\n`;
         md += `| --- | --- | --- | --- | --- |\n`;
         for (const { bench, r, idiomatic } of ratios) {
-            const ratio = (num, den) => {
-                const nums = opts.sizes.map((s) => (r.sizes[s] ?? {})[num]).filter((c) => c?.ms);
-                const dens = opts.sizes.map((s) => (r.sizes[s] ?? {})[den]).filter((c) => c?.ms);
-                if (nums.length === 0 || nums.length !== dens.length) return "-";
-                return (nums.reduce((a, c) => a + c.ms, 0) / nums.length / (dens.reduce((a, c) => a + c.ms, 0) / dens.length)).toFixed(2) + "x";
+            const rows = r.sizes[at] ?? {};
+            const cell = (num, den) => (rows[num]?.ms && rows[den]?.ms) ? (rows[num].ms / rows[den].ms).toFixed(2) : "-";
+            const handTuned = (tag) => {
+                const std = rows[`${idiomatic} ${tag}`]?.ms;
+                if (!std) return "-";
+                let best = null;
+                for (const variant of bench.cpp) {
+                    if (variant === bench.cpp[0]) continue;
+                    const ms = rows[`cpp${variant} ${tag}`]?.ms;
+                    if (ms && (best === null || ms < best)) best = ms;
+                }
+                return best === null ? "-" : (best / std).toFixed(2);
             };
-            md += `| ${bench} | ${ratio(`simse g++`, `${idiomatic} g++`)} | ${ratio(`simse clang++`, `${idiomatic} clang++`)} | ${ratio(`${idiomatic} clang++`, `${idiomatic} g++`)} | ${ratio(`simse clang++`, `simse g++`)} |\n`;
+            md += `| ${bench.name} | ${cell(`simse g++`, `${idiomatic} g++`)} | ${cell(`simse clang++`, `${idiomatic} clang++`)} | ${handTuned("g++")} | ${handTuned("clang++")} |\n`;
         }
         md += "\n";
     }

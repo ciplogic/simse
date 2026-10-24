@@ -21,11 +21,15 @@ or with trivial fixes - see "State of the port" for what that left.
   baked in by rewriting the one line carrying `// BENCH_N` (the goose suite's
   own arrangement; Simse has no preprocessor).
 - `simse/kit/kit.kt` - shared u64-over-`Int64` support (below).
-- `run.js` - the harness; `results.md` - the current ratios (the idiomatic C++ row is
-  the 1.00 baseline; small sizes are startup-floor noise and run only with --sizes).
+- `run.js` - the harness; `results.md` - the unified ratios, a Windows section
+  and a Linux section plus the estimated-Goose comparison and the analysis
+  (hand-merged from a `run.js` run and a `run-linux.js` run; `run.js` rewrites
+  only its own table, so a fresh Windows run needs the merge redone).
 - `run-linux.js` - the Linux twin: every row built twice, with g++ and clang++
   (Simse transpiles once - the two compiler builds emit byte-identical C++ - and
-  both compile it); `results-linux-i3.md` - its numbers (i3-N305).
+  both compile it), under `-flto` the analog of the Windows `/GL`; its raw
+  per-size output is regenerated into `results-linux-i3.md` with `--out` and is
+  not kept in the repo.
 
 ## Running
 
@@ -96,8 +100,9 @@ loops.)
 ## State of the port
 
 Checksums verified against C++ at small and medium sizes: **all sixteen
-benchmarks**. Numbers are in [results.md](results.md), one table per
-benchmark as the harness writes it from a run.
+benchmarks**, on Windows and on Linux. Numbers are in
+[results.md](results.md): a Windows and a Linux ratio table, an estimated
+comparison against the Goose language itself, and the analysis.
 
 Four bugs were found and fixed while reconciling checksums:
 
