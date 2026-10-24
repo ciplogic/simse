@@ -96,6 +96,12 @@ data class IlMethod(
     var returnType: Int,
     var argTypes: List<Int>,
 
+// The package the resolved declaration lives in, for a plain function whose name
+// several packages declare: the emitter spells this one's C++ name instead of the
+// first-collected declaration's (`xmlSkipMisc` over a cursor and over a parser). ""
+// keeps the name-based resolution.
+    var packageName: Str,
+
 // Whether a `Method`'s receiver is one the emitter passes as `T* self` - a value or a raw-pointer
 // receiver. A counted reference (`&T`, `PList`) is the receiver the emitter passes as the handle
 // itself, so `linear/PromoteRefs.kt` must not turn such a receiver into a raw pointer.

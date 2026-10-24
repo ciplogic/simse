@@ -192,9 +192,12 @@ fun IlExtractor.ilListOfType(callee: AstXmlNode, args: List<AstXmlNode>, from: I
 // first, then a last parameter a call may pack into. A member call also resolves by its
 // receiver's type. An ambiguous name resolves to nothing (no packing, no conversion), and
 // so does a call whose facts are unavailable.
-fun IlExtractor.callTarget(callee: *AstXmlNode, receiver: *AstXmlNode, argCount: Int, member: Bool): AstXmlNode {
+// The resolved declaration of a call, as its index into the facts (-1 when nothing
+// matched): the caller reads the declaration and the package the C++ name spells from.
+fun IlExtractor.callTarget(callee: *AstXmlNode, receiver: *AstXmlNode, argNodes: List<AstXmlNode>, member: Bool): Int {
+    val argCount: Int = argNodes.size()
     if (this.fn.facts == null) {
-        return xmlEmptyNode()
+        return -1
     }
     val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
     // The candidates are *indices* into the facts, not the facts themselves: a `SemFnFact`
@@ -203,7 +206,7 @@ fun IlExtractor.callTarget(callee: *AstXmlNode, receiver: *AstXmlNode, argCount:
     // stay per candidate below.
     val named: *List<Int> = this.fn.facts.functionsByName.getPtr(name)
     if (named == null) {
-        return xmlEmptyNode()
+        return -1
     }
     var candidates: List<Int> = List<Int>()
     for (index in named) {
@@ -243,24 +246,25 @@ fun IlExtractor.callTarget(callee: *AstXmlNode, receiver: *AstXmlNode, argCount:
         }
         candidates = matching
     }
-    var exact: AstXmlNode = xmlEmptyNode()
-    var pack: AstXmlNode = xmlEmptyNode()
+    var exact: Int = -1
+    var pack: Int = -1
     var exactCount: Int = 0
     var packCount: Int = 0
     var k: Int = 0
     while (k < candidates.size()) {
-        val fact: *SemFnFact = *this.fn.facts.functions[candidates[k]]
+        val at: Int = candidates[k]
         k++
+        val fact: *SemFnFact = *this.fn.facts.functions[at]
         // The count and the pack test are the fact's own, so a candidate that does not match by
         // arity needs no parameter list.
         val paramCount: Int = fact.paramCount
         if (paramCount == argCount) {
-            exact = fact.decl
+            exact = at
             exactCount++
             continue
         }
         if (fact.packTarget && argCount >= paramCount - 1) {
-            pack = fact.decl
+            pack = at
             packCount++
         }
     }
@@ -268,12 +272,73 @@ fun IlExtractor.callTarget(callee: *AstXmlNode, receiver: *AstXmlNode, argCount:
         if (exactCount == 1) {
             return exact
         }
-        return xmlEmptyNode()
+        // Several same-arity declarations of the name: the arguments' own types pick the
+        // overload - the `xmlAtEnd` pair (minui's `*XmlCursor`, xml's `*XmlParser`) is the
+        // shape. An argument whose type the rules cannot name leaves the field unresolved
+        // (the ambiguity is not this call's to settle), and so does a field where no
+        // candidate's parameters all unify - the wrong-overload spelling C++ cannot
+        // compile is worse than the failure here.
+        var matched: Int = -1
+        var matchedCount: Int = 0
+        var k2: Int = 0
+        while (k2 < candidates.size()) {
+            val fact: *SemFnFact = *this.fn.facts.functions[candidates[k2]]
+            k2++
+            if (fact.paramCount != argCount) {
+                continue
+            }
+            var unify: Bool = true
+            var t: Int = 0
+            while (t < argCount && unify) {
+                val argType: AstXmlNode = this.exprType(argNodes[t])
+                if (xmlIsEmpty(argType)) {
+                    unify = false
+                    break
+                }
+                val params: List<AstXmlNode> = xmlChildren(fact.decl, AstNodeKind.Param)
+                val paramType: *AstXmlNode = xmlChildPtr(params[t], AstNodeKind.Type)
+                if (xmlIsEmpty(paramType)) {
+                    unify = false
+                    break
+                }
+                // A pointer parameter takes a value argument of its pointee (the borrow
+                // conversion the call applies later): `xmlSkipMisc(*p)` with a `*XmlParser`
+                // parameter reads the argument as the value, so the comparison strips the
+                // parameter's handle before unifying.
+                unify = semUnifyType(*paramType, argType, fact.templateParams)
+                if (!unify) {
+                    val paramPointee: AstXmlNode = semPointeeOf(paramType)
+                    if (!xmlIsEmpty(paramPointee)) {
+                        unify = semUnifyType(paramPointee, argType, fact.templateParams)
+                    }
+                }
+                t++
+            }
+            if (unify) {
+                matched = candidates[k2 - 1]
+                matchedCount++
+            }
+            if (name == "xmlSkipMisc") {
+                var arg0: AstXmlNode = this.exprType(argNodes[0])
+                if (xmlIsEmpty(arg0)) {
+                    println("skipMisc arg UNKNOWN")
+                } else {
+                    println("skipMisc arg known")
+                }
+            }
+        }
+        if (name == "xmlSkipMisc") {
+            println("narrow done")
+        }
+        if (matchedCount == 1) {
+            return matched
+        }
+        return -1
     }
     if (packCount == 1) {
         return pack
     }
-    return xmlEmptyNode()
+    return -1
 }
 
 // Whether `e` builds a value of a declared data class - `Box<Int>(3)` by its generic

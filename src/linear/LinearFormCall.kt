@@ -107,12 +107,18 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
     // The trailing arguments may pack into a list-valued last parameter. A static call
     // (`Res<Str>.ok(x)`) is not looked up: its callee is a type.
     var target: AstXmlNode = xmlEmptyNode()
+    var targetPackage: Str = ""
     if (!staticCall && callName == calleeName) {
         var receiverNode: AstXmlNode = xmlEmptyNode()
         if (receiverCall) {
             receiverNode = lhs
         }
-        target = this.callTarget(callee, receiverNode, argNodes.size(), receiverCall)
+        val targetAt: Int = this.callTarget(callee, receiverNode, argNodes, receiverCall)
+        if (targetAt >= 0) {
+            val fact: *SemFnFact = *this.fn.facts.functions[targetAt]
+            target = fact.decl
+            targetPackage = fact.packageName
+        }
     }
     val packFrom: Int = this.packStart(target, argNodes)
 
@@ -422,7 +428,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
 
     if (receiverCall) {
         operands.append(
-            this.methodIndex(calleeName, IlMethodKind.Method, -1, returnType, fullTypes, recvIsValue)
+            this.methodIndex(calleeName, IlMethodKind.Method, -1, returnType, fullTypes, recvIsValue, "")
         )
         operands.append(recvSlot)
         i = 0
@@ -439,7 +445,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
             this.methodIndex(
                 calleeName, IlMethodKind.Function,
                 this.typeIndex(this.baseText(lhs), this.calleeToType(lhs)),
-                returnType, argTypes, true
+                returnType, argTypes, true, ""
             )
         )
         i = 0
@@ -496,7 +502,9 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
     }
     // A plain function (or a native - the backend resolves the symbol). A callee that is a
     // value was materialized above, so its slot name is the method's own.
-    operands.append(this.methodIndex(callName, IlMethodKind.Function, -1, returnType, argTypes, true))
+    // The package the resolution picked: a name several packages declare is two C++
+    // functions, and the first-collected one is not always the call's.
+    operands.append(this.methodIndex(callName, IlMethodKind.Function, -1, returnType, argTypes, true, targetPackage))
     i = 0
     while (i < args.size()) {
         operands.append(args[i])

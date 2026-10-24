@@ -341,6 +341,17 @@ fun Emitter.call(e: *AstXmlNode): Str {
 
         AstNodeCategory.ExprName -> {
             val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+            // The IL resolution's own package, when the lowering carried one: a name
+            // several packages declare is two C++ functions, and first-collected is
+            // not always the call's (`xmlSkipMisc` over a cursor and over a parser).
+            var callPackage: Str = ""
+            var pi: Int = 0
+            while (pi < e.attributes.size()) {
+                if (e.attributes[pi].name == AstNodeAttributeKind.Package) {
+                    callPackage = e.attributes[pi].value
+                }
+                pi++
+            }
             if (name == "println" || name == "print") {
                 var arg: Str = ""
                 if (argNodes.size() > 0) {
@@ -406,7 +417,11 @@ fun Emitter.call(e: *AstXmlNode): Str {
             }
             val nativeOpt: Opt<Str> = this.nativeSymbols.get(name)
             val hasPlainFunction: Bool = this.plainFunctionNames.has(name)
-            var calleeName: Str = this.qualify(this.functionPackage(name), name)
+            var resolvedPackage: Str = this.functionPackage(name)
+            if (callPackage != "") {
+                resolvedPackage = callPackage
+            }
+            var calleeName: Str = this.qualify(resolvedPackage, name)
             if (!hasPlainFunction && nativeOpt.hasValue()) {
                 calleeName = nativeOpt.value()
             }

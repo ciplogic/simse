@@ -1802,10 +1802,11 @@ Int ns1_partStringEscapes() {
 }
 // stress/strings/src/main.kt
 Int ns1_partStrings() {
-    Str _sm_base1, _sm_base2, _sm_base5, _sm_base7, _sm_base9, _sm_base11, _sm_base13, _sm_base15,
-        _sm_base17, raw, text, _sm_expr1, _sm_expr2, _sm_expr11, _sm_expr14;
-    Char _sm_base3;
-    Str* _sm_base4, * _sm_base6, * _sm_base8, * _sm_base10, * _sm_base12, * _sm_base14, * _sm_base16;
+    Str* _sm_base1, * _sm_base6, * _sm_base8, * _sm_base10, * _sm_base12, * _sm_base14, * _sm_base16,
+        * _sm_base18;
+    Str _sm_base2, _sm_base3, _sm_base4, _sm_base7, _sm_base9, _sm_base11, _sm_base13, _sm_base15,
+        _sm_base17, _sm_base19, raw, text, _sm_expr1, _sm_expr2, _sm_expr11, _sm_expr14;
+    Char _sm_base5;
     Bool _sm_expr3, _sm_expr5, _sm_expr12, _sm_expr13;
     Int _sm_expr6, _sm_expr7, _sm_expr8, _sm_expr9, _sm_expr10;
     List<Str> parts;
@@ -1824,56 +1825,60 @@ Int ns1_partStrings() {
     simse_println((_sm_expr5), stdout);
     _sm_expr6 = simse_lenOf(text);
     simse_println((_sm_expr6), stdout);
-    parts = split(simse_addressOf(text), simse_addressOf(Str(__sm_stringTable[80])));
+    _sm_base2 = __sm_stringTable[80];
+    _sm_base1 = &_sm_base2;
+    parts = split(simse_addressOf(text), _sm_base1);
     _sm_expr7 = simse_lenOf(parts);
     simse_println((_sm_expr7), stdout);
-    _sm_base1 = parts[0];
-    simse_println((_sm_base1), stdout);
-    _sm_base2 = parts[1];
-    simse_println((_sm_base2), stdout);
-    _sm_base3 = text[0];
+    _sm_base3 = parts[0];
     simse_println((_sm_base3), stdout);
-    _sm_base5 = __sm_stringTable[24];
-    _sm_base4 = &_sm_base5;
-    _sm_expr8 = indexOf(simse_addressOf(text), _sm_base4);
-    simse_println((_sm_expr8), stdout);
-    _sm_base7 = __sm_stringTable[60];
+    _sm_base4 = parts[1];
+    simse_println((_sm_base4), stdout);
+    _sm_base5 = text[0];
+    simse_println((_sm_base5), stdout);
+    _sm_base7 = __sm_stringTable[24];
     _sm_base6 = &_sm_base7;
-    _sm_expr9 = find(simse_addressOf(text), _sm_base6);
-    simse_println((_sm_expr9), stdout);
-    _sm_base9 = __sm_stringTable[92];
+    _sm_expr8 = indexOf(simse_addressOf(text), _sm_base6);
+    simse_println((_sm_expr8), stdout);
+    _sm_base9 = __sm_stringTable[60];
     _sm_base8 = &_sm_base9;
-    _sm_expr10 = lastIndexOf(simse_addressOf(text), _sm_base8);
+    _sm_expr9 = find(simse_addressOf(text), _sm_base8);
+    simse_println((_sm_expr9), stdout);
+    _sm_base11 = __sm_stringTable[92];
+    _sm_base10 = &_sm_base11;
+    _sm_expr10 = lastIndexOf(simse_addressOf(text), _sm_base10);
     simse_println((_sm_expr10), stdout);
     _sm_expr11 = substr(simse_addressOf(text), 6, 5);
     simse_println((_sm_expr11), stdout);
-    _sm_base11 = __sm_stringTable[22];
-    _sm_base10 = &_sm_base11;
-    _sm_expr12 = startsWith(simse_addressOf(text), _sm_base10);
-    simse_println((_sm_expr12), stdout);
-    _sm_base13 = __sm_stringTable[24];
+    _sm_base13 = __sm_stringTable[22];
     _sm_base12 = &_sm_base13;
-    _sm_expr13 = endsWith(simse_addressOf(text), _sm_base12);
-    simse_println((_sm_expr13), stdout);
+    _sm_expr12 = startsWith(simse_addressOf(text), _sm_base12);
+    simse_println((_sm_expr12), stdout);
     _sm_base15 = __sm_stringTable[24];
     _sm_base14 = &_sm_base15;
-    _sm_base17 = __sm_stringTable[23];
+    _sm_expr13 = endsWith(simse_addressOf(text), _sm_base14);
+    simse_println((_sm_expr13), stdout);
+    _sm_base17 = __sm_stringTable[24];
     _sm_base16 = &_sm_base17;
-    _sm_expr14 = replace(simse_addressOf(text), _sm_base14, _sm_base16);
+    _sm_base19 = __sm_stringTable[23];
+    _sm_base18 = &_sm_base19;
+    _sm_expr14 = replace(simse_addressOf(text), _sm_base16, _sm_base18);
     simse_println((_sm_expr14), stdout);
     return 0;
 }
 // stress/strings/src/main.kt
 Int ns1_partTextProcessing() {
-    Str* _sm_base2, * _sm_base3, * _sm_base5, * _sm_base7, * _sm_base9;
-    Str _sm_base4, _sm_base6, _sm_base8, _sm_base10, text, word, longest, shout, _sm_expr19;
+    Str* _sm_base1, * _sm_base4, * _sm_base5, * _sm_base7, * _sm_base9, * _sm_base11;
+    Str _sm_base2, _sm_base6, _sm_base8, _sm_base10, _sm_base12, text, word, longest, shout, _sm_expr19;
     List<Str> words, keys;
     Dictionary<Str, Int> counts;
     Int i, _sm_expr1, _sm_expr5, _sm_expr6, _sm_expr7, _sm_expr9, _sm_expr11, k, _sm_expr16;
     Bool _sm_expr2, _sm_expr12, _sm_expr18, _sm_expr20;
     Opt<Int> seen, _sm_expr8, _sm_expr10;
     text = __sm_stringTable[0];
-    words = split(simse_addressOf(text), simse_addressOf(Str(__sm_stringTable[77])));
+    _sm_base2 = __sm_stringTable[77];
+    _sm_base1 = &_sm_base2;
+    words = split(simse_addressOf(text), _sm_base1);
     counts = simse_dictionaryOf<Str, Int>();
     i = 0;
     L1:;
@@ -1916,8 +1921,8 @@ Int ns1_partTextProcessing() {
     _sm_expr1 = simse_lenOf(keys);
     _sm_expr2 = k < _sm_expr1;
     if (!(_sm_expr2)) goto L7;
-    _sm_base2 = simse_addressOf(keys[k]);
-    _sm_expr1 = simse_lenOf((*_sm_base2));
+    _sm_base4 = simse_addressOf(keys[k]);
+    _sm_expr1 = simse_lenOf((*_sm_base4));
     _sm_expr16 = simse_lenOf(longest);
     _sm_expr2 = _sm_expr1 > _sm_expr16;
     if (_sm_expr2) goto L8;
@@ -1930,18 +1935,18 @@ Int ns1_partTextProcessing() {
     L7:;
     simse_println((longest), stdout);
     shout = toUpper(simse_addressOf(text));
-    _sm_base4 = __sm_stringTable[47];
-    _sm_base3 = &_sm_base4;
-    _sm_expr18 = startsWith(simse_addressOf(shout), _sm_base3);
-    simse_println((_sm_expr18), stdout);
-    _sm_base6 = __sm_stringTable[51];
+    _sm_base6 = __sm_stringTable[47];
     _sm_base5 = &_sm_base6;
-    _sm_base8 = __sm_stringTable[50];
+    _sm_expr18 = startsWith(simse_addressOf(shout), _sm_base5);
+    simse_println((_sm_expr18), stdout);
+    _sm_base8 = __sm_stringTable[51];
     _sm_base7 = &_sm_base8;
-    _sm_expr19 = replace(simse_addressOf(text), _sm_base5, _sm_base7);
     _sm_base10 = __sm_stringTable[50];
     _sm_base9 = &_sm_base10;
-    _sm_expr20 = endsWith(simse_addressOf(_sm_expr19), _sm_base9);
+    _sm_expr19 = replace(simse_addressOf(text), _sm_base7, _sm_base9);
+    _sm_base12 = __sm_stringTable[50];
+    _sm_base11 = &_sm_base12;
+    _sm_expr20 = endsWith(simse_addressOf(_sm_expr19), _sm_base11);
     simse_println((_sm_expr20), stdout);
     return 0;
 }

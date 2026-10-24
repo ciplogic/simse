@@ -70,6 +70,16 @@ fun Emitter.ilSretKey(il: *IlBody, frame: *IlFrame, op: *IlOp): Str {
             }
         }
     }
+    // The method's own package, when the resolution carried one: a name several packages
+    // declare is two C++ functions, and only the resolved one's sret-ness applies
+    // (`xmlSkipMisc` over a cursor returns a Res - sret; over a parser it is Unit - not).
+    if (method.packageName != "") {
+        val ownKey: Str = this.qualify(method.packageName, method.name)
+        if (this.sretFns.has(ownKey)) {
+            return ownKey
+        }
+        return ""
+    }
     val fnKey: Str = this.qualify(this.functionPackage(method.name), method.name)
     if (this.sretFns.has(fnKey)) {
         return fnKey

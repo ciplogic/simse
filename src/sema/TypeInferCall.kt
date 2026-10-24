@@ -548,6 +548,67 @@ fun SemInfer.callableReturn(typeNode: *AstXmlNode): AstXmlNode {
     return xmlEmptyNode()
 }
 
+// A bare call that names only extensions is the implicit-`this` spelling: without the
+// rewrite the call lowers with no receiver at all - the C++ spelled from it has the wrong
+// arity (`ns1_count()` against `ns1_count(Out* self)`; the shape that broke the compiler's
+// own build when a module added a `collect`). The callee becomes the member form, `this`
+// the receiver, but only when the extension's receiver unifies with the *enclosing
+// function's own* `self` - a bare `xmlAtEnd()` inside an `XmlParser` method must not bind
+// to an `XmlCursor` extension just because the arity fits. Answers the extension's return
+// type, empty when nothing unified.
+fun SemInfer.implicitThisReturn(callee: *AstXmlNode, argNodes: *List<AstXmlNode>): AstXmlNode {
+    val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+    if (name.isEmpty()) {
+        return xmlEmptyNode()
+    }
+    var self: AstXmlNode = this.body.selfType
+    if (xmlIsEmpty(self)) {
+        return xmlEmptyNode()
+    }
+    val recv: AstXmlNode = this.resolveAlias(self)
+    val named: *List<Int> = this.facts.functionsByName.getPtr(name)
+    if (named == null) {
+        return xmlEmptyNode()
+    }
+    for (i in named) {
+        val fn: *SemFnFact = *this.facts.functions[i]
+        if (xmlIsEmpty(fn.receiver)) {
+            continue
+        }
+        val paramCount: Int = fn.paramCount
+        if (paramCount != argNodes.size()) {
+            continue
+        }
+        var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+        if (!semBindTypes(fn.receiver, recv, fn.templateParams, bindings)) {
+            continue
+        }
+        // The receiver unifies with `self`: the callee becomes the member form.
+        var thisExpr: AstXmlNode = AstXmlNode(
+            AstNodeKind.Expr, AstNodeCategory.ExprName,
+            List<AstNodeAttribute>(), Array<AstXmlNode>()
+        )
+        thisExpr.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, "this"))
+        var member: AstXmlNode = AstXmlNode(
+            AstNodeKind.Expr, AstNodeCategory.ExprMember,
+            List<AstNodeAttribute>(), Array<AstXmlNode>()
+        )
+        member.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+        var thisChild: AstXmlNode = thisExpr
+        thisChild.name = AstNodeKind.Receiver
+        xmlAddChild(member, thisChild)
+        callee.kind = AstNodeCategory.ExprMember
+        callee.attributes = member.attributes
+        callee.Children = member.Children
+        val ret: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
+        if (xmlIsEmpty(ret)) {
+            return xmlEmptyNode()
+        }
+        return semSubstitute(ret, bindings, fn.templateParams)
+    }
+    return xmlEmptyNode()
+}
+
 fun SemInfer.callReturn(callee: *AstXmlNode, argNodes: *List<AstXmlNode>): AstXmlNode {
     val kind: AstNodeCategory = xmlKind(callee)
     when (kind) {
@@ -567,6 +628,10 @@ fun SemInfer.callReturn(callee: *AstXmlNode, argNodes: *List<AstXmlNode>): AstXm
             val direct: AstXmlNode = this.functionReturn(name, List<AstXmlNode>(), xmlEmptyNode(), argNodes)
             if (!xmlIsEmpty(direct)) {
                 return direct
+            }
+            val extension: AstXmlNode = this.implicitThisReturn(callee, argNodes)
+            if (!xmlIsEmpty(extension)) {
+                return extension
             }
             return this.callableReturn(this.lookup(name))
         }

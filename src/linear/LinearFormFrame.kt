@@ -75,9 +75,9 @@ fun IlExtractor.labelIndex(name: *Str): Int {
 // over two receivers is two entries.
 fun IlExtractor.methodIndex(
     name: *Str, kind: IlMethodKind, staticBase: Int, returnType: Int,
-    argTypes: *List<Int>, recvIsValue: Bool
+    argTypes: *List<Int>, recvIsValue: Bool, packageName: Str
 ): Int {
-    var key: Str = name + "|" + ilMethodKindText(kind) + "|" + ilIntText(staticBase)
+    var key: Str = name + "|" + ilMethodKindText(kind) + "|" + ilIntText(staticBase) + "|" + packageName
     for (argType in argTypes) {
         key = key + "|" + ilIntText(argType)
     }
@@ -86,7 +86,7 @@ fun IlExtractor.methodIndex(
         return * found
     }
     this.out.methods.append(
-        IlMethod(name, kind, argTypes.size(), staticBase, returnType, argTypes, recvIsValue)
+        IlMethod(name, kind, argTypes.size(), staticBase, returnType, argTypes, packageName, recvIsValue)
     )
     this.methodAt.insert(key, this.out.methods.size() - 1)
     return this.out.methods.size() - 1

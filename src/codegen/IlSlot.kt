@@ -534,6 +534,11 @@ fun Emitter.ilCallNode(il: *IlBody, frame: *IlFrame, op: *IlOp): AstXmlNode {
     if (xmlIsEmpty(callee)) {
         return xmlEmptyNode()
     }
+    // The resolution's own package, for a name several packages declare: the printer
+    // spells it instead of the first-collected declaration's.
+    if (method.kind == IlMethodKind.Function && method.packageName != "") {
+        call.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Package, method.packageName))
+    }
     if (recvSlot >= 0) {
         this.attachMachineCallArgs(il, op, recvSlot, callee, method.name, op.operands.size() - first)
     }
