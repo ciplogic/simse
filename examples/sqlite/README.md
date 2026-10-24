@@ -7,9 +7,11 @@ builder chains; `linq` materializes a result set with `queryRows` and shapes it 
 the `linq` module's operators.
 
 The module (`modules/sqlite`) resolves the platform's SQLite at run time - nothing is
-linked, no header is needed - so the only prerequisite is that the library exists where
-the program runs: on Linux the runtime `libsqlite3.so.0` (installed nearly everywhere),
-on Windows `sqlite3.dll` beside the executable.
+linked, no header is needed, and the module carries no C++ at all: the `native`
+declarations in `api.kt` are the whole binding. The only prerequisite is that the
+library exists where the program runs: on Linux the runtime `libsqlite3.so.0`
+(installed nearly everywhere; the loader falls back to the macOS `libsqlite3.dylib`
+spelling), on Windows `sqlite3.dll` beside the executable.
 
 ## Run (Linux)
 
@@ -25,11 +27,14 @@ g++ -std=c++20 -O2 -DNDEBUG -I. /tmp/basics.cpp -o /tmp/basics && /tmp/basics
 
 ## The layer map
 
-- `modules/sqlite/api.kt` - the raw C ABI, one body-less declaration per C function;
-  the `_res.md` beside it is the C++ glue that owns the loader, the out-parameters and
-  the text conversions.
+- `modules/sqlite/api.kt` - the raw C ABI, one `@SmGen("native", ...)` declaration per
+  C function. The out-parameters (`sqlite3_open_v2`'s `sqlite3**`) are `native class`
+  handle structs; the untyped null slots are `RawPtr`; `SQLITE_TRANSIENT` is
+  `rawPtr(Int64(-1))`, the prelude's escape hatch.
 - `modules/sqlite/sqlite.kt` - `open`/`exec`/`query`/`execBind`/`queryRows`, the
-  `SqlValue` bind values, the borrowed `Row` and the materialized `RowValue`.
+  `SqlValue` bind values, the borrowed `Row` and the materialized `RowValue`. It also
+  owns the one behavior the thunk cannot see: a library that failed to load answers
+  `SQLITE_OK` with a null handle, and `open` turns that into the loader's error.
 - `modules/sqlite/builder.kt` - `select`/`select2`/`select3` chains, `whereBind`,
   `insert`/`insertCols`, `Query.rows`.
 
