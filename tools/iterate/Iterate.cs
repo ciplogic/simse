@@ -43,6 +43,11 @@ public static class Program
     static readonly string Repo = FindRepo();
     static readonly string Stress = Path.Combine(Repo, "stress");
 
+    // cl.exe builds the compiler and compiles every case on Windows; on Linux the same
+    // shape runs with g++ (or clang++) and the sibling shim include. The bun build steps
+    // stay Windows-only: build.js sources vcvars.
+    static readonly bool OnWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+
     // tools/roots.mjs's list, spelled as the command line: what the compiler is built from.
     static readonly string[] CompilerRootArgs =
     {
@@ -174,7 +179,7 @@ public static class Program
                 if (dir.Length == 0) continue;
                 try
                 {
-                    var candidate = Path.Combine(dir.Trim(), name + ".exe");
+                    var candidate = Path.Combine(dir.Trim(), name + (OnWindows ? ".exe" : ""));
                     if (File.Exists(candidate)) return candidate;
                 }
                 catch (ArgumentException)
@@ -445,16 +450,34 @@ public static class Program
                 $"the emitted C++ differs from expected.cpp.out\n{FirstDifference(ReadIfPresent(outCpp) ?? "", expectedCpp)}");
         }
 
-        var exe = Path.Combine(work, "prog.exe");
-        var compileCommand = new List<string>
+        var exe = Path.Combine(work, OnWindows ? "prog.exe" : "prog");
+        List<string> compileCommand;
+        if (OnWindows)
         {
-            build.Cl, "/nologo", "/std:c++20", "/EHsc", "/W3",
-        };
-        compileCommand.AddRange(build.Flags);
-        compileCommand.Add($"/I{Repo}");
-        compileCommand.Add($"/Fo{work}{Path.DirectorySeparatorChar}");
-        compileCommand.Add($"/Fe{exe}");
-        compileCommand.Add(outCpp);
+            compileCommand = new List<string>
+            {
+                build.Cl, "/nologo", "/std:c++20", "/EHsc", "/W3",
+            };
+            compileCommand.AddRange(build.Flags);
+            compileCommand.Add($"/I{Repo}");
+            compileCommand.Add($"/Fo{work}{Path.DirectorySeparatorChar}");
+            compileCommand.Add($"/Fe{exe}");
+            compileCommand.Add(outCpp);
+        }
+        else
+        {
+            compileCommand = new List<string> { build.Cl, "-std=c++20" };
+            compileCommand.AddRange(build.Flags);
+            compileCommand.Add($"-I{Repo}");
+            // The sibling checkout's shim satisfies the amalgamation's unreachable Win32
+            // includes (docs/building-on-linux.md); a program's own C++ rarely needs it,
+            // and a missing directory is no loss.
+            var shim = Path.GetFullPath(Path.Combine(Repo, "..", "simse-linux-gcc", "shim"));
+            if (Directory.Exists(shim)) compileCommand.Add($"-I{shim}");
+            compileCommand.Add("-o");
+            compileCommand.Add(exe);
+            compileCommand.Add(outCpp);
+        }
         if (build.Opts.Verbose) Console.WriteLine("  " + string.Join(" ", compileCommand));
         var compiled = await RunProcess(compileCommand, build.Env);
         if (compiled.Exit != 0)
@@ -462,7 +485,7 @@ public static class Program
             var log = string.Join("\n", (compiled.Stdout + compiled.Stderr)
                 .Split('\n').Take(40));
             return new CaseResult(name, false,
-                $"cl.exe failed (the generated C++ did not compile)\n{log}");
+                $"the C++ compile failed\n{log}");
         }
 
         var runCommand = new List<string> { exe };
@@ -769,35 +792,57 @@ public static class Program
 
         var simse = opts.Simse is not null
             ? Path.GetFullPath(Path.Combine(Repo, opts.Simse))
-            : Path.Combine(Repo, "simse.exe");
+            : Path.Combine(Repo, OnWindows ? "simse.exe" : "simse");
         if (!File.Exists(simse))
         {
-            return Fail("no compiler to test: build one with `dotnet run --project tools/iterate` " +
-                "(or point --simse at one)");
+            return Fail("no compiler to test: build one (docs/building-on-linux.md on Linux) " +
+                "or point --simse at one");
         }
 
-        Dictionary<string, string> env;
+        Dictionary<string, string>? env;
         string cl;
-        try
+        if (OnWindows)
         {
-            env = DeveloperEnv(NormalizeArch(opts.Arch ?? HostArch()));
-            cl = Which("cl", env);
-        }
-        catch (Exception e)
-        {
-            return Fail(e.Message);
-        }
-
-        var flags = new List<string>();
-        if (opts.Release)
-        {
-            flags.AddRange(new[] { "/MD", "/O2", "/Ob3", "/DNDEBUG" });
+            try
+            {
+                env = DeveloperEnv(NormalizeArch(opts.Arch ?? HostArch()));
+                cl = Which("cl", env);
+            }
+            catch (Exception e)
+            {
+                return Fail(e.Message);
+            }
         }
         else
         {
-            flags.Add("/MDd");
+            env = null;
+            cl = Which("g++") ?? Which("clang++") ?? Which("clang++-19") ?? "";
+            if (cl.Length == 0)
+            {
+                return Fail("no g++ or clang++ on PATH (the Linux corpus step compiles with one)");
+            }
         }
-        foreach (var define in opts.Defines) flags.Add($"/D{define}");
+
+        var flags = new List<string>();
+        if (OnWindows)
+        {
+            if (opts.Release)
+            {
+                flags.AddRange(new[] { "/MD", "/O2", "/Ob3", "/DNDEBUG" });
+            }
+            else
+            {
+                flags.Add("/MDd");
+            }
+            foreach (var define in opts.Defines) flags.Add($"/D{define}");
+        }
+        else
+        {
+            flags.AddRange(opts.Release
+                ? new[] { "-O2", "-DNDEBUG" }
+                : new[] { "-O1", "-g", "-DNDEBUG" });
+            foreach (var define in opts.Defines) flags.Add($"-D{define}");
+        }
 
         var build = new CorpusBuild
         {
@@ -810,11 +855,20 @@ public static class Program
         };
 
         var totalWatch = Stopwatch.StartNew();
-        // build step: the same bun tool, sequential and single - no pool involved.
-        var buildStep = opts.Full
-            ? new[] { "build.js", "--release", "--no-lto", "--quiet" }
-            : new[] { "build.js", "--fast", "--quiet" };
-        if (await RunBunStep("build", buildStep, opts.Quiet) != 0) return 1;
+        // build step: the same bun tool, sequential and single - no pool involved. It
+        // sources vcvars, so it is a Windows step; on Linux the compiler arrives built
+        // (docs/building-on-linux.md) and --simse points here.
+        if (OnWindows)
+        {
+            var buildStep = opts.Full
+                ? new[] { "build.js", "--release", "--no-lto", "--quiet" }
+                : new[] { "build.js", "--fast", "--quiet" };
+            if (await RunBunStep("build", buildStep, opts.Quiet) != 0) return 1;
+        }
+        else if (!opts.Quiet)
+        {
+            Console.WriteLine("iterate: build skipped (build.js sources vcvars; testing the compiler as built)");
+        }
 
         // stress step: native pool.
         if (await RunCorpus(build, cases) != 0)
@@ -823,7 +877,7 @@ public static class Program
             return 1;
         }
 
-        if (opts.Full)
+        if (opts.Full && OnWindows)
         {
             if (await RunBunStep("refresh",
                     new[] { "build.js", "--release", "--no-compile", "--bootstrap", "--quiet" },
@@ -835,6 +889,8 @@ public static class Program
         }
         else
         {
+            // The native one-direction check runs everywhere; on Linux it is the whole
+            // bootstrap step (the two-way check wants cl.exe to build the published file).
             var quick = await BootstrapQuick(simse);
             if (quick != 0)
             {
@@ -845,7 +901,7 @@ public static class Program
 
         Console.WriteLine(
             $"iterate: {(opts.Full ? "full" : "fast")} loop ok " +
-            $"({(opts.Full ? 4 : 3)} steps, {Seconds(totalWatch.Elapsed.TotalSeconds)})");
+            $"({(OnWindows ? (opts.Full ? 4 : 3) : 2)} steps, {Seconds(totalWatch.Elapsed.TotalSeconds)})");
         return 0;
     }
 }
