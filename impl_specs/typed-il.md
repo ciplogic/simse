@@ -80,6 +80,19 @@ post-mortem on generated C++. The verifier starts permissive (it only rejects `?
 that survive to emission) and tightens as ops gain types; when it is strict, the
 `Unsupported` op kind can be deleted.
 
+## Status
+
+- **Step 1 (the verifier) is in** (`315dda1`): jump targets checked before emission; the
+  slot-without-type failure names its line.
+- **Step 2 (typed pointer indexing) is in** (`ba0304c`): `ps[i]` over a `*Cell` types as
+  `Cell`, below the container shapes.
+- **The buffer hoist is in progress, stashed**: the stability walker (`bpSpanStableNode`)
+  and the sema transform (`hoistSpanAt` - typed span decl, `analyzeStmt` at inject,
+  in-place block mutation, `set`-receiver rewrite) are written; the reduced battery fails
+  in a half-fired state (the transformed body errors where the untransformed one lowers,
+  with no span vars in the IL), which needs a debugging pass. Paused while a parallel
+  change to the same sema files lands.
+
 ## Order of work
 
 1. The verifier, permissive (reject `?` at emission; print op + slot + line). It is safe

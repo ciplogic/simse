@@ -9,20 +9,20 @@ mismatch, never timed.
 
 | benchmark | Simse / std | hand-tuned / std |
 | --- | --- | --- |
-| sum | 0.93 | 0.77 |
-| push | 1.61 | 1.40 |
+| sum | 1.01 | 0.93 |
+| push | 1.13 | 0.97 |
 | strlist | 1.08 | - |
-| records | 1.12 | 0.88 |
-| tree | 0.56 | 0.69 |
-| interp | 0.91 | 1.00 |
-| graph | 1.37 | 0.29 |
-| words | 0.98 | 0.55 |
-| particles | 1.44 | 1.17 |
-| sexp | 0.88 | 0.73 |
-| lru | 0.35 | 0.27 |
-| scene | 0.77 | 0.62 |
-| calc | 0.38 | 0.35 |
-| bintrees | 0.29 | 0.30 |
-| respond | 1.30 | 0.66 |
-| blur | 1.19 | 0.72 |
+| records | 1.15 | 0.74 |
+| tree | 0.52 | 0.70 |
+| interp | 0.62 | 0.60 |
+| graph | 1.34 | 0.24 |
+| words | 0.93 | 0.42 |
+| particles | 0.96 | 1.05 |
+| sexp | 0.87 | 0.66 |
+| lru | 0.30 | 0.23 |
+| scene | 0.70 | 0.75 |
+| calc | 0.36 | 0.30 |
+| bintrees | 0.29 | 0.28 |
+| respond | 1.36 | 0.67 |
+| blur | 1.22 | 0.76 |
 
