@@ -907,3 +907,10 @@ fun nowMillis(): Int64
 // The same clock in microseconds: what the instrumented profiler measures with.
 @SmGen("res", "timeops", "simse_nowMicros")
 fun nowMicros(): Int64
+
+// The pointer-sized-integer escape hatch a P/Invoke layer needs: the constants a C API
+// spells as addresses (`SQLITE_TRANSIENT` is `((void*)-1)`) and the untyped slots a
+// declaration wants to pass NULL through. The bits travel as they are; what the pointee
+// means is the library declaration's business, not the prelude's.
+@SmGen("res", "rawptr", "simse_rawPtr")
+fun rawPtr(address: Int64): RawPtr

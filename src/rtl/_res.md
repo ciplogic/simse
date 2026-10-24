@@ -1430,3 +1430,21 @@ bodies:
 // here.
 ```
 
+!rawptr
+====
+forward:
+```cpp
+// `rawPtr(address)`: the escape hatch a P/Invoke layer needs for the constants the C API
+// spells as pointer-sized integers - SQLITE_TRANSIENT is `((void*)-1)`, a Win32
+// INVALID_HANDLE_VALUE is `((HANDLE)-1)`. The bits travel as they are; what the pointee
+// means is the declaration's business, not the prelude's. Read nothing through a handle
+// built this way that the library did not hand out first.
+inline RawPtr simse_rawPtr(Int64 address);
+```
+bodies:
+```cpp
+inline RawPtr simse_rawPtr(Int64 address) {
+    static_assert(sizeof(void*) <= sizeof(Int64), "rawPtr wants a 64-bit target");
+    return reinterpret_cast<void*>(address);
+}
+```
