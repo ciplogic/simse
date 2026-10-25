@@ -10,6 +10,7 @@ package bench_scene
 // fixed-size array members.
 
 import kit
+import unsafe
 
 val DEPTH: Int = 12 // BENCH_N
 val FRAMES: Int = 16
@@ -32,10 +33,10 @@ fun ident(): Xf {
 // One of twelve axis-aligned rotations, from the seed. `zf` keeps the
 // negations in Float32: `0.0 - s` would promote through the Float64 literal
 // and the braced initializer rejects the narrowing.
-fun rotation(seed: Int64): Xf {
+fun rotation(seed: UInt64): Xf {
     val zf: Float32 = 0.0
-    val axis: Int64 = xsMod(seed, 3)
-    val quarter: Int64 = xsMod(uShr(seed, 8), 4)
+    val axis: Int = seed.uMod(UInt64(3)).toInt()
+    val quarter: Int = seed.shr(8).uMod(UInt64(4)).toInt()
     var c: Float32 = 1.0
     var s: Float32 = 0.0
     if (quarter == 1) {
@@ -73,20 +74,20 @@ fun kidAt(n: SNode, k: Int): Int {
 // The node is pushed before its children so its id is the pre-order creation
 // index; the arena may move under the recursion, so children are re-linked by
 // index after every build.
-fun build(depth: Int, seed: Int64): Int {
-    val r: Int64 = xsNext(seed)
+fun build(depth: Int, seed: UInt64): Int {
+    val r: UInt64 = xsNext(seed)
     val self: Int = pool.size()
     pool.append(SNode(self, rotation(r), ident(), 0, 0, 0, 0, 0))
-    pool[self].local.tx = Float32(xsMod(uShr(r, 16), 9))
-    pool[self].local.ty = Float32(xsMod(uShr(r, 24), 9))
-    pool[self].local.tz = Float32(xsMod(uShr(r, 32), 9))
+    pool[self].local.tx = Float32(r.shr(16).uMod(UInt64(9)).toInt64())
+    pool[self].local.ty = Float32(r.shr(24).uMod(UInt64(9)).toInt64())
+    pool[self].local.tz = Float32(r.shr(32).uMod(UInt64(9)).toInt64())
     if (depth == 0) {
         return self
     }
-    val n: Int = 1 + Int(xsMod(uShr(r, 40), MAXKIDS))
+    val n: Int = 1 + r.shr(40).uMod(UInt64(MAXKIDS)).toInt()
     var i: Int = 0
     while (i < n) {
-        val c: Int = build(depth - 1, xsNext(r + Int64(i)))
+        val c: Int = build(depth - 1, xsNext(r.plus(UInt64(i))))
         val cnt: Int = pool[self].nkids
         if (cnt == 0) {
             pool[self].k0 = c
@@ -131,7 +132,7 @@ fun update(i: Int, parent: Xf): Unit {
 }
 
 fun main(): Int {
-    val root: Int = build(DEPTH, 12345)
+    val root: Int = build(DEPTH, UInt64(12345))
     var total: Int64 = 0
     for (f in 0 until FRAMES) {
         // A seventh of the nodes move each frame: the animation.

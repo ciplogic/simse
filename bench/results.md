@@ -17,27 +17,29 @@ estimate, explained below it.
 
 ## Windows - Snapdragon X2, Windows 11, cl.exe /O2 /Ob3 /GL (LTCG)
 
-From `bun bench/run.js` (the Windows harness), medium size.
+From `bun bench/run.js` (the Windows harness), medium size (October 25, 2026 -
+after the u64 values moved onto `unsafe.UInt64`, whose unsigned surface is raw
+`uint64_t` C++; see "Why the numbers are what they are").
 
 | benchmark | tuned C++ | Simse | Goose (est.) |
 | --- | ---: | ---: | ---: |
-| sum | 1.08 | 0.99 | 1.60 |
-| push | 1.03 | 0.88 | 3.13 |
-| strlist | - | 0.93 | 3.52 |
-| records | 1.35 | 0.87 | 2.77 |
-| tree | 1.43 | 1.92 | 4.41 |
-| interp | 1.67 | 1.61 | 5.51 |
-| graph | 4.17 | 0.75 | 4.96 |
-| words | 2.38 | 1.08 | 2.20 |
-| particles | 0.95 | 1.04 | 1.20 |
-| sexp | 1.52 | 1.15 | 3.72 |
-| lru | 4.35 | 3.33 | 3.36 |
-| scene | 1.33 | 1.43 | 5.78 |
-| calc | 3.33 | 2.78 | 4.06 |
-| bintrees | 3.57 | 3.45 | 15.58 |
-| respond | 1.49 | 0.74 | 2.10 |
-| blur | 1.32 | 0.82 | 3.59 |
-| **geometric mean** | **1.80** | **1.29** | **3.51** |
+| sum | 0.93 | 0.89 | 1.60 |
+| push | 1.24 | 1.15 | 3.13 |
+| strlist | - | 1.03 | 3.52 |
+| records | 1.20 | 1.00 | 2.77 |
+| tree | 2.40 | 2.05 | 4.41 |
+| interp | 1.00 | 1.48 | 5.51 |
+| graph | 5.92 | 0.85 | 4.96 |
+| words | 2.69 | 1.05 | 2.20 |
+| particles | 0.94 | 0.99 | 1.20 |
+| sexp | 1.47 | 1.18 | 3.72 |
+| lru | 4.43 | 3.12 | 3.36 |
+| scene | 1.66 | 1.71 | 5.78 |
+| calc | 3.49 | 3.21 | 4.06 |
+| bintrees | 4.33 | 4.24 | 15.58 |
+| respond | 1.75 | 0.69 | 2.10 |
+| blur | 2.62 | 0.81 | 3.59 |
+| **geometric mean** | **2.02** | **1.36** | **3.51** |
 
 (The tuned-C++ geomean is over the fifteen benchmarks with a tuned row; the
 port runs `strlist`'s idiomatic C++ row only.)
@@ -51,6 +53,8 @@ only in the backend. All columns are normalized on the **idiomatic g++ row** -
 so the clang++ columns also carry the clang-vs-g++ backend ratio (this is
 visible in itself: tuned C++ 2.60 under clang++ vs 1.19 under g++ on `blur` is
 clang auto-vectorizing the byte loops, not a source difference).
+(Measured before the u64 move onto `unsafe.UInt64`: these Simse columns still
+carry the unsigned-modulo emulation the Windows table above no longer pays.)
 
 | benchmark | tuned C++ g++ | tuned C++ clang++ | Simse g++ | Simse clang++ | Goose (est.) |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -89,7 +93,7 @@ costs loom larger at large - on his own tables Goose's `bintrees` edge is 6.7x
 at medium but 15.6x at large), and his machine and toolchains differ from both
 of ours. Read it as where Simse would sit in Goose's table, to first order:
 Goose is estimated faster than Simse on fifteen of sixteen benchmarks, with
-`lru` the exception - a dead heat on Windows (3.33 vs 3.36) and Simse slightly
+`lru` the exception - Goose slightly ahead on Windows (3.36 vs 3.12) and Simse
 ahead on Linux g++ (3.51 vs 3.36).
 
 ## Why the numbers are what they are
@@ -103,27 +107,33 @@ ahead on Linux g++ (3.51 vs 3.36).
   plain structs linked by `Int32` indices, so "allocate a node" is a bump in
   one growing array and teardown is one free per pool. Indexing is unchecked.
   That is the same shape the suite's expert C++ rows hand-write, which is why
-  Simse lands in the tuned-C++ band on exactly those rows (`tree` 1.92 vs
-  tuned 1.43 on Windows; `interp`, `scene`, `bintrees`, `lru` all within ~20%
+  Simse lands in the tuned-C++ band on exactly those rows (`tree` 2.05 vs
+  tuned 2.40 on Windows; `interp`, `scene`, `bintrees`, `lru` all within ~30%
   of tuned on both machines) while both crush the idiomatic rows by 1.4-5x.
   Hash tables tell the same story: Simse's `Dictionary` is open addressing
   with the cached hash stored beside the key (one cache line per probe,
   growth re-masks instead of re-hashing) against `unordered_map`'s chained
-  per-node allocation - hence `lru` 3.3-3.8x and `words` at parity-to-ahead
+  per-node allocation - hence `lru` 3.1-3.8x and `words` at parity-to-ahead
   of idiomatic while both expert rows go further.
-- **The losses are a generator tax and loop shape, not container costs.**
-  `sum`, `push` and `strlist` spend most of their wall time *generating* the
-  input: one xorshift64 plus one u64 modulo per element - per *character* in
-  `strlist`. Simse scalars are signed, so the kit's `xsMod` emulates the
-  unsigned modulo over the bit pattern: every negative pattern (about half)
-  takes a four-modulo slow path where C++ does a single hardware `%`. The
-  proof that allocation is not the problem is `strlist` itself: every word
-  fits Simse's 24-byte inline `Str` (libstdc++'s small-string buffer is 15),
-  so the Simse row heap-allocates *less* than the idiomatic C++ row it loses
-  to - the cost is the arithmetic above it. The scan phases add the second
-  half: `for` loops compile to per-element iterator state machines
-  (`advance()` on a yieldable struct) that the auto-vectorizers do not
-  flatten, where C++'s range-`for` over a flat array does vectorize.
+- **The generator tax is paid off; loop shape is what remains.** `sum`, `push`
+  and `strlist` spend most of their wall time *generating* the input: one
+  xorshift64 plus one u64 modulo per element - per *character* in `strlist`.
+  Those values travel as `unsafe.UInt64`, whose `uMod`/`uDiv`/`shr` are raw
+  `uint64_t` C++ (modules/unsafe/_res.md, behind `@SmGen("res", "u64", ...)`
+  declarations) - the same single hardware `%` the C++ rows get. The port's
+  first pass emulated the unsigned modulo over a signed `Int64` bit pattern,
+  and every negative pattern (about half) took a four-modulo slow path; that
+  tax is gone, and the generator rows moved with it (`push` 0.88 -> 1.15,
+  `records` 0.87 -> 1.00, `scene` 1.43 -> 1.71 against the idiomatic row).
+  `strlist` is the proof allocation was never the problem either way: every
+  word fits Simse's 24-byte inline `Str` (libstdc++'s small-string buffer is
+  15), so the Simse row heap-allocates *less* than the idiomatic C++ row it
+  now sits beside. What is left is the scan half: `for` loops compile to
+  per-element iterator state machines (`advance()` on a yieldable struct)
+  that the auto-vectorizers do not flatten, where C++'s range-`for` over a
+  flat array does vectorize - and the short rows (`sum`, `respond`) ride the
+  process-startup floor, where a few milliseconds of scheduling moves the
+  ratio by more than the code does.
 - **`blur` is the backend, made visible.** The kernel is a flat byte loop;
   clang++ compiles the C++ rows 3x faster than g++ does (52 vs 161 ms at
   medium) purely by auto-vectorizing them. The Simse row's masked byte loads
@@ -131,12 +141,14 @@ ahead on Linux g++ (3.51 vs 3.36).
   not vectorize under either backend, so Simse sits at 0.8-0.9 while the gap
   between the tuned columns (1.19 vs 2.60) is entirely the vectorizer.
 - **Windows and Linux tell the same story at different magnitudes.** The
-  allocation wins and generator losses reproduce across machines; what moves
-  is the flat-loop tail. MSVC with `/Ob3 /GL` reaches parity on `sum` (0.99)
-  where gcc/clang with `-O2 -flto` sit at ~0.7, and strlist improves under
-  LTO on Linux (2.19x without it, 1.4-1.5x with it). `-flto` was added for
-  comparability with the Windows `/GL` and mostly aligns flags rather than
-  unlocking inlining - each row is already a single translation unit.
+  allocation wins and generator shape reproduce across machines; what moves
+  is the flat-loop tail. MSVC with `/Ob3 /GL` reaches parity on `sum` (0.89)
+  where gcc/clang with `-O2 -flto` sit at ~0.7 (and the Linux table predates
+  the u64 move, so its generator rows still carry the emulation tax), and
+  strlist improves under LTO on Linux (2.19x without it, 1.4-1.5x with it).
+  `-flto` was added for comparability with the Windows `/GL` and mostly
+  aligns flags rather than unlocking inlining - each row is already a single
+  translation unit.
 - **And Goose is faster still, on the suite it was built for.** These sixteen
   benchmarks are Goose's own, chosen by its author to exercise what Goose
   optimizes for - value-mode enums that pay only the payload used, grow-only
@@ -144,10 +156,11 @@ ahead on Linux g++ (3.51 vs 3.36).
   of each row is tuned for its compiler's passes. Simse is a general-purpose
   transpiler that has not been tuned for this suite at all (its rows exist to
   be honest ports of the C++ shapes, and its remaining losses above are
-  exactly the untuned parts: unsigned arithmetic emulation and loop shape).
-  Against that, Simse still takes `lru` to a draw with Goose on both machines
-  and lands at a 1.2-1.3x geometric-mean speedup over idiomatic C++ on stock
-  shape-for-shape code - roughly half the tuned-C++ band (1.8-2.2x), with
+  exactly the untuned part: loop shape and the flat-byte backend gap).
+  Against that, Simse still takes `lru` close to Goose's estimate on both
+  machines (3.12 vs 3.36 on Windows, 3.51 vs 3.36 on Linux g++) and lands at
+  a 1.2-1.4x geometric-mean speedup over idiomatic C++ on stock
+  shape-for-shape code - roughly half the tuned-C++ band (1.9-2.2x), with
   Goose's 3.5x the ceiling of a language working its own home field.
 
 ## Reproducing

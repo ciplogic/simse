@@ -15,8 +15,13 @@ package unsafe
 // Only `+`, the comparisons and `==` have operator spellings (`specs/functions.md` lowers
 // `get`/`set`/`compareTo`/`equals`/`plus` only); the rest are named methods. `+` and `shl`
 // mask their result and `shr` masks its input, so every method reads the same whatever
-// the constructor was given. The 64-bit type travels in a signed `Int64`, so its shifts
-// are the platform's two's-complement ones - the 8/16/32-bit types are exact.
+// the constructor was given. Every type is exact at its width. `UInt64` keeps its bits in
+// a signed `Int64` (the language has no unsigned 64-bit scalar) and recovers the unsigned
+// surface as raw C++ over `uint64_t` - `shr` the logical shift, `uDiv`/`uMod` the
+// machine's own unsigned division and remainder, `toString` the `%llu` spelling
+// (`_res.md`'s `u64` section behind the `@SmGen` declarations below the class) - while
+// `compareTo` answers the u64 order and the wrap arithmetic stays two's-complement
+// `Int64`, which is the u64 wrap bit for bit.
 //
 // A program reaches the module with `--module modules/unsafe` and `import unsafe`.
 
@@ -225,9 +230,16 @@ data class UInt32(var bits: Int) {
     }
 }
 
-// A 64-bit unsigned integer: `value()` is the `Int64`'s bits read unsigned (it may read
-// negative, since the language has no unsigned 64-bit scalar). The shifts below are the
-// platform's two's-complement ones, valid while the value fits in 63 bits.
+// A 64-bit unsigned integer: `value()` is the `Int64`'s bits (it may read negative,
+// since the language has no unsigned 64-bit scalar - the bits are the value). The
+// unsigned surface the signed `Int64` read lacks is raw C++ over `uint64_t`
+// (`_res.md`'s `u64` section, reached through the `@SmGen` declarations below the
+// class): `shr` is the logical shift, `uDiv`/`uMod` the machine's own unsigned
+// division and remainder, `toString` the `%llu` spelling - one instruction or one
+// formatting pass each, never the mask dance or the binary long division a signed
+// scalar needs. `+`/`-`/`*` and the bitwise ops wrap in two's complement, which is
+// the u64 wrap bit for bit, so they stay plain Simse; `compareTo` is the u64 order
+// (top-bit-clear patterns sort below top-bit-set ones).
 data class UInt64(var bits: Int64) {
     fun value(): Int64 {
         return this.bits
@@ -237,7 +249,26 @@ data class UInt64(var bits: Int64) {
         return UInt64(this.bits + other.bits)
     }
 
+    fun minus(other: UInt64): UInt64 {
+        return UInt64(this.bits - other.bits)
+    }
+
+    fun times(other: UInt64): UInt64 {
+        return UInt64(this.bits * other.bits)
+    }
+
+    // The u64 order: the patterns with the top bit clear (the non-negative `Int64`s)
+    // sort below the ones with it set, and within each half the signed order is the
+    // pattern order.
     operator fun compareTo(other: UInt64): Int {
+        val aHigh: Bool = this.bits < Int64(0)
+        val bHigh: Bool = other.bits < Int64(0)
+        if (aHigh != bHigh) {
+            if (aHigh) {
+                return 1
+            }
+            return -1
+        }
         if (this.bits < other.bits) {
             return -1
         }
@@ -270,18 +301,29 @@ data class UInt64(var bits: Int64) {
         return UInt64(this.bits << count)
     }
 
-    fun shr(count: Int): UInt64 {
-        if (count >= 64) {
-            return UInt64(0)
-        }
-        return UInt64(this.bits >> count)
+    // The low 32 bits as a plain `Int` (negative when bit 31 is set).
+    fun toInt(): Int {
+        return Int(this.bits)
     }
 
     fun toInt64(): Int64 {
         return this.bits
     }
-
-    fun toString(): Str {
-        return this.bits.toString()
-    }
 }
+
+// The C++-backed unsigned surface (`_res.md`'s `u64` section): each is one
+// `uint64_t` operation, template-shaped so it fits whatever namespace the
+// program's generated `UInt64` landed in. The bodies live in resources rather
+// than the class so a program that never divides unsigned never compiles
+// unsigned division.
+@SmGen("res", "u64", "simse_u64_shr")
+fun shr(this: UInt64, count: Int): UInt64
+
+@SmGen("res", "u64", "simse_u64_uDiv")
+fun uDiv(this: UInt64, other: UInt64): UInt64
+
+@SmGen("res", "u64", "simse_u64_uMod")
+fun uMod(this: UInt64, other: UInt64): UInt64
+
+@SmGen("res", "u64", "simse_u64_toString")
+fun toString(this: UInt64): Str

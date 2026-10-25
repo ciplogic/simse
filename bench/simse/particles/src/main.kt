@@ -7,6 +7,7 @@ package bench_particles
 // a bit-identical checksum however the backend reassociates.
 
 import kit
+import unsafe
 
 val N: Int = 100000 // BENCH_N
 val STEPS: Int = 200
@@ -19,16 +20,16 @@ val SIXTEEN: Float32 = 16.0
 
 fun main(): Int {
     var ps: List<P> = List<P>()
-    var r: Int64 = 12345
+    var r: UInt64 = UInt64(12345)
     var i: Int = 0
     while (i < N) {
         r = xsNext(r)
-        val px: Float32 = Float32(xsMod(r, 1024))
-        val py: Float32 = Float32(xsMod(r >> 12, 1024))
-        val pz: Float32 = Float32(xsMod(r >> 24, 1024))
-        val vx: Float32 = Float32((Float64(xsMod(r >> 36, 256)) - 128.0) / 16.0)
-        val vy: Float32 = Float32((Float64(xsMod(r >> 44, 256)) - 128.0) / 16.0)
-        val vz: Float32 = Float32((Float64(xsMod(r >> 52, 256)) - 128.0) / 16.0)
+        val px: Float32 = Float32(r.uMod(UInt64(1024)).toInt64())
+        val py: Float32 = Float32(r.shr(12).uMod(UInt64(1024)).toInt64())
+        val pz: Float32 = Float32(r.shr(24).uMod(UInt64(1024)).toInt64())
+        val vx: Float32 = Float32((Float64(r.shr(36).uMod(UInt64(256)).toInt64()) - 128.0) / 16.0)
+        val vy: Float32 = Float32((Float64(r.shr(44).uMod(UInt64(256)).toInt64()) - 128.0) / 16.0)
+        val vz: Float32 = Float32((Float64(r.shr(52).uMod(UInt64(256)).toInt64()) - 128.0) / 16.0)
         ps.append(P(F3(px, py, pz), F3(vx, vy, vz)))
         i++
     }

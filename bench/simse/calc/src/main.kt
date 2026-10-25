@@ -7,9 +7,10 @@ package bench_calc
 // `clear` does, keeping its capacity - bench/cpp/calc.cpp VARIANT 1), and the
 // error travels out of the recursion as a code threaded through every return,
 // against the idiomatic C++ row's exceptions. Evaluation is in wrapping u64 -
-// two's-complement `Int64` here.
+// `unsafe.UInt64`, whose `uDiv` is the machine's own unsigned division.
 
 import kit
+import unsafe
 
 val N: Int = 100000 // BENCH_N
 
@@ -21,7 +22,7 @@ val E_DIV0: Int = 4
 // 0 Num, 1 Neg, 2 Paren, 3 Bin.
 data class CExpr(var kind: Int, var op: Int, var v: Int, var l: Int, var r: Int)
 data class POut(var idx: Int, var err: Int)
-data class EOut(var value: Int64, var err: Int)
+data class EOut(var value: UInt64, var err: Int)
 
 var text: Str = Str()
 var pos: Int = 0
@@ -36,25 +37,25 @@ fun emitNum(v: Int): Unit {
     text.append(Char(48 + v % 10))
 }
 
-fun gen(depth: Int, seed: Int64): Int64 {
-    var r: Int64 = xsNext(seed)
-    val k: Int64 = xsMod(r, 8)
-    if (depth == 0 || k == Int64(0)) {
-        emitNum(1 + Int(xsMod(uShr(r, 8), 99)))
+fun gen(depth: Int, seed: UInt64): UInt64 {
+    var r: UInt64 = xsNext(seed)
+    val k: UInt64 = r.uMod(UInt64(8))
+    if (depth == 0 || k == UInt64(0)) {
+        emitNum(1 + r.shr(8).uMod(UInt64(99)).toInt())
         return r
     }
-    if (k == 1) {
+    if (k == UInt64(1)) {
         text.append('-')
         return gen(depth - 1, r)
     }
-    if (k == 2) {
+    if (k == UInt64(2)) {
         text.append('(')
         r = gen(depth - 1, r)
         text.append(')')
         return r
     }
     r = gen(depth - 1, r)
-    val op: Int64 = xsMod(uShr(r, 16), 4)
+    val op: Int = r.shr(16).uMod(UInt64(4)).toInt()
     text.append(' ')
     if (op == 0) {
         text.append('+')
@@ -70,8 +71,8 @@ fun gen(depth: Int, seed: Int64): Int64 {
 }
 
 // One in four inputs is damaged after generation.
-fun corrupt(seed: Int64): Unit {
-    val kind: Int64 = xsMod(seed, 16)
+fun corrupt(seed: UInt64): Unit {
+    val kind: Int = seed.uMod(UInt64(16)).toInt()
     if (kind == 0) {
         var i: Int = text.size()
         while (i > 0) {
@@ -85,7 +86,7 @@ fun corrupt(seed: Int64): Unit {
         return
     }
     if (kind == 1) {
-        text[Int(xsMod(uShr(seed, 8), Int64(text.size())))] = '#'
+        text[seed.shr(8).uMod(UInt64(text.size())).toInt()] = '#'
         return
     }
     if (kind == 2) {
@@ -207,14 +208,14 @@ fun parseExpr(): POut {
 fun evalExpr(i: Int): EOut {
     val e: CExpr = pool[i]
     if (e.kind == 0) {
-        return EOut(Int64(e.v), 0)
+        return EOut(UInt64(e.v), 0)
     }
     if (e.kind == 1) {
         val a: EOut = evalExpr(e.l)
         if (a.err != 0) {
             return a
         }
-        return EOut(Int64(0) - a.value, 0)
+        return EOut(UInt64(0).minus(a.value), 0)
     }
     if (e.kind == 2) {
         return evalExpr(e.l)
@@ -228,18 +229,18 @@ fun evalExpr(i: Int): EOut {
         return b
     }
     if (e.op == 43) {
-        return EOut(a.value + b.value, 0)
+        return EOut(a.value.plus(b.value), 0)
     }
     if (e.op == 45) {
-        return EOut(a.value - b.value, 0)
+        return EOut(a.value.minus(b.value), 0)
     }
     if (e.op == 42) {
-        return EOut(a.value * b.value, 0)
+        return EOut(a.value.times(b.value), 0)
     }
-    if (b.value == Int64(0)) {
-        return EOut(0, E_DIV0)
+    if (b.value == UInt64(0)) {
+        return EOut(UInt64(0), E_DIV0)
     }
-    return EOut(uDiv(a.value, b.value), 0)
+    return EOut(a.value.uDiv(b.value), 0)
 }
 
 // One input: the tree occupies the pool's front, reset by the next input.
@@ -248,38 +249,38 @@ fun runOne(): EOut {
     pos = 0
     val e: POut = parseExpr()
     if (e.err != 0) {
-        return EOut(0, e.err)
+        return EOut(UInt64(0), e.err)
     }
     skip()
     if (pos != text.size()) {
-        return EOut(0, E_TOKEN)
+        return EOut(UInt64(0), E_TOKEN)
     }
     return evalExpr(e.idx)
 }
 
 fun main(): Int {
-    var seed: Int64 = 12345
+    var seed: UInt64 = UInt64(12345)
     var ok: Int64 = 0
     var chars: Int64 = 0
     var errsEof: Int64 = 0
     var errsParen: Int64 = 0
     var errsToken: Int64 = 0
     var errsDiv0: Int64 = 0
-    var sum: Int64 = 0
+    var sum: UInt64 = UInt64(0)
     var i: Int = 0
     while (i < N) {
         seed = xsNext(seed)
         // A fresh buffer per input: the one visible cost of the static-resize
         // gap above; the C++ arena row keeps its text capacity instead.
         text = Str()
-        val depth: Int = 3 + Int(xsMod(seed, 4))
-        val s: Int64 = gen(depth, uShr(seed, 8))
+        val depth: Int = 3 + seed.uMod(UInt64(4)).toInt()
+        val s: UInt64 = gen(depth, seed.shr(8))
         corrupt(s)
         chars += Int64(text.size())
         val out: EOut = runOne()
         if (out.err == 0) {
             ok += 1
-            sum = sum * 31 + out.value
+            sum = sum.times(UInt64(31)).plus(out.value)
         } else if (out.err == E_EOF) {
             errsEof += 1
         } else if (out.err == E_PAREN) {
@@ -298,6 +299,6 @@ fun main(): Int {
     println(errsParen)
     println(errsToken)
     println(errsDiv0)
-    println(uToString(sum))
+    println(sum.toString())
     return 0
 }

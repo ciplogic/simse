@@ -8,6 +8,7 @@ package bench_tree
 // null sentinel; children are pushed before their parent.
 
 import kit
+import unsafe
 
 val DEPTH: Int = 16 // BENCH_N
 val PASSES: Int = 8
@@ -16,14 +17,14 @@ data class TNode(var v: Int, var l: Int, var r: Int)
 
 var pool: List<TNode> = List<TNode>()
 
-fun build(depth: Int, seed: Int64): Int {
+fun build(depth: Int, seed: UInt64): Int {
     if (depth == 0) {
-        pool.append(TNode(Int(xsMod(seed, 1000)), 0, 0))
+        pool.append(TNode(seed.uMod(UInt64(1000)).toInt(), 0, 0))
         return pool.size() - 1
     }
     val l: Int = build(depth - 1, xsNext(seed))
-    val r: Int = build(depth - 1, xsNext(seed + Int64(1)))
-    pool.append(TNode(Int(xsMod(seed, 1000)), l, r))
+    val r: Int = build(depth - 1, xsNext(seed.plus(UInt64(1))))
+    pool.append(TNode(seed.uMod(UInt64(1000)).toInt(), l, r))
     return pool.size() - 1
 }
 
@@ -43,7 +44,7 @@ fun sumTree(n: Int, p: Int64): Int64 {
 
 fun main(): Int {
     pool.append(TNode(0, 0, 0))
-    val root: Int = build(DEPTH, 12345)
+    val root: Int = build(DEPTH, UInt64(12345))
     var total: Int64 = 0
     for (p in 0 until PASSES) {
         total += sumTree(root, Int64(p))

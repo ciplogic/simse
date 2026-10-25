@@ -20,7 +20,7 @@ or with trivial fixes - see "State of the port" for what that left.
 - `simse/<name>/src/main.kt` - one Simse program per benchmark. The size is
   baked in by rewriting the one line carrying `// BENCH_N` (the goose suite's
   own arrangement; Simse has no preprocessor).
-- `simse/kit/kit.kt` - shared u64-over-`Int64` support (below).
+- `simse/kit/kit.kt` - the suite's shared scaffolding over `unsafe.UInt64` (below).
 - `run.js` - the harness; `results.md` - the unified ratios, a Windows section
   and a Linux section plus the estimated-Goose comparison and the analysis
   (hand-merged from a `run.js` run and a `run-linux.js` run; `run.js` rewrites
@@ -42,8 +42,8 @@ bun bench/run.js --reps 5
 ```
 
 Each benchmark at each size builds the C++ rows (`-DBENCH_N=n -DVARIANT=v`)
-and the Simse row (transpile with `--root <src> --root bench/simse/kit`,
-compile with the release flags), then times the exes with the runs interleaved
+and the Simse row (transpile with `--root <src> --root bench/simse/kit
+--module modules/unsafe`, compile with the release flags), then times the exes with the runs interleaved
 round-robin - on a laptop, turbo/thermal history lands evenly on every row
 instead of piling boost on the first and heat on the last. A row whose output
 disagrees with the C++ baseline is failed, never timed.
@@ -56,27 +56,26 @@ filter before believing it.
 ## The u64 question
 
 The suite's generators and checksums are written against C++ `uint64_t`; all
-of Simse's scalars are signed. `simse/kit/kit.kt` carries the bits in an
-`Int64` and recovers what the signed surface lacks:
+of Simse's scalars are signed. The u64 values travel as `unsafe.UInt64`
+(modules/unsafe/api.kt): the type keeps its bits in an `Int64`, and the four
+operations a signed read answers differently are raw `uint64_t` C++ the module
+hangs on `@SmGen("res", "u64", ...)` declarations - the same single
+instructions the C++ rows get, never the emulation a signed scalar needs:
 
-- `xsNext` - the xorshift64 of `bench.h`; the left shifts are the modulo-2^64
-  ones C++20 defines, the logical right shift is masked out of the arithmetic
-  one (`uShr`);
-- `xsMod` - the unsigned modulo. A negative `Int64` names the pattern
-  x + 2^64, and the wrap is invisible only modulo powers of two, so the
-  general case adds 2^64 mod k, built from 2^32 mod k;
-- addition, subtraction and multiplication need no helper: the generated C++
-  computes them in two's complement, which is the u64 wrap bit for bit;
-- `uDiv`/`uGe` - the unsigned division `calc`'s evaluator needs over the bit
-  patterns (a signed `/` answers a different quotient for negative patterns);
-  both non-negative operands take the machine's own division;
-- `uToString` - the `%llu` spelling, by binary long division;
-- `byteAt` - a `Str` byte as 0..255: `Char` is a *signed* `Int8`, so every
-  byte read the C++ rows get from `uint8_t` needs the mask.
+- `shr` - the logical right shift (an arithmetic one carries the sign bit in,
+  so over a plain `Int64` the high bits need masking back off);
+- `uDiv`/`uMod` - the machine's own unsigned division and remainder (a signed
+  `/` answers a different quotient for negative patterns, and the general fix
+  over `Int64` is a binary long division);
+- `toString` - the `%llu` spelling.
 
-(`modules/unsafe` has the `UInt64` wrapper class this work predates; the kit
-predates its current shape and stays over plain `Int64` for zero-overhead hot
-loops.)
+`+`/`-`/`*` and the bitwise ops wrap in two's complement, which is the u64
+wrap bit for bit, and `compareTo` answers the u64 order (top-bit-clear
+patterns sort below top-bit-set ones), so they are plain arithmetic inside the
+type. `simse/kit/kit.kt` carries the two pieces that are the suite's rather
+than the type's: `xsNext`, the xorshift64 of `bench.h`, and `byteAt`, a `Str`
+byte as 0..255 (`Char` is a *signed* `Int8`, so every byte read the C++ rows
+get from `uint8_t` needs the mask).
 
 ## Porting decisions
 
@@ -104,7 +103,10 @@ benchmarks**, on Windows and on Linux. Numbers are in
 [results.md](results.md): a Windows and a Linux ratio table, an estimated
 comparison against the Goose language itself, and the analysis.
 
-Four bugs were found and fixed while reconciling checksums:
+Four bugs were found and fixed while reconciling checksums (the fixes are
+described in the kit's old `Int64` spellings - `xsMod`/`uShr`/`uDiv`/`uGe`;
+the operations moved into the `UInt64` type itself - `uMod`/`shr`/`uDiv`/
+`compareTo` - when the port adopted it):
 
 - **Logical shift before unsigned mod.** `xsMod(r >> s, k)` reads the
   arithmetic shift, where C++ shifts a `uint64_t` logically; the sign

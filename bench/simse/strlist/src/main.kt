@@ -6,6 +6,7 @@ package bench_strlist
 // (bench/cpp/strlist.cpp VARIANT 0).
 
 import kit
+import unsafe
 
 val N: Int = 200000 // BENCH_N
 val PASSES: Int = 4
@@ -13,15 +14,15 @@ val PASSES: Int = 4
 fun main(): Int {
     // One text buffer of space-separated random words.
     var text: Str = Str()
-    var r: Int64 = 12345
+    var r: UInt64 = UInt64(12345)
     var i: Int = 0
     while (i < N) {
         r = xsNext(r)
-        val wl: Int = 3 + Int(xsMod(r, 18))
+        val wl: Int = 3 + r.uMod(UInt64(18)).toInt()
         var j: Int = 0
         while (j < wl) {
             r = xsNext(r)
-            text.append(Char(97 + Int(xsMod(r, 26))))
+            text.append(Char(97 + r.uMod(UInt64(26)).toInt()))
             j++
         }
         text.append(' ')

@@ -8,23 +8,24 @@ package bench_words
 // checksums line up whatever the map internals.
 
 import kit
+import unsafe
 
 val N: Int = 500000 // BENCH_N
 
 fun main(): Int {
     val vocab: Int = N / 10 + 16
-    var r: Int64 = 12345
+    var r: UInt64 = UInt64(12345)
     // A vocabulary of words.
     var dict: List<Str> = List<Str>()
     var i: Int = 0
     while (i < vocab) {
         var w: Str = Str()
         r = xsNext(r)
-        val n: Int = 3 + Int(xsMod(r, 12))
+        val n: Int = 3 + r.uMod(UInt64(12)).toInt()
         var j: Int = 0
         while (j < n) {
             r = xsNext(r)
-            w.append(Char(97 + Int(xsMod(r, 26))))
+            w.append(Char(97 + r.uMod(UInt64(26)).toInt()))
             j++
         }
         dict.append(w)
@@ -35,7 +36,7 @@ fun main(): Int {
     i = 0
     while (i < N) {
         r = xsNext(r)
-        val a: Int64 = xsMod(r, Int64(vocab))
+        val a: Int64 = r.uMod(UInt64(vocab)).toInt64()
         val k: Int = Int((a * a) / Int64(vocab))
         text.appendStr(dict[k])
         text.append(' ')

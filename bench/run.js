@@ -162,7 +162,9 @@ function buildSimse(build, bench, n, work) {
     mkdirSync(src, { recursive: true });
     writeSized(path.join(HERE, "simse", bench.name, "src", "main.kt"), path.join(src, "main.kt"), n);
     const outCpp = path.join(work, "out.cpp");
-    const transpiled = runProcess([build.simse, "--root", src, "--root", path.join(HERE, "simse", "kit"), "-o", outCpp], { env: build.env });
+    // The kit carries the shared u64 scaffolding over `unsafe.UInt64`, so every row
+    // names both roots and the module.
+    const transpiled = runProcess([build.simse, "--root", src, "--root", path.join(HERE, "simse", "kit"), "--module", path.join(REPO, "modules", "unsafe"), "-o", outCpp], { env: build.env });
     if (transpiled.exit !== 0) {
         throw new Error(`transpile failed: ${(transpiled.stderr || transpiled.stdout).split("\n").slice(0, 2).join(" | ")}`);
     }

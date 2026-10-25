@@ -8,6 +8,7 @@ package bench_graph
 // does not depend on the edge order out of the adjacency structure.
 
 import kit
+import unsafe
 
 val V: Int = 100000 // BENCH_N
 val DEG: Int = 8
@@ -26,21 +27,21 @@ fun main(): Int {
         pool.append(Edge(-1, 0))
         i++
     }
-    var r: Int64 = 12345
+    var r: UInt64 = UInt64(12345)
     var e: Int = 0
     while (e < ne) {
         r = xsNext(r)
-        val u: Int = Int(xsMod(r, Int64(V)))
-        val w: Int = Int(xsMod(uShr(r, 24), Int64(V)))
+        val u: Int = r.uMod(UInt64(V)).toInt()
+        val w: Int = r.shr(24).uMod(UInt64(V)).toInt()
         pool.append(Edge(w, pool[u].next))
         pool[u].next = pool.size() - 1
         e++
     }
     var total: Int64 = 0
-    var seed: Int64 = 999
+    var seed: UInt64 = UInt64(999)
     for (s in 0 until SOURCES) {
         seed = xsNext(seed)
-        val src: Int = Int(xsMod(seed, Int64(V)))
+        val src: Int = seed.uMod(UInt64(V)).toInt()
         var v: Int = 0
         while (v < V) {
             dist[v] = -1

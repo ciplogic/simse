@@ -4,17 +4,18 @@ package bench_sum
 // aardappel/goose bench/sum.goose (the C++ reference is bench/cpp/sum.cpp).
 
 import kit
+import unsafe
 
 val N: Int = 1000000 // BENCH_N
 val PASSES: Int = 8
 
 fun main(): Int {
     var vals: List<Int> = List<Int>()
-    var r: Int64 = 12345
+    var r: UInt64 = UInt64(12345)
     var i: Int = 0
     while (i < N) {
         r = xsNext(r)
-        vals.append(Int(xsMod(r, 1000)))
+        vals.append(r.uMod(UInt64(1000)).toInt())
         i++
     }
     var total: Int64 = 0
