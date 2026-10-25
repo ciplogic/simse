@@ -369,7 +369,7 @@ fun Parser.interpFragmentExpr(fragment: *Str, at: SourcePos): AstXmlNode {
         }
     }
     toks.append(Token("", TokenKind.Eof, at))
-    var parser: Parser = Parser(spanOf(*toks), false, "", this.file, 1, 0, this.emptyNode(), 0)
+    var parser: Parser = Parser(spanOf(*toks), false, "", this.file, 1, 0, this.emptyNode(), 0, List<OpenBracket>())
     val value: ExprNode = parser.parseExpr(0)
     if (parser.failed) {
         this.failed = true

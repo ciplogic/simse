@@ -22,6 +22,14 @@ data class ExprNode(
     var column: Int
 )
 
+// One bracket the cursor has opened (`(`, `[`, `{`): what a failed closer expectation
+// reports against - the unclosed bracket is the mistake's place, not the token the parser
+// stopped at.
+data class OpenBracket(
+    var pos: SourcePos,
+    var text: Str
+)
+
 data class Parser(
     var cursor: Span<Token>,
 
@@ -35,7 +43,10 @@ data class Parser(
     // parenthesized `return (x)` constructs, via the `initByValue` convention.
     var returnTypeCtx: AstXmlNode,
     // Unique suffix for the temporary a `return (...)` construction declares.
-    var ctorCounter: Int
+    var ctorCounter: Int,
+    // The open brackets, innermost last (`advance` pushes and pops; a backtracking restore
+    // trims the stack to its saved depth, `trimOpeners`).
+    var openers: List<OpenBracket>
 ) {
 
     fun peek(offset: Int): Token {
@@ -54,7 +65,22 @@ data class Parser(
         if (this.cursor.size() > 1) {
             this.cursor = this.cursor.slice(1)
         }
+        if (token.text == "(" || token.text == "[" || token.text == "{") {
+            this.openers.append(OpenBracket(token.pos, token.text))
+        } else if (token.text == ")" || token.text == "]" || token.text == "}") {
+            if (this.openers.size() > 0) {
+                this.openers.removeAt(this.openers.size() - 1)
+            }
+        }
         return token
+    }
+
+    // The backtracking restore's bracket half: a speculative parse's openers are not the
+    // program's, so the stack is trimmed to the depth saved beside the cursor.
+    fun trimOpeners(depth: Int): Unit {
+        while (this.openers.size() > depth) {
+            this.openers.removeAt(this.openers.size() - 1)
+        }
     }
 
     fun atEnd(): Bool {
@@ -111,6 +137,15 @@ data class Parser(
     fun expectText(text: *Str): Bool {
         if (this.matchText(text)) {
             return true
+        }
+        // A failed closer with a bracket still open: the unclosed bracket is the mistake's
+        // place, so the error is reported there and names what the parser ran into instead.
+        if ((text == ")" || text == "]" || text == "}") && this.openers.size() > 0) {
+            val opener: OpenBracket = this.openers[this.openers.size() - 1]
+            val openerText: Str = opener.text
+            val found: Str = this.foundTokenText()
+            this.setError(opener.pos, `'@openerText' is never closed: expected '@text', @found`)
+            return false
         }
         val found: Str = this.foundTokenText()
         this.setError(this.peek(0).pos, diagHint(`expected '@text'`, found))
@@ -245,7 +280,8 @@ data class Parser(
 fun parseModule(cursor: Span<Token>, fileName: *Str): Res<AstXmlNode> {
     var parser: Parser = Parser(
         cursor, false, "", fileName, 1, 0,
-        AstXmlNode(AstNodeKind.None, AstNodeCategory.None, List<AstNodeAttribute>(), Array<AstXmlNode>()), 0
+        AstXmlNode(AstNodeKind.None, AstNodeCategory.None, List<AstNodeAttribute>(), Array<AstXmlNode>()), 0,
+        List<OpenBracket>()
     )
     val root: AstXmlNode = parser.parseRoot()
     if (parser.failed) {

@@ -352,6 +352,7 @@ fun Parser.tryParseCtorReturn(pos: SourcePos): AstXmlNode {
     val savedFailed: Bool = this.failed
     val savedError: Str = this.error
     val savedClosers: Int = this.pendingClosers
+    val savedOpeners: Int = this.openers.size()
     this.advance()
     this.skipNewlines()
     var args: List<ExprNode> = List<ExprNode>()
@@ -379,6 +380,7 @@ fun Parser.tryParseCtorReturn(pos: SourcePos): AstXmlNode {
         this.failed = savedFailed
         this.error = savedError
         this.pendingClosers = savedClosers
+        this.trimOpeners(savedOpeners)
         return this.emptyNode()
     }
     this.ctorCounter++

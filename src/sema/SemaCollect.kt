@@ -680,6 +680,57 @@ fun semaClosestName(name: *Str, candidates: *List<Str>): Str {
     return best
 }
 
+// Whether ANY package declares a function of the bare name. A bare call resolves
+// program-wide at emission (`CgCall`'s `findFunction`), not against the file's visible
+// scope - `src/linear` calls `xmlKind` bare without importing `common` - so the visible
+// table alone cannot say a name is unknown. The global table keys by `pkg|name`
+// (`collectGlobal`); the bare name is after the last `|`.
+fun Analyzer.declaresFunctionAnywhere(name: *Str): Bool {
+    val keys: List<Str> = this.globalFunctions.keys()
+    for (*key in keys) {
+        val bar: Int = key.lastIndexOf("|")
+        if (bar >= 0 && key.substr(bar + 1, -1) == name) {
+            return true
+        }
+    }
+    return false
+}
+
+// Every declared function's bare name, across packages, once each: what an
+// unknown-function hint suggests from.
+fun Analyzer.declaredFunctionNames(): List<Str> {
+    var names: List<Str> = List<Str>()
+    val keys: List<Str> = this.globalFunctions.keys()
+    for (*key in keys) {
+        val bar: Int = key.lastIndexOf("|")
+        if (bar < 0) {
+            continue
+        }
+        val bare: Str = key.substr(bar + 1, -1)
+        if (!names.contains(bare)) {
+            names.append(bare)
+        }
+    }
+    return names
+}
+
+// A bare call of a name no function declares anywhere (and no local or type holds): the
+// diagnostic the emitter cannot give - it would spell the call into the C++ and leave the
+// "not declared" to the C++ compiler, rows away from the source. Suggestions come from the
+// declared functions, the same closest-name rule as the unknown type's.
+fun Analyzer.diagUnknownFunction(name: *Str, line: Int, column: Int): Unit {
+    if (this.declaresFunctionAnywhere(name)) {
+        return
+    }
+    var message: Str = `unknown function '@name'`
+    val candidates: List<Str> = this.declaredFunctionNames()
+    val closest: Str = semaClosestName(name, *candidates)
+    if (closest != "") {
+        message = diagHint(message, `the closest declared function is '@closest'`)
+    }
+    this.diag(line, column, message)
+}
+
 fun Analyzer.checkTypeName(name: *Str, line: Int, column: Int): Unit {
     if (semaIsBuiltinType(name) || this.types.has(name) || this.typeParamVisible(name)) {
         return

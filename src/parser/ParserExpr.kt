@@ -250,12 +250,14 @@ fun Parser.parsePostfix(): ExprNode {
                 val savedFailed: Bool = this.failed
                 val savedError: Str = this.error
                 val savedClosers: Int = this.pendingClosers
+                val savedOpeners: Int = this.openers.size()
                 typeArgs = this.parseGenericArgs()
                 if (this.failed || !this.checkText("(")) {
                     this.cursor = savedCursor
                     this.failed = savedFailed
                     this.error = savedError
                     this.pendingClosers = savedClosers
+                    this.trimOpeners(savedOpeners)
                     typeArgs = List<AstXmlNode>()
                 }
             }
@@ -393,6 +395,7 @@ fun Parser.parsePrimary(): ExprNode {
             val savedCursor: Span<Token> = this.cursor
             val savedFailed: Bool = this.failed
             val savedError: Str = this.error
+            val savedOpeners: Int = this.openers.size()
             this.advance()
             val typeArgs: List<AstXmlNode> = this.parseGenericArgs()
             if (!this.failed && (this.checkText(".") || this.checkText("("))) {
@@ -406,6 +409,7 @@ fun Parser.parsePrimary(): ExprNode {
             this.cursor = savedCursor
             this.failed = savedFailed
             this.error = savedError
+            this.trimOpeners(savedOpeners)
         }
         this.advance()
         var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
@@ -420,6 +424,7 @@ fun Parser.parsePrimary(): ExprNode {
         val savedCursor: Span<Token> = this.cursor
         val savedFailed: Bool = this.failed
         val savedError: Str = this.error
+        val savedOpeners: Int = this.openers.size()
         val lambda: ExprNode = this.tryParseLambda()
         if (!this.failed) {
             return lambda
@@ -427,6 +432,7 @@ fun Parser.parsePrimary(): ExprNode {
         this.cursor = savedCursor
         this.failed = savedFailed
         this.error = savedError
+        this.trimOpeners(savedOpeners)
         this.advance()
         this.skipNewlines()
         val inner: ExprNode = this.parseExpr(0)
@@ -534,6 +540,7 @@ fun Parser.parseBraceLambda(): ExprNode {
         val savedFailed: Bool = this.failed
         val savedError: Str = this.error
         val savedClosers: Int = this.pendingClosers
+        val savedOpeners: Int = this.openers.size()
         var ok: Bool = true
         while (true) {
             if (!this.checkKind(TokenKind.Identifier)) {
@@ -562,6 +569,7 @@ fun Parser.parseBraceLambda(): ExprNode {
             this.failed = savedFailed
             this.error = savedError
             this.pendingClosers = savedClosers
+            this.trimOpeners(savedOpeners)
             names = List<Str>()
             paramTypes = List<AstXmlNode>()
         }

@@ -43,6 +43,13 @@ fun semaBuiltinTypeNames(): List<Str> {
     )
 }
 
+// The bare calls the emitter spells itself, by name (`CgCall.kt`'s `simse_println`):
+// `print` and `println` have no Simse declaration to collect, so the unknown-function
+// check must not fire on them.
+fun semaIsBuiltinCall(name: *Str): Bool {
+    return name == "print" || name == "println"
+}
+
 fun semaBuiltinGenericArity(name: *Str): Int {
     when (name) {
         "List", "Array", "RawArray", "PList" -> {

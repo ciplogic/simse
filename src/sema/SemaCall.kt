@@ -10,6 +10,16 @@ import parser
 import common
 import errors
 
+// `<base>Task` is the factory the task lowering declares for a suspending function `base`
+// (`Emitter.asyncFactory`): a name no declaration carries, because the emitter builds it.
+fun Analyzer.isTaskFactoryName(name: *Str): Bool {
+    if (!name.endsWith("Task")) {
+        return false
+    }
+    val base: Str = name.substr(0, name.size() - 4)
+    return this.declaresFunctionAnywhere(base)
+}
+
 // The overload parameter counts, deduplicated and joined: what the arity diagnostic's hint
 // offers as "declared with 1, 3 parameter(s)". A generic call skips the overloads its type
 // argument count rules out, matching the arity check above it.
@@ -177,8 +187,18 @@ fun Analyzer.checkCallArity(call: *AstXmlNode): Unit {
         }
     }
 
+    // A builtin type's construction (`List<T>(0)`, `Array<T>(count)`) is not a function
+    // call: no declaration collects it, and the emitter lowers it itself. `print`/`println`
+    // are the emitter's own spellings (`semaIsBuiltinCall`), `<base>Task` the task
+    // lowering's factory (`isTaskFactoryName`).
+    if (semaIsBuiltinType(name) || semaIsBuiltinCall(name) || this.isTaskFactoryName(name)) {
+        return
+    }
     val overloads: *List<AstXmlNode> = this.functions.getPtr(name)
     if (overloads == null) {
+        // No local (checked above), no construction, no function of the name: without this
+        // the emitter spells the call into the C++ and the "not declared" surfaces there.
+        this.diagUnknownFunction(name, xmlLine(call), xmlColumn(call))
         return
     }
     var typeArgCount: Int = 0

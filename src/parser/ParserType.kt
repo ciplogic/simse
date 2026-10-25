@@ -52,6 +52,7 @@ fun Parser.parseFunction(
         val savedCursor: Span<Token> = this.cursor
         val savedFailed: Bool = this.failed
         val savedError: Str = this.error
+        val savedOpeners: Int = this.openers.size()
         val receiver: AstXmlNode = this.parseType(AstNodeKind.Receiver)
         if (!this.failed && this.checkText(".")) {
             this.advance()
@@ -66,6 +67,7 @@ fun Parser.parseFunction(
             this.cursor = savedCursor
             this.failed = savedFailed
             this.error = savedError
+            this.trimOpeners(savedOpeners)
         }
     }
     if (!hasReceiver) {
