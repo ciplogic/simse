@@ -1,7 +1,9 @@
 # The for-walk: the span machine flattened where it is redundant
 
-Status: proposal (2026-10-25) - the plan the flat-scan bench rows motivated. Every step
-lands under `--for-walk`, default off (`impl_specs/typed-il.md`'s flag convention).
+Status: in build (2026-10-25) - the plan the flat-scan bench rows motivated. Every step
+lands under `--for-walk`, default off (`impl_specs/typed-il.md`'s flag convention). The
+measurement below is in: the counter walk beats the machine on the flat scan and the
+pointer pair buys nothing over the counter, so variant B builds and variant A is closed.
 
 ## Why
 
@@ -47,6 +49,28 @@ while (_sm_p1 != _sm_end1) {
 Read-then-step, both variants: the element is bound *before* the counter moves, or
 element 0 is skipped (the sketch this proposal answers bumped first - that reading loses
 the first element).
+
+**The measurement** (2026-10-25, `tools/_walkprobe/`, the sum row's flat scan - build 1M
+values, scan them eight passes - spelled the three ways, interleaved A/B,
+`tools/_bench_ab.mjs`, 11 pairs, two runs; all checksums agree at 3998750656):
+
+| shape | min (run 1 / run 2) | median (run 1 / run 2) |
+| --- | --- | --- |
+| the machine (`for (x in vals)`) | 9.5 / 9.2 ms | 10.1 / 10.0 ms |
+| the counter walk (variant B) | 8.1 / 7.8 ms | 9.1 / 8.9 ms |
+| the pointer pair (variant A) | 8.3 / 7.5 ms | 9.3 / 8.9 ms |
+
+The counter walk takes ~15% off the machine at the min and ~10% at the median - the
+auto-vectorizers do flatten it where they do not flatten the machine. The pointer pair is
+parity with the counter at best, exactly the MSVC expectation, so variant A is closed: no
+emitter work, no `RawPtrT<T>` surface owed. The pair leg's spelling also settled a
+limitation the sketch had assumed away: `at != end` on two `*T` lowers as a *value*
+comparison through the pointers (`*(at) != *(end)` - an out-of-bounds read at `end`), so
+the address comparison variant A needed was never spellable at the source level; only the
+pointer-vs-`null` case compares addresses. If a future pass ever wants the pair shape, a
+typed raw pointer with address `==`/`!=` is the surface to design for it - not a
+for-walk prerequisite. The pair leg stands as raw C++ (`tools/_walkprobe/pair_raw.cpp`),
+the shape variant A would have had to emit, so the claim here is checkable.
 
 ## The contract: real iterators keep their machine
 
@@ -138,24 +162,25 @@ this proposal inherits.
    three ways (machine, counter walk, pointer pair), interleaved A/B with
    `tools/_bench_ab.mjs`; the rows to watch are sum, strlist, words, particles, blur, and
    the compiler's own self-transpile (`for.md`'s table is the baseline to beat or fail
-   against).
+   against). **Done** - the table above; the counter walk moves, the pair does not.
 2. Variant B lands green under the flag; the A/B then decides whether variant A exists at
-   all - MSVC vectorizes counted and pointer-pair loops about equally, so B may capture
-   all of it.
+   all - **it does not**: parity with the counter, and its comparison was never spellable.
 3. The default flips only after the Linux twin confirms (`bench/run-linux.js`, the i3),
    and the flag is deleted once trusted.
 4. **The honest failure**: `for.md`'s own measurement says the machine was free on
-   pointer-chasing work. If the A/B shows the counter walk buys nothing on the flat scans
-   either, the proposal closes - the flag cost nothing and the answer is recorded here.
+   pointer-chasing work. On the flat scan the walk moves (the table above), so the
+   proposal builds - the flag-on rows (sum, strlist, words, particles, blur, the
+   self-transpile) decide the default flip.
 
 ## Order of work
 
-1. The measurement (above), pinned into this file.
+1. The measurement (above) - done, pinned above.
 2. `forWalkAt` beside `spanForAt`/`hoistSpanAt` (`src/sema/SemaCall.kt`, inside
    `promoteForLoops`' per-scope walk, after `promoteForAt`): variant B, the `iterValues`
    wrap first, then the `iter` wrap.
 3. The three stress cases and both-path validation.
-4. Variant A, only if the A/B asks for it.
+4. ~~Variant A, only if the A/B asks for it~~ - closed by the measurement: parity with the
+   counter, and `*T != *T` compares values, not addresses.
 5. The default flip (Linux first), then the flag's deletion.
 
 ## Risks
