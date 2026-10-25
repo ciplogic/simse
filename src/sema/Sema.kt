@@ -33,6 +33,16 @@ fun semaIsBuiltinType(name: *Str): Bool {
     return false
 }
 
+// The same names as `semaIsBuiltinType`, for the unknown-type suggestion (a "did you mean"
+// hint can also point at a builtin the program never declares). The two lists must agree;
+// semaIsBuiltinType stays the spelling the checks read.
+fun semaBuiltinTypeNames(): List<Str> {
+    return listOf<Str>(
+        "Int", "Int8", "Int16", "Int32", "Int64", "Float32", "Float64", "Char",
+        "Str", "Bool", "Unit", "List", "Array", "RawArray", "Dictionary", "SmallVector", "PList"
+    )
+}
+
 fun semaBuiltinGenericArity(name: *Str): Int {
     when (name) {
         "List", "Array", "RawArray", "PList" -> {

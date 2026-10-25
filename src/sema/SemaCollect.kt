@@ -8,6 +8,7 @@ import compiler
 
 import parser
 import common
+import errors
 
 fun Analyzer.run(): Unit {
     this.checkPreludeTypeNames()
@@ -637,11 +638,62 @@ fun Analyzer.typeParamVisible(name: *Str): Bool {
     return false
 }
 
+// How many leading bytes `left` and `right` share: the similarity the "did you mean" hint
+// ranks by (a shared start is what a typo mostly keeps).
+fun semaCommonPrefix(left: *Str, right: *Str): Int {
+    var n: Int = 0
+    while (n < left.size() && n < right.size() && left[n] == right[n]) {
+        n++
+    }
+    return n
+}
+
+// The candidate closest to `name`, or "" when none shares its first byte: longest common
+// prefix wins, a smaller length gap breaks the tie. Only candidates that start like the
+// unknown name are suggested - a hint pointing at a name that shares nothing reads as noise.
+fun semaClosestName(name: *Str, candidates: *List<Str>): Str {
+    var best: Str = ""
+    var bestPrefix: Int = 0
+    var bestGap: Int = 0
+    for (*candidate in candidates) {
+        if (candidate == name) {
+            continue
+        }
+        val prefix: Int = semaCommonPrefix(name, candidate)
+        if (prefix == 0) {
+            continue
+        }
+        val gap: Int = candidate.size() - name.size()
+        var absGap: Int = gap
+        if (gap < 0) {
+            absGap = 0 - gap
+        }
+        if (prefix > bestPrefix || (prefix == bestPrefix && best == "")) {
+            best = candidate
+            bestPrefix = prefix
+            bestGap = absGap
+        } else if (prefix == bestPrefix && absGap < bestGap) {
+            best = candidate
+            bestGap = absGap
+        }
+    }
+    return best
+}
+
 fun Analyzer.checkTypeName(name: *Str, line: Int, column: Int): Unit {
     if (semaIsBuiltinType(name) || this.types.has(name) || this.typeParamVisible(name)) {
         return
     }
-    this.diag(line, column, `unknown type '@name'`)
+    var candidates: List<Str> = this.types.keys()
+    for (builtin in semaBuiltinTypeNames()) {
+        candidates.append(builtin)
+    }
+    var message: Str = `unknown type '@name'`
+    val closest: Str = semaClosestName(name, *candidates)
+    if (closest != "") {
+        message = diagHint(message, `the closest visible type is '@closest'`)
+    }
+    this.diag(line, column, message)
 }
 
 fun Analyzer.checkInstantiationArity(name: *Str, argCount: Int, line: Int, column: Int): Unit {

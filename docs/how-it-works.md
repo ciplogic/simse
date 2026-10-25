@@ -286,15 +286,23 @@ measured:
 
 ## Diagnostics
 
-Errors carry a position (`file:line:column`) and a message, printed by the driver:
+Errors carry a position (`file:line:column`) and a message, printed by the driver with the
+source line under it, a caret at the column, and - where the stage knows - a hint line
+(`src/errors/Diagnostics.kt` renders them; a message with no parsable position, or a file
+the driver never read, prints as it is):
 
 ```
-examples/wordcount/src/main.kt:37:23: expected ')'
+examples/wordcount/src/main.kt:39:5: error: expected ')'
+39 |     var t: Int = 0
+   |     ^
+hint: found 'var'
 ```
 
-The compiler deliberately does not have a "recover and continue" mode: the first
-error stops the stage and the process exits non-zero, which is why the stress
-corpus has `diagnostic-*` cases that assert on *rejected* programs.
+The parser's `expected` messages carry what they found instead; the checker's unknown-name
+messages suggest the closest visible name. The compiler deliberately does not have a
+"recover and continue" mode: the first error stops the stage and the process exits
+non-zero, which is why the stress corpus has `diagnostic-*` cases that assert on *rejected*
+programs.
 
 ## Performance, honestly
 

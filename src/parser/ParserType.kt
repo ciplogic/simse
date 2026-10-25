@@ -9,6 +9,7 @@ import compiler
 
 import lex
 import common
+import errors
 
 fun Parser.looksLikeTypeStart(): Bool {
     // `..` starts a `..T` receiver: `fun ..T.iter<T>()` is the wrap that makes a
@@ -416,7 +417,8 @@ fun Parser.parseType(role: AstNodeKind): AstXmlNode {
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
         return AstXmlNode(role, AstNodeCategory.TypeNamed, attrs, Array<AstXmlNode>())
     }
-    this.fail("expected type")
+    val found: Str = this.foundTokenText()
+    this.setError(this.peek(0).pos, diagHint("expected type", found))
     return this.emptyNode()
 }
 

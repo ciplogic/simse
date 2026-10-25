@@ -8,6 +8,24 @@ import compiler
 
 import parser
 import common
+import errors
+
+// The overload parameter counts, deduplicated and joined: what the arity diagnostic's hint
+// offers as "declared with 1, 3 parameter(s)". A generic call skips the overloads its type
+// argument count rules out, matching the arity check above it.
+fun semaParamCountsText(overloads: *List<AstXmlNode>, generic: Bool, typeArgCount: Int): Str {
+    var counts: List<Str> = List<Str>()
+    for (*overload in overloads) {
+        if (generic && xmlCount(overload, AstNodeKind.TypeParam) != typeArgCount) {
+            continue
+        }
+        val countText: Str = xmlCount(overload, AstNodeKind.Param).toString()
+        if (!counts.contains(countText)) {
+            counts.append(countText)
+        }
+    }
+    return joinStrs(*counts, ", ")
+}
 
 // Whether a parameter type is a *view*: `Span<T>`, `StrView`, or a program
 // `typealias` reaching one (followed one hop at a time, as `Emitter.resolveAlias`).
@@ -191,6 +209,14 @@ fun Analyzer.checkCallArity(call: *AstXmlNode): Unit {
                 return
             }
         }
+    }
+    val counts: Str = semaParamCountsText(overloads, generic, typeArgCount)
+    if (counts != "") {
+        this.diag(
+            xmlLine(call), xmlColumn(call),
+            diagHint(`no overload of '@name' takes @argCount argument(s)`, `'@name' is declared with @counts parameter(s)`)
+        )
+        return
     }
     this.diag(
         xmlLine(call), xmlColumn(call),
@@ -998,6 +1024,7 @@ fun Analyzer.checkExtensionCallArity(call: *AstXmlNode): Unit {
     }
     val argCount: Int = xmlCount(call, AstNodeKind.Arg)
     var compatible: Bool = false
+    var valueCounts: List<Str> = List<Str>()
     for (*fn in overloads) {
         var receiver: AstXmlNode = xmlEmptyNode()
         var valueParamCount: Int = 0
@@ -1031,6 +1058,10 @@ fun Analyzer.checkExtensionCallArity(call: *AstXmlNode): Unit {
             val typeParams: List<Str> = xmlTypeParamNames(fn)
             if (semaUnifyReceiver(receiver, actual, typeParams)) {
                 compatible = true
+                val valueText: Str = valueParamCount.toString()
+                if (!valueCounts.contains(valueText)) {
+                    valueCounts.append(valueText)
+                }
                 if (valueParamCount == argCount) {
                     return
                 }
@@ -1038,6 +1069,17 @@ fun Analyzer.checkExtensionCallArity(call: *AstXmlNode): Unit {
         }
     }
     if (compatible) {
+        val counts: Str = joinStrs(*valueCounts, ", ")
+        if (counts != "") {
+            this.diag(
+                xmlLine(call), xmlColumn(call),
+                diagHint(
+                    `no overload of '@name' takes @argCount argument(s)`,
+                    `'@name' is declared with @counts value parameter(s) on this receiver`
+                )
+            )
+            return
+        }
         this.diag(
             xmlLine(call), xmlColumn(call),
             `no overload of '@name' takes @argCount argument(s)`

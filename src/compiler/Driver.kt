@@ -14,6 +14,7 @@ import parser
 import sema
 import codegen
 import common
+import errors
 import io
 import profiling
 import resources
@@ -67,8 +68,11 @@ fun driverParseFile(fileName: *Str): Res<AstXmlNode> {
     return driverParseSource(readFile(fileName), fileName)
 }
 
-// For source text that is not a file: `fileName` is what every diagnostic calls it.
+// For source text that is not a file: `fileName` is what every diagnostic calls it. The text
+// is registered with the diagnostic renderer (`src/errors/Diagnostics.kt`) under that name,
+// so every positioned error this parse produces can be shown with its source line.
 fun driverParseSource(text: *Str, fileName: *Str): Res<AstXmlNode> {
+    diagRememberSource(fileName, text)
     var scanner: Scanner = Scanner(0, 1, 1, Str())
     scanner.setSource(text)
     var raw: List<Token> = List<Token>()
@@ -76,7 +80,7 @@ fun driverParseSource(text: *Str, fileName: *Str): Res<AstXmlNode> {
         val result: Res<Token> = scanner.nextToken()
         if (!result.isOk()) {
             val errorText: Str = result.Error
-            return Res<AstXmlNode>.err(`@fileName: @errorText`)
+            return Res<AstXmlNode>.err(`@fileName:@errorText`)
         }
         if (result.Value.kind == TokenKind.Eof) {
             break
@@ -411,7 +415,7 @@ fun main(args: List<Str>): Int {
     for (preludeFile in preludeFiles) {
         val parsedPrelude: Res<AstXmlNode> = driverParseFile(preludeFile)
         if (!parsedPrelude.isOk()) {
-            eprintln(parsedPrelude.Error)
+            eprintln(diagRender(parsedPrelude.Error))
             return 1
         }
         preludeCanon.append(pathCanonical(preludeFile))
@@ -444,7 +448,7 @@ fun main(args: List<Str>): Int {
     for (fileName in files) {
         val parsed: Res<AstXmlNode> = driverParseFile(fileName)
         if (!parsed.isOk()) {
-            eprintln(parsed.Error)
+            eprintln(diagRender(parsed.Error))
             return 1
         }
         fileNames.append(fileName)
@@ -466,7 +470,7 @@ fun main(args: List<Str>): Int {
     if (generated.Value != "") {
         val parsedGenerated: Res<AstXmlNode> = driverParseSource(generated.Value, "<generated>/kt.kt")
         if (!parsedGenerated.isOk()) {
-            eprintln(parsedGenerated.Error)
+            eprintln(diagRender(parsedGenerated.Error))
             return 1
         }
         fileNames.append("<generated>/kt.kt")
@@ -488,7 +492,7 @@ fun main(args: List<Str>): Int {
         }
         val parsedSuite: Res<AstXmlNode> = driverParseSource(suite.Value, "<generated>/tests.kt")
         if (!parsedSuite.isOk()) {
-            eprintln(parsedSuite.Error)
+            eprintln(diagRender(parsedSuite.Error))
             return 1
         }
         fileNames.append("<generated>/tests.kt")
@@ -530,7 +534,7 @@ fun main(args: List<Str>): Int {
         var preludeTarget: AstXmlNode = preludeModules[pmod]
         val error: Str = propRewriteModule(preludeTarget, preludeNames[pmod], propagateDecls)
         if (error != "") {
-            eprintln(error)
+            eprintln(diagRender(error))
             return 1
         }
         pmod++
@@ -540,7 +544,7 @@ fun main(args: List<Str>): Int {
         var programTarget: AstXmlNode = modules[rmod]
         val error: Str = propRewriteModule(programTarget, fileNames[rmod], propagateDecls)
         if (error != "") {
-            eprintln(error)
+            eprintln(diagRender(error))
             return 1
         }
         rmod++
@@ -614,7 +618,7 @@ fun main(args: List<Str>): Int {
     val diagnostics: List<Str> = analyze(semaInputs)
     if (diagnostics.size() > 0) {
         for (diagnostic in diagnostics) {
-            eprintln(diagnostic)
+            eprintln(diagRender(diagnostic))
         }
         return 1
     }
@@ -631,7 +635,7 @@ fun main(args: List<Str>): Int {
 
     val emitted: Res<Str> = emitProgram(cgInputs, resourceStored)
     if (!emitted.isOk()) {
-        eprintln(emitted.Error)
+        eprintln(diagRender(emitted.Error))
         return 1
     }
     if (!writeFile(output, emitted.Value)) {

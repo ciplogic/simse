@@ -11,6 +11,7 @@ import compiler
 
 import lex
 import common
+import errors
 
 // The position travels with the expression: a parent node takes its own from the operand
 // it extends (callee, receiver or left).
@@ -92,11 +93,28 @@ data class Parser(
         return false
     }
 
+    // The token the parser stopped at, as a hint line spells it: what the message's "expected"
+    // ran into. Endings spell out (an end of line has no text to quote); everything else keeps
+    // the token's own text.
+    fun foundTokenText(): Str {
+        val token: Token = this.peek(0)
+        if (token.kind == TokenKind.Eof) {
+            return "found the end of the file"
+        }
+        if (token.kind == TokenKind.EndOfLine) {
+            return "found the end of the line"
+        }
+        val tokenText: Str = token.text
+        return `found '@tokenText'`
+    }
+
     fun expectText(text: *Str): Bool {
         if (this.matchText(text)) {
             return true
         }
-        return this.fail(`expected '@text'`)
+        val found: Str = this.foundTokenText()
+        this.setError(this.peek(0).pos, diagHint(`expected '@text'`, found))
+        return false
     }
 
     fun expectName(): Str {
@@ -110,7 +128,8 @@ data class Parser(
             }
             return token.text
         }
-        this.fail("expected name")
+        val found: Str = this.foundTokenText()
+        this.setError(this.peek(0).pos, diagHint("expected name", found))
         return ""
     }
 
