@@ -453,11 +453,35 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                 val base: AstXmlNode = this.ilSlotNode(il, frame, this.ilOpOperand(op.operands, 0), 0)
                 target = this.ilMemberNode(base, il.pool[textIndex])
             } else {
+                var spanDirect: Bool = false
                 val base: AstXmlNode = this.ilSlotNode(il, frame, this.ilOpOperand(op.operands, 0), 0)
                 val index: AstXmlNode = this.ilOperandNode(il, frame, this.ilOpOperand(op.operands, 1), 0)
+                // A span write goes through its pointer directly: the operator set is a
+                // generic template whose declaration can trail the use in the amalgamation,
+                // and the direct spelling is the faster one anyway (the span hoist writes).
+                val baseType: AstXmlNode = this.inferType(base)
+                if (xmlKind(baseType) == AstNodeCategory.TypeGeneric
+                    && xmlAttr(baseType, AstNodeAttributeKind.Name) == "Span"
+                    && !xmlIsEmpty(base) && !xmlIsEmpty(index)
+                ) {
+                    var ptrMember: AstXmlNode = this.ilMemberNode(base, "ptr")
+                    if (!xmlIsEmpty(ptrMember)) {
+                        spanDirect = true
+                        target = AstXmlNode(
+                            AstNodeKind.Expr, AstNodeCategory.ExprIndex,
+                            List<AstNodeAttribute>(), Array<AstXmlNode>()
+                        )
+                        xmlAddChild(target, this.renameRole(ptrMember, AstNodeKind.Receiver))
+                        xmlAddChild(target, this.renameRole(index, AstNodeKind.Index))
+                    }
+                }
                 // The index syntax on a type that declares `operator set`
-                // (specs/functions.md) is that call: `x[i] = v` is `set(x, i, v)`.
-                val setAt: Int = this.operatorFn("set", base, 2)
+                // (specs/functions.md) is that call: `x[i] = v` is `set(x, i, v)` - unless
+                // the direct span spelling above already built the target.
+                var setAt: Int = -1
+                if (!spanDirect) {
+                    setAt = this.operatorFn("set", base, 2)
+                }
                 if (setAt >= 0) {
                     val setValue: AstXmlNode = this.ilOperandNode(il, frame, this.ilOpOperand(op.operands, 2), 0)
                     if (xmlIsEmpty(base) || xmlIsEmpty(index) || xmlIsEmpty(setValue)) {
@@ -468,7 +492,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                     i++
                     continue
                 }
-                if (this.operatorFn("get", base, 1) >= 0) {
+                if (!spanDirect && this.operatorFn("get", base, 1) >= 0) {
                     // The type reads through `get` but declares no write: an index write
                     // needs its own operator, the way Kotlin's indexers work.
                     return IlText(
@@ -476,7 +500,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                         "this index has no 'operator set(index, value)': an index write needs one"
                     )
                 }
-                if (!xmlIsEmpty(base) && !xmlIsEmpty(index)) {
+                if (!spanDirect && !xmlIsEmpty(base) && !xmlIsEmpty(index)) {
                     target = AstXmlNode(
                         AstNodeKind.Expr,
                         AstNodeCategory.ExprIndex,

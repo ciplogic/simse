@@ -109,6 +109,18 @@ fun Emitter.exprInner(e: *AstXmlNode, expected: *AstXmlNode): Str {
         AstNodeCategory.ExprIndex -> {
             val lhs: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Receiver)
             val indexNode: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Index)
+            // A span index reads through its pointer directly (`span.ptr[i]`): the operator
+            // get is a generic template whose declaration can trail the use in the
+            // amalgamation, and a `get(...)` result types as the template T - which the
+            // member resolution downstream of the read cannot see through (the span hoist).
+            val spanType: AstXmlNode = this.inferType(lhs)
+            if (xmlKind(spanType) == AstNodeCategory.TypeGeneric
+                && xmlAttr(spanType, AstNodeAttributeKind.Name) == "Span"
+            ) {
+                val ptrText: Str = this.expr(lhs, 12, xmlEmptyNode()) + ".ptr"
+                val idxText: Str = this.expr(indexNode, 0, xmlEmptyNode())
+                return `(@ptrText[@idxText])`
+            }
             // The index syntax on a type that declares `operator get` (specs/functions.md)
             // is that call: `x[i]` is `get(x, i)`, with the receiver the method convention
             // takes. The built-in shapes below apply when the type declares none.

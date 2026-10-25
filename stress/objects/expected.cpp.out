@@ -395,6 +395,9 @@ Span<T> simse_spanOf(List<T>* items);
 template <class T>
 Span<T> simse_spanOf(Array<T>* items);
 
+Span<Char> simse_spanOfStr(Str* text);
+Span<Char> simse_spanOfStr(Span<Char> view);
+
 #include <cstdint>
 #include <type_traits>
 
@@ -1058,10 +1061,11 @@ Res<T> simse_resErr(Str* message) {
 void initByValue(Str* self) {
 }
 Str fmtStr(Span<Char> fmt, List<Str>* items) {
-    Str _sm_base2, out;
     Bool _sm_expr1;
     Int points, i, _sm_expr2, _sm_expr8, used;
     Char _sm_expr4, ch;
+    Str out, _sm_expr13;
+    Span<Str> _sm_expr12;
     _sm_expr1 = items == nullptr;
     if (_sm_expr1) goto L1;
     goto L2;
@@ -1105,8 +1109,9 @@ Str fmtStr(Span<Char> fmt, List<Str>* items) {
     if (_sm_expr1) goto L11;
     goto L12;
     L11:;
-    _sm_base2 = (*items)[used];
-    simse_str_appendStr(out, _sm_base2);
+    _sm_expr12 = simse_spanOf(items);
+    _sm_expr13 = (_sm_expr12.ptr[used]);
+    simse_str_appendStr(out, _sm_expr13);
     used = used + 1;
     goto L13;
     L12:;
@@ -1338,7 +1343,8 @@ void set(Str* self, Int index, Char value) {
 Bool startsWith(Str* self, Str* prefix) {
     Int count, _sm_expr1, i;
     Bool _sm_expr2;
-    Char _sm_expr4, _sm_expr5;
+    Char _sm_expr4, _sm_expr6;
+    Span<Char> _sm_expr5;
     count = simse_lenOf((*prefix));
     _sm_expr1 = simse_lenOf((*self));
     _sm_expr2 = count > _sm_expr1;
@@ -1352,8 +1358,9 @@ Bool startsWith(Str* self, Str* prefix) {
     _sm_expr2 = i < count;
     if (!(_sm_expr2)) goto L4;
     _sm_expr4 = (*self)[i];
-    _sm_expr5 = (*prefix)[i];
-    _sm_expr2 = _sm_expr4 != _sm_expr5;
+    _sm_expr5 = simse_spanOfStr(prefix);
+    _sm_expr6 = get(simse_addressOf(_sm_expr5), i);
+    _sm_expr2 = _sm_expr4 != _sm_expr6;
     if (_sm_expr2) goto L5;
     goto L6;
     L5:;
@@ -1367,7 +1374,8 @@ Bool startsWith(Str* self, Str* prefix) {
 Bool endsWith(Str* self, Str* suffix) {
     Int count, len, i, _sm_expr3, _sm_expr4;
     Bool _sm_expr1;
-    Char _sm_expr5, _sm_expr6;
+    Char _sm_expr5, _sm_expr7;
+    Span<Char> _sm_expr6;
     count = simse_lenOf((*suffix));
     len = simse_lenOf((*self));
     _sm_expr1 = count > len;
@@ -1383,8 +1391,9 @@ Bool endsWith(Str* self, Str* suffix) {
     _sm_expr3 = len - count;
     _sm_expr4 = _sm_expr3 + i;
     _sm_expr5 = (*self)[_sm_expr4];
-    _sm_expr6 = (*suffix)[i];
-    _sm_expr1 = _sm_expr5 != _sm_expr6;
+    _sm_expr6 = simse_spanOfStr(suffix);
+    _sm_expr7 = get(simse_addressOf(_sm_expr6), i);
+    _sm_expr1 = _sm_expr5 != _sm_expr7;
     if (_sm_expr1) goto L5;
     goto L6;
     L5:;
@@ -1595,11 +1604,13 @@ Bool isSpace(Char* self) {
     return _sm_expr1;
 }
 Str intToStr(Int64 value) {
-    Char _sm_base1, ch;
+    Str* _sm_base1;
     Int64 rest, _sm_expr4;
     Bool _sm_expr1;
     Str reversed, out;
     Int digit, _sm_expr6, i;
+    Char ch, _sm_expr11;
+    Span<Char> _sm_expr10;
     rest = value;
     _sm_expr1 = rest > 0;
     if (_sm_expr1) goto L1;
@@ -1638,8 +1649,10 @@ Str intToStr(Int64 value) {
     L9:;
     _sm_expr1 = i >= 0;
     if (!(_sm_expr1)) goto L10;
-    _sm_base1 = reversed[i];
-    simse_str_append(out, _sm_base1);
+    _sm_base1 = &reversed;
+    _sm_expr10 = simse_spanOfStr(_sm_base1);
+    _sm_expr11 = get(simse_addressOf(_sm_expr10), i);
+    simse_str_append(out, _sm_expr11);
     i = i - 1;
     goto L9;
     L10:;
@@ -1804,7 +1817,7 @@ Int ns1_countIf(List<Int>* items, Func<Bool(Int)> predicate) {
     _sm_expr1 = isEmpty(simse_addressOf(c));
     _sm_expr2 = !_sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_base1 = get(simse_addressOf(c), 0);
+    _sm_base1 = (c.ptr[0]);
     _sm_expr1 = predicate(_sm_base1);
     if (_sm_expr1) goto L3;
     goto L4;
@@ -2363,9 +2376,10 @@ void ns1_mirror(Str* _sm_out, Str* a, Ref<Str> b) {
 // stress/objects/src/main.kt
 void ns1_parcel(Str* _sm_out, Str* after, List<Str>* items) {
     Char* __sm_catP;
-    Str out, _sm_expr3, _sm_expr4;
+    Str out, _sm_expr3, _sm_expr5;
     Int i, _sm_expr1;
     Bool _sm_expr2;
+    Span<Str> _sm_expr4;
     out = *(after);
     i = 0;
     L1:;
@@ -2377,12 +2391,13 @@ void ns1_parcel(Str* _sm_out, Str* after, List<Str>* items) {
     std::memcpy(__sm_catP, out.data(), out.size());
     __sm_catP = __sm_catP + out.size();
     *__sm_catP = (char) ('+');
-    _sm_expr4 = (*items)[i];
-    out.resize(_sm_expr3.size() + _sm_expr4.size());
+    _sm_expr4 = simse_spanOf(items);
+    _sm_expr5 = (_sm_expr4.ptr[i]);
+    out.resize(_sm_expr3.size() + _sm_expr5.size());
     __sm_catP = simse_str_data(&out);
     std::memcpy(__sm_catP, _sm_expr3.data(), _sm_expr3.size());
     __sm_catP = __sm_catP + _sm_expr3.size();
-    std::memcpy(__sm_catP, _sm_expr4.data(), _sm_expr4.size());
+    std::memcpy(__sm_catP, _sm_expr5.data(), _sm_expr5.size());
     i = i + 1;
     goto L1;
     L2:;
@@ -2550,6 +2565,14 @@ template <class T>
 inline Span<T> simse_spanOf(Array<T>* items) {
     const Int count = items->count();
     return Span<T>(count > 0 ? &(*items)[0] : nullptr, count);
+}
+
+inline Span<Char> simse_spanOfStr(Str* text) {
+    return Span<Char>{reinterpret_cast<Char*>(text->data()), text->size()};
+}
+
+inline Span<Char> simse_spanOfStr(Span<Char> view) {
+    return view;
 }
 
 template <class T>

@@ -1078,6 +1078,7 @@ fun Analyzer.promoteForLoops(stmts: *List<AstXmlNode>): Unit {
         if (!bpNoBorrow()) {
             this.promoteForAt(stmts, i)
             this.promotePlaceAt(stmts, i)
+            this.hoistSpanAt(stmts, i)
         }
         i++
     }
@@ -1295,6 +1296,191 @@ fun Analyzer.promotePlaceAt(stmts: *List<AstXmlNode>, index: Int): Unit {
             xmlAddChild(decl, pointer)
         }
     }
+}
+
+// The span hoist (impl_specs/typed-il.md, the buffer form): a loop whose body indexes a
+// container - c[i] reads and writes - and keeps it storage-stable gets the container
+// buffer bound once before the loop: var _sm_span<n>: Span<T> = spanOf(c), and every
+// c[i] in the condition and body indexes the span instead - one pointer load where every
+// access used to re-derive the buffer through the container inline-or-heap branch
+// (raw(), src/rtl/containers.hpp). Element writes are stable, which is what a scan
+// kernel dst[i] = v needs; a mutates-marked callee on another named receiver is trusted.
+// A yielding body is the machine pass own territory, and `this` is the receiver, not a
+// local container - neither hoists. --no-borrow turns it off with the rest.
+var semaSpanHoistId: Int = 0
+
+fun Analyzer.hoistSpanAt(stmts: *List<AstXmlNode>, index: Int): Unit {
+    val loop: *AstXmlNode = *stmts[index]
+    if (xmlKind(loop) != AstNodeCategory.StmtWhile) {
+        return
+    }
+    val cond: *AstXmlNode = xmlChildPtr(loop, AstNodeKind.Cond)
+    val bodyNode: *AstXmlNode = xmlChildPtr(loop, AstNodeKind.Body)
+    if (xmlIsEmpty(bodyNode)) {
+        return
+    }
+    val body: List<AstXmlNode> = xmlChildren(bodyNode, AstNodeKind.Stmt)
+    if (body.size() == 0) {
+        return
+    }
+    if (semaBodyYields(bodyNode)) {
+        return
+    }
+    var roots: List<Str> = List<Str>()
+    semaSpanCollectIndexRoots(*cond, *roots)
+    for (*stmt in body) {
+        semaSpanCollectIndexRoots(stmt, *roots)
+    }
+    for (*root in roots) {
+        if (root.startsWith("_sm_") || root == "this" || bpStaticNames.has(root)) {
+            continue
+        }
+        var rootExpr: AstXmlNode = AstXmlNode(
+            AstNodeKind.Expr, AstNodeCategory.ExprName, List<AstNodeAttribute>(), Array<AstXmlNode>()
+        )
+        rootExpr.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, root))
+        val rootType: AstXmlNode = this.exprType(rootExpr)
+        if (xmlIsEmpty(rootType)) {
+            continue
+        }
+        val conversion: Str = this.spanConversion(rootType)
+        if (conversion == "") {
+            continue
+        }
+        var stable: Bool = bpSpanStableNode(*cond, root)
+        var at: Int = 0
+        while (stable && at < body.size()) {
+            stable = bpSpanStableNode(body[at], root)
+            at++
+        }
+        if (!stable) {
+            continue
+        }
+        // The rewrite is declaration-free: every c[i] becomes spanOf(c).ptr[i] in place,
+        // correct by construction (no injected declaration to place or reorder), typed by
+        // the existing rules (the call is Span<T>, the member *T, the index T), and the
+        // C++ optimizer hoists the loop-invariant spanOf out of the loop itself - the
+        // buffer load it exists to remove is gone either way.
+        this.semaSpanRewrite(*cond, root, conversion)
+        for (*stmt in body) {
+            this.semaSpanRewrite(stmt, root, conversion)
+        }
+    }
+}
+
+fun semaBodyYields(node: *AstXmlNode): Bool {
+    if (xmlKind(node) == AstNodeCategory.StmtYield) {
+        return true
+    }
+    for (*child in node.Children) {
+        if (semaBodyYields(child)) {
+            return true
+        }
+    }
+    return false
+}
+
+// The names indexed directly in `node` (c[i], any depth): the hoist candidates.
+fun semaSpanCollectIndexRoots(node: AstXmlNode, roots: *List<Str>): Unit {
+    if (xmlKind(node) == AstNodeCategory.ExprIndex) {
+        val receiver: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Receiver)
+        if (xmlKind(receiver) == AstNodeCategory.ExprName) {
+            val name: Str = xmlAttr(receiver, AstNodeAttributeKind.Name)
+            if (name != "" && !roots.contains(name)) {
+                roots.append(name)
+            }
+        }
+    }
+    for (*child in node.Children) {
+        semaSpanCollectIndexRoots(child, roots)
+    }
+}
+
+
+
+// One container accesses rewritten in place: every c[i] under `node` keeps its own index
+// and only the receiver becomes the span name; the receiver of a `set` call follows too
+// (c[i] = v on a Str is c.set(i, v), the parser operator rewrite).
+fun Analyzer.semaSpanRewrite(node: *AstXmlNode, root: Str, conversion: Str): Unit {
+    var buffer: AstXmlNode = semaSpanBuffer(root, conversion, xmlLine(node), xmlColumn(node))
+    if (xmlKind(node) == AstNodeCategory.ExprIndex) {
+        var at: Int = 0
+        while (at < node.Children.count()) {
+            val receiver: AstXmlNode = node.Children[at]
+            if (receiver.name == AstNodeKind.Receiver
+                && xmlKind(receiver) == AstNodeCategory.ExprName
+                && xmlAttr(receiver, AstNodeAttributeKind.Name) == root
+            ) {
+                // The buffer takes the seat *and the role*: a node without `Receiver` is
+                // invisible to `xmlChildPtr`, and the extractor would lower an index with
+                // no receiver at all (the typing edge the v3 stash stalled on).
+                buffer.name = AstNodeKind.Receiver
+                node.Children[at] = buffer
+                break
+            }
+            at++
+        }
+    }
+    if (xmlKind(node) == AstNodeCategory.ExprCall) {
+        val callee: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Callee)
+        if (xmlKind(callee) == AstNodeCategory.ExprMember
+            && xmlAttr(callee, AstNodeAttributeKind.Name) == "set"
+        ) {
+            val receiver: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
+            if (xmlKind(receiver) == AstNodeCategory.ExprName
+                && xmlAttr(receiver, AstNodeAttributeKind.Name) == root
+            ) {
+                var second: AstXmlNode = semaSpanBuffer(root, conversion, xmlLine(node), xmlColumn(node))
+                second.name = AstNodeKind.Receiver
+                var swapped: Bool = false
+                var atC: Int = 0
+                while (atC < callee.Children.count()) {
+                    if (callee.Children[atC].name == AstNodeKind.Receiver) {
+                        callee.Children[atC] = second
+                        swapped = true
+                        break
+                    }
+                    atC++
+                }
+                if (!swapped) {
+                    xmlAddChild(callee, second)
+                }
+            }
+        }
+    }
+    for (*child in node.Children) {
+        this.semaSpanRewrite(child, root, conversion)
+    }
+}
+
+// `spanOf(root)` - the buffer expression every index in the loop reads through;
+// the emitter spells the span index through its pointer itself (CgCall, IlEmit).
+// A fresh node per site (the tree shares nothing between uses).
+fun semaSpanBuffer(root: Str, conversion: Str, line: Int, column: Int): AstXmlNode {
+    var callAttrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+    callAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, conversion))
+    callAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, line.toString()))
+    callAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, column.toString()))
+    var callee: AstXmlNode = AstXmlNode(
+        AstNodeKind.Expr, AstNodeCategory.ExprName, callAttrs, Array<AstXmlNode>()
+    )
+    callee.name = AstNodeKind.Callee
+    var rootAttrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+    rootAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, root))
+    rootAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, line.toString()))
+    rootAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, column.toString()))
+    var rootExpr: AstXmlNode = AstXmlNode(
+        AstNodeKind.Expr, AstNodeCategory.ExprName, rootAttrs, Array<AstXmlNode>()
+    )
+    rootExpr.name = AstNodeKind.Arg
+    var call: AstXmlNode = AstXmlNode(
+        AstNodeKind.Expr, AstNodeCategory.ExprCall, List<AstNodeAttribute>(), Array<AstXmlNode>()
+    )
+    call.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Line, line.toString()))
+    call.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Column, column.toString()))
+    xmlAddChild(call, callee)
+    xmlAddChild(call, rootExpr)
+    return call
 }
 
 // The plain name a member/index place chain is rooted at, or "" when the expression is

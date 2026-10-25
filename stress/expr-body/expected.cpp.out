@@ -322,6 +322,11 @@ static struct __SmStringTableInitType {
     }
 } __sm_stringTableInit;
 
+template <class T>
+Span<T> simse_spanOf(List<T>* items);
+template <class T>
+Span<T> simse_spanOf(Array<T>* items);
+
 #include <cstdint>
 #include <type_traits>
 
@@ -685,10 +690,11 @@ Res<T> simse_resErr(Str* message) {
 void initByValue(Str* self) {
 }
 Str fmtStrWith(Char separator, Span<Char> templateText, List<Str>* items) {
-    Str _sm_base2, out;
     Bool _sm_expr1;
     Int points, i, _sm_expr2, _sm_expr8, used;
     Char _sm_expr4, ch;
+    Str out, _sm_expr13;
+    Span<Str> _sm_expr12;
     _sm_expr1 = items == nullptr;
     if (_sm_expr1) goto L1;
     goto L2;
@@ -732,8 +738,9 @@ Str fmtStrWith(Char separator, Span<Char> templateText, List<Str>* items) {
     if (_sm_expr1) goto L11;
     goto L12;
     L11:;
-    _sm_base2 = (*items)[used];
-    simse_str_appendStr(out, _sm_base2);
+    _sm_expr12 = simse_spanOf(items);
+    _sm_expr13 = (_sm_expr12.ptr[used]);
+    simse_str_appendStr(out, _sm_expr13);
     used = used + 1;
     goto L13;
     L12:;
@@ -929,6 +936,17 @@ int main() {
     simse_println((_sm_expr9), stdout);
     ns1_announce();
     return 0;
+}
+
+template <class T>
+inline Span<T> simse_spanOf(List<T>* items) {
+    return Span<T>(items->data(), items->size());
+}
+
+template <class T>
+inline Span<T> simse_spanOf(Array<T>* items) {
+    const Int count = items->count();
+    return Span<T>(count > 0 ? &(*items)[0] : nullptr, count);
 }
 
 template <class T>

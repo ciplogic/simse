@@ -1007,6 +1007,89 @@ fun bpPlaceReadOnly(body: *List<AstXmlNode>, name: *Str, root: *Str): Bool {
     return true
 }
 
+// ---- the span hoist stability rule -------------------------------------------
+
+// Whether `body` keeps the container named `root` storage-stable: the buffer its
+// elements live in does not move, so a span taken before the block sees every element
+// the block reads or writes. An element write (c[i] = v) is stable - it writes through
+// the buffer, it does not move it; what moves a buffer is a mutating call on it, a
+// rebind of the name, or an escape of the name. The trust rule is the parameter rule,
+// with the place-promotion relaxation generalized: a mutates-marked callee on a named
+// receiver other than the root moves that receiver buffer alone.
+data class BpSpan(
+    var rebind: Bool,
+    var escape: Bool,
+    var unsafeCall: Bool
+)
+
+fun bpSpanWalk(node: *AstXmlNode, root: *Str, facts: *BpSpan): Unit {
+    val kind: AstNodeCategory = xmlKind(node)
+    if (kind == AstNodeCategory.StmtAssign) {
+        val target: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Target)
+        if (xmlKind(target) == AstNodeCategory.ExprName
+            && xmlAttr(target, AstNodeAttributeKind.Name) == *root
+        ) {
+            facts.rebind = true
+        }
+    }
+    if (kind == AstNodeCategory.ExprCall) {
+        val callee: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Callee)
+        var safe: Bool = bpIsConstruct(callee, *bpKnownTypes) || bpMachineStep(callee)
+        val ck: AstNodeCategory = xmlKind(callee)
+        if (!safe && (ck == AstNodeCategory.ExprName || ck == AstNodeCategory.ExprMember)) {
+            val calleeName: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+            if (bpCallTrusted(calleeName, *bpTrustedNames)) {
+                safe = true
+            }
+            if (!safe && bpMutatesNames.has(calleeName) && ck == AstNodeCategory.ExprMember) {
+                val receiver: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
+                if (xmlKind(receiver) == AstNodeCategory.ExprName
+                    && xmlAttr(receiver, AstNodeAttributeKind.Name) != *root
+                ) {
+                    safe = true
+                }
+            }
+        }
+        if (!safe) {
+            facts.unsafeCall = true
+        }
+    }
+    if (kind == AstNodeCategory.ExprRef || kind == AstNodeCategory.ExprLambda) {
+        if (bpNameUnder(node, *root)) {
+            facts.escape = true
+        }
+        if (kind == AstNodeCategory.ExprLambda) {
+            return
+        }
+    }
+    for (*child in node.Children) {
+        bpSpanWalk(child, root, facts)
+    }
+}
+
+// Whether the plain name appears anywhere under `node` - the over-approximation the
+// escape check wants.
+fun bpNameUnder(node: *AstXmlNode, name: Str): Bool {
+    if (xmlKind(node) == AstNodeCategory.ExprName
+        && xmlAttr(node, AstNodeAttributeKind.Name) == name
+    ) {
+        return true
+    }
+    for (*child in node.Children) {
+        if (bpNameUnder(child, name)) {
+            return true
+        }
+    }
+    return false
+}
+
+// One node (a statement, an expression, a condition) walked for the stability facts.
+fun bpSpanStableNode(node: *AstXmlNode, root: Str): Bool {
+    var facts: BpSpan = BpSpan(false, false, false)
+    bpSpanWalk(node, root, facts)
+    return !facts.rebind && !facts.escape && !facts.unsafeCall
+}
+
 // The names hand-written C++ may call: `<name>` followed by `(` anywhere in a resource body or
 // a prelude header. The scan is coarse on purpose - a member call on another type or a
 // declaration counts too - because a name it misses would be rewritten under C++ that is

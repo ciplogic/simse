@@ -1263,7 +1263,7 @@ Bool contains(Span<T>* self, T value) {
     L1:;
     _sm_expr1 = i < len;
     if (!(_sm_expr1)) goto L2;
-    _sm_expr2 = get(self, i);
+    _sm_expr2 = ((*self).ptr[i]);
     _sm_expr1 = _sm_expr2 == value;
     if (_sm_expr1) goto L3;
     goto L4;
@@ -2469,7 +2469,7 @@ Int ns1_sum(List<Int>* items) {
     _sm_expr1 = isEmpty(simse_addressOf(span));
     _sm_expr2 = !_sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_expr3 = get(simse_addressOf(span), 0);
+    _sm_expr3 = (span.ptr[0]);
     total = total + _sm_expr3;
     span = slice(simse_addressOf(span), 1);
     goto L1;
@@ -2508,7 +2508,7 @@ Int ns1_middleSum(List<Int>* items) {
     _sm_expr1 = size(simse_addressOf(middle));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_expr1 = get(simse_addressOf(middle), i);
+    _sm_expr1 = (middle.ptr[i]);
     total = total + _sm_expr1;
     i = i + 1;
     goto L1;
@@ -2764,8 +2764,8 @@ Int ns1_partSpanConvert() {
     s = simse_spanOf(_sm_base1);
     _sm_expr1 = size(simse_addressOf(s));
     simse_println((_sm_expr1), stdout);
-    _sm_expr2 = get(simse_addressOf(s), 0);
-    _sm_expr3 = get(simse_addressOf(s), 1);
+    _sm_expr2 = (s.ptr[0]);
+    _sm_expr3 = (s.ptr[1]);
     _sm_expr4 = _sm_expr2 + _sm_expr3;
     simse_println((_sm_expr4), stdout);
     text = __sm_stringTable[11];

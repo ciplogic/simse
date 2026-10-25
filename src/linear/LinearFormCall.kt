@@ -436,6 +436,16 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
             operands.append(args[i])
             i++
         }
+        // A fresh destination carries no type, and the method entry's return type is the
+        // first caller's - the call node's own answer is the one that stays with the slot
+        // (`x.trim().size()`: the size call reads the trim result's slot, whose type
+        // decides every resolution downstream of it; impl_specs/typed-il.md).
+        if (hasDst && xmlIsEmpty(ilVarTypeNode(this.out, dst))) {
+            val callType: AstXmlNode = this.exprType(e)
+            if (!xmlIsEmpty(callType)) {
+                this.setSlotType(dst, callType)
+            }
+        }
         this.emitCall(hasDst, operands)
         return
     }

@@ -314,6 +314,9 @@ static struct __SmStringTableInitType {
     }
 } __sm_stringTableInit;
 
+Span<Char> simse_spanOfStr(Str* text);
+Span<Char> simse_spanOfStr(Span<Char> view);
+
 #include <cstdint>
 #include <type_traits>
 
@@ -873,11 +876,13 @@ void set(Str* self, Int index, Char value) {
     bytes[index] = value;
 }
 Str intToStr(Int64 value) {
-    Char _sm_base1, ch;
+    Str* _sm_base1;
     Int64 rest, _sm_expr4;
     Bool _sm_expr1;
     Str reversed, out;
     Int digit, _sm_expr6, i;
+    Char ch, _sm_expr11;
+    Span<Char> _sm_expr10;
     rest = value;
     _sm_expr1 = rest > 0;
     if (_sm_expr1) goto L1;
@@ -916,8 +921,10 @@ Str intToStr(Int64 value) {
     L9:;
     _sm_expr1 = i >= 0;
     if (!(_sm_expr1)) goto L10;
-    _sm_base1 = reversed[i];
-    simse_str_append(out, _sm_base1);
+    _sm_base1 = &reversed;
+    _sm_expr10 = simse_spanOfStr(_sm_base1);
+    _sm_expr11 = get(simse_addressOf(_sm_expr10), i);
+    simse_str_append(out, _sm_expr11);
     i = i - 1;
     goto L9;
     L10:;
@@ -1019,6 +1026,14 @@ int main() {
     ns1_markIt(3);
     ns1_apply(ns1_markIt);
     return 0;
+}
+
+inline Span<Char> simse_spanOfStr(Str* text) {
+    return Span<Char>{reinterpret_cast<Char*>(text->data()), text->size()};
+}
+
+inline Span<Char> simse_spanOfStr(Span<Char> view) {
+    return view;
 }
 
 template <class T>

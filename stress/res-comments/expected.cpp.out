@@ -328,6 +328,9 @@ static struct __SmStringTableInitType {
 static Int __sm_resourceIndex[] = {0,1};
 static const Int __sm_resourceCount = 1;
 
+Span<Char> simse_spanOfStr(Str* text);
+Span<Char> simse_spanOfStr(Span<Char> view);
+
 #include <cstdint>
 #include <type_traits>
 
@@ -758,8 +761,8 @@ void resourcesInstall(Span<Char>* table, Int tableCount, Int* index, Int count) 
     _sm_expr3 = index[_sm_expr2];
     _sm_expr5 = _sm_expr2 + 1;
     _sm_expr6 = index[_sm_expr5];
-    _sm_base1 = get(simse_addressOf(views), _sm_expr3);
-    _sm_base2 = get(simse_addressOf(views), _sm_expr6);
+    _sm_base1 = (views.ptr[_sm_expr3]);
+    _sm_base2 = (views.ptr[_sm_expr6]);
     entry = ResourceEntry{_sm_base1, _sm_base2};
     _sm_base3 = &resourceStore;
     simse_list_append((*_sm_base3), entry);
@@ -918,11 +921,13 @@ void set(Str* self, Int index, Char value) {
     bytes[index] = value;
 }
 Str intToStr(Int64 value) {
-    Char _sm_base1, ch;
+    Str* _sm_base1;
     Int64 rest, _sm_expr4;
     Bool _sm_expr1;
     Str reversed, out;
     Int digit, _sm_expr6, i;
+    Char ch, _sm_expr11;
+    Span<Char> _sm_expr10;
     rest = value;
     _sm_expr1 = rest > 0;
     if (_sm_expr1) goto L1;
@@ -961,8 +966,10 @@ Str intToStr(Int64 value) {
     L9:;
     _sm_expr1 = i >= 0;
     if (!(_sm_expr1)) goto L10;
-    _sm_base1 = reversed[i];
-    simse_str_append(out, _sm_base1);
+    _sm_base1 = &reversed;
+    _sm_expr10 = simse_spanOfStr(_sm_base1);
+    _sm_expr11 = get(simse_addressOf(_sm_expr10), i);
+    simse_str_append(out, _sm_expr11);
     i = i - 1;
     goto L9;
     L10:;
@@ -994,6 +1001,14 @@ int main() {
     _sm_expr2 = toString(simse_addressOf(_sm_expr1));
     simse_println((_sm_expr2), stdout);
     return 0;
+}
+
+inline Span<Char> simse_spanOfStr(Str* text) {
+    return Span<Char>{reinterpret_cast<Char*>(text->data()), text->size()};
+}
+
+inline Span<Char> simse_spanOfStr(Span<Char> view) {
+    return view;
 }
 
 template <class T>

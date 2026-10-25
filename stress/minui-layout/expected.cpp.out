@@ -1800,8 +1800,8 @@ void resourcesInstall(Span<Char>* table, Int tableCount, Int* index, Int count) 
     _sm_expr3 = index[_sm_expr2];
     _sm_expr5 = _sm_expr2 + 1;
     _sm_expr6 = index[_sm_expr5];
-    _sm_base1 = get(simse_addressOf(views), _sm_expr3);
-    _sm_base2 = get(simse_addressOf(views), _sm_expr6);
+    _sm_base1 = (views.ptr[_sm_expr3]);
+    _sm_base2 = (views.ptr[_sm_expr6]);
     entry = ResourceEntry{_sm_base1, _sm_base2};
     _sm_base3 = &resourceStore;
     simse_list_append((*_sm_base3), entry);
@@ -1830,10 +1830,12 @@ Array<T> arrayEmpty() {
 }
 template <class T>
 Array<T> toArray(List<T>* self) {
-    T _sm_base1;
+    Array<T>* _sm_base1;
+    T _sm_base2;
     Int count, i;
     Bool _sm_expr1;
     Array<T> _sm_expr2, out;
+    Span<T> _sm_expr4;
     count = simse_lenOf((*self));
     _sm_expr1 = count == 0;
     if (_sm_expr1) goto L1;
@@ -1847,8 +1849,10 @@ Array<T> toArray(List<T>* self) {
     L3:;
     _sm_expr1 = i < count;
     if (!(_sm_expr1)) goto L4;
-    _sm_base1 = (*self)[i];
-    out[i] = _sm_base1;
+    _sm_base1 = &out;
+    _sm_expr4 = simse_spanOf(_sm_base1);
+    _sm_base2 = (*self)[i];
+    _sm_expr4.ptr[i] = _sm_base2;
     i = i + 1;
     goto L3;
     L4:;
@@ -2077,7 +2081,8 @@ void set(Str* self, Int index, Char value) {
 Bool startsWith(Str* self, Str* prefix) {
     Int count, _sm_expr1, i;
     Bool _sm_expr2;
-    Char _sm_expr4, _sm_expr5;
+    Char _sm_expr4, _sm_expr6;
+    Span<Char> _sm_expr5;
     count = simse_lenOf((*prefix));
     _sm_expr1 = simse_lenOf((*self));
     _sm_expr2 = count > _sm_expr1;
@@ -2091,8 +2096,9 @@ Bool startsWith(Str* self, Str* prefix) {
     _sm_expr2 = i < count;
     if (!(_sm_expr2)) goto L4;
     _sm_expr4 = (*self)[i];
-    _sm_expr5 = (*prefix)[i];
-    _sm_expr2 = _sm_expr4 != _sm_expr5;
+    _sm_expr5 = simse_spanOfStr(prefix);
+    _sm_expr6 = get(simse_addressOf(_sm_expr5), i);
+    _sm_expr2 = _sm_expr4 != _sm_expr6;
     if (_sm_expr2) goto L5;
     goto L6;
     L5:;
@@ -2344,11 +2350,13 @@ Bool isSpace(Char* self) {
     return _sm_expr1;
 }
 Str intToStr(Int64 value) {
-    Char _sm_base1, ch;
+    Str* _sm_base1;
     Int64 rest, _sm_expr4;
     Bool _sm_expr1;
     Str reversed, out;
     Int digit, _sm_expr6, i;
+    Char ch, _sm_expr11;
+    Span<Char> _sm_expr10;
     rest = value;
     _sm_expr1 = rest > 0;
     if (_sm_expr1) goto L1;
@@ -2387,8 +2395,10 @@ Str intToStr(Int64 value) {
     L9:;
     _sm_expr1 = i >= 0;
     if (!(_sm_expr1)) goto L10;
-    _sm_base1 = reversed[i];
-    simse_str_append(out, _sm_base1);
+    _sm_base1 = &reversed;
+    _sm_expr10 = simse_spanOfStr(_sm_base1);
+    _sm_expr11 = get(simse_addressOf(_sm_expr10), i);
+    simse_str_append(out, _sm_expr11);
     i = i - 1;
     goto L9;
     L10:;
@@ -3514,18 +3524,20 @@ void ns2_layoutNode(ns2_Frame* f, Int node) {
 }
 // modules/minui/tree.kt
 void ns2_layoutChildren(ns2_Frame* f, Int box, Int layout) {
-    ns2_Node* _sm_base1, * _sm_base3, * _sm_base11, * _sm_base14, * _sm_base17, * _sm_base20,
-        * _sm_base22, * _sm_base25;
-    List<ns2_Node>* _sm_base2, * _sm_base4, * _sm_base12, * _sm_base15, * _sm_base18, * _sm_base21,
+    ns2_Node* _sm_base1, * _sm_base3, * _sm_base12, * _sm_base15, * _sm_base18, * _sm_base21,
         * _sm_base23, * _sm_base26;
+    List<ns2_Node>* _sm_base2, * _sm_base4, * _sm_base13, * _sm_base16, * _sm_base19, * _sm_base22,
+        * _sm_base24, * _sm_base27;
     ns2_BoxLayout _sm_base9;
-    ns2_Rect* _sm_base10, * _sm_base13, * _sm_base16, * _sm_base19, * _sm_base24;
+    List<Int>* _sm_base10;
+    ns2_Rect* _sm_base11, * _sm_base14, * _sm_base17, * _sm_base20, * _sm_base25;
     List<Int> kids;
     Int count, pad, gap, _sm_expr2, innerX, _sm_expr3, innerY, _sm_expr4, _sm_expr5, innerWidth,
         _sm_expr6, innerHeight, _sm_expr8, fixed, fills, i, child, each, remain, cursor, _sm_child_2, x, y,
         width, height, dx, dy;
     Bool _sm_expr1, column;
     ns2_Rect rect, old;
+    Span<Int> _sm_expr10;
     _sm_base2 = simse_addressOf(f->nodes);
     _sm_base1 = simse_addressOf((*_sm_base2)[box]);
     kids = _sm_base1->children;
@@ -3559,40 +3571,42 @@ void ns2_layoutChildren(ns2_Frame* f, Int box, Int layout) {
     L3:;
     _sm_expr1 = i < count;
     if (!(_sm_expr1)) goto L4;
-    child = kids[i];
+    _sm_base10 = &kids;
+    _sm_expr10 = simse_spanOf(_sm_base10);
+    child = (_sm_expr10.ptr[i]);
     if (column) goto L5;
     goto L6;
     L5:;
-    _sm_base12 = simse_addressOf(f->nodes);
-    _sm_base11 = simse_addressOf((*_sm_base12)[child]);
-    _sm_base10 = simse_addressOf(_sm_base11->rect);
-    _sm_expr2 = _sm_base10->height;
+    _sm_base13 = simse_addressOf(f->nodes);
+    _sm_base12 = simse_addressOf((*_sm_base13)[child]);
+    _sm_base11 = simse_addressOf(_sm_base12->rect);
+    _sm_expr2 = _sm_base11->height;
     _sm_expr1 = _sm_expr2 > 0;
     if (_sm_expr1) goto L7;
     goto L8;
     L7:;
-    _sm_base15 = simse_addressOf(f->nodes);
-    _sm_base14 = simse_addressOf((*_sm_base15)[child]);
-    _sm_base13 = simse_addressOf(_sm_base14->rect);
-    _sm_expr2 = _sm_base13->height;
+    _sm_base16 = simse_addressOf(f->nodes);
+    _sm_base15 = simse_addressOf((*_sm_base16)[child]);
+    _sm_base14 = simse_addressOf(_sm_base15->rect);
+    _sm_expr2 = _sm_base14->height;
     fixed = fixed + _sm_expr2;
     goto L13;
     L8:;
     fills = fills + 1;
     goto L13;
     L6:;
-    _sm_base18 = simse_addressOf(f->nodes);
-    _sm_base17 = simse_addressOf((*_sm_base18)[child]);
-    _sm_base16 = simse_addressOf(_sm_base17->rect);
-    _sm_expr2 = _sm_base16->width;
+    _sm_base19 = simse_addressOf(f->nodes);
+    _sm_base18 = simse_addressOf((*_sm_base19)[child]);
+    _sm_base17 = simse_addressOf(_sm_base18->rect);
+    _sm_expr2 = _sm_base17->width;
     _sm_expr1 = _sm_expr2 > 0;
     if (_sm_expr1) goto L11;
     goto L12;
     L11:;
-    _sm_base21 = simse_addressOf(f->nodes);
-    _sm_base20 = simse_addressOf((*_sm_base21)[child]);
-    _sm_base19 = simse_addressOf(_sm_base20->rect);
-    _sm_expr2 = _sm_base19->width;
+    _sm_base22 = simse_addressOf(f->nodes);
+    _sm_base21 = simse_addressOf((*_sm_base22)[child]);
+    _sm_base20 = simse_addressOf(_sm_base21->rect);
+    _sm_expr2 = _sm_base20->width;
     fixed = fixed + _sm_expr2;
     goto L13;
     L12:;
@@ -3641,9 +3655,9 @@ void ns2_layoutChildren(ns2_Frame* f, Int box, Int layout) {
     _sm_expr1 = i < count;
     if (!(_sm_expr1)) goto L24;
     _sm_child_2 = kids[i];
-    _sm_base23 = simse_addressOf(f->nodes);
-    _sm_base22 = simse_addressOf((*_sm_base23)[_sm_child_2]);
-    old = _sm_base22->rect;
+    _sm_base24 = simse_addressOf(f->nodes);
+    _sm_base23 = simse_addressOf((*_sm_base24)[_sm_child_2]);
+    old = _sm_base23->rect;
     x = innerX;
     y = innerY;
     width = old.width;
@@ -3698,11 +3712,11 @@ void ns2_layoutChildren(ns2_Frame* f, Int box, Int layout) {
     L36:;
     ns2_moveNode(f, _sm_child_2, dx, dy);
     L37:;
-    _sm_base26 = simse_addressOf(f->nodes);
-    _sm_base25 = simse_addressOf((*_sm_base26)[_sm_child_2]);
-    _sm_base24 = simse_addressOf(_sm_base25->rect);
-    _sm_base24->width = width;
-    _sm_base24->height = height;
+    _sm_base27 = simse_addressOf(f->nodes);
+    _sm_base26 = simse_addressOf((*_sm_base27)[_sm_child_2]);
+    _sm_base25 = simse_addressOf(_sm_base26->rect);
+    _sm_base25->width = width;
+    _sm_base25->height = height;
     if (column) goto L39;
     goto L40;
     L39:;
@@ -5577,17 +5591,18 @@ void ns2_xmlBoolAttr(Res<Bool>* _sm_out, ns3_XmlNode* node, Str* name, Bool fall
 // modules/minui/xml.kt
 void ns2_xmlRectAttr(Res<ns2_Rect>* _sm_out, ns3_XmlNode* node) {
     Char* __sm_catP;
-    Str* _sm_base1, * _sm_base2, * _sm_base3, * _sm_base5, * _sm_base6, * _sm_base7, * _sm_base8,
-        * _sm_base9;
-    Str _sm_base4, name, tag, value, _sm_expr3, _sm_expr4, _sm_expr5, _sm_expr6, _sm_expr12, _sm_expr20,
-        _sm_expr27;
-    Int _sm_base10, _sm_base11, _sm_base12, _sm_base13, line, _sm_expr1, i, _sm_expr22;
-    Bool _sm_expr2, _sm_expr16;
+    Str* _sm_base1, * _sm_base2, * _sm_base3, * _sm_base5, * _sm_base8, * _sm_base9;
+    Str _sm_base4, name, tag, value, _sm_expr3, _sm_expr4, _sm_expr5, _sm_expr6, _sm_expr12, _sm_expr16,
+        _sm_expr21, _sm_expr24, _sm_expr31;
+    List<Str>* _sm_base6, * _sm_base7;
+    Int _sm_base10, _sm_base11, _sm_base12, _sm_base13, line, _sm_expr1, i, _sm_expr26;
+    Bool _sm_expr2, _sm_expr18;
     Res<ns2_Rect> _sm_expr7;
     List<Str> parts;
     List<Int> numbers;
+    Span<Str> _sm_expr15;
     Opt<Int> parsed;
-    ns2_Rect _sm_expr29;
+    ns2_Rect _sm_expr33;
     name = __sm_stringTable[196];
     line = ns2_xmlLine(node);
     ns2_xmlElementName(&tag, node);
@@ -5656,11 +5671,13 @@ void ns2_xmlRectAttr(Res<ns2_Rect>* _sm_out, ns3_XmlNode* node) {
     L5:;
     _sm_expr2 = i < 4;
     if (!(_sm_expr2)) goto L6;
-    _sm_base6 = simse_addressOf(parts[i]);
-    parsed = toInt(_sm_base6);
+    _sm_base6 = &parts;
+    _sm_expr15 = simse_spanOf(_sm_base6);
+    _sm_expr16 = (_sm_expr15.ptr[i]);
+    parsed = toInt(simse_addressOf(_sm_expr16));
     _sm_expr2 = simse_optHasValue(simse_addressOf(parsed));
-    _sm_expr16 = !_sm_expr2;
-    if (_sm_expr16) goto L7;
+    _sm_expr18 = !_sm_expr2;
+    if (_sm_expr18) goto L7;
     goto L8;
     L7:;
     _sm_expr3.resize(22 + name.size());
@@ -5668,25 +5685,27 @@ void ns2_xmlRectAttr(Res<ns2_Rect>* _sm_out, ns3_XmlNode* node) {
     std::memcpy(__sm_catP, name.data(), name.size());
     __sm_catP = __sm_catP + name.size();
     std::memcpy(__sm_catP, " wants a number, got \"", 22);
-    _sm_base7 = simse_addressOf(parts[i]);
-    _sm_expr4 = trim(_sm_base7);
+    _sm_base7 = &parts;
+    _sm_expr15 = simse_spanOf(_sm_base7);
+    _sm_expr21 = (_sm_expr15.ptr[i]);
+    _sm_expr4 = trim(simse_addressOf(_sm_expr21));
     _sm_expr5.resize(_sm_expr3.size() + _sm_expr4.size());
     __sm_catP = simse_str_data(&_sm_expr5);
     std::memcpy(__sm_catP, _sm_expr3.data(), _sm_expr3.size());
     __sm_catP = __sm_catP + _sm_expr3.size();
     std::memcpy(__sm_catP, _sm_expr4.data(), _sm_expr4.size());
-    _sm_expr20.resize(1 + _sm_expr5.size());
-    __sm_catP = simse_str_data(&_sm_expr20);
+    _sm_expr24.resize(1 + _sm_expr5.size());
+    __sm_catP = simse_str_data(&_sm_expr24);
     std::memcpy(__sm_catP, _sm_expr5.data(), _sm_expr5.size());
     __sm_catP = __sm_catP + _sm_expr5.size();
     *__sm_catP = (char) ('\"');
-    _sm_base8 = &_sm_expr20;
+    _sm_base8 = &_sm_expr24;
     _sm_expr7 = ns2_xmlFail<ns2_Rect>(line, _sm_base8);
     *_sm_out = _sm_expr7;
     return;
     L8:;
-    _sm_expr22 = simse_optValue(simse_addressOf(parsed));
-    simse_list_append(numbers, _sm_expr22);
+    _sm_expr26 = simse_optValue(simse_addressOf(parsed));
+    simse_list_append(numbers, _sm_expr26);
     i = i + 1;
     goto L5;
     L6:;
@@ -5698,12 +5717,12 @@ void ns2_xmlRectAttr(Res<ns2_Rect>* _sm_out, ns3_XmlNode* node) {
     if (_sm_expr2) goto L9;
     goto L10;
     L9:;
-    _sm_expr27.resize(34 + name.size());
-    __sm_catP = simse_str_data(&_sm_expr27);
+    _sm_expr31.resize(34 + name.size());
+    __sm_catP = simse_str_data(&_sm_expr31);
     std::memcpy(__sm_catP, name.data(), name.size());
     __sm_catP = __sm_catP + name.size();
     std::memcpy(__sm_catP, " needs a positive width and height", 34);
-    _sm_base9 = &_sm_expr27;
+    _sm_base9 = &_sm_expr31;
     _sm_expr7 = ns2_xmlFail<ns2_Rect>(line, _sm_base9);
     *_sm_out = _sm_expr7;
     return;
@@ -5712,8 +5731,8 @@ void ns2_xmlRectAttr(Res<ns2_Rect>* _sm_out, ns3_XmlNode* node) {
     _sm_base11 = numbers[1];
     _sm_base12 = numbers[2];
     _sm_base13 = numbers[3];
-    _sm_expr29 = ns2_Rect{_sm_base10, _sm_base11, _sm_base12, _sm_base13};
-    _sm_expr7 = simse_resOk<ns2_Rect>(_sm_expr29);
+    _sm_expr33 = ns2_Rect{_sm_base10, _sm_base11, _sm_base12, _sm_base13};
+    _sm_expr7 = simse_resOk<ns2_Rect>(_sm_expr33);
     *_sm_out = _sm_expr7;
     return;
 }
@@ -9063,41 +9082,43 @@ void ns3_xmlDecodeEntity(Res<Str>* _sm_out, ns3_XmlParser* p) {
 void ns3_xmlCodePoint(Res<Str>* _sm_out, Str* digits, Int base, Int line) {
     Char* __sm_catP;
     Int __sm_catC0;
-    Char _sm_base1, _sm_expr10;
-    Str _sm_base2, _sm_expr5, _sm_expr7, out;
-    Str* _sm_base3;
+    Str _sm_base1, _sm_expr7, _sm_expr9, out;
+    Str* _sm_base2;
     Int value, i, _sm_expr1, d;
     Bool _sm_expr2;
-    Res<Str> _sm_expr8;
+    Span<Char> _sm_expr3;
+    Char _sm_expr4, _sm_expr12;
+    Res<Str> _sm_expr10;
     value = 0;
     i = 0;
     L1:;
     _sm_expr1 = simse_lenOf((*digits));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_base1 = (*digits)[i];
-    d = ns3_xmlDigitValue(_sm_base1, base);
+    _sm_expr3 = simse_spanOfStr(digits);
+    _sm_expr4 = get(simse_addressOf(_sm_expr3), i);
+    d = ns3_xmlDigitValue(_sm_expr4, base);
     _sm_expr2 = d < 0;
     if (_sm_expr2) goto L3;
     goto L4;
     L3:;
-    _sm_base2 = *(digits);
-    _sm_expr5.resize(38 + _sm_base2.size());
-    __sm_catP = simse_str_data(&_sm_expr5);
+    _sm_base1 = *(digits);
+    _sm_expr7.resize(38 + _sm_base1.size());
+    __sm_catP = simse_str_data(&_sm_expr7);
     std::memcpy(__sm_catP, "xml: bad character reference ", 29);
     __sm_catP = __sm_catP + 29;
-    std::memcpy(__sm_catP, _sm_base2.data(), _sm_base2.size());
-    __sm_catP = __sm_catP + _sm_base2.size();
+    std::memcpy(__sm_catP, _sm_base1.data(), _sm_base1.size());
+    __sm_catP = __sm_catP + _sm_base1.size();
     std::memcpy(__sm_catP, " at line ", 9);
     __sm_catC0 = strCountDigits(line);
-    _sm_expr7.resize(_sm_expr5.size() + __sm_catC0);
-    __sm_catP = simse_str_data(&_sm_expr7);
-    std::memcpy(__sm_catP, _sm_expr5.data(), _sm_expr5.size());
-    __sm_catP = __sm_catP + _sm_expr5.size();
+    _sm_expr9.resize(_sm_expr7.size() + __sm_catC0);
+    __sm_catP = simse_str_data(&_sm_expr9);
+    std::memcpy(__sm_catP, _sm_expr7.data(), _sm_expr7.size());
+    __sm_catP = __sm_catP + _sm_expr7.size();
     strAddInt(__sm_catP, line, __sm_catC0);
-    _sm_base3 = &_sm_expr7;
-    _sm_expr8 = simse_resErr<Str>(_sm_base3);
-    *_sm_out = _sm_expr8;
+    _sm_base2 = &_sm_expr9;
+    _sm_expr10 = simse_resErr<Str>(_sm_base2);
+    *_sm_out = _sm_expr10;
     return;
     L4:;
     _sm_expr1 = value * base;
@@ -9106,10 +9127,10 @@ void ns3_xmlCodePoint(Res<Str>* _sm_out, Str* digits, Int base, Int line) {
     goto L1;
     L2:;
     out = Str();
-    _sm_expr10 = Char(value);
-    simse_str_append(out, _sm_expr10);
-    _sm_expr8 = simse_resOk<Str>(out);
-    *_sm_out = _sm_expr8;
+    _sm_expr12 = Char(value);
+    simse_str_append(out, _sm_expr12);
+    _sm_expr10 = simse_resOk<Str>(out);
+    *_sm_out = _sm_expr10;
     return;
 }
 // modules/xml/parse.kt
@@ -9658,6 +9679,7 @@ void ns3_xmlEscape(Str* _sm_out, Str* text) {
     Str out;
     Int i, _sm_expr1;
     Bool _sm_expr2;
+    Span<Char> _sm_expr3;
     Char ch;
     out = Str();
     i = 0;
@@ -9665,7 +9687,8 @@ void ns3_xmlEscape(Str* _sm_out, Str* text) {
     _sm_expr1 = simse_lenOf((*text));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    ch = (*text)[i];
+    _sm_expr3 = simse_spanOfStr(text);
+    ch = get(simse_addressOf(_sm_expr3), i);
     _sm_expr2 = ch == '&';
     if (_sm_expr2) goto L3;
     goto L4;
@@ -9726,18 +9749,20 @@ void ns3_xmlWritePretty(Str* _sm_out, ns3_XmlNode node) {
 }
 // modules/xml/write.kt
 void ns3_xmlWriteLevel(Str* _sm_out, ns3_XmlNode node, Str indent, Int depth) {
-    Str _sm_base1, _sm_base5, _sm_base15, _sm_base21, pad, out, _sm_expr4, _sm_expr9, _sm_expr15,
-        _sm_expr20, _sm_expr21, _sm_expr23;
+    Str _sm_base1, _sm_base5, _sm_base15, _sm_base21, pad, out, _sm_expr4, _sm_expr9, _sm_expr16,
+        _sm_expr17, _sm_expr22, _sm_expr23, _sm_expr25;
     List<ns3_Attribute>* _sm_base2, * _sm_base4;
     ns3_Attribute* _sm_base3, * attribute;
-    Str* _sm_base6, * _sm_base7, * _sm_base11, * _sm_base12, * _sm_base13, * _sm_base14, * _sm_base18,
-        * _sm_base19, * _sm_base20;
+    Str* _sm_base6, * _sm_base7, * _sm_base11, * _sm_base12, * _sm_base14, * _sm_base18, * _sm_base19,
+        * _sm_base20;
     Array<ns3_XmlNode>* _sm_base8, * _sm_base10, * _sm_base16, * _sm_base17;
     ns3_XmlNode* _sm_base9, * child;
-    Int i, a, _sm_expr2, elements, c, t, k, _sm_expr22;
+    List<Str>* _sm_base13;
+    Int i, a, _sm_expr2, elements, c, t, k, _sm_expr24;
     Bool _sm_expr1;
     List<Str> texts;
     Span<Char> _sm_expr7;
+    Span<Str> _sm_expr15;
     ns3_XmlNode _sm_child_2;
     pad = Str();
     i = 0;
@@ -9820,10 +9845,12 @@ void ns3_xmlWriteLevel(Str* _sm_out, ns3_XmlNode node, Str indent, Int depth) {
     _sm_expr2 = simse_lenOf(texts);
     _sm_expr1 = t < _sm_expr2;
     if (!(_sm_expr1)) goto L15;
-    _sm_base14 = simse_addressOf(texts[t]);
-    _sm_base13 = _sm_base14;
-    ns3_xmlEscape(&_sm_expr15, _sm_base13);
-    simse_str_appendStr(out, _sm_expr15);
+    _sm_base13 = &texts;
+    _sm_expr15 = simse_spanOf(_sm_base13);
+    _sm_expr16 = (_sm_expr15.ptr[t]);
+    _sm_base14 = &_sm_expr16;
+    ns3_xmlEscape(&_sm_expr17, _sm_base14);
+    simse_str_appendStr(out, _sm_expr17);
     t = t + 1;
     goto L14;
     L15:;
@@ -9852,16 +9879,16 @@ void ns3_xmlWriteLevel(Str* _sm_out, ns3_XmlNode node, Str indent, Int depth) {
     L18:;
     simse_str_appendStr(out, pad);
     simse_str_appendStr(out, indent);
-    ns3_textValue(&_sm_expr20, simse_addressOf(_sm_child_2));
-    _sm_base20 = &_sm_expr20;
-    ns3_xmlEscape(&_sm_expr21, _sm_base20);
-    simse_str_appendStr(out, _sm_expr21);
+    ns3_textValue(&_sm_expr22, simse_addressOf(_sm_child_2));
+    _sm_base20 = &_sm_expr22;
+    ns3_xmlEscape(&_sm_expr23, _sm_base20);
+    simse_str_appendStr(out, _sm_expr23);
     simse_str_append(out, '\n');
     goto L20;
     L19:;
-    _sm_expr22 = depth + 1;
-    ns3_xmlWriteLevel(&_sm_expr23, _sm_child_2, indent, _sm_expr22);
-    simse_str_appendStr(out, _sm_expr23);
+    _sm_expr24 = depth + 1;
+    ns3_xmlWriteLevel(&_sm_expr25, _sm_child_2, indent, _sm_expr24);
+    simse_str_appendStr(out, _sm_expr25);
     L20:;
     k = k + 1;
     goto L16;

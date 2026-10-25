@@ -980,10 +980,11 @@ Bool compareLessThan(Str* left, Str* right) {
 void initByValue(Str* self) {
 }
 Str fmtStr(Span<Char> fmt, List<Str>* items) {
-    Str _sm_base2, out;
     Bool _sm_expr1;
     Int points, i, _sm_expr2, _sm_expr8, used;
     Char _sm_expr4, ch;
+    Str out, _sm_expr13;
+    Span<Str> _sm_expr12;
     _sm_expr1 = items == nullptr;
     if (_sm_expr1) goto L1;
     goto L2;
@@ -1027,8 +1028,9 @@ Str fmtStr(Span<Char> fmt, List<Str>* items) {
     if (_sm_expr1) goto L11;
     goto L12;
     L11:;
-    _sm_base2 = (*items)[used];
-    simse_str_appendStr(out, _sm_base2);
+    _sm_expr12 = simse_spanOf(items);
+    _sm_expr13 = (_sm_expr12.ptr[used]);
+    simse_str_appendStr(out, _sm_expr13);
     used = used + 1;
     goto L13;
     L12:;
@@ -1040,10 +1042,11 @@ Str fmtStr(Span<Char> fmt, List<Str>* items) {
     return out;
 }
 Str fmtStrWith(Char separator, Span<Char> templateText, List<Str>* items) {
-    Str _sm_base2, out;
     Bool _sm_expr1;
     Int points, i, _sm_expr2, _sm_expr8, used;
     Char _sm_expr4, ch;
+    Str out, _sm_expr13;
+    Span<Str> _sm_expr12;
     _sm_expr1 = items == nullptr;
     if (_sm_expr1) goto L1;
     goto L2;
@@ -1087,8 +1090,9 @@ Str fmtStrWith(Char separator, Span<Char> templateText, List<Str>* items) {
     if (_sm_expr1) goto L11;
     goto L12;
     L11:;
-    _sm_base2 = (*items)[used];
-    simse_str_appendStr(out, _sm_base2);
+    _sm_expr12 = simse_spanOf(items);
+    _sm_expr13 = (_sm_expr12.ptr[used]);
+    simse_str_appendStr(out, _sm_expr13);
     used = used + 1;
     goto L13;
     L12:;
@@ -1373,7 +1377,8 @@ void set(Str* self, Int index, Char value) {
 Bool startsWith(Str* self, Str* prefix) {
     Int count, _sm_expr1, i;
     Bool _sm_expr2;
-    Char _sm_expr4, _sm_expr5;
+    Char _sm_expr4, _sm_expr6;
+    Span<Char> _sm_expr5;
     count = simse_lenOf((*prefix));
     _sm_expr1 = simse_lenOf((*self));
     _sm_expr2 = count > _sm_expr1;
@@ -1387,8 +1392,9 @@ Bool startsWith(Str* self, Str* prefix) {
     _sm_expr2 = i < count;
     if (!(_sm_expr2)) goto L4;
     _sm_expr4 = (*self)[i];
-    _sm_expr5 = (*prefix)[i];
-    _sm_expr2 = _sm_expr4 != _sm_expr5;
+    _sm_expr5 = simse_spanOfStr(prefix);
+    _sm_expr6 = get(simse_addressOf(_sm_expr5), i);
+    _sm_expr2 = _sm_expr4 != _sm_expr6;
     if (_sm_expr2) goto L5;
     goto L6;
     L5:;
@@ -1402,7 +1408,8 @@ Bool startsWith(Str* self, Str* prefix) {
 Bool endsWith(Str* self, Str* suffix) {
     Int count, len, i, _sm_expr3, _sm_expr4;
     Bool _sm_expr1;
-    Char _sm_expr5, _sm_expr6;
+    Char _sm_expr5, _sm_expr7;
+    Span<Char> _sm_expr6;
     count = simse_lenOf((*suffix));
     len = simse_lenOf((*self));
     _sm_expr1 = count > len;
@@ -1418,8 +1425,9 @@ Bool endsWith(Str* self, Str* suffix) {
     _sm_expr3 = len - count;
     _sm_expr4 = _sm_expr3 + i;
     _sm_expr5 = (*self)[_sm_expr4];
-    _sm_expr6 = (*suffix)[i];
-    _sm_expr1 = _sm_expr5 != _sm_expr6;
+    _sm_expr6 = simse_spanOfStr(suffix);
+    _sm_expr7 = get(simse_addressOf(_sm_expr6), i);
+    _sm_expr1 = _sm_expr5 != _sm_expr7;
     if (_sm_expr1) goto L5;
     goto L6;
     L5:;
@@ -1685,11 +1693,13 @@ Bool isSpace(Char* self) {
     return _sm_expr1;
 }
 Str intToStr(Int64 value) {
-    Char _sm_base1, ch;
+    Str* _sm_base1;
     Int64 rest, _sm_expr4;
     Bool _sm_expr1;
     Str reversed, out;
     Int digit, _sm_expr6, i;
+    Char ch, _sm_expr11;
+    Span<Char> _sm_expr10;
     rest = value;
     _sm_expr1 = rest > 0;
     if (_sm_expr1) goto L1;
@@ -1728,8 +1738,10 @@ Str intToStr(Int64 value) {
     L9:;
     _sm_expr1 = i >= 0;
     if (!(_sm_expr1)) goto L10;
-    _sm_base1 = reversed[i];
-    simse_str_append(out, _sm_base1);
+    _sm_base1 = &reversed;
+    _sm_expr10 = simse_spanOfStr(_sm_base1);
+    _sm_expr11 = get(simse_addressOf(_sm_expr10), i);
+    simse_str_append(out, _sm_expr11);
     i = i - 1;
     goto L9;
     L10:;
@@ -1868,13 +1880,16 @@ Int ns1_partStrings() {
 }
 // stress/strings/src/main.kt
 Int ns1_partTextProcessing() {
-    Str* _sm_base1, * _sm_base4, * _sm_base5, * _sm_base7, * _sm_base9, * _sm_base11;
-    Str _sm_base2, _sm_base6, _sm_base8, _sm_base10, _sm_base12, text, word, longest, shout, _sm_expr19;
+    Str* _sm_base1, * _sm_base6, * _sm_base8, * _sm_base10, * _sm_base12;
+    Str _sm_base2, _sm_base7, _sm_base9, _sm_base11, _sm_base13, text, word, longest, _sm_expr16, shout,
+        _sm_expr22;
+    List<Str>* _sm_base4, * _sm_base5;
     List<Str> words, keys;
     Dictionary<Str, Int> counts;
-    Int i, _sm_expr1, _sm_expr5, _sm_expr6, _sm_expr7, _sm_expr9, _sm_expr11, k, _sm_expr16;
-    Bool _sm_expr2, _sm_expr12, _sm_expr18, _sm_expr20;
+    Int i, _sm_expr1, _sm_expr5, _sm_expr6, _sm_expr7, _sm_expr9, _sm_expr11, k, _sm_expr18;
+    Bool _sm_expr2, _sm_expr12, _sm_expr21, _sm_expr23;
     Opt<Int> seen, _sm_expr8, _sm_expr10;
+    Span<Str> _sm_expr15;
     text = __sm_stringTable[0];
     _sm_base2 = __sm_stringTable[77];
     _sm_base1 = &_sm_base2;
@@ -1921,33 +1936,37 @@ Int ns1_partTextProcessing() {
     _sm_expr1 = simse_lenOf(keys);
     _sm_expr2 = k < _sm_expr1;
     if (!(_sm_expr2)) goto L7;
-    _sm_base4 = simse_addressOf(keys[k]);
-    _sm_expr1 = simse_lenOf((*_sm_base4));
-    _sm_expr16 = simse_lenOf(longest);
-    _sm_expr2 = _sm_expr1 > _sm_expr16;
+    _sm_base4 = &keys;
+    _sm_expr15 = simse_spanOf(_sm_base4);
+    _sm_expr16 = (_sm_expr15.ptr[k]);
+    _sm_expr1 = simse_lenOf(_sm_expr16);
+    _sm_expr18 = simse_lenOf(longest);
+    _sm_expr2 = _sm_expr1 > _sm_expr18;
     if (_sm_expr2) goto L8;
     goto L9;
     L8:;
-    longest = keys[k];
+    _sm_base5 = &keys;
+    _sm_expr15 = simse_spanOf(_sm_base5);
+    longest = (_sm_expr15.ptr[k]);
     L9:;
     k = k + 1;
     goto L6;
     L7:;
     simse_println((longest), stdout);
     shout = toUpper(simse_addressOf(text));
-    _sm_base6 = __sm_stringTable[47];
-    _sm_base5 = &_sm_base6;
-    _sm_expr18 = startsWith(simse_addressOf(shout), _sm_base5);
-    simse_println((_sm_expr18), stdout);
-    _sm_base8 = __sm_stringTable[51];
-    _sm_base7 = &_sm_base8;
-    _sm_base10 = __sm_stringTable[50];
-    _sm_base9 = &_sm_base10;
-    _sm_expr19 = replace(simse_addressOf(text), _sm_base7, _sm_base9);
-    _sm_base12 = __sm_stringTable[50];
-    _sm_base11 = &_sm_base12;
-    _sm_expr20 = endsWith(simse_addressOf(_sm_expr19), _sm_base11);
-    simse_println((_sm_expr20), stdout);
+    _sm_base7 = __sm_stringTable[47];
+    _sm_base6 = &_sm_base7;
+    _sm_expr21 = startsWith(simse_addressOf(shout), _sm_base6);
+    simse_println((_sm_expr21), stdout);
+    _sm_base9 = __sm_stringTable[51];
+    _sm_base8 = &_sm_base9;
+    _sm_base11 = __sm_stringTable[50];
+    _sm_base10 = &_sm_base11;
+    _sm_expr22 = replace(simse_addressOf(text), _sm_base8, _sm_base10);
+    _sm_base13 = __sm_stringTable[50];
+    _sm_base12 = &_sm_base13;
+    _sm_expr23 = endsWith(simse_addressOf(_sm_expr22), _sm_base12);
+    simse_println((_sm_expr23), stdout);
     return 0;
 }
 // stress/strings/src/main.kt
