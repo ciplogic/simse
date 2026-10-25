@@ -7,6 +7,7 @@ package bench_interp
 // whole pure call hoists out of the loop.
 
 import kit
+import unsafe
 
 val DEPTH: Int = 16 // BENCH_N
 val PASSES: Int = 8
@@ -17,13 +18,13 @@ data class INode(var tag: Int, var v: Int, var a: Int, var b: Int)
 
 var pool: List<INode> = List<INode>()
 
-fun build(depth: Int, seed: Int64): Int {
-    val s: Int64 = xsNext(seed)
+fun build(depth: Int, seed: UInt64): Int {
+    val s: UInt64 = xsNext(seed)
     if (depth == 0) {
-        pool.append(INode(0, Int(xsMod(s, 1000)), 0, 0))
+        pool.append(INode(0, s.uMod(UInt64(1000)).toInt(), 0, 0))
         return pool.size() - 1
     }
-    val k: Int64 = xsMod(s, 8)
+    val k: Int = s.uMod(UInt64(8)).toInt()
     if (k < 1) {
         val a: Int = build(depth - 1, s)
         pool.append(INode(3, 0, a, 0))
@@ -58,7 +59,7 @@ fun evalAt(i: Int, p: Int64): Int64 {
 }
 
 fun main(): Int {
-    val root: Int = build(DEPTH, 12345)
+    val root: Int = build(DEPTH, UInt64(12345))
     var total: Int64 = 0
     for (p in 0 until PASSES) {
         total = (total + evalAt(root, Int64(p))) % M

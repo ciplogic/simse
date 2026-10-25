@@ -7,30 +7,31 @@ package bench_respond
 // carries a quote or a backslash, so the escaping path is real.
 
 import kit
+import unsafe
 
 val N: Int = 100000 // BENCH_N
 
 data class Item(var sku: Str, var qty: Int, var price: Int)
 data class Resp(var id: Int64, var user: Str, var items: List<Item>)
-data class HOut(var h: Int64, var len: Int)
+data class HOut(var h: UInt64, var len: Int)
 
 // A user name of 3..10 letters; one in eight carries a quote or a backslash.
-fun nameOf(seed: Int64): Str {
+fun nameOf(seed: UInt64): Str {
     var s: Str = Str()
-    var r: Int64 = xsNext(seed)
-    val n: Int = 3 + Int(xsMod(r, 8))
-    val odd: Bool = xsMod(uShr(r, 8), 8) == Int64(0)
+    var r: UInt64 = xsNext(seed)
+    val n: Int = 3 + r.uMod(UInt64(8)).toInt()
+    val odd: Bool = r.shr(8).uMod(UInt64(8)) == UInt64(0)
     var i: Int = 0
     while (i < n) {
         r = xsNext(r)
         if (odd && i == 1) {
-            if (xsMod(r, 2) == Int64(0)) {
+            if (r.uMod(UInt64(2)) == UInt64(0)) {
                 s.append('"')
             } else {
                 s.append('\\')
             }
         } else {
-            s.append(Char(97 + Int(xsMod(r, 26))))
+            s.append(Char(97 + r.uMod(UInt64(26)).toInt()))
         }
         i++
     }
@@ -38,27 +39,27 @@ fun nameOf(seed: Int64): Str {
 }
 
 // A stock keeping unit: two letters and four digits.
-fun skuOf(seed: Int64): Str {
+fun skuOf(seed: UInt64): Str {
     var s: Str = Str()
-    var r: Int64 = xsNext(seed)
-    s.append(Char(65 + Int(xsMod(r, 26))))
-    s.append(Char(65 + Int(xsMod(uShr(r, 8), 26))))
+    var r: UInt64 = xsNext(seed)
+    s.append(Char(65 + r.uMod(UInt64(26)).toInt()))
+    s.append(Char(65 + r.shr(8).uMod(UInt64(26)).toInt()))
     var i: Int = 0
     while (i < 4) {
         r = xsNext(r)
-        s.append(Char(48 + Int(xsMod(r, 10))))
+        s.append(Char(48 + r.uMod(UInt64(10)).toInt()))
         i++
     }
     return s
 }
 
-fun makeItems(seed: Int64, n: Int): List<Item> {
+fun makeItems(seed: UInt64, n: Int): List<Item> {
     var t: List<Item> = List<Item>()
-    var r: Int64 = seed
+    var r: UInt64 = seed
     var i: Int = 0
     while (i < n) {
         r = xsNext(r)
-        t.append(Item(skuOf(r), 1 + Int(xsMod(uShr(r, 8), 5)), 100 + Int(xsMod(uShr(r, 16), 99900))))
+        t.append(Item(skuOf(r), 1 + r.shr(8).uMod(UInt64(5)).toInt(), 100 + r.shr(16).uMod(UInt64(99900)).toInt()))
         i++
     }
     return t
@@ -127,41 +128,41 @@ fun render(out: *Str, r: *Resp): Unit {
 }
 
 // FNV-1a, the checksum the C++ and Rust rows compute.
-fun fnv(s: *Str): Int64 {
+fun fnv(s: *Str): UInt64 {
     // 0xcbf29ce484222325, as the signed spelling of its bit pattern.
-    var h: Int64 = -3750763034362895579
+    var h: UInt64 = UInt64(-3750763034362895579)
     var i: Int = 0
     while (i < s.size()) {
-        h = (h ^ Int64(byteAt(s, i))) * 1099511628211
+        h = h.xorWith(UInt64(byteAt(s, i))).times(UInt64(1099511628211))
         i++
     }
     return h
 }
 
 // One request: the response object and its rendering are both locals.
-fun handle(seed: Int64): HOut {
-    val r: Int64 = xsNext(seed)
-    val n: Int = 1 + Int(xsMod(r, 8))
-    val resp: Resp = Resp(Int64(xsMod(uShr(r, 4), 1000000)), nameOf(uShr(r, 8)), makeItems(uShr(r, 16), n))
+fun handle(seed: UInt64): HOut {
+    val r: UInt64 = xsNext(seed)
+    val n: Int = 1 + r.uMod(UInt64(8)).toInt()
+    val resp: Resp = Resp(r.shr(4).uMod(UInt64(1000000)).toInt64(), nameOf(r.shr(8)), makeItems(r.shr(16), n))
     var out: Str = Str()
     render(out, resp)
     return HOut(fnv(out), out.size())
 }
 
 fun main(): Int {
-    var seed: Int64 = 12345
-    var h: Int64 = 0
+    var seed: UInt64 = UInt64(12345)
+    var h: UInt64 = UInt64(0)
     var bytes: Int64 = 0
     var i: Int = 0
     while (i < N) {
         seed = xsNext(seed)
         val r: HOut = handle(seed)
-        h = h ^ (r.h * 31 + Int64(i))
+        h = h.xorWith(r.h.times(UInt64(31)).plus(UInt64(i)))
         bytes += Int64(r.len)
         i++
     }
     println(N)
     println(bytes)
-    println(uToString(h))
+    println(h.toString())
     return 0
 }

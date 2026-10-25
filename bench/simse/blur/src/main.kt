@@ -7,6 +7,7 @@ package bench_blur
 // they were initialised with.
 
 import kit
+import unsafe
 
 val W: Int = 1024 // BENCH_N
 val PASSES: Int = 16
@@ -30,11 +31,11 @@ fun blur(src: *Str, dst: *Str, w: Int): Unit {
 fun main(): Int {
     var a: Str = Str()
     var b: Str = Str()
-    var r: Int64 = 12345
+    var r: UInt64 = UInt64(12345)
     var i: Int = 0
     while (i < W * W) {
         r = xsNext(r)
-        a.append(Char(Int(xsMod(r, 256))))
+        a.append(Char(r.uMod(UInt64(256)).toInt()))
         b.append(Char(0))
         i++
     }

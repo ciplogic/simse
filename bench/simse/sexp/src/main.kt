@@ -9,6 +9,7 @@ package bench_sexp
 // list's children in reverse source order, which the C++ rows reproduce.
 
 import kit
+import unsafe
 
 val N: Int = 20000 // BENCH_N
 val DEPTH: Int = 4
@@ -23,13 +24,13 @@ var pos: Int = 0
 var pool: List<SNode> = List<SNode>()
 var roots: List<Int> = List<Int>()
 
-fun emitSym(seed: Int64): Unit {
-    var r: Int64 = seed
-    val n: Int = 3 + Int(xsMod(r, 12))
+fun emitSym(seed: UInt64): Unit {
+    var r: UInt64 = seed
+    val n: Int = 3 + r.uMod(UInt64(12)).toInt()
     var i: Int = 0
     while (i < n) {
         r = xsNext(r)
-        text.append(Char(97 + Int(xsMod(r, 26))))
+        text.append(Char(97 + r.uMod(UInt64(26)).toInt()))
         i++
     }
 }
@@ -52,19 +53,19 @@ fun emitNum(v: Int): Unit {
     }
 }
 
-fun gen(depth: Int, seed: Int64): Int64 {
-    var r: Int64 = xsNext(seed)
-    if (depth == 0 || xsMod(r, 4) == Int64(0)) {
-        if (xsMod(uShr(r, 8), 2) == Int64(0)) {
+fun gen(depth: Int, seed: UInt64): UInt64 {
+    var r: UInt64 = xsNext(seed)
+    if (depth == 0 || r.uMod(UInt64(4)) == UInt64(0)) {
+        if (r.shr(8).uMod(UInt64(2)) == UInt64(0)) {
             emitSym(r)
         } else {
-            emitNum(Int(xsMod(uShr(r, 16), 100000)))
+            emitNum(r.shr(16).uMod(UInt64(100000)).toInt())
         }
         text.append(' ')
         return r
     }
     text.append('(')
-    val kids: Int = 2 + Int(xsMod(uShr(r, 24), 4))
+    val kids: Int = 2 + r.shr(24).uMod(UInt64(4)).toInt()
     var k: Int = 0
     while (k < kids) {
         r = gen(depth - 1, r)
@@ -138,7 +139,7 @@ fun walkChain(c: Int, p: Int64): Int64 {
 }
 
 fun main(): Int {
-    var seed: Int64 = 12345
+    var seed: UInt64 = UInt64(12345)
     var i: Int = 0
     while (i < N) {
         seed = gen(DEPTH, seed)

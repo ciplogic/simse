@@ -7,7 +7,9 @@ import unsafe
 // wrap point, mask read, bit operations and shifts.
 //
 // The storage is a wider signed scalar, so this pins the reads: a `UInt8` of 300 reads as
-// 44, a `UInt32` of -1 reads as 4294967295, and the arithmetic wraps at the width.
+// 44, a `UInt32` of -1 reads as 4294967295, and the arithmetic wraps at the width. The
+// 64-bit section pins the unsigned surface `UInt64` recovers over the signed `Int64`:
+// the logical `shr`, the u64 compare order, `uDiv`/`uMod`, and the `%llu` spelling.
 
 fun main(): Int {
     // 8-bit: wrapping add and the masked read.
@@ -40,5 +42,21 @@ fun main(): Int {
     println("u64-v " + UInt64(42).value().toString())
     println("u64-add " + (UInt64(4294967296) + UInt64(4294967296)).toInt64().toString())
     println("u64-shr " + UInt64(4294967296).shr(32).toString())
+
+    // 64-bit: the unsigned surface - the logical shift, the u64 order, the unsigned
+    // division and remainder, and the unsigned decimal spelling of a top-bit pattern
+    // (`-1` names 18446744073709551615).
+    println("u64-lshr " + UInt64(-1).shr(1).toString())
+    println("u64-cmp " + (UInt64(-1) > UInt64(1)).toString())
+    println("u64-cmp-lo " + (UInt64(1) < UInt64(-1)).toString())
+    println("u64-sub " + UInt64(0).minus(UInt64(1)).toString())
+    println("u64-mul " + UInt64(4294967296).times(UInt64(4294967296)).toString())
+    println("u64-div " + UInt64(100).uDiv(UInt64(7)).toString())
+    println("u64-div-hi " + UInt64(-1).uDiv(UInt64(2)).toString())
+    println("u64-div-hi2 " + UInt64(-1).uDiv(UInt64(-2)).toString())
+    println("u64-mod " + UInt64(100).uMod(UInt64(7)).toString())
+    println("u64-mod-hi " + UInt64(-1).uMod(UInt64(7)).toString())
+    println("u64-mod-p2 " + UInt64(-1).uMod(UInt64(16)).toString())
+    println("u64-str " + UInt64(-1).toString())
     return 0
 }

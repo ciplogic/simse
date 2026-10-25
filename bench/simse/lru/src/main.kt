@@ -9,6 +9,7 @@ package bench_lru
 // Its idiomatic row is std::list plus unordered_map.
 
 import kit
+import unsafe
 
 val N: Int = 2000000 // BENCH_N
 
@@ -23,10 +24,10 @@ var lcount: Int = 0
 
 // 0x9E3779B97F4A7C15, as the signed spelling of its bit pattern: the product
 // wraps, the shift below is the logical one, and only the bits matter.
-val FIB: Int64 = -7046029254386353131
+val FIB: UInt64 = UInt64(-7046029254386353131)
 
 fun homeSlot(key: Int64): Int {
-    return Int(uShr(key * FIB, 24) & mask)
+    return Int(UInt64(key).times(FIB).shr(24).andWith(UInt64(mask)).toInt64())
 }
 
 // The slot holding `key`, or the empty slot where it would go.
@@ -106,15 +107,15 @@ fun main(): Int {
     var hits: Int64 = 0
     var misses: Int64 = 0
     var removes: Int64 = 0
-    var r: Int64 = 12345
+    var r: UInt64 = UInt64(12345)
     var op: Int = 0
     while (op < N) {
         r = xsNext(r)
-        val a: Int64 = xsMod(r, Int64(keys))
+        val a: Int64 = r.uMod(UInt64(keys)).toInt64()
         val key: Int64 = (a * a) / Int64(keys)
         val at: Int = findSlot(key)
         val fi: Int = slots[at].idx
-        if (xsMod(r >> 40, 16) == 0) {
+        if (r.shr(40).uMod(UInt64(16)) == UInt64(0)) {
             // An invalidation: drop the entry if it is cached.
             if (fi >= 0) {
                 unlink(fi)
@@ -155,11 +156,11 @@ fun main(): Int {
         op++
     }
     // Walk the list from most to least recent, so the order is checked too.
-    var walk: Int64 = 0
+    var walk: UInt64 = UInt64(0)
     var vals: Int64 = 0
     var cur: Int = pool[hi].next
     while (pool[cur].key >= 0) {
-        walk = walk * 31 + Int64(pool[cur].key)
+        walk = walk.times(UInt64(31)).plus(UInt64(pool[cur].key))
         vals += Int64(pool[cur].value)
         cur = pool[cur].next
     }
@@ -167,7 +168,7 @@ fun main(): Int {
     println(misses)
     println(removes)
     println(lcount)
-    println(uToString(walk))
+    println(walk.toString())
     println(vals)
     return 0
 }

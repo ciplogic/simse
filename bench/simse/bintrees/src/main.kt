@@ -8,8 +8,6 @@ package bench_bintrees
 // C++ idiomatic row pays a malloc and a free per node instead. Index 0 is the
 // null sentinel.
 
-import kit
-
 val MAXDEPTH: Int = 15 // BENCH_N
 val MINDEPTH: Int = 4
 
