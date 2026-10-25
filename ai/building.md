@@ -28,9 +28,13 @@ point. The commands below are what it runs.
 The same loop exists as a C# tool (`tools/iterate/`, .NET 8+) whose corpus runs through a pool
 of Tasks, 16 cases at a time by default — the whole corpus in ~9 s where the sequential JS run
 takes ~60 s, and none of bun's overlapping-spawn flakes (`uv_spawn EUNKNOWN`, the reason
-stress.js runs one case at a time). The build, refresh and fixed-point steps spawn the same bun
-tools, so the build logic stays in one place; the fast loop's bootstrap check is native too.
-`--serial` is the old one-case-at-a-time corpus.
+stress.js runs one case at a time). `bun tools/iterate.js` **is** that twin when `dotnet` is on
+the PATH: it forwards its argv to `dotnet run --project tools/iterate` and streams the output,
+so the one command is the parallel loop everywhere dotnet exists (Linux included, where the
+twin skips the build step and tests the compiler as built). `--js` — or having no dotnet —
+runs the all-JS steps instead. The twin's own options pass through the front door
+(`--jobs`, `--serial`, `--keep-going`, `--list`, `--update`), and it can be run or published
+directly:
 
 ```sh
 dotnet run --project tools/iterate -- --full   # the C# loop, same options as iterate.js

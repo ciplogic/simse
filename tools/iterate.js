@@ -1,6 +1,13 @@
 // tools/iterate.js - the one-command iteration loop.
 //
-//   bun tools/iterate.js [--full] [--filter <text>] [--quiet]
+//   bun tools/iterate.js [--full] [--filter <text>] [--quiet] [--js]
+//
+// With dotnet on the PATH this is a front door for the C# twin (tools/iterate/, .NET 8+):
+// the same loop, but the corpus runs through a pool of Tasks, 16 cases at a time, and the
+// twin's own options pass straight through (--jobs, --serial, --keep-going, ...). The argv
+// is forwarded as written, output streams live, and the exit code is the twin's. `--js`
+// (or no dotnet) runs the all-JS steps below; on Linux the twin skips the build step and
+// tests the compiler as built (docs/building-on-linux.md).
 //
 // Fast (the default) is the loop for a change whose effect you want to see:
 //
@@ -18,12 +25,31 @@
 // a failing step's whole output. `--quiet` prints only the total. All of this is JS on bun -
 // there is no perl or bash in the loop.
 
+import { statSync } from "node:fs";
 import * as path from "node:path";
 
 import { fail as failTool, REPO } from "./msvc.mjs";
 
 const TOOL = "iterate";
 const fail = (message) => failTool(TOOL, message);
+
+// `dotnet` on the PATH, or null: the C# twin is the loop's parallel form when it is there
+// (the same PATH walk msvc.mjs's whichCl does for cl.exe; a missing entry is skipped, as
+// the shell's would be).
+function findDotnet() {
+  const names = process.platform === "win32" ? ["dotnet.exe", "dotnet"] : ["dotnet"];
+  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+    if (dir.length === 0) continue;
+    for (const name of names) {
+      try {
+        if (statSync(path.join(dir, name)).isFile()) return path.join(dir, name);
+      } catch {
+        // not there; the next entry is the question
+      }
+    }
+  }
+  return null;
+}
 
 function usage() {
   console.log(`usage: bun tools/iterate.js [options]
@@ -32,7 +58,11 @@ function usage() {
                     (default: the fast loop - debug build + corpus + bootstrap in-sync check)
   --filter <text>   only stress cases whose path contains <text> (repeatable)
   --quiet           only the final line
-  -h, --help        this text`);
+  --js              run the all-JS steps (the sequential bun corpus), not the dotnet twin
+  -h, --help        this text
+
+With dotnet on the PATH (the default), the options of the C# twin pass through too:
+--jobs <n>, --serial, --keep-going, --list, --update, --simse <exe> (its --help has them).`);
 }
 
 function parseArgs(argv) {
@@ -46,6 +76,7 @@ function parseArgs(argv) {
       case "--full": opts.full = true; break;
       case "--filter": opts.filters.push(value(i)); i++; break;
       case "--quiet": opts.quiet = true; break;
+      case "--js": break; // already honored: this IS the JS loop
       case "-h": case "--help": opts.help = true; break;
       default: fail(`unknown option '${argv[i]}' (try --help)`);
     }
@@ -78,7 +109,28 @@ function lastLine(text) {
 }
 
 async function main() {
-  const opts = parseArgs(process.argv.slice(2));
+  const raw = process.argv.slice(2);
+  const wantsJs = raw.includes("--js");
+  const dotnet = wantsJs ? null : findDotnet();
+  if (wantsJs || dotnet === null) {
+    if (!wantsJs && !raw.includes("--quiet")) {
+      console.log("iterate: no dotnet on the PATH - the all-JS steps (the sequential corpus)");
+    }
+    return jsLoop(raw);
+  }
+  // The C# twin, live: same loop, parallel corpus. The argv forwards as written (minus
+  // nothing - the twin's options are a superset of this script's), and the exit code is
+  // its own.
+  const proc = Bun.spawn(
+    [dotnet, "run", "--project", "tools/iterate", "--", ...raw],
+    { cwd: REPO, stdout: "inherit", stderr: "inherit" },
+  );
+  const exit = await proc.exited;
+  return exit === 0 ? 0 : 1;
+}
+
+async function jsLoop(raw) {
+  const opts = parseArgs(raw);
   if (opts.help) {
     usage();
     return 0;
