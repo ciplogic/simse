@@ -86,12 +86,19 @@ that survive to emission) and tightens as ops gain types; when it is strict, the
   slot-without-type failure names its line.
 - **Step 2 (typed pointer indexing) is in** (`ba0304c`): `ps[i]` over a `*Cell` types as
   `Cell`, below the container shapes.
-- **The buffer hoist is in progress, stashed**: the stability walker (`bpSpanStableNode`)
-  and the sema transform (`hoistSpanAt` - typed span decl, `analyzeStmt` at inject,
-  in-place block mutation, `set`-receiver rewrite) are written; the reduced battery fails
-  in a half-fired state (the transformed body errors where the untransformed one lowers,
-  with no span vars in the IL), which needs a debugging pass. Paused while a parallel
-  change to the same sema files lands.
+- **The buffer hoist is one typing edge from done (v3, stashed)**: the stability walker
+  (`bpSpanStableNode`) and the declaration-free rewrite (`hoistSpanAt`: every `c[i]` in a
+  storage-stable loop becomes `spanOf(c)[i]`, the emitter spelling the span index through
+  its pointer; no injected declarations, so no placement or reordering hazard - the v2
+  body-prepend miscompiled gzip exactly that way, the span landing after its first read
+  once the short-circuit lowering reordered the body). The reduced battery and an
+  rtl-only transpile pass; the full self-transpile fails typing `toArray` (generic
+  context: `Span<T>` element over `spanOfArray(out)` in the write target) - the open
+  edge, and the resume point. Mechanics learned on the way, all in the stash: synthetic
+  AST nodes need their role names (`Callee`, `Receiver`) and positions or the extractor
+  drops them; `LinLowerer` descends into `StmtBlock` (blocks are transparent); and
+  operator get/set are templates whose declarations can trail uses, so span reads and
+  writes spell `.ptr[i]` directly (the `spanDirect` guards).
 
 ## Order of work
 
