@@ -281,6 +281,15 @@ fun main(args: List<Str>): Int {
                 bpSetNoBorrow(true)
             }
 
+            // The for-walk on (src/sema/SemaCall.kt, impl_specs/for-walk.md): a `for` whose
+            // machine is the span's own lowers as the flat counter walk the auto-vectorizers
+            // flatten. Off by default - the measured verdict keeps it opt-in: the flat scalar
+            // scans vectorize and move, the struct pointer walks pay for the atPtr binding
+            // (impl_specs/for-walk.md, the flag-on table).
+            "--for-walk" -> {
+                semaSetForWalk(true)
+            }
+
             // The escape-parameter optimization off (src/parser/EscapeParams.kt): no analysis, so
             // the promotion keeps only its structural rules and `print`/`println` are not mapped.
             "--no-escape" -> {
@@ -350,7 +359,7 @@ fun main(args: List<Str>): Int {
 
             "-h", "--help" -> {
                 println("simse " + simseVersion)
-                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>]... [--module <dir>]... [--tests] [--no-concat] [--no-borrow] [--no-escape] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showBorrow] [--showEscape] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos] [--diagnostics <topics>] [--version]")
+                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>]... [--module <dir>]... [--tests] [--no-concat] [--no-borrow] [--for-walk] [--no-escape] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showBorrow] [--showEscape] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos] [--diagnostics <topics>] [--version]")
                 return 0
             }
 

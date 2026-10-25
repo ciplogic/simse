@@ -415,11 +415,12 @@ fun Analyzer.analyzeFunction(decl: *AstXmlNode): Unit {
 
     val savedLoopDepth: Int = this.loopDepth
     this.loopDepth = 0
-    val body: List<AstXmlNode> = xmlChildren(xmlChildPtr(decl, AstNodeKind.Body), AstNodeKind.Stmt)
+    val bodyContainer: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.Body)
+    val body: List<AstXmlNode> = xmlChildren(bodyContainer, AstNodeKind.Stmt)
     for (*stmtNode in body) {
         this.analyzeStmt(stmtNode)
     }
-    this.promoteForLoops(*body)
+    this.promoteForLoops(bodyContainer, *body)
     this.loopDepth = savedLoopDepth
 
     this.popScope()
@@ -893,14 +894,15 @@ fun Analyzer.analyzeStmt(stmt: *AstXmlNode): Unit {
                 this.analyzeExpr(cond)
             }
             this.pushScope()
-            val thenBody: List<AstXmlNode> = xmlChildren(xmlChildPtr(stmt, AstNodeKind.Then), AstNodeKind.Stmt)
+            val thenContainer: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Then)
+            val thenBody: List<AstXmlNode> = xmlChildren(thenContainer, AstNodeKind.Stmt)
             for (*thenStmt in thenBody) {
                 this.analyzeStmt(thenStmt)
             }
             // The `for` rewrite resolves the iterated expression (`spanForAt`), so it has to
             // run while the scope that declares the receiver is still up - a `for` over a
             // local of the arm's own (`val xs = ...; for (x in xs)`) is the common case.
-            this.promoteForLoops(*thenBody)
+            this.promoteForLoops(thenContainer, *thenBody)
             this.popScope()
             val elseBlock: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Else)
             if (!xmlIsEmpty(elseBlock)) {
@@ -909,7 +911,7 @@ fun Analyzer.analyzeStmt(stmt: *AstXmlNode): Unit {
                 for (*elseStmt in elseBody) {
                     this.analyzeStmt(elseStmt)
                 }
-                this.promoteForLoops(*elseBody)
+                this.promoteForLoops(elseBlock, *elseBody)
                 this.popScope()
             }
             return
@@ -922,13 +924,14 @@ fun Analyzer.analyzeStmt(stmt: *AstXmlNode): Unit {
             }
             this.pushScope()
             this.loopDepth++
-            val body: List<AstXmlNode> = xmlChildren(xmlChildPtr(stmt, AstNodeKind.Body), AstNodeKind.Stmt)
+            val bodyContainer: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Body)
+            val body: List<AstXmlNode> = xmlChildren(bodyContainer, AstNodeKind.Stmt)
             for (*bodyStmt in body) {
                 this.analyzeStmt(bodyStmt)
             }
             // Same as the `if` arms: the rewrite runs in the scope that declares the
             // iterated local, before the scope goes away.
-            this.promoteForLoops(*body)
+            this.promoteForLoops(bodyContainer, *body)
             this.loopDepth--
             this.popScope()
             return
@@ -1116,11 +1119,12 @@ fun Analyzer.analyzeExpr(expr: *AstXmlNode): Unit {
             }
             val savedLoopDepth: Int = this.loopDepth
             this.loopDepth = 0
-            val body: List<AstXmlNode> = xmlChildren(xmlChildPtr(expr, AstNodeKind.Body), AstNodeKind.Stmt)
+            val lambdaBody: *AstXmlNode = xmlChildPtr(expr, AstNodeKind.Body)
+            val body: List<AstXmlNode> = xmlChildren(lambdaBody, AstNodeKind.Stmt)
             for (*stmtNode in body) {
                 this.analyzeStmt(stmtNode)
             }
-            this.promoteForLoops(*body)
+            this.promoteForLoops(lambdaBody, *body)
             this.loopDepth = savedLoopDepth
             this.popScope()
             return

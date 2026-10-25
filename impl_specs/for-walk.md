@@ -165,12 +165,30 @@ this proposal inherits.
    against). **Done** - the table above; the counter walk moves, the pair does not.
 2. Variant B lands green under the flag; the A/B then decides whether variant A exists at
    all - **it does not**: parity with the counter, and its comparison was never spellable.
-3. The default flips only after the Linux twin confirms (`bench/run-linux.js`, the i3),
-   and the flag is deleted once trusted.
-4. **The honest failure**: `for.md`'s own measurement says the machine was free on
-   pointer-chasing work. On the flat scan the walk moves (the table above), so the
-   proposal builds - the flag-on rows (sum, strlist, words, particles, blur, the
-   self-transpile) decide the default flip.
+3. **The flag-on rows are a per-shape tradeoff, and the default does not flip.** The five
+   flat-scan bench rows, interleaved off/on/off/on (two rounds, `bench/run.js` vs the
+   `--for-walk` twin `bench/run-walk.js`, medium sizes, reps 3; simse column, ms):
+
+   | row | off (r1 / r2) | on (r1 / r2) | verdict |
+   | --- | --- | --- | --- |
+   | sum (flat Int scan, value form) | 92 / 90 | 82 / 71 | **the walk wins ~15%** - the counted loop vectorizes, the machine does not |
+   | strlist | 149 / 156 | 158 / 155 | parity |
+   | words | 742 / 783 | 792 / 662 | noise (the spread swamps the shape) |
+   | particles (struct walk, `*p` form) | 196 / 204 | 234 / 232 | **the walk loses ~15%**, consistent across rounds |
+   | blur | 154 / 152 | 139 / 147 | the walk, slightly |
+
+   The particles loss is the honest cost the proposal accepted measuring: the `*p` walk
+   binds through `atPtr` (the machine's own spelling, correct for every element type -
+   the raw `.ptr` index it replaces reads `Str[i]` as the `Char` on container elements,
+   the bug the self-transpile caught), and on a 200-step struct loop that binding costs
+   what the machine's inlined `advance` did not. Flat scalar scans - the rows the
+   proposal was for - move the other way. So: `--for-walk` stays **default off**, a
+   program opts in per build, and the flag lives until a per-shape rule (walk the scalar
+   value forms, keep the machine for pointer walks) is worth designing.
+4. The honest failure clause is half-answered: the machine was not free, and the walk is
+   not free either - the measurement above is the answer to both.
+5. The default flip (Linux first), then the flag's deletion - **superseded by 3**: the
+   default stays off; the flag is the feature.
 
 ## Order of work
 
