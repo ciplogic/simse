@@ -88,8 +88,17 @@ it with the source.
 
 ## Debug views (all print to stderr, C++ output unchanged)
 
+`--diagnostics <topics>` is the one flag for tracing a rewrite through the stages: a
+comma-separated topic list (`sema`, `lowering`, `il`, `codegen`, or `all`) prints one line
+per stage boundary - the sema rewrites (with the container-vs-list name check that catches
+a mutation landing on a copy), the body's statement head after each lowering stage, the
+full IL per body (`il`), and the emitter's body stages. `--showBorrow`/`--showEscape` stay
+the per-decision views of their own passes.
+
 ```sh
 ./simse.exe --root src --root modules -o a.cpp --showLinearRepresentation 2> il.txt   # the IL of every body
+./simse.exe --root my/src -o a.cpp --diagnostics sema,lowering,il 2> diag.txt         # per-stage trace: sema,
+                                                                                      # lowering, il, codegen, all
 ./simse.exe --root examples/async/src --module modules/io --showAsync   # suspension coloring
 ./simse.exe --root src --root modules -o a.cpp --showBorrow 2> borrow.txt             # per-candidate borrow decisions (prelude first)
 ./simse.exe --root src --root modules -o a.cpp --showEscape 2> escape.txt             # per-name escape-parameter kinds (prelude + modules)

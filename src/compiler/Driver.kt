@@ -337,9 +337,20 @@ fun main(args: List<Str>): Int {
                 profSetNanos(true)
             }
 
+            // --diagnostics <topics>: per-stage trace on stderr, comma-separated
+            // (`sema`, `lowering`, `il`, `codegen`, `all`). Off unless asked for.
+            "--diagnostics" -> {
+                if (i + 1 >= args.size()) {
+                    eprintln("simse: --diagnostics requires a topic list")
+                    return 2
+                }
+                i++
+                diagSetTopics(args[i])
+            }
+
             "-h", "--help" -> {
                 println("simse " + simseVersion)
-                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>]... [--module <dir>]... [--tests] [--no-concat] [--no-borrow] [--no-escape] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showBorrow] [--showEscape] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos] [--version]")
+                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>]... [--module <dir>]... [--tests] [--no-concat] [--no-borrow] [--no-escape] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showBorrow] [--showEscape] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos] [--diagnostics <topics>] [--version]")
                 return 0
             }
 

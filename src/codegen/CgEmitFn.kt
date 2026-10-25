@@ -427,8 +427,12 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
     // Structured control flow is lowered to labels/gotos and expressions extracted into
     // temporaries, in a loop because each stage leaves work for the others
     // (impl_specs/linear-lowering.md); the emitter below knows the linear forms only.
+    val fnNameDiag: Str = fn.name
+    diagTrace("codegen", `fn @fnNameDiag: emitting, body stages begin`)
     var lowered: List<AstXmlNode> =
         linLowerForEmission(xmlChildren(xmlChildPtr(decl, AstNodeKind.Body), AstNodeKind.Stmt))
+    val headLowerDiag: Str = cgDiagStmts(lowered)
+    diagTrace("lowering", `fn @fnNameDiag after linLowerForEmission @headLowerDiag`)
     val semantics: SemBody = SemBody(
         decl, fn.templateParams, selfTypePtr, xmlEmptyNode(),
         List<Str>(), List<AstXmlNode>(), Dictionary<Str, AstXmlNode>()
@@ -437,11 +441,19 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
     // declaration can never say (`..T` is not spellable).
     var inferred: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
     lowered = semInferTypes(lowered, facts, semantics, inferred)
+    val headInferDiag: Str = cgDiagStmts(lowered)
+    diagTrace("lowering", `fn @fnNameDiag after semInferTypes @headInferDiag`)
     val finalBody: List<AstXmlNode> = linFinishForEmission(
         lowered,
         this.cgReservedNames(decl, !xmlIsEmpty(fn.receiver), mainArgs),
         `fn:@signature`
     )
+    val headFinalDiag: Str = cgDiagStmts(finalBody)
+    diagTrace("lowering", `fn @fnNameDiag after linFinishForEmission @headFinalDiag`)
+    if (diagOn("il")) {
+        val unit: IlUnit = ilExtractUnit(this.ilFunctionFor(fn, decl, facts, inferred), finalBody, fn.file)
+        eprintln(printIlUnit(unit))
+    }
     this.dumpIl(fn, decl, finalBody, facts, inferred)
     this.emitBodyAt(this.ilFunctionFor(fn, decl, facts, inferred), finalBody, fn.file, 1, true)
     if (this.failed) {
@@ -692,4 +704,53 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
         return
     }
     this.line(0, "}")
+}
+
+// ---- the diagnostics trace (--diagnostics, Diagnostics.kt) --------------------------------
+//
+// One statement list, compactly: up to six statements as `<kind>(name,init=<kind>)`, the
+// head of a body at a stage boundary. The `lowering` topic prints one of these per stage, so
+// a statement that changes shape between two stages is visible by diffing the lines.
+
+fun cgDiagStmt(stmt: *AstXmlNode): Str {
+    val kindText: Str = xmlKindText(xmlKind(stmt))
+    val name: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
+    if (xmlKind(stmt) == AstNodeCategory.StmtVarDecl) {
+        val init: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Init)
+        var initText: Str = "-"
+        if (!xmlIsEmpty(init)) {
+            initText = xmlKindText(xmlKind(init))
+        }
+        val kidsText: Str = stmt.Children.count().toString()
+        return `@kindText(@name,init=@initText,kids=@kidsText)`
+    }
+    if (xmlKind(stmt) == AstNodeCategory.StmtWhile) {
+        val cond: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Cond)
+        var condText: Str = "-"
+        if (!xmlIsEmpty(cond)) {
+            condText = xmlKindText(xmlKind(cond))
+        }
+        return `@kindText(cond=@condText)`
+    }
+    if (name != "") {
+        return `@kindText(@name)`
+    }
+    return kindText
+}
+
+fun cgDiagStmts(body: List<AstXmlNode>): Str {
+    var out: Str = "["
+    var i: Int = 0
+    while (i < body.size() && i < 6) {
+        if (i > 0) {
+            out = out + "; "
+        }
+        out = out + cgDiagStmt(body[i])
+        i++
+    }
+    if (body.size() > 6) {
+        val rest: Int = body.size() - 6
+        out = out + "; +" + rest.toString() + " more"
+    }
+    return out + "]"
 }
