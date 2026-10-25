@@ -145,7 +145,7 @@ function compile(compiler, flags, source, exe, extraIncludes = []) {
 }
 
 function transpile(simse, srcRoot, outCpp) {
-    const transpiled = runProcess([simse, "--root", srcRoot, "--root", path.join(HERE, "simse", "kit"), "-o", outCpp]);
+    const transpiled = runProcess([simse, "--root", srcRoot, "--root", path.join(HERE, "simse", "kit"), "--module", path.join(REPO, "modules", "unsafe"), "-o", outCpp]);
     if (transpiled.exit !== 0) {
         throw new Error(`transpile failed: ${(transpiled.stderr || transpiled.stdout).split("\n").slice(0, 2).join(" | ")}`);
     }
