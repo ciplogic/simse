@@ -336,3 +336,8 @@ Still open:
   walks it); it is also the one common container with no span view to fall back on.
 - **a `for` inside a yielding body**: the machine would have to be a *field*, and a field needs
   a nameable type (`impl_specs/yield.md`).
+- **the span machine's flat form**: where the machine is the span's own (a container walk
+  that does not yield and is storage-stable), the loop can lower as the flat counter or
+  pointer-pair walk the auto-vectorizers flatten - the proposal is
+  `impl_specs/for-walk.md` (`--for-walk`, default off; every other iterator - machines,
+  generators, user `iterValues` extensions - keeps its machine by contract).
