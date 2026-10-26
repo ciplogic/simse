@@ -966,6 +966,17 @@ fun semaForTemplateId(name: *Str): Int {
     return id
 }
 
+// One refused walk, traced: the reason names the gate, the file and line name the `for`.
+// `--diagnostics sema` prints it; the machine keeps the loop either way.
+fun Analyzer.semaWalkRefuse(reason: Str, machineName: Str): Int {
+    val fileDiag: Str = this.file
+    diagTrace(
+        "sema",
+        `forWalk refuse @reason file=@fileDiag template=@machineName`
+    )
+    return 0
+}
+
 // One `for` (the machine declaration's statement slot): every gate runs before the first
 // mutation, so a refused walk leaves the machine exactly as the desugar wrote it. The
 // container is the statement list's node - the walk's counter declaration is inserted after
@@ -984,83 +995,84 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
     }
     val init: *AstXmlNode = xmlChildPtr(machineDecl, AstNodeKind.Init)
     if (xmlKind(init) != AstNodeCategory.ExprCall) {
-        return 0
+        return this.semaWalkRefuse("init-not-a-call", machineName)
     }
     val callee: *AstXmlNode = xmlChildPtr(init, AstNodeKind.Callee)
     if (xmlKind(callee) != AstNodeCategory.ExprMember) {
-        return 0
+        return this.semaWalkRefuse("callee-not-a-member", machineName)
     }
     val wrap: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
-    if (wrap != "iterValues" && wrap != "iter") {
-        return 0
-    }
+    // Both wraps walk - the flag's contract is "a span every time". The measured tradeoff
+    // (impl_specs/for-walk.md, the flag-on table) stands behind it: the counter walk wins
+    // on the flat scalar scans and loses on the struct pointer walks - where MSVC's
+    // optimizer pattern-matches the machine's `while (advance()) { p = m.current }` into
+    // one base register with paired loads/stores, and none of the direct spellings
+    // (counter over atPtr, running pointer, a current slot) reproduce that form. The
+    // machine keeps a container `for` only where the walk cannot prove correct - a yielding
+    // body, a root the loop rebinds.
     val receiver: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
 
-    // The span the walk reads, and the root its stability is proved on: `spanForAt`'s
-    // conversion call over a plain name, or a span value named outright. Place chains widen
-    // later - anything else keeps the machine.
-    var root: Str = ""
-    if (xmlKind(receiver) == AstNodeCategory.ExprCall) {
-        val arg: *AstXmlNode = xmlChildPtr(receiver, AstNodeKind.Arg)
-        if (xmlKind(arg) != AstNodeCategory.ExprName) {
-            return 0
-        }
-        root = xmlAttr(arg, AstNodeAttributeKind.Name)
-    } else if (xmlKind(receiver) == AstNodeCategory.ExprName) {
-        root = xmlAttr(receiver, AstNodeAttributeKind.Name)
-    } else {
-        return 0
-    }
-
-    // The wrap's receiver type is the span (a `StrView` reaches it through its alias): the
-    // gate the contract names. No span, no walk.
+    // The wrap's receiver type decides the arm: a `Range` (`for i in a until b`) is spelled
+    // through the yieldable machinery but is semantically the counter - the walk is its own
+    // machine body, and the bounds are copied values, so no stability proof exists to run.
+    // A span (a `StrView` reaches it through the alias) walks with the stability proof its
+    // borrowed buffer needs.
     val receiverType: AstXmlNode = this.iteratedType(receiver)
     if (xmlIsEmpty(receiverType)) {
-        return 0
+        return this.semaWalkRefuse("receiver-type-unknown", machineName)
     }
     val outer: AstXmlNode = this.semaReceiverOuter(receiverType)
-    if (xmlKind(outer) != AstNodeCategory.TypeGeneric
-        || xmlAttr(outer, AstNodeAttributeKind.Name) != "Span"
+    val outerName: Str = xmlAttr(outer, AstNodeAttributeKind.Name)
+    val isRange: Bool = xmlKind(outer) == AstNodeCategory.TypeNamed && outerName == "Range"
+    if (!isRange
+        && (xmlKind(outer) != AstNodeCategory.TypeGeneric || outerName != "Span")
     ) {
-        return 0
+        return this.semaWalkRefuse("receiver-neither-range-nor-span", machineName)
     }
 
-    // The element the walk hands out, from the machine the wrap builds - the value form `E`,
-    // the pointer form `*E`.
+    // The root the span's stability is proved on: `spanForAt`'s conversion call over a place
+    // chain (a plain name, `this.items`, `box.parts` - `placeRootName` walks to the chain's
+    // root), or a span value named outright. "" when no root can be named - a receiver whose
+    // storage is a call's result: the walk's slot copies the span the way the machine's did,
+    // and nothing in the body can name - so rebind or move - storage no name reaches. The
+    // proof runs only where a name exists to check.
+    var root: Str = ""
+    if (!isRange) {
+        if (xmlKind(receiver) == AstNodeCategory.ExprCall) {
+            root = this.placeRootName(xmlChildPtr(receiver, AstNodeKind.Arg))
+        } else {
+            root = this.placeRootName(receiver)
+        }
+    }
+
+    // The element the walk hands out, from the machine the wrap builds - `E`.
     val machine: AstXmlNode = this.semaMemberCall(init)
     if (xmlKind(machine) != AstNodeCategory.TypeYield) {
-        return 0
+        return this.semaWalkRefuse("machine-type-unknown", machineName)
     }
-    val inner: AstXmlNode = this.semaYieldElement(machine)
-    if (xmlIsEmpty(inner)) {
-        return 0
-    }
-    var element: AstXmlNode = inner
-    if (wrap == "iter") {
-        element = semPointeeOf(inner)
-    }
+    val element: AstXmlNode = this.semaYieldElement(machine)
     if (xmlIsEmpty(element)) {
-        return 0
+        return this.semaWalkRefuse("element-type-unknown", machineName)
     }
 
     val loopIndex: Int = this.forLoopIndex(stmts, index)
     if (loopIndex < 0) {
-        return 0
+        return this.semaWalkRefuse("loop-not-found", machineName)
     }
     val loop: *AstXmlNode = *stmts[loopIndex]
     val cond: *AstXmlNode = xmlChildPtr(loop, AstNodeKind.Cond)
     if (xmlKind(cond) != AstNodeCategory.ExprCall
         || !bpMachineStep(xmlChildPtr(cond, AstNodeKind.Callee))
     ) {
-        return 0
+        return this.semaWalkRefuse("condition-not-advance", machineName)
     }
     val bodyNode: *AstXmlNode = xmlChildPtr(loop, AstNodeKind.Body)
     if (xmlIsEmpty(bodyNode) || semaBodyYields(bodyNode)) {
-        return 0
+        return this.semaWalkRefuse("body-empty-or-yields", machineName)
     }
     val body: List<AstXmlNode> = xmlChildren(bodyNode, AstNodeKind.Stmt)
     if (body.size() == 0) {
-        return 0
+        return this.semaWalkRefuse("body-prefix-shape", machineName)
     }
 
     // The body prefix, by shape: the element binding reads the machine's `current`; in the
@@ -1071,7 +1083,7 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
         if (body.size() < 3 || xmlKind(body[0]) != AstNodeCategory.StmtAssign
             || !semaWalkIsElementBinding(body[1], machineName)
         ) {
-            return 0
+            return this.semaWalkRefuse("counter-slot-missing", machineName)
         }
         elementAt = 1
     }
@@ -1080,25 +1092,38 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
         // The indexed form's counter declaration is the slot between the machine and the
         // loop; the walk's counter takes it over.
         if (index + 1 >= stmts.size()) {
-            return 0
+            return this.semaWalkRefuse("counter-slot-mismatch", machineName)
         }
         val counterDecl: *AstXmlNode = *stmts[index + 1]
         if (xmlKind(counterDecl) != AstNodeCategory.StmtVarDecl
             || xmlAttr(counterDecl, AstNodeAttributeKind.Name) != counterName
         ) {
-            return 0
+            return this.semaWalkRefuse("counter-slot-mismatch", machineName)
         }
     }
 
     // Storage stability for the root - the span hoist's proof (`bpSpanStableNode`): no
     // rebind of the root, no escape, no mutating call on it. Element writes through the walk
-    // variable are stable - they write *through* the buffer, they do not move it.
-    if (!bpSpanStableNode(cond, root)) {
-        return 0
-    }
-    for (*stmt in body) {
-        if (!bpSpanStableNode(stmt, root)) {
-            return 0
+    // variable are stable - they write *through* the buffer, they do not move it. A range
+    // needs no proof: its slot is a copied value, its bounds travel with it. A span over an
+    // unnamed source (a call's result) has no name to check - and nothing in the body can
+    // reach that storage to move it.
+    if (!isRange && root != "") {
+        if (!bpSpanStableNode(cond, root)) {
+            return this.semaWalkRefuse("span-unstable", machineName)
+        }
+        var at: Int = 0
+        while (at < body.size()) {
+            if (!bpSpanStableNode(body[at], root)) {
+                val stmtDiag: Str = xmlKindText(xmlKind(body[at]))
+                val fileDiag2: Str = this.file
+                diagTrace(
+                    "sema",
+                    `forWalk unstable stmt@at @stmtDiag file=@fileDiag2 template=@machineName root=@root`
+                )
+                return this.semaWalkRefuse("span-unstable-body", machineName)
+            }
+            at++
         }
     }
 
@@ -1159,39 +1184,45 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
     spanInit.name = AstNodeKind.Init
     semaWalkSetChild(realDecl, AstNodeKind.Init, spanInit)
 
-    // The indexed form's `_sm_index<id>` slot becomes the walk's counter, at 0 - the
-    // template's `-1`-and-pre-increment disappears, the walk's counter *is* the index. The
-    // value form's counter is inserted after the span slot, below.
+    // The indexed form's `_sm_index<id>` slot becomes the walk's counter - at 0 over a span,
+    // at the range's first bound over a range. The template's `-1`-and-pre-increment
+    // disappears: the walk's counter *is* the index. The value form's counter is inserted
+    // after the slot, below.
     if (indexed) {
         val realCounter: *AstXmlNode = semaWalkStmtAt(container, index + 1 + shift)
         if (xmlIsEmpty(realCounter)) {
             return 0
         }
         semaWalkRename(realCounter, stepName)
-        semaWalkSetChild(realCounter, AstNodeKind.Init, semaWalkIntLit(0, line, column))
+        semaWalkSetChild(realCounter, AstNodeKind.Init, semaWalkCounterInit(isRange, walkName, line, column))
     }
 
-    // The condition: the counter against the span's length - the machine's own `len`, read
-    // before its loop, is the constant of the walk.
+    // The condition: the counter against the span's length, or the range's last bound
+    // (inclusive - `until` folds to it in `Int.until`). Both are the machine's own loop
+    // condition, read before its loop.
+    var condMember: Str = "len"
+    var condOp: Str = "<"
+    if (isRange) {
+        condMember = "to"
+        condOp = "<="
+    }
     semaWalkSetChild(
         realLoop, AstNodeKind.Cond,
         semaWalkBinaryExpr(
-            "<",
+            condOp,
             semaWalkNameExpr(stepName, line, column),
-            semaWalkMemberExpr(walkName, "len", line, column),
+            semaWalkMemberExpr(walkName, condMember, line, column),
             line, column
         )
     )
 
-    // The element binds the span's slot at the counter - read-then-step. The value wrap
-    // indexes the *span*: the writer spells a span index through the pointer directly
-    // (`span.ptr[i]`), while an index whose receiver is the extracted `ptr` temp spells
-    // `(*p)[i]` - the borrowed-container read, wrong for a container element. The `*v`
-    // wrap binds through `atPtr` - the machine's own spelling (`current = atPtr(...)`):
-    // the call answers the element's place for every element type (its body indexes the
-    // `*T` receiver, spelled as pointer arithmetic), where an index over the extracted
-    // `ptr` temp of a span-of-containers reads the pointee's element instead (`Str[i]`
-    // is the `Char`).
+    // The element binds at the counter - read-then-step. A span indexes the slot: the writer
+    // spells a span index through its pointer directly (`span.ptr[i]`), where an index whose
+    // receiver is the extracted `ptr` temp spells `(*p)[i]` - the borrowed-container read,
+    // wrong for a container element (`Str[i]` is the `Char`). The `*v` wrap binds through
+    // `atPtr` - the machine's own spelling (`current = atPtr(...)`): the call answers the
+    // element's *place* for every element type, and a write through it reaches the
+    // container. A range's element *is* the counter - the machine's `yield i`, verbatim.
     var indexRead: AstXmlNode = semaWalkIndexExpr(
         semaWalkNameExpr(walkName, line, column),
         semaWalkNameExpr(stepName, line, column),
@@ -1200,16 +1231,25 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
     if (wrap == "iter") {
         indexRead = semaWalkCall1(walkName, "atPtr", stepName, line, column)
     }
+    if (isRange) {
+        indexRead = semaWalkNameExpr(stepName, line, column)
+    }
     semaWalkSetChild(realElement, AstNodeKind.Init, indexRead)
-    val outerArgs: List<AstXmlNode> = xmlChildren(outer, AstNodeKind.TypeArg)
-    if (outerArgs.size() == 1) {
-        var elementType: AstXmlNode = outerArgs[0]
-        if (wrap == "iter") {
-            // The `*v` form binds the element's place: the declared type is the pointer.
-            elementType = semPointerOf(elementType)
-        }
+    if (isRange) {
+        var elementType: AstXmlNode = element
         elementType.name = AstNodeKind.Type
         semaWalkSetChild(realElement, AstNodeKind.Type, elementType)
+    } else {
+        val outerArgs: List<AstXmlNode> = xmlChildren(outer, AstNodeKind.TypeArg)
+        if (outerArgs.size() == 1) {
+            var elementType: AstXmlNode = outerArgs[0]
+            if (wrap == "iter") {
+                // The `*v` form binds the element's place: the declared type is the pointer.
+                elementType = semPointerOf(elementType)
+            }
+            elementType.name = AstNodeKind.Type
+            semaWalkSetChild(realElement, AstNodeKind.Type, elementType)
+        }
     }
 
     if (indexed) {
@@ -1240,7 +1280,10 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
         )
         // The counter itself, after the span slot - the one statement the machine template
         // never needed, which is why the walk goes through the container.
-        semaStmtInsertAfter(container, index + shift, semaWalkIntDecl(stepName, line, column))
+        semaStmtInsertAfter(
+            container, index + shift,
+            semaWalkCounterDecl(stepName, isRange, walkName, line, column)
+        )
     }
 
     val afterNameDiag: Str = xmlAttr(realDecl, AstNodeAttributeKind.Name)
@@ -1444,13 +1487,6 @@ fun semaWalkMemberExpr(target: Str, field: Str, line: Int, column: Int): AstXmlN
     return member
 }
 
-fun semaWalkIndexExpr(receiver: AstXmlNode, index: AstXmlNode, line: Int, column: Int): AstXmlNode {
-    var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprIndex, semaWalkPos(line, column), Array<AstXmlNode>())
-    semaWalkSetChild(node, AstNodeKind.Receiver, receiver)
-    semaWalkSetChild(node, AstNodeKind.Index, index)
-    return node
-}
-
 // `<target>.<method>(<arg>)` - the walk's `atPtr` read, every child role-named.
 fun semaWalkCall1(target: Str, method: Str, arg: Str, line: Int, column: Int): AstXmlNode {
     var member: AstXmlNode = semaWalkMemberExpr(target, method, line, column)
@@ -1460,12 +1496,12 @@ fun semaWalkCall1(target: Str, method: Str, arg: Str, line: Int, column: Int): A
     return call
 }
 
-fun semaWalkDerefExpr(operand: AstXmlNode, line: Int, column: Int): AstXmlNode {
-    var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprDeref, semaWalkPos(line, column), Array<AstXmlNode>())
-    semaWalkSetChild(node, AstNodeKind.Operand, operand)
+fun semaWalkIndexExpr(receiver: AstXmlNode, index: AstXmlNode, line: Int, column: Int): AstXmlNode {
+    var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprIndex, semaWalkPos(line, column), Array<AstXmlNode>())
+    semaWalkSetChild(node, AstNodeKind.Receiver, receiver)
+    semaWalkSetChild(node, AstNodeKind.Index, index)
     return node
 }
-
 fun semaWalkBinaryExpr(op: Str, lhs: AstXmlNode, rhs: AstXmlNode, line: Int, column: Int): AstXmlNode {
     var attrs: List<AstNodeAttribute> = semaWalkPos(line, column)
     attrs.append(AstNodeAttribute(AstNodeAttributeKind.Op, op))
@@ -1484,7 +1520,8 @@ fun semaWalkAssignStmt(target: AstXmlNode, value: AstXmlNode, line: Int, column:
     return node
 }
 
-// `var <name>: Int = 0` - the walk's counter, standing where the template's stood.
+// `var <name>: Int = 0` - the walk's counter over a span, standing where the template's
+// stood.
 fun semaWalkIntDecl(name: Str, line: Int, column: Int): AstXmlNode {
     var attrs: List<AstNodeAttribute> = semaWalkPos(line, column)
     attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
@@ -1494,6 +1531,22 @@ fun semaWalkIntDecl(name: Str, line: Int, column: Int): AstXmlNode {
     intAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, "Int"))
     xmlAddChild(node, AstXmlNode(AstNodeKind.Type, AstNodeCategory.TypeNamed, intAttrs, Array<AstXmlNode>()))
     semaWalkSetChild(node, AstNodeKind.Init, semaWalkIntLit(0, line, column))
+    return node
+}
+
+// The walk counter's initializer: 0 over a span, the range's first bound over a range
+// (`i = walk.from` - the machine's own `var i: Int = this.from`).
+fun semaWalkCounterInit(isRange: Bool, walkName: Str, line: Int, column: Int): AstXmlNode {
+    if (isRange) {
+        return semaWalkMemberExpr(walkName, "from", line, column)
+    }
+    return semaWalkIntLit(0, line, column)
+}
+
+// The counter declaration for the value form's insert, per arm.
+fun semaWalkCounterDecl(name: Str, isRange: Bool, walkName: Str, line: Int, column: Int): AstXmlNode {
+    var node: AstXmlNode = semaWalkIntDecl(name, line, column)
+    semaWalkSetChild(node, AstNodeKind.Init, semaWalkCounterInit(isRange, walkName, line, column))
     return node
 }
 
@@ -1522,6 +1575,14 @@ fun Analyzer.semaReceiverNameMatches(pattern: *AstXmlNode, actual: *AstXmlNode, 
 fun Analyzer.iteratedType(expr: *AstXmlNode): AstXmlNode {
     if (xmlKind(expr) == AstNodeCategory.ExprName) {
         return this.exprType(expr)
+    }
+    if (xmlKind(expr) == AstNodeCategory.ExprIntLit) {
+        // A literal receiver (`0 until n` is `0.until(n)`, the parser's sugar for the range
+        // extension): its type is its spelling, the `unionArgType` convention.
+        if (semIsInt64Literal(xmlAttr(expr, AstNodeAttributeKind.Text))) {
+            return semNamedType("Int64")
+        }
+        return semNamedType("Int")
     }
     if (xmlKind(expr) == AstNodeCategory.ExprMember) {
         // A field read: the field's declared type, reached through the base's.

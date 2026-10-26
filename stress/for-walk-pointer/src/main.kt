@@ -2,9 +2,9 @@ package for_walk_pointer
 
 // The for-walk's pointer form (impl_specs/for-walk.md, `--for-walk`): `for (*v in xs)` binds
 // the element's *place* - a write through the loop variable reaches the container - and the
-// walk reads the place off the span's pointer (`&span.ptr[i]`, the address). This case pins
-// the write-through on scalars and structs, the indexed pointer form, and the mix with an
-// ordinary value walk over the same container.
+// walk binds it through `atPtr` (the machine's own spelling, correct for every element
+// type). This case pins the write-through on scalars, structs and Strs, the indexed
+// pointer form, and the mix with an ordinary value walk over the same container.
 
 data class Cell(var value: Int, var tag: Str)
 

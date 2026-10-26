@@ -144,6 +144,43 @@ fun partWalkInIf(): Int {
     return 0
 }
 
+// ---- walk-range ----
+
+// A `Range` is spelled through the yieldable machinery but is semantically the counter:
+// the walk is the machine's own body - bounds copied into the slot, the counter from
+// `from`, the condition against `to` (inclusive; `until` folds to it), no machine class.
+fun partWalkRange(): Int {
+    var total: Int64 = 0
+    for (i in 0 until 8) {
+        total += Int64(i) * Int64(i)
+    }
+    println(total)
+
+    var picked: Str = ""
+    for (i in 2..6) {
+        picked = picked + Int(i).toString()
+    }
+    println(picked)
+
+    // The indexed range form: the walk's counter is the index, as over a span.
+    var scale: Int64 = 0
+    for ((i, k) in 0 until 5) {
+        scale += Int64(i) * Int64(k)
+    }
+    println(scale)
+
+    // `continue` lands after the step, as over a span.
+    var odds: Int64 = 0
+    for (i in 0 until 10) {
+        if (i % 2 == 0) {
+            continue
+        }
+        odds += Int64(i)
+    }
+    println(odds)
+    return 0
+}
+
 fun main(): Int {
     partWalkValue()
     partWalkIndexed()
@@ -152,5 +189,6 @@ fun main(): Int {
     partWalkText()
     partWalkArray()
     partWalkInIf()
+    partWalkRange()
     return 0
 }

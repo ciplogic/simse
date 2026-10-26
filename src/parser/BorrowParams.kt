@@ -1030,6 +1030,25 @@ fun bpSpanWalk(node: *AstXmlNode, root: *Str, facts: *BpSpan): Unit {
             && xmlAttr(target, AstNodeAttributeKind.Name) == *root
         ) {
             facts.rebind = true
+        } else if (xmlKind(target) == AstNodeCategory.ExprMember) {
+            // A field write through the root (`this.items = ...`, `box.parts = ...`): the
+            // field holding the buffer a walk or hoist borrowed is itself rebound. An
+            // *index* link is an element write - it goes through the buffer, it does not
+            // move it - so the chain stops there (`c[i] = v` stays the scan kernel's
+            // stable shape, the hoist's own proof), and `c[i].f = v` with it.
+            var chain: *AstXmlNode = target
+            var crossed: Bool = false
+            var guard: Int = 0
+            while (xmlKind(chain) == AstNodeCategory.ExprMember && guard < 32) {
+                guard++
+                crossed = true
+                chain = xmlChildPtr(chain, AstNodeKind.Receiver)
+            }
+            if (crossed && xmlKind(chain) == AstNodeCategory.ExprName
+                && xmlAttr(chain, AstNodeAttributeKind.Name) == *root
+            ) {
+                facts.rebind = true
+            }
         }
     }
     if (kind == AstNodeCategory.ExprCall) {
