@@ -1,9 +1,25 @@
 // Diagnostics.kt
 //
-// `--diagnostics <topics>`: per-stage trace output, on stderr, off unless asked for. A topic
-// is a stage name - `sema`, `lowering`, `il`, `codegen` - and the flag takes a comma-separated
-// list (`--diagnostics lowering,il`) or `all`. `diagTrace` is the one call site: it prints
-// nothing unless the topic is on, so the trace lines are free when the flag is absent.
+// `--diagnostics <topics>`: per-stage trace output, on stderr, off unless asked for. The
+// flag takes a comma-separated topic list (`--diagnostics lowering,il`) or `all`. The
+// topics are the stages in compile order:
+//
+// - `driver`  - the CLI's own spans: the output written, the wall time;
+// - `parse`   - every file and prelude module parsed, with its declaration count;
+// - `gen`     - the source generators: the generated modules, the resource sections;
+// - `borrow`  - the auto-borrow pass: the fixpoint's tables, then what `--showBorrow`
+//               reports (the flag bridges to that report);
+// - `escape`  - the escape-parameter pass, bridged to `--showEscape` the same way;
+// - `sema`    - the analysis and the rewrites: which `for` was span-converted, promoted,
+//               place-promoted, span-hoisted, walked or refused (with the reason);
+// - `async`   - the suspension coloring: how many task functions the program reached;
+// - `lowering`- the linear stages per body: the statement head after each one;
+// - `il`      - the extracted IL per body, op counts after the fusion and the reuse;
+// - `codegen` - the emitter's phases: sections, reached names, task/prototype/body passes.
+//
+// Convention: `diagTrace(topic, text)` prints nothing unless the topic is on, but its
+// arguments are built eagerly - so anything past a constant goes behind
+// `if (diagOn(topic)) { ... }`, and the flag-off path pays nothing.
 
 package compiler
 import io

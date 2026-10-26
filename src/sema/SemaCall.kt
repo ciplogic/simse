@@ -920,6 +920,10 @@ fun Analyzer.spanForAt(stmts: *List<AstXmlNode>, index: Int): Unit {
     receiver.kind = AstNodeCategory.ExprCall
     receiver.attributes = call.attributes
     receiver.Children = call.Children
+    if (diagOn("sema")) {
+        val fileDiag: Str = this.file
+        diagTrace("sema", `spanFor @machineName -> @conversion file=@fileDiag`)
+    }
 }
 
 // ---- the for-walk (impl_specs/for-walk.md) -------------------------------------------------
@@ -1135,14 +1139,16 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
     // rebuild on one of its elements lands nowhere, which is exactly what the
     // `--diagnostics sema` trace catches as `stmtsName != containerName`. The inserts
     // rebuild arrays, so they run *last*, after the node edits they would detach.
-    val fileDiag: Str = this.file
-    val kidsDiag: Str = machineDecl.Children.count().toString()
-    val initDiag: Str = xmlKindText(xmlKind(init))
-    val containerDiag: Str = semaWalkContainerChildName(container, index)
-    diagTrace(
-        "sema",
-        `forWalk before file=@fileDiag stmtsName=@machineName containerName=@containerDiag kids=@kidsDiag init=@initDiag wrap=@wrap`
-    )
+    if (diagOn("sema")) {
+        val fileDiag: Str = this.file
+        val kidsDiag: Str = machineDecl.Children.count().toString()
+        val initDiag: Str = xmlKindText(xmlKind(init))
+        val containerDiag: Str = semaWalkContainerChildName(container, index)
+        diagTrace(
+            "sema",
+            `forWalk before file=@fileDiag stmtsName=@machineName containerName=@containerDiag kids=@kidsDiag init=@initDiag wrap=@wrap`
+        )
+    }
     val realDecl: *AstXmlNode = semaWalkStmtAt(container, index + shift)
     if (xmlIsEmpty(realDecl)) {
         return 0
@@ -1286,14 +1292,17 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
         )
     }
 
-    val afterNameDiag: Str = xmlAttr(realDecl, AstNodeAttributeKind.Name)
-    val afterKidsDiag: Str = realDecl.Children.count().toString()
-    val afterInitDiag: Str = xmlKindText(xmlKind(xmlChildPtr(realDecl, AstNodeKind.Init)))
-    val afterContainerDiag: Str = semaWalkContainerChildName(container, index + shift)
-    diagTrace(
-        "sema",
-        `forWalk after file=@fileDiag realName=@afterNameDiag containerName=@afterContainerDiag kids=@afterKidsDiag init=@afterInitDiag`
-    )
+    if (diagOn("sema")) {
+        val fileDiag: Str = this.file
+        val afterNameDiag: Str = xmlAttr(realDecl, AstNodeAttributeKind.Name)
+        val afterKidsDiag: Str = realDecl.Children.count().toString()
+        val afterInitDiag: Str = xmlKindText(xmlKind(xmlChildPtr(realDecl, AstNodeKind.Init)))
+        val afterContainerDiag: Str = semaWalkContainerChildName(container, index + shift)
+        diagTrace(
+            "sema",
+            `forWalk after file=@fileDiag realName=@afterNameDiag containerName=@afterContainerDiag kids=@afterKidsDiag init=@afterInitDiag`
+        )
+    }
     if (indexed) {
         return 0
     }
@@ -1847,6 +1856,10 @@ fun Analyzer.promoteForAt(stmts: *List<AstXmlNode>, index: Int): Unit {
         }
     }
     callee.attributes = attrs
+    if (diagOn("sema")) {
+        val fileDiag: Str = this.file
+        diagTrace("sema", `promoteFor @machineName -> iter (deep element, read-only body) file=@fileDiag`)
+    }
 }
 
 // Only a `List`/`Array`/`Span` of a deep element is promoted: a user type's `iter`, a receiver
@@ -2003,6 +2016,10 @@ fun Analyzer.promotePlaceAt(stmts: *List<AstXmlNode>, index: Int): Unit {
             xmlAddChild(decl, pointer)
         }
     }
+    if (diagOn("sema")) {
+        val fileDiag: Str = this.file
+        diagTrace("sema", `promotePlace @name -> *(place) file=@fileDiag`)
+    }
 }
 
 // The span hoist (impl_specs/typed-il.md, the buffer form): a loop whose body indexes a
@@ -2071,6 +2088,10 @@ fun Analyzer.hoistSpanAt(stmts: *List<AstXmlNode>, index: Int): Unit {
         this.semaSpanRewrite(*cond, root, conversion)
         for (*stmt in body) {
             this.semaSpanRewrite(stmt, root, conversion)
+        }
+        if (diagOn("sema")) {
+            val fileDiag: Str = this.file
+            diagTrace("sema", `hoistSpan @root -> @conversion file=@fileDiag`)
         }
     }
 }

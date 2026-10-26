@@ -507,7 +507,7 @@ fun bpInferReads(
             }
         }
     }
-    if (bpShow()) {
+    if (bpShow() || diagOn("borrow")) {
         for (*fact in facts) {
             if (!reads.has(fact.name)) {
                 var why: Str = ""
@@ -1206,7 +1206,7 @@ fun bpBorrowDecl(
     // A write through a field/index/deref or a file-level `var`, or a call the analysis cannot
     // trust, borrows nothing: each is the "unsure" that means escape.
     if (facts.fieldWrite || facts.staticWrite || facts.impureCall) {
-        if (bpShow()) {
+        if (bpShow() || diagOn("borrow")) {
             val xmlAttrText: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
             val bpWhyText: Str = bpWhy(*facts)
             bpNote(`borrow- @xmlAttrText @bpWhyText`)
@@ -1232,12 +1232,12 @@ fun bpBorrowDecl(
     }
     val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
     if (prelude && cppCalled.has(name)) {
-        if (bpShow()) {
+        if (bpShow() || diagOn("borrow")) {
             bpNote(`borrow- @name C++ calls it (prelude)`)
         }
         return decl
     }
-    if (bpShow()) {
+    if (bpShow() || diagOn("borrow")) {
         val bpNamesText: Str = bpNames(*borrowed)
         bpNote(`borrow+ @name @bpNamesText`)
     }
@@ -1246,6 +1246,7 @@ fun bpBorrowDecl(
     if (bpNoBorrow()) {
         return decl
     }
+    bpRewrittenDecls = bpRewrittenDecls + 1
     var out: AstXmlNode = AstXmlNode(decl.name, decl.kind, decl.attributes, Array<AstXmlNode>())
     var kids: List<AstXmlNode> = List<AstXmlNode>()
     for (*child in decl.Children) {
@@ -1259,6 +1260,9 @@ fun bpBorrowDecl(
     out.Children = kids.toArray()
     return out
 }
+
+// The declarations the pass rebuilt, for the `borrow` topic's summary (reset per program).
+var bpRewrittenDecls: Int = 0
 
 // One module rewritten: a data class rebuilt when a method borrows, a function rebuilt when it
 // borrows, everything else kept as it is. Only a name the fixpoint trusted is touched: a
@@ -1378,6 +1382,16 @@ fun bpBorrowParams(
         bpBlockedNames(mod, *reads, *blocked)
     }
     bpInferReads(*factList, *blocked, *reads)
+    if (diagOn("borrow")) {
+        val readsDiag: Str = reads.size().toString()
+        val mutatesDiag: Str = mutates.size().toString()
+        val staticsDiag: Str = statics.size().toString()
+        val blockedDiag: Str = blocked.size().toString()
+        diagTrace(
+            "borrow",
+            `fixpoint: @readsDiag trusted, @mutatesDiag mutates, @staticsDiag statics, @blockedDiag blocked`
+        )
+    }
 
     // The analysis's results, kept for sema's `for` promotion (the caches above): the trusted
     // names and file-level vars weigh a loop body, and the deep classes gate the element type.
@@ -1397,6 +1411,7 @@ fun bpBorrowParams(
 
     // Both sides are rewritten: a Simse-bodied prelude declaration borrows exactly like a module
     // one, and only a name C++ may call keeps its authored signature (inside `bpBorrowDecl`).
+    bpRewrittenDecls = 0
     var cppCalled: Dictionary<Str, Bool> = bpCppCalled(cppTexts)
     var outPrelude: List<AstXmlNode> = List<AstXmlNode>()
     for (*pre in preludeModules) {
@@ -1405,6 +1420,10 @@ fun bpBorrowParams(
     var out: List<AstXmlNode> = List<AstXmlNode>()
     for (*mod in modules) {
         out.append(bpRewriteModule(mod, *types, *reads, *statics, *valueUsed, *cppCalled, false))
+    }
+    if (diagOn("borrow")) {
+        val rewrittenDiag: Str = bpRewrittenDecls.toString()
+        diagTrace("borrow", `rewrote @rewrittenDiag declaration signature(s)`)
     }
     return BpRewrite(outPrelude, out)
 }

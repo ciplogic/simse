@@ -203,6 +203,7 @@ fun driverExpandRoot(root: *Str, isTree: Bool, out: *List<Str>, outTree: *List<B
 }
 
 fun main(args: List<Str>): Int {
+    val driverStartedAt: Int64 = nowMicros()
     var inputs: List<Str> = List<Str>()
     var output: Str = ""
     var preludePath: Str = ""
@@ -441,6 +442,10 @@ fun main(args: List<Str>): Int {
         preludeCanon.append(pathCanonical(preludeFile))
         preludeNames.append(preludeFile)
         preludeModules.append(parsedPrelude.Value)
+        if (diagOn("parse")) {
+            val declsDiag: Str = xmlDecls(parsedPrelude.Value).size().toString()
+            diagTrace("parse", `prelude @preludeFile @declsDiag decl(s)`)
+        }
         driverAppendNamed(mergedPrelude, parsedPrelude.Value, AstNodeKind.Import)
         driverAppendDecls(mergedPrelude, parsedPrelude.Value)
     }
@@ -454,6 +459,10 @@ fun main(args: List<Str>): Int {
     // compile-only (`!`) - each as the C++ literal holding its bytes.
     val resources: List<ResourceItem> = resLoad(moduleRoots)
     val resourceStored: List<Str> = resStoredLiterals(resources)
+    if (diagOn("gen")) {
+        val resDiag: Str = resources.size().toString()
+        diagTrace("gen", `resources @resDiag section group(s) from the module roots`)
+    }
 
     // The compiler's *own* resources (`_res.md` beside the prelude, read here like its `.kt`
     // files): the second half of the generator lookup (`src/compiler/GenTypes.kt`), which
@@ -473,6 +482,10 @@ fun main(args: List<Str>): Int {
         }
         fileNames.append(fileName)
         modules.append(parsed.Value)
+        if (diagOn("parse")) {
+            val declsDiag: Str = xmlDecls(parsed.Value).size().toString()
+            diagTrace("parse", `file @fileName @declsDiag decl(s)`)
+        }
     }
 
     // The generators' state (`src/compiler/SourceGen.kt`), filled here because the reparse
@@ -495,6 +508,10 @@ fun main(args: List<Str>): Int {
         }
         fileNames.append("<generated>/kt.kt")
         modules.append(parsedGenerated.Value)
+        if (diagOn("gen")) {
+            val genDiag: Str = xmlDecls(parsedGenerated.Value).size().toString()
+            diagTrace("gen", `generated kt.kt @genDiag decl(s)`)
+        }
         // Added to the generators' state too: the second pass runs after this one, and a
         // generator walking the program should see everything it was compiled with.
         sourceGenAddModule("<generated>/kt.kt", parsedGenerated.Value)
@@ -609,14 +626,14 @@ fun main(args: List<Str>): Int {
         driverAppendNamed(mergedPrelude, pre, AstNodeKind.Import)
         driverAppendDecls(mergedPrelude, pre)
     }
-    if (bpShow()) {
+    if (bpShow() || diagOn("borrow")) {
         // Bound first: a `for` over a temporary borrows a pointer to it (`agents.md`).
         val borrowLines: List<Str> = bpReportLines()
         for (*borrowLine in borrowLines) {
             eprintln(*borrowLine)
         }
     }
-    if (epShow()) {
+    if (epShow() || diagOn("escape")) {
         val escapeLines: List<Str> = epReportLines()
         for (*escapeLine in escapeLines) {
             eprintln(*escapeLine)
@@ -635,7 +652,15 @@ fun main(args: List<Str>): Int {
         semaInputs.append(SemaInput(fileNames[m], modules[m], false))
         m++
     }
+    if (diagOn("sema")) {
+        val semaDiag: Str = semaInputs.size().toString()
+        diagTrace("sema", `analyzing @semaDiag module(s)`)
+    }
     val diagnostics: List<Str> = analyze(semaInputs)
+    if (diagOn("sema")) {
+        val diagsDiag: Str = diagnostics.size().toString()
+        diagTrace("sema", `analyzed, @diagsDiag diagnostic(s)`)
+    }
     if (diagnostics.size() > 0) {
         for (diagnostic in diagnostics) {
             eprintln(diagRender(diagnostic))
@@ -661,6 +686,11 @@ fun main(args: List<Str>): Int {
     if (!writeFile(output, emitted.Value)) {
         eprintln("simse: cannot write " + output)
         return 1
+    }
+    if (diagOn("driver")) {
+        val bytesDiag: Str = emitted.Value.size().toString()
+        val elapsedDiag: Str = ((nowMicros() - driverStartedAt) / 1000).toString()
+        diagTrace("driver", `wrote @output (@bytesDiag bytes) in @elapsedDiag ms`)
     }
     return 0
 }

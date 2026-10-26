@@ -258,6 +258,9 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
     // a function: the coloring pass's set is what says so, and a `@SmGen` leaf's C++ is its
     // own (the file and socket steps).
     if (this.asyncFns.has(fn.name)) {
+        if (diagOn("async")) {
+            diagTrace("async", `fn @fnNameDiag lowers as a task`)
+        }
         this.emitTask(fn, decl, prototypeOnly, facts)
         return
     }
@@ -431,8 +434,10 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
     diagTrace("codegen", `fn @fnNameDiag: emitting, body stages begin`)
     var lowered: List<AstXmlNode> =
         linLowerForEmission(xmlChildren(xmlChildPtr(decl, AstNodeKind.Body), AstNodeKind.Stmt))
-    val headLowerDiag: Str = cgDiagStmts(lowered)
-    diagTrace("lowering", `fn @fnNameDiag after linLowerForEmission @headLowerDiag`)
+    if (diagOn("lowering")) {
+        val headLowerDiag: Str = cgDiagStmts(lowered)
+        diagTrace("lowering", `fn @fnNameDiag after linLowerForEmission @headLowerDiag`)
+    }
     val semantics: SemBody = SemBody(
         decl, fn.templateParams, selfTypePtr, xmlEmptyNode(),
         List<Str>(), List<AstXmlNode>(), Dictionary<Str, AstXmlNode>()
@@ -441,17 +446,23 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
     // declaration can never say (`..T` is not spellable).
     var inferred: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
     lowered = semInferTypes(lowered, facts, semantics, inferred)
-    val headInferDiag: Str = cgDiagStmts(lowered)
-    diagTrace("lowering", `fn @fnNameDiag after semInferTypes @headInferDiag`)
+    if (diagOn("lowering")) {
+        val headInferDiag: Str = cgDiagStmts(lowered)
+        diagTrace("lowering", `fn @fnNameDiag after semInferTypes @headInferDiag`)
+    }
     val finalBody: List<AstXmlNode> = linFinishForEmission(
         lowered,
         this.cgReservedNames(decl, !xmlIsEmpty(fn.receiver), mainArgs),
         `fn:@signature`
     )
-    val headFinalDiag: Str = cgDiagStmts(finalBody)
-    diagTrace("lowering", `fn @fnNameDiag after linFinishForEmission @headFinalDiag`)
+    if (diagOn("lowering")) {
+        val headFinalDiag: Str = cgDiagStmts(finalBody)
+        diagTrace("lowering", `fn @fnNameDiag after linFinishForEmission @headFinalDiag`)
+    }
     if (diagOn("il")) {
         val unit: IlUnit = ilExtractUnit(this.ilFunctionFor(fn, decl, facts, inferred), finalBody, fn.file)
+        val opsDiag: Str = unit.body.ops.size().toString()
+        diagTrace("il", `fn @fnNameDiag @opsDiag op(s) extracted`)
         eprintln(printIlUnit(unit))
     }
     this.dumpIl(fn, decl, finalBody, facts, inferred)

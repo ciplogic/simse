@@ -88,12 +88,16 @@ it with the source.
 
 ## Debug views (all print to stderr, C++ output unchanged)
 
-`--diagnostics <topics>` is the one flag for tracing a rewrite through the stages: a
-comma-separated topic list (`sema`, `lowering`, `il`, `codegen`, or `all`) prints one line
-per stage boundary - the sema rewrites (with the container-vs-list name check that catches
-a mutation landing on a copy), the body's statement head after each lowering stage, the
-full IL per body (`il`), and the emitter's body stages. `--showBorrow`/`--showEscape` stay
-the per-decision views of their own passes.
+`--diagnostics <topics>` is the one flag for tracing the compiler through its stages: a
+comma-separated topic list - `driver`, `parse`, `gen`, `borrow`, `escape`, `sema`,
+`async`, `lowering`, `il`, `codegen`, or `all` - prints per-stage lines on stderr. The
+`sema` topic names every rewrite (which `for` was span-converted, promoted,
+place-promoted, span-hoisted, walked or refused and why); `borrow`/`escape` bridge to
+what `--showBorrow`/`--showEscape` report; `lowering` prints each body's statement head
+after every linear stage; `il` counts and dumps the extracted IL; `codegen` follows the
+emitter's sections. `--showBorrow`/`--showEscape` stay the standalone per-decision views.
+Trace text is built only when the topic is on (`diagOn` guards) - the flag-off path pays
+nothing.
 
 ```sh
 ./simse.exe --root src --root modules -o a.cpp --showLinearRepresentation 2> il.txt   # the IL of every body

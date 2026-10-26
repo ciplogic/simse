@@ -360,6 +360,10 @@ fun Emitter.emitAsyncMain(fn: *CgFn, className: *Str, task: *TskTask): Unit {
 }
 
 fun Emitter.run(): Res<Str> {
+    if (diagOn("codegen")) {
+        val inputsDiag: Str = this.inputs.size().toString()
+        diagTrace("codegen", `emitting @inputsDiag input module(s)`)
+    }
     this.collect()
     // The protocol implementations the dispatch sets will reach must count as reached
     // *before* the reached-name fixpoint runs (`CgProtocol.kt`): a prelude body the glue
@@ -370,10 +374,18 @@ fun Emitter.run(): Res<Str> {
     // the program reaches, which is what tells a prelude `suspend fun` from one of the
     // program's own.
     this.collectProgramNames()
+    if (diagOn("codegen")) {
+        val reachDiag: Str = this.referencedNames.size().toString()
+        diagTrace("codegen", `@reachDiag name(s) reached for emission`)
+    }
     // The concat trio's reach, before `emitFunctions` decides it (`ilConcatReachScan`'s
     // header says why this cannot wait for the fusion itself).
     this.ilConcatReachScan()
     this.collectAsync()
+    if (diagOn("async")) {
+        val asyncDiag: Str = this.asyncFns.size().toString()
+        diagTrace("async", `@asyncDiag task function(s) colored`)
+    }
     // The program's constant globals (`optimizations/FoldGlobals.kt`), a property of the
     // whole program: declarations first (the borrow rule asks which functions take a handle
     // parameter), then bodies.
@@ -403,6 +415,10 @@ fun Emitter.run(): Res<Str> {
     this.emitProfileText()
     this.sections.begin("strings")
     this.emitStringTable()
+    if (diagOn("codegen")) {
+        val stringsDiag: Str = this.literals.count().toString()
+        diagTrace("codegen", `string table: @stringsDiag literal(s)`)
+    }
     this.sections.begin("resources")
     this.emitResourceTable()
     val emittedTypes: Dictionary<Str, Bool> = this.computeEmittedTypes()
@@ -420,6 +436,10 @@ fun Emitter.run(): Res<Str> {
     if (this.failed) {
         return Res<Str>.err(this.error)
     }
+    if (diagOn("codegen")) {
+        val typesDiag: Str = emittedTypes.size().toString()
+        diagTrace("codegen", `@typesDiag type(s) emitted`)
+    }
     this.sections.begin("prototypes")
     this.emitFunctions(true, facts)
     if (this.failed) {
@@ -435,6 +455,10 @@ fun Emitter.run(): Res<Str> {
         return Res<Str>.err(this.error)
     }
     this.sections.begin("bodies")
+    if (diagOn("codegen")) {
+        val fnsDiag: Str = this.functions.size().toString()
+        diagTrace("codegen", `@fnsDiag function(s) on the emission list`)
+    }
     this.emitFunctions(false, facts)
     if (this.failed) {
         return Res<Str>.err(this.error)
@@ -455,5 +479,10 @@ fun Emitter.run(): Res<Str> {
     if (this.failed) {
         return Res<Str>.err(this.error)
     }
-    return Res<Str>.ok(this.sections.render())
+    val rendered: Str = this.sections.render()
+    if (diagOn("codegen")) {
+        val linesDiag: Str = rendered.size().toString()
+        diagTrace("codegen", `amalgamation: @linesDiag bytes`)
+    }
+    return Res<Str>.ok(rendered)
 }

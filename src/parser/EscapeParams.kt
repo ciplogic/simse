@@ -651,7 +651,7 @@ fun epAnalyze(preludeModules: List<AstXmlNode>, modules: List<AstXmlNode>): Unit
         epTable.insert(*name, row)
     }
 
-    if (epShow()) {
+    if (epShow() || diagOn("escape")) {
         epReport = List<Str>()
         for (*name in epTable.keys()) {
             val row: *List<EpKind> = epTable.getPtr(*name)
