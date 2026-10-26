@@ -970,6 +970,15 @@ fun semaForTemplateId(name: *Str): Int {
     return id
 }
 
+// One refused promotion or hoist, traced (`--diagnostics sema`): the pass, the candidate
+// name, and the reason the proof did not close. Silent unless the topic is on.
+fun Analyzer.semaPromoRefuse(pass: Str, candidate: Str, reason: Str): Unit {
+    if (diagOn("sema")) {
+        val fileDiag: Str = this.file
+        diagTrace("sema", `@pass refuse @candidate: @reason file=@fileDiag`)
+    }
+}
+
 // One refused walk, traced: the reason names the gate, the file and line name the `for`.
 // `--diagnostics sema` prints it; the machine keeps the loop either way.
 fun Analyzer.semaWalkRefuse(reason: Str, machineName: Str): Int {
@@ -1828,22 +1837,27 @@ fun Analyzer.promoteForAt(stmts: *List<AstXmlNode>, index: Int): Unit {
     }
     var ptrWrap: Str = "iter"
     if (!this.hasWrap(ptrWrap, receiverType)) {
+        this.semaPromoRefuse("promoteFor", machineName, "no pointer wrap for the receiver")
         return
     }
     if (!this.promoteElementDeep(receiverType)) {
+        this.semaPromoRefuse("promoteFor", machineName, "element is not deep")
         return
     }
     val loopIndex: Int = this.forLoopIndex(stmts, index)
     if (loopIndex < 0) {
+        this.semaPromoRefuse("promoteFor", machineName, "loop not found")
         return
     }
     val loop: *AstXmlNode = *stmts[loopIndex]
     val body: List<AstXmlNode> = xmlChildren(xmlChildPtr(loop, AstNodeKind.Body), AstNodeKind.Stmt)
     val elementName: Str = this.loopElementName(*body, machineName)
     if (elementName == "") {
+        this.semaPromoRefuse("promoteFor", machineName, "element binding not found")
         return
     }
     if (!bpLoopReadOnly(*body, *elementName)) {
+        this.semaPromoRefuse("promoteFor", machineName, `body writes @elementName`)
         return
     }
     var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
@@ -1945,17 +1959,21 @@ fun Analyzer.promotePlaceAt(stmts: *List<AstXmlNode>, index: Int): Unit {
     }
     val initKind: AstNodeCategory = xmlKind(init)
     if (initKind != AstNodeCategory.ExprIndex && initKind != AstNodeCategory.ExprMember) {
+        this.semaPromoRefuse("promotePlace", name, "initializer is not a place")
         return
     }
     val root: Str = this.placeRootName(init)
     if (root == "") {
+        this.semaPromoRefuse("promotePlace", name, "place root not a plain name")
         return
     }
     val elementType: AstXmlNode = this.iteratedType(init)
     if (xmlIsEmpty(elementType) || !bpDeepElement(elementType)) {
+        this.semaPromoRefuse("promotePlace", name, "element is not deep")
         return
     }
     if (index + 1 >= stmts.size()) {
+        this.semaPromoRefuse("promotePlace", name, "nothing follows the binding")
         return
     }
     var rest: List<AstXmlNode> = List<AstXmlNode>()
@@ -1965,6 +1983,7 @@ fun Analyzer.promotePlaceAt(stmts: *List<AstXmlNode>, index: Int): Unit {
         j++
     }
     if (!bpPlaceReadOnly(*rest, *name, *root)) {
+        this.semaPromoRefuse("promotePlace", name, "the block does not only read it")
         return
     }
     // The declaration's initializer becomes `*(place)` - `*x` is the address of a value,
@@ -2057,6 +2076,7 @@ fun Analyzer.hoistSpanAt(stmts: *List<AstXmlNode>, index: Int): Unit {
     }
     for (*root in roots) {
         if (root.startsWith("_sm_") || root == "this" || bpStaticNames.has(root)) {
+            this.semaPromoRefuse("hoistSpan", root, "template, receiver or static")
             continue
         }
         var rootExpr: AstXmlNode = AstXmlNode(
@@ -2065,10 +2085,12 @@ fun Analyzer.hoistSpanAt(stmts: *List<AstXmlNode>, index: Int): Unit {
         rootExpr.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, root))
         val rootType: AstXmlNode = this.exprType(rootExpr)
         if (xmlIsEmpty(rootType)) {
+            this.semaPromoRefuse("hoistSpan", root, "type unknown")
             continue
         }
         val conversion: Str = this.spanConversion(rootType)
         if (conversion == "") {
+            this.semaPromoRefuse("hoistSpan", root, "no span view")
             continue
         }
         var stable: Bool = bpSpanStableNode(*cond, root)
@@ -2078,6 +2100,7 @@ fun Analyzer.hoistSpanAt(stmts: *List<AstXmlNode>, index: Int): Unit {
             at++
         }
         if (!stable) {
+            this.semaPromoRefuse("hoistSpan", root, "storage not stable in the loop")
             continue
         }
         // The rewrite is declaration-free: every c[i] becomes spanOf(c).ptr[i] in place,

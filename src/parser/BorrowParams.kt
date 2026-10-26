@@ -1291,6 +1291,49 @@ fun bpBorrowDecl(
         }
     }
     if (borrowed.size() == 0) {
+        // The body was clean but nothing survived the per-param checks: say which heavy
+        // parameter was refused and why (written / taken / captured), the one answer the
+        // report otherwise leaves silent. No heavy parameter, no line - scalars were never
+        // candidates.
+        if (bpShow() || diagOn("borrow")) {
+            var refused: Str = ""
+            for (*param in params) {
+                val paramName: Str = xmlAttr(param, AstNodeAttributeKind.Name)
+                if (paramName == "this") {
+                    continue
+                }
+                if (!bpHeavy(xmlChildPtr(param, AstNodeKind.Type), types)) {
+                    continue
+                }
+                var why: Str = ""
+                if (facts.written.has(paramName)) {
+                    why = "written"
+                }
+                if (facts.taken.has(paramName)) {
+                    if (why != "") {
+                        why = why + "+"
+                    }
+                    why = why + "taken"
+                }
+                if (facts.inLambda.has(paramName)) {
+                    if (why != "") {
+                        why = why + "+"
+                    }
+                    why = why + "captured"
+                }
+                if (why == "") {
+                    why = "refused"
+                }
+                if (refused != "") {
+                    refused = refused + " "
+                }
+                refused = refused + paramName + ":" + why
+            }
+            if (refused != "") {
+                val declName: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+                bpNote(`borrow- @declName @refused`)
+            }
+        }
         return decl
     }
     val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
