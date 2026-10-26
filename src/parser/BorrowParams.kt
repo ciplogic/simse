@@ -637,6 +637,22 @@ fun bpContainsRef(node: *AstXmlNode): Bool {
 // materializes a copy (`agents.md`, the `*this.sections` trap), so the set must be reached
 // through `this`. `reads` is the borrowness flag (the fixpoint above); `statics` is the set of
 // file-level `var` names, a write to one of which is a write the rule must see.
+// Whether any plain name under `node` is in `set` - the provenance check the narrow
+// `taken` rule reads (`&param` names the parameter; `*this.sections[i]` does not).
+fun bpNamesAnyOf(node: *AstXmlNode, set: Dictionary<Str, Bool>): Bool {
+    if (xmlKind(node) == AstNodeCategory.ExprName) {
+        if (set.has(xmlAttr(node, AstNodeAttributeKind.Name))) {
+            return true
+        }
+    }
+    for (*child in node.Children) {
+        if (bpNamesAnyOf(child, set)) {
+            return true
+        }
+    }
+    return false
+}
+
 data class BpFacts(
     var fieldWrite: Bool,
     var staticWrite: Bool,
@@ -658,7 +674,17 @@ data class BpFacts(
     // a `mutates`-marked callee on a receiver that is a plain name other than this root
     // writes storage the borrowed element cannot live in, so the call is safe for the
     // promotion however the parameter rule treats it.
-    var placeRoot: Str
+    var placeRoot: Str,
+
+    // The declaration's own parameters, for the `taken` provenance check (`narrowTaken`).
+    var params: Dictionary<Str, Bool>,
+
+    // Narrow the `taken` mark to provenance: a local initialized from a borrowed place is
+    // "taken" only when that place derives from a parameter (or a local already carrying
+    // one) - a deref of *object* state (`*this.sections[i]`) derives from `this`, cannot
+    // reach a parameter, and leaves the local fresh. The parameter rule walks with this on;
+    // the promotion gates keep the coarse rule, whose decisions their soundness reads.
+    var narrowTaken: Bool
 ) {
     // Every name under `node`: an over-approximation is what the rule wants, since it is asked only
     // about names it already cares about.
@@ -691,7 +717,12 @@ data class BpFacts(
             val declared: Str = xmlAttr(node, AstNodeAttributeKind.Name)
             if (!this.statics.has(declared)) {
                 this.written.insert(declared, true)
-                if (bpContainsRef(xmlChildPtr(node, AstNodeKind.Init))) {
+                var declInit: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Init)
+                var declTaken: Bool = bpContainsRef(declInit)
+                if (declTaken && this.narrowTaken) {
+                    declTaken = bpNamesAnyOf(declInit, this.params) || bpNamesAnyOf(declInit, this.taken)
+                }
+                if (declTaken) {
                     // Initialized from a borrowed *place* (`var p = &param`): a mutating
                     // call on it may reach the parameter the address came from.
                     this.taken.insert(declared, true)
@@ -710,7 +741,12 @@ data class BpFacts(
                     this.staticWrite = true
                 } else {
                     this.written.insert(targetName, true)
-                    if (bpContainsRef(xmlChildPtr(node, AstNodeKind.Value))) {
+                    var assignInit: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Value)
+                    var assignTaken: Bool = bpContainsRef(assignInit)
+                    if (assignTaken && this.narrowTaken) {
+                        assignTaken = bpNamesAnyOf(assignInit, this.params) || bpNamesAnyOf(assignInit, this.taken)
+                    }
+                    if (assignTaken) {
                         // The local is initialized or reassigned from a borrowed *place*
                         // (`var p = &param`), so a mutating call on it may reach the
                         // parameter the address came from: the local never counts as fresh.
@@ -741,7 +777,27 @@ data class BpFacts(
                 val calleeName: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
                 if (this.mutates.has(calleeName)) {
                     val receiver: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
-                    if (xmlKind(receiver) == AstNodeCategory.ExprName) {
+                    if (xmlKind(receiver) == AstNodeCategory.ExprMember) {
+                        // The same relaxation over a *place chain* (`node.attributes.append(...)`,
+                        // `target.text.appendStr(...)`): the mutation lands in storage the chain
+                        // projects from its root, and the root is the fresh-local test - a
+                        // parameter flowing into any field target would already have refused the
+                        // body as a field write before this arm ran.
+                        var chain: *AstXmlNode = receiver
+                        var crossed: Bool = false
+                        var guard: Int = 0
+                        while (xmlKind(chain) == AstNodeCategory.ExprMember && guard < 32) {
+                            guard++
+                            crossed = true
+                            chain = xmlChildPtr(chain, AstNodeKind.Receiver)
+                        }
+                        if (crossed && xmlKind(chain) == AstNodeCategory.ExprName) {
+                            val chainRoot: Str = xmlAttr(chain, AstNodeAttributeKind.Name)
+                            if (this.written.has(chainRoot) && !this.taken.has(chainRoot)) {
+                                safe = true
+                            }
+                        }
+                    } else if (xmlKind(receiver) == AstNodeCategory.ExprName) {
                         val receiverName: Str = xmlAttr(receiver, AstNodeAttributeKind.Name)
                         if (this.written.has(receiverName) && !this.taken.has(receiverName)) {
                             safe = true
@@ -954,7 +1010,7 @@ fun bpLoopReadOnly(body: *List<AstXmlNode>, name: *Str): Bool {
         false, false, false, *bpStaticNames, *bpTrustedNames, *bpKnownTypes, *bpMutatesNames,
         bpMutatesParamsNames,
         Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), List<Str>(),
-        ""
+        "", Dictionary<Str, Bool>(), false
     )
     for (*stmt in body) {
         // The template's own binding (`val <name> = <machine>.current`, the `for`'s first
@@ -985,7 +1041,7 @@ fun bpPlaceReadOnly(body: *List<AstXmlNode>, name: *Str, root: *Str): Bool {
         false, false, false, *bpStaticNames, *bpTrustedNames, *bpKnownTypes, *bpMutatesNames,
         bpMutatesParamsNames,
         Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), List<Str>(),
-        *root
+        *root, Dictionary<Str, Bool>(), false
     )
     for (*stmt in body) {
         // The promoted declaration itself is the binding being retyped, not a write.
@@ -1195,10 +1251,17 @@ fun bpBorrowDecl(
     if (xmlIsEmpty(body)) {
         return decl
     }
+    var paramNames: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    for (*param in params) {
+        val paramName: Str = xmlAttr(param, AstNodeAttributeKind.Name)
+        if (paramName != "this") {
+            paramNames.insert(paramName, true)
+        }
+    }
     var facts: BpFacts = BpFacts(
         false, false, false, statics, reads, types, *bpMutatesNames, bpMutatesParamsNames,
         Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), List<Str>(),
-        ""
+        "", paramNames, true
     )
     for (*stmt in body.Children) {
         facts.walk(stmt)
