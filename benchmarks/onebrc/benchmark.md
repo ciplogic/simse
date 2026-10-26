@@ -3,7 +3,9 @@
 Two straight-line implementations of the same naive algorithm: read a
 `station;temperature` line, aggregate min/mean/max per station in a hash map, sort,
 print. No mmap, no chunked parsing, no per-station arrays, no threads - the first
-thing one writes, in both languages.
+thing one writes, in both languages. The source spells the byte reads through the
+indexer (`body[0]`) - an earlier draft used the pre-rename `charAt`, which the
+uniform indexer removed.
 
 | | |
 | --- | --- |
@@ -16,19 +18,22 @@ bytes (127.7 MiB), 100 stations.
 
 ## Result
 
-Windows on ARM64, MSVC (C++20) with `/O2 /Ob3 /DNDEBUG`, single-threaded. Each
-binary reports its own time over the read-and-aggregate loop (printing excluded),
-and the legs are interleaved round by round (baseline, Simse legs, canary) because
-this machine throttles under load; min/median of the five rounds:
+Windows on ARM64, MSVC (C++20) with `/O2 /Ob3 /DNDEBUG /GL` - whole-program
+optimization on **both** sides (`/GL` is MSVC's analog of `-flto`; the linker runs
+LTCG when a compilation unit carries it, so the baseline gets the same LTO the
+released compiler does), single-threaded. Each binary reports its own time over the
+read-and-aggregate loop (printing excluded), and the legs are interleaved round by
+round (baseline, Simse legs, canary) because this machine throttles under load;
+min/median of the five rounds (`tools/_onebrc_ab.mjs`):
 
 | Implementation | Time (min/median) | Throughput | Peak working set |
 | --- | --- | --- | --- |
-| **Simse: in-place parse, in-place aggregate (`readLineView`, `getPtr`)** | **1157 / 1167 ms** | **116 / 115 MB/s** | 6.5 MB |
-| C++ STL baseline | 1340 / 1360 ms | 100 / 98 MB/s | 5.9 MB |
-| Bun reference aggregate (`check`) | 673 / 677 ms | 199 / 198 MB/s | — |
+| **Simse: in-place parse, in-place aggregate (`readLineView`, `getPtr`)** | **1313 / 1346 ms** | **103 / 100 MB/s** | 6.5 MB |
+| C++ STL baseline | 1370 / 1400 ms | 98 / 96 MB/s | 5.9 MB |
+| Bun reference aggregate (`check`) | 676 / 706 ms | 201 / 195 MB/s | — |
 
-**The Simse program is 1.16x faster than the naive C++ one** on the same data, and
-1.72x behind the JavaScript reference. All three reports are byte-identical to each
+**The Simse program is 1.04x faster than the naive C++ one** on the same data
+(this session), and 1.93x behind the JavaScript reference. All three reports are byte-identical to each
 other (100 stations, values in exact tenths).
 
 **The `getPtr` change is worth 7% of the loop**, and it is the one number here that
@@ -37,9 +42,11 @@ ran **1246 / 1256 ms against 1157 / 1167 ms**, in the same five interleaved roun
 with no round of either leg overlapping the other.
 
 The ratio is one session's number, not a constant: measured in the same style on the
-same data it has run **1.16x-1.40x**, because the C++ baseline varies more than the
-Simse program does (1340-1580 ms against 1056-1177 ms across sessions, each with the
-reference leg as a canary - 673-727 ms). The Simse side is the stable one.
+same data it has run **1.04x-1.40x**, because the C++ baseline varies more than the
+Simse program does (1340-1580 ms against 1056-1397 ms across sessions, each with the
+reference leg as a canary - 673-771 ms). The Simse side is the stable one. The
+`1.16x` session ran without `/GL` on the baseline; adding it (this session) made the
+C++ side faster and the honest ratio narrower.
 
 ## Where the time goes
 
@@ -95,7 +102,7 @@ path the table above runs, whose whole-program number in that session was 1093/1
 :: the data (127.7 MiB, 10M rows, 100 stations)
 bun benchmarks\onebrc\onebrc.mjs gen 10000000 benchmarks\onebrc\data\measurements.txt --seed 42
 
-:: the two implementations
+:: the two implementations (both /GL - whole-program optimization, MSVC's -flto)
 bun build.js --release --root benchmarks\onebrc --module modules\io --module modules\streams --out benchmarks\onebrc\onebrc.cpp --exe benchmarks\onebrc\onebrc.exe
 benchmarks\onebrc\build_naive.bat
 

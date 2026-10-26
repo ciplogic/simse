@@ -17,34 +17,40 @@ estimate, explained below it.
 
 ## Windows - Snapdragon X2, Windows 11, cl.exe /O2 /Ob3 /GL (LTCG)
 
-From `bun bench/run.js` (the Windows harness), medium size (October 25, 2026 -
-after the u64 values moved onto `unsafe.UInt64` (raw `uint64_t` C++) and after
-the span hoist, which binds a storage-stable index loop's container buffer once
-through a span instead of re-deriving it per access; see "Why the numbers are
-what they are").
+From `bun bench/run.js --reps 5` (the Windows harness), medium size (October 26,
+2026 - the compiler carrying the borrow-relaxation and refusal-diagnostics work; the
+emission of every hot loop here is unchanged by those, and the run is the tightest
+of three full passes taken back to back, the machine throttling visibly across a
+bench session). The October 25 session's ratios sit in brackets where they moved
+beyond the passes' own spread - both directions, recorded as measured: the
+flat-scan edge on `sum` did not reproduce this session (four passes say
+0.95-1.06 where October 25 said 1.31; the emitted scan loop is byte-identical to
+that session's), while `blur` and `respond` came in ahead of their October 25
+ratios. Rows within the passes' spread carry one number.
 
 | benchmark | tuned C++ | Simse | Goose (est.) |
 | --- | ---: | ---: | ---: |
-| sum | 1.20 | 1.31 | 1.60 |
-| push | 1.04 | 1.24 | 3.13 |
-| strlist | - | 1.00 | 3.52 |
-| records | 1.35 | 1.00 | 2.77 |
-| tree | 2.03 | 1.81 | 4.41 |
-| interp | 1.36 | 1.54 | 5.51 |
-| graph | 5.57 | 0.81 | 4.96 |
-| words | 2.45 | 1.05 | 2.20 |
-| particles | 0.96 | 1.11 | 1.20 |
-| sexp | 1.57 | 1.13 | 3.72 |
-| lru | 4.88 | 3.88 | 3.36 |
-| scene | 1.74 | 1.92 | 5.78 |
-| calc | 3.79 | 3.15 | 4.06 |
-| bintrees | 4.36 | 4.05 | 15.58 |
-| respond | 1.66 | 0.69 | 2.10 |
-| blur | 2.17 | 0.95 | 3.59 |
-| **geometric mean** | **2.05** | **1.43** | **3.51** |
+| sum | 1.06 | 1.01 [1.31] | 1.60 |
+| push | 1.13 | 1.09 [1.24] | 3.13 |
+| strlist | - | 0.95 [1.00] | 3.52 |
+| records | 1.45 | 0.94 [1.00] | 2.77 |
+| tree | 1.71 | 1.76 [1.81] | 4.41 |
+| interp | 1.52 | 1.56 [1.54] | 5.51 |
+| graph | 5.42 | 0.75 [0.81] | 4.96 |
+| words | 2.25 | 1.14 [1.05] | 2.20 |
+| particles | 0.93 | 0.99 [1.11] | 1.20 |
+| sexp | 1.49 | 1.11 [1.13] | 3.72 |
+| lru | 4.87 | 3.54 [3.88] | 3.36 |
+| scene | 1.55 | 1.61 [1.92] | 5.78 |
+| calc | 3.70 | 3.15 [3.15] | 4.06 |
+| bintrees | 4.34 | 4.11 [4.05] | 15.58 |
+| respond | 1.81 | 0.76 [0.69] | 2.10 |
+| blur | 2.19 | 0.85 [0.95] | 3.59 |
+| **geometric mean** | **2.01** | **1.35** | **3.51** |
 
 (The tuned-C++ geomean is over the fifteen benchmarks with a tuned row; the
-port runs `strlist`'s idiomatic C++ row only.)
+port runs `strlist`'s idiomatic C++ row only. The bracketed October 25 numbers
+are not averaged into the geomeans - the table is the October 26 session.)
 
 ## Linux - Core i3-N305, g++ 13.3.0 / clang++ 19.1.1, -O2 -DNDEBUG -flto
 
@@ -165,7 +171,7 @@ and on Linux g++ (4.16 vs 3.36).
   be honest ports of the C++ shapes, and its remaining losses above are
   exactly the untuned part: loop shape and the flat-byte backend gap).
   Against that, Simse takes `lru` past Goose's estimate on both machines
-  (3.88 vs 3.36 on Windows, 4.16 vs 3.36 on Linux g++) and lands at a
+  (3.54-3.88 vs 3.36 on Windows, 4.16 vs 3.36 on Linux g++) and lands at a
   1.3-1.4x geometric-mean speedup over idiomatic C++ on stock shape-for-shape
   code (1.43x on Windows, 1.33-1.34x on Linux after the span hoist) - roughly
   two-thirds of the

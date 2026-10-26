@@ -29,7 +29,7 @@ fun tenths(text: Str): Int {
     var body: Str = text
     var negative: Bool = false
     if (body.size() > 0) {
-        if (body.charAt(0) == '-') {
+        if (body[0] == '-') {
             negative = true
             body = body.substr(1, body.size() - 1)
         }

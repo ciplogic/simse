@@ -5,7 +5,9 @@ The [1BRC](https://github.com/gunnarmorling/1brc): read a file of
 sorted by station. This folder holds the *naive* Simse implementation, the C++ STL
 baseline it is compared against, and the generator/reference that both are checked
 against. **The measured result is in [`benchmark.md`](benchmark.md)** - the Simse
-program is 1.16x faster than the naive C++ one on 10M rows.
+program runs ahead of the naive C++ one on 10M rows (1.04x-1.40x across
+sessions with both sides on `/GL`; the ratio is session-dependent, the
+shape of the win is not).
 
 Nothing here is optimized: no mmap, no chunked parsing, no per-station arrays, no
 threads. The point is a straight-line implementation in each language, measured on
