@@ -1,9 +1,13 @@
 # The for-walk: the span machine flattened where it is redundant
 
-Status: in build (2026-10-25) - the plan the flat-scan bench rows motivated. Every step
-lands under `--for-walk`, default off (`impl_specs/typed-il.md`'s flag convention). The
-measurement below is in: the counter walk beats the machine on the flat scan and the
-pointer pair buys nothing over the counter, so variant B builds and variant A is closed.
+Status: landed under `--for-walk` (2026-10-26). The rule the flag states is one line:
+**an item that is span-aware iterates directly over its span; anything else keeps the
+yieldable machine.** Span-aware is `List`/`Array`/`Str` (through `spanForAt`'s
+conversion), a `Span`/`StrView` value, and a `Range` (`a until b`, `a..b` - spelled
+through the yieldable machinery, semantically the counter). Not span-aware - a
+generator's `..T`, a user type's `iterValues`, a `Dictionary`, a `SteppedRange` (its
+machine branches on the step's sign) - keeps the machine, byte for byte. The refusals
+that remain are correctness, not preference: a yielding body, a root the loop rebinds.
 
 ## Why
 
@@ -165,37 +169,50 @@ this proposal inherits.
    against). **Done** - the table above; the counter walk moves, the pair does not.
 2. Variant B lands green under the flag; the A/B then decides whether variant A exists at
    all - **it does not**: parity with the counter, and its comparison was never spellable.
-3. **The flag-on rows are a per-shape tradeoff, and the default does not flip.** The five
-   flat-scan bench rows, interleaved off/on/off/on (two rounds, `bench/run.js` vs the
-   `--for-walk` twin `bench/run-walk.js`, medium sizes, reps 3; simse column, ms):
+3. **The flag-on rows, measured twice (interleaved off/on, `bench/run.js` vs the
+   `--for-walk` twin `bench/run-walk.js`, medium sizes, reps 3; simse column, ms):**
 
    | row | off (r1 / r2) | on (r1 / r2) | verdict |
    | --- | --- | --- | --- |
-   | sum (flat Int scan, value form) | 92 / 90 | 82 / 71 | **the walk wins ~15%** - the counted loop vectorizes, the machine does not |
-   | strlist | 149 / 156 | 158 / 155 | parity |
-   | words | 742 / 783 | 792 / 662 | noise (the spread swamps the shape) |
-   | particles (struct walk, `*p` form) | 196 / 204 | 234 / 232 | **the walk loses ~15%**, consistent across rounds |
-   | blur | 154 / 152 | 139 / 147 | the walk, slightly |
+   | sum (flat Int scan, value form) | 93 / 99 | 80 / 95 | the walk wins (~10-15% at the min) - the counted loop vectorizes, the machine does not |
+   | strlist | 156 | 146 | the walk, slightly |
+   | words | 687 | 749 | noise (cpp0 moved the same way) |
+   | particles (struct walk, `*p` form) | 215 / 223 | 251 / 238 | **the walk pays ~8-15%** |
+   | blur (no container `for`; the hoist's rows) | 164 | 154 | noise |
+   | **the self-transpile** (the compiler's own 1091 walk sites: ranges, `this.x` chains, value scans) | 2681 / 2694 | **2584 / 2622** | **the walk wins ~4%** |
 
-   The particles loss is the honest cost the proposal accepted measuring: the `*p` walk
-   binds through `atPtr` (the machine's own spelling, correct for every element type -
-   the raw `.ptr` index it replaces reads `Str[i]` as the `Char` on container elements,
-   the bug the self-transpile caught), and on a 200-step struct loop that binding costs
-   what the machine's inlined `advance` did not. Flat scalar scans - the rows the
-   proposal was for - move the other way. So: `--for-walk` stays **default off**, a
-   program opts in per build, and the flag lives until a per-shape rule (walk the scalar
-   value forms, keep the machine for pointer walks) is worth designing.
-4. The honest failure clause is half-answered: the machine was not free, and the walk is
-   not free either - the measurement above is the answer to both.
-5. The default flip (Linux first), then the flag's deletion - **superseded by 3**: the
-   default stays off; the flag is the feature.
+   **The particles cost is understood, not mysterious.** The machine's inner loop, once
+   MSVC inlines `advance`, SROA's the machine struct and emits its canonical counted loop:
+   one base register with constant offsets, paired loads/stores (LDP/STP), ~6 memory ops
+   per particle. The walk's counter-over-`atPtr` compiles to the scaled index kept live
+   (`umull` per iteration) and register-offset addressing per field with per-field bases -
+   ~13 single memory ops, no pairing. Three direct spellings were tried to reproduce the
+   machine's form (the counter, a running pointer, a `current` slot the loop bumps - the
+   machine's own memory shape); each costs 1-3 extra instructions per iteration in a
+   different way (`tools/_walkptr/`, the A/B and the asm listings). The machine's
+   `while (advance()) { p = m.current }` shape matches an MSVC loop-optimization pattern
+   the direct forms do not. On flat scalar scans the addressing form dominates and the
+   walk wins; on the struct walk the pattern-match does.
+
+   The contract stands as stated: span-aware iterates the span, everything else the
+   machine, and the ledger above is what the rule costs and buys per shape. The flag
+   stays default off (the Linux twin has not confirmed a flip), a program opts in per
+   build.
+4. The honest failure clause is answered: the machine was not free (sum, the
+   self-transpile), and the walk is not free either (particles) - the table is the answer
+   to both.
+5. The default flip (Linux first), then the flag's deletion - pending the twin.
 
 ## Order of work
 
 1. The measurement (above) - done, pinned above.
 2. `forWalkAt` beside `spanForAt`/`hoistSpanAt` (`src/sema/SemaCall.kt`, inside
-   `promoteForLoops`' per-scope walk, after `promoteForAt`): variant B, the `iterValues`
-   wrap first, then the `iter` wrap.
+   `promoteForLoops`' per-scope walk, after `promoteForAt`): variant B, both wraps, the
+   range arm, and member-chain receivers - the receiver expression extracted once into
+   the walk slot before the loop (the slot *is* the hoist; `bpSpanStableNode` guards it
+   against a loop that rebinds the borrowed field, extended to see `this.items = ...`
+   member writes, which the hoist never needed - its roots are containers, and containers
+   have no writable fields).
 3. The three stress cases and both-path validation.
 4. ~~Variant A, only if the A/B asks for it~~ - closed by the measurement: parity with the
    counter, and `*T != *T` compares values, not addresses.
