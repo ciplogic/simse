@@ -15,6 +15,11 @@
 // the builder functions below (`expandResOptCtor`), which place the arm through its
 // generated setter - by *name*, so the `Res<Str>` instantiation, where `Value: T` and
 // `Error: Str` are both `Str`, cannot make the construction ambiguous.
+//
+// A new member-surface name must also join the borrow pass's twin table
+// (`bpIsSurfaceName`/`bpSurfaceTwins`, src/parser/BorrowParams.kt): a surface call is
+// borrow-trusted only when the name is listed there and every `simse_` spelling it can
+// resolve to has proved - a name left out silently keeps every caller of it borrow-dirty.
 
 package rtl
 
