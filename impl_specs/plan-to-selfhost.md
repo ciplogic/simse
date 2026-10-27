@@ -1,6 +1,13 @@
 # Plan to self-host
 
-Status: implementation plan — exploratory and subject to revision.
+Status: **realized** - kept as the design record. The compiler is written in Simse
+(`src/**/*.kt` plus the modules it names), the published bootstrap
+(`../simse_bootstrap/builds/simse_bootstrap.cpp`) is the C++ foundation Phase 4 named, and
+the loop's two-way fixed point (`bun tools/bootstrap.js`) is the self-hosting test. The
+`native fun` proposal below landed as `@SmGen` instead (one declaration, one spelling -
+`@SmGen("cpp", "sym")` names hand-written C++, `@SmGen("res", section, sym)` a resource
+section; `ai/contributing.md` has the rule), and the fallback boundary it describes is
+`src/rtl` plus the `_res.md` sections, per `impl_specs/native-interop.md`.
 
 ## Goal
 

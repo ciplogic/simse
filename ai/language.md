@@ -97,9 +97,12 @@ on the arrow's line; a call's final argument may be a **trailing brace lambda** 
 `twice { 41 }` — whose body spans lines, and whose last statement is the lambda's value. A
 brace lambda with no declared parameter that names `it` gets it as the single implicit
 parameter (`xs.forEach { println(it) }`; the prelude's `repeat(n) { }` and `List`/`Array`
-`forEach` are the canonical consumers). Lambdas **capture by value**, and `this` inside a
-lambda is a diagnostic; to mutate the enclosing object, capture a raw pointer
-(`var p: *T = *this`). A lambda is a
+`forEach` are the canonical consumers), and a brace lambda that names no parameter at all
+takes the callable parameter's whole contract - every argument unnamed, the value the
+block ignores (`repeat(n) { out.appendStr("x") }` never names the index, and its closure
+still converts to the `(Int) -> Unit` the callee takes). Lambdas **capture by value**, and
+`this` inside a lambda is a diagnostic; to mutate the enclosing object, capture a raw
+pointer (`var p: *T = *this`). A lambda is a
 data class with a free `<sym>_invoke` method (`ai/contributing.md` has the codegen rules).
 
 ## Generics and call inference

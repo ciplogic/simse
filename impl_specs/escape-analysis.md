@@ -210,6 +210,13 @@ The rule is the simplest one that is sound, and it refuses by default - *unsure 
   prefix is the compiler's own and a machine can only come from an `iterValues`/`iter` call in the
   same body, so the call that built it has already been weighed and `advance` reads the container it was
   built over;
+- **a call to a callable-by-value parameter of the enclosing declaration is not a call at all**
+  (`bpCallableParams`): the callee is the caller's own function value, and a signature whose every
+  parameter is a value cannot name a place through which to write - the most it can touch is the
+  copies its arguments are. `repeat`'s `body(i)` and `forEach`'s `f(x)` are the shapes: their
+  declarations prove now, so every caller of them borrows through them (a `(*T) -> Unit` or
+  `&T`-parameter signature stays opaque - the callee could write or retain what it is handed);
+  a parameter captured by a lambda is still never borrowed, so the consumer side keeps its guard;
 - **any** assignment whose target is not a plain name (`x.f = ...`, `x[i] = ...`, `*x = ...`), **or
   is a file-level `var`**, borrows nothing, anywhere in the body - the author's own rule, and the
   cheap guard against a write through an alias the analysis would otherwise have to hunt for. The
@@ -337,6 +344,28 @@ What is still out of reach, in the order a histogram of the `borrow-` lines puts
   whole-program call graph beyond the name-keyed fixpoint, no size model exists, and only a type it
   can name as heavy (`Str`, a `data class`, a container) is borrowed - never a scalar, a handle, or
   `Span`/`Array`.
+
+## The fresh-handle twin ABI (landed)
+
+A `&T`-returning free function whose every return *builds* the value it hands back -
+`return &Ctor(...)` - is a **fresh-handle** function (`CgCore.freshHandleEligible`: free, with a
+body, non-generic, no lambda in the body, the payload a plain class with no `unInit`): the box
+exists only because the authored ABI returns a handle. One is emitted **twice**:
+
+- the authored `Ref<T> f(...)` keeps its `makeRef` - the ABI every call that *keeps* the handle
+  takes (the handle stored into a container, compared, handed on);
+- a value twin `void f_v(T* _sm_out, ...)` runs the same body with every return's construction
+  stored into the caller's storage (`IlEmit`'s twin branches: the aliased `&T` slot declares
+  nothing, the `CallCtor` is the one store, the return is the plain exit).
+
+The call site chooses, in the promotion pass (`ilPromoteFind`'s fresh-call arm): a `&T` slot
+written once by a call to a fresh name whose handle never escapes - the same use/def analysis the
+box promotions read - is retargeted through a method clone named `f_v`, and the sret call arm
+spells `f_v(&_sm_stkN, args)` with the handle pointing at the stack storage. `--no-escape` emits
+no twins at all. `stress/escape-twin` pins the sketch: the non-escaping `createUser` call is
+`_sm_stk0` and a raw pointer with no box on the path, the stored call keeps the authored ABI, and
+exactly one `makeRef` exists in the program. The compiler's own `jsonField` and `linEmptyUseDefs`
+run through their twins in the self-transpile.
 
 ## Decisions
 

@@ -269,8 +269,10 @@ The parser picks the wrap before types are known, so the choice is made in sema
 
 - the receiver resolves to a `List`/`Array`/`Span` (a container is already its span by this
   point in the pass: the rewrite above runs first) with an `iter` (a machine has none), and
-- the element is *deep* - a `Str`, or a data class with a `Str` field (`bpDeepElement`, from
-  the borrow pass's `bpDeepClasses` fixpoint) - and
+- the element is *deep* - a `Str`, a data class with a `Str` field, or a container of a deep
+  element (`List<List<Str>>`, `List<Dictionary<Str, T>>`: `bpDeepElement` recurses through
+  `List`/`Dictionary`/`Opt`/`Res`, the containers that own heap storage, over the borrow
+  pass's `bpDeepClasses` fixpoint) - and
 - the body only reads `x` (`bpLoopReadOnly`, the parameter rule: no write through it, no
   `&`/`*`, no capture, no call the fixpoint cannot trust), and `--no-borrow` is off. A
   built-in scalar conversion (`Int64(x)`, `Char(c)`) and the generic `castAs<T>(x)` are
@@ -291,9 +293,12 @@ The gate matters. On `List<Cell>` (a class with a `Str` field) the value form de
 allocates — per element; a read-only walk in the harness probe goes **1,255,621 us -> 27,897 us**
 (~45x) once promoted. On `List<Small>` (four `Int`s) the two forms are a wash, and on
 `List<AstXmlNode>` the table above has the value form slightly *ahead*, so a scalar, a handle, a
-container and a class of those keep the value wrap. A body that writes through the variable is
-not promoted (the pointer form would mutate the list). The rewrite is invisible: the same reads,
-the same values, one fewer copy. `--no-borrow` disables it with the rest of the rewrite.
+view (`Span`/`Array`) and a class of those keep the value wrap - and a container of a deep
+element does not, its ownership is the deep copy (`minui`'s per-iteration `List<Attribute>`
+copies became `simse_addressOf` places when the recursion landed). A body that writes through
+the variable is not promoted (the pointer form would mutate the list). The rewrite is
+invisible: the same reads, the same values, one fewer copy. `--no-borrow` disables it with
+the rest of the rewrite.
 
 Reach is the same coarse one the parameter rule has: a body that calls something the fixpoint
 cannot trust (an `append`, an emitter helper) keeps the value form — conversions used to sit

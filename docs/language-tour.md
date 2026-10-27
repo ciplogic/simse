@@ -759,6 +759,14 @@ copying it - that is what the compiler's own code does with the AST). Handles ar
 reference counts, so a cycle of `&T` values is not collected: use values, `Array`
 blocks, or an explicit `null`-out to break one.
 
+A function that returns a *fresh* handle - every `return` builds the value,
+`return &User(name, age)` - gets the best of both spellings: the compiler emits
+it twice, the authored handle-returning form for calls that keep the handle, and
+a value form it rewires a call into when the handle never escapes - so the
+object is plain stack storage addressed by a pointer, and the box (with its
+reference count) is made only on the path that actually stores the handle. No
+annotation asks for this; the escape analysis proves it per call site.
+
 ## Modules and statics
 
 A module is a directory; a package is the `package` name declared at the top of

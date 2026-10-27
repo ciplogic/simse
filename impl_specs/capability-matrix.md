@@ -5544,3 +5544,100 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   skipped it, the fact walk did not), and the seeded list is exactly `print`/`println`
   (there is no `eprintln` builtin). Verified: `bun tools/iterate.js --full` - **113/113**
   and both fixed points; golden refreshes additive (`strings` gained borrowed helpers).
+
+- **Methods in the out-parameter ABI, resolved by the renderer's own lookup.** The EA
+  plan's Step 3, landed in two moves. `sretEligible` drops its free-functions-only guard
+  (a method's C++ is the free function `qualify(pkg, name)` taking the receiver first),
+  and `ilSretKey`'s member-call lane is decided by the resolution the by-value rendering
+  itself runs - `findExtensionFn`, then the receiver-function fallback - so the ABI a call
+  spells and the head the renderer emits can never name two declarations: the
+  package-table guessing that preceded it rewrote a bare name several packages declare
+  (`sqlite`'s `insert` beside the RTL's `Dictionary.insert`) into the wrong ABI.
+  Protocol dispatch thunks keep the protocol's by-value shape and hand an sret
+  implementation the local it writes. Verified: `bun tools/iterate.js --full` and the
+  fixed points; five emission goldens carried the new signatures.
+
+- **Sema types a bare call from the overload its arguments pick, as the IL already does.**
+  A bare name several packages declare with one parameter count is two C++ symbols, and
+  `LinearFormExpr.callTarget` picks one by the arguments' own types; the checker's two
+  typing walks (`semaPlainCallReturn`, `SemInfer.functionReturn`) picked the first match,
+  so a call could be typed by a declaration the emitted call never names. Both now collect
+  every arity match and keep the unique unifier, with two rules the roll-out earned:
+  several unifiers answer only when every one returns the same type (a `@SmGen("kt")`
+  bodyless declaration beside its generated implementation is one shape twice;
+  `xmlSkipMisc`'s cursor-`Res`/parser-`Unit` pair is not), and a trailing-pack fact is
+  answerable again - the substitution itself refuses a return naming an unbound parameter,
+  so `fmtStrWith('@', t, a, b)` keeps its `Str` and every interpolation keeps its fusion
+  (the early pack refusal had broken the self-transpile: untyped destinations refused the
+  concat fusion and the fallback emitted number items into `List<Str>` unconverted). A
+  body carrying the extractor's own `unsupported:` report now answers it over the
+  dangling-slot shape message, so the ambiguity report of `pick(lambda)` is not masked by
+  the slot its failed resolution left behind. Verified: `bun tools/iterate.js --full` -
+  the corpus, both fixed points, and the published bootstrap refreshed (the compiler's
+  own emission moved).
+
+- **Deep-container elements take the place form in the `for` promotion.** The EA plan's
+  Step 4. `bpDeepElement` answers true only for `Str` and the data classes holding one, so
+  a `List<List<Str>>` element - a `TypeGeneric` - was never deep and its value-form loop
+  copied the whole inner container per element. The generic arm recurses through the
+  containers that own heap storage (`List`/`Dictionary`/`Opt`/`Res`: deep when any element
+  they hold is; types are acyclic, so the recursion ends); `Span`/`Array` stay value-form
+  as `for.md`'s measurement says for views and counted blocks. `escape-viral` gained the
+  deep-containers part (`joinGrid`'s outer and inner walks both bind places, `iter(` not
+  `iterValues(`), and `minui`'s golden moved where the rule reached real code: twenty-six
+  lines of per-iteration `List<Attribute>` copies became `simse_addressOf` places.
+  Verified: `bun tools/iterate.js --full` - **136/136** and both fixed points.
+
+- **The fresh-handle twin ABI: `createUser` builds where it lives.** The EA plan's Step 5,
+  the last and largest. A `&T`-returning free function whose every return is
+  `&Ctor(...)` (`freshHandleEligible` - free, bodied, non-generic, lambda-free, the
+  payload a plain class with no `unInit`) is emitted twice: the authored `Ref<T> f(...)`
+  keeps its `makeRef` for the calls that keep the handle, and a value twin
+  `void f_v(T* _sm_out, ...)` (`emitFreshTwin`) stores every construction into the
+  caller's storage - `IlEmit`'s twin branches spell the aliased `&T` slot's non-declaration,
+  the one store, and the plain return. The choice is the promotion's
+  (`ilPromoteFind`'s fresh-call arm): a `&T` slot written once by a call to a fresh name
+  whose handle never escapes is retargeted through a method clone named `f_v`, and the
+  sret call arm spells `f_v(&_sm_stkN, args)`. `--no-escape` emits no twins at all.
+  `stress/escape-twin` pins both spellings of one function in one program: stack storage
+  and a raw pointer on the non-escaping path, one `makeRef` in the program at the stored
+  call. Step 6 needed nothing: every verify shape it named already promotes (the sret ABI
+  writes caller storage, a handle passed to a builder converts against the parameter's own
+  type before the call, and every sret-eligible name has a body so the retention fixpoint
+  always votes on its parameters), and both proposed seeds are unsound - sret constrains
+  only the result channel. The plan records this. The compiler's own `jsonField` and
+  `linEmptyUseDefs` run through their twins in the self-transpile. Verified:
+  `bun tools/iterate.js --full` - **137/137** and both fixed points; the published
+  bootstrap refreshed.
+
+- **Callable-by-value parameters prove borrow-clean, and the two bugs that hid behind
+  them.** The EA plan's first cleanup. A call to a callable parameter of the enclosing
+  declaration is the caller's own function value invoked, and a signature whose every
+  parameter is a value (`bpCallableParams`) cannot name a place through which to write -
+  so `repeat`'s `body(i)` and `forEach`'s `f(x)` prove, their callers borrow through them
+  (`escape-callable`'s `walk` borrowed its whole `List<Str>` at every call before), and a
+  user combinator proves the same way. A `(*T) -> Unit` or `&T`-parameter signature stays
+  opaque, and a parameter captured by a lambda is still never borrowed, so the consumer
+  side keeps its guard. The new case walked into two pre-existing bugs, both fixed with
+  it: a zero-name block (`repeat(n) { out = ... }`, the argument ignored) was typed as a
+  zero-parameter lambda whose closure operator spelled `Func<void()>` and converted to
+  nothing the callee accepts - the block now takes the callable's whole contract, every
+  argument an unnamed `_sm_arg`; and a call through a callable *value* resolved same-named
+  declarations in the emitter - a parameter named `step` matched `Range.step` and the
+  receiver lane took the argument's address as that declaration's `self` - the value's own
+  signature is the conversion truth now (`optres.kt`'s header gained the pointer at
+  `bpCallTrusted`'s twin table the same week, so the next surface accessor does not
+  silently un-borrow every caller). Verified: `bun tools/iterate.js --full` - **138/138**
+  and both fixed points; the bootstrap refreshed.
+
+- **An unresolved call over value-taking overloads spells the borrowed value.** The
+  `initByValue`-targeted deref generalized: a call no single Simse target answers, where
+  every same-arity declaration's parameter at the argument's position is a value
+  (`ilOverloadsAllTakeValue`, read through `functionsByName`), spells an auto-borrowed
+  name as the explicit deref - the value the C++ overload set resolves against, never the
+  pointer a template parameter would otherwise deduce `T` from. A position where any
+  overload takes a pointer or a handle (`parseModule(Span, *Str)`'s shape) keeps the raw
+  spelling, a name no declaration records keeps it too, and the union arm constructor
+  stays spelled by name (its arms are compiler-generated, all-value). Verified:
+  `bun tools/iterate.js --full` - **138/138** and both fixed points; the union arms remain
+  the corpus's pin for the rule.

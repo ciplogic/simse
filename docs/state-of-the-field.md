@@ -32,13 +32,13 @@ server).
 (`../simse_bootstrap/builds/simse_bootstrap.cpp`) builds a compiler with a C++ compiler
 alone, and that compiler transpiles the sources back into the same file byte for byte. One
 implementation, checked by `bun tools/iterate.js --full` - the bootstrap fixed
-point and the end-to-end stress corpus (71 programs) in one command, with
+point and the end-to-end stress corpus (138 programs) in one command, with
 `tools/bootstrap.js` and `tools/stress.js` as the tools underneath.
 
-**The performance story.** Transpiling the compiler's own 17,905-line source
-tree takes ~1.1 s (release, ~16.4k lines/s) with ~31 MB peak working set, and
-the emitted 1.38 MB translation unit takes `cl.exe` ~21 s to optimize - the
-compiler's own share of a build is the small one. The runtime's dictionary is
+**The performance story.** Transpiling the compiler's own 50,212-line source
+tree takes ~3.8 s (release, ~13k lines/s) with ~128 MB peak working set, and
+the emitted 4.05 MB translation unit takes `cl.exe` ~30 s to optimize and
+LTCG-link - the compiler's own share of a build is the small one. The runtime's dictionary is
 the RTL's own: `SmDictionary` keeps one row per entry, with the cached hash and
 chain link next to the key and value, so a probe touches one cache line and
 iteration is a pointer walk (measured ~8x and deep copies ~5x the
