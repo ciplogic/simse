@@ -8,6 +8,20 @@ its item here retires.
 
 ## Fixed (the record, and where the pin lives)
 
+- **Same-name extension methods resolved by name, not shape.** With `Query.whereBind(cond,
+  value)` and `Query.whereBind2(cond, a, b)` both declared, a call spelling `whereBind`
+  with three arguments once resolved `whereBind2`'s signature but emitted `whereBind`'s
+  name and symbol - no diagnostic, a C++ error far from the cause. The call resolution
+  now selects by receiver and arity before binding a name
+  (`LinearFormExpr.callTarget`'s several-candidate lane, the emitter's own
+  `findExtensionFn`), and the arity mismatch is a diagnostic at the call with the
+  declaration's shape in its hint: `stress/diagnostic-extension-arity` pins it.
+- **A program's own function lost to an imported extension of the same name.** The
+  two-argument `attr(name, value)` of a program importing a module whose `XmlNode.attr`
+  extension shares the name once resolved to the extension and emitted nonsense. Same-name
+  declarations now emit as C++ overloads of one symbol and each call resolves by its own
+  shape - the emitter's by-arity resolution and sema's arguments-picked overload agree on
+  which declaration a call names: `stress/overload-shadow` pins both calls of one program.
 - **A call's type was invisible.** `exprType` answered "unknown" for every plain call,
   so a union construction could not match its arm against a call's result, a `for` over
   a call's result had no type to wrap, and a `Res`-returning call written directly in a
@@ -31,21 +45,6 @@ its item here retires.
 
 ## Still open (the workarounds a module author needs)
 
-- **Same-name extension methods confuse the emitter.** With `Query.whereBind(cond,
-  value)` and `Query.whereBind2(cond, a, b)` both declared, a call spelling `whereBind`
-  with three arguments resolved to `whereBind2`'s signature but emitted `whereBind`'s
-  name and symbol - no diagnostic, a C++ error far from the cause. Workaround: exact
-  names at every call site, and treat an arity mismatch on an extension as a silent
-  mis-resolution, not a compile error. The general fix - resolution that matches
-  receiver type and arity before binding a name, diagnosed as ambiguity when two
-  candidates survive - is its own step.
-- **A program's own function loses to an imported extension of the same name.** The
-  `xml` module originally named its lookup `XmlNode.attr`; `stress/xml-module`, which
-  defines its own `attr(name, value): Attribute`, then resolved those two-argument calls
-  to the zero-receiver extension and emitted nonsense. Workaround: the module's lookups
-  are `attribute`/`attributeOr`, and `collect` became `descendants` (the compiler's own
-  build scans `modules/xml`, and `Emitter.collect` met the name halfway). Same root as
-  the item above: candidate selection before name-binding.
 - **Bare `when` labels need a simple-name subject.** `when (v) { I -> ... }` works for a
   local `v`; `when (cell.value()) { I -> ... }` emits a bare `I` the C++ cannot see.
   Workaround: `when (x.getTypeOf())` with qualified labels (`SmSqlValueTypes.I`), the
