@@ -13,6 +13,7 @@ import linear
 import optimizations
 import profiling
 import resources
+import parser
 
 
 fun Emitter.fail(posNode: *AstXmlNode, message: *Str): Unit {
@@ -339,6 +340,7 @@ fun Emitter.collect(): Unit {
     }
     }
     this.collectSretFns()
+    this.collectFreshHandles()
 }
 
 // Whether a return type is one the out-parameter ABI pays for: a *class* value (a user
@@ -416,6 +418,141 @@ fun Emitter.sretMarkValueUses(node: *AstXmlNode, used: *Dictionary<Str, Bool>): 
     }
     for (*child in node.Children) {
         this.sretMarkValueUses(child, used)
+    }
+}
+
+// A `&T`-returning free function whose every return builds the value it hands back -
+// `return &Ctor(...)` - is a *fresh-handle* one: the box exists only because the authored
+// ABI returns a handle. For one of those the emitter also writes a value twin
+// `void <name>_v(T* _sm_out, ...)` - the same body with every construction stored into the
+// caller's storage - which a call whose handle never escapes takes
+// (`PromoteRefs.ilPromoteFind`'s fresh-call arm rewrites the call); the authored `Ref<T>`
+// ABI stays for every other call, so both spellings of one function live in one program.
+fun Emitter.freshHandleEligible(fn: *CgFn): Bool {
+    val decl: *AstXmlNode = *fn.decl
+    if (!fn.hasBody || fn.isNative || fn.prelude) {
+        return false
+    }
+    if (!xmlIsEmpty(fn.receiver)) {
+        return false // methods take their receiver through the twin's free spelling; later
+    }
+    if (xmlAttr(decl, AstNodeAttributeKind.IsOperator) == "true"
+        || xmlAttr(decl, AstNodeAttributeKind.IsSuspend) == "true"
+        || xmlAttr(decl, AstNodeAttributeKind.IsUnionGenerated) == "true"
+    ) {
+        return false
+    }
+    if (fn.name == "main" || fn.name.endsWith("_invoke")) {
+        return false
+    }
+    if (xmlCount(decl, AstNodeKind.TypeParam) > 0) {
+        return false
+    }
+    val returnNode: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.ReturnType)
+    if (xmlIsEmpty(returnNode) || xmlKind(returnNode) != AstNodeCategory.TypeReference) {
+        return false
+    }
+    // The payload must be a class the store can spell: a `union class` has no aggregate
+    // form, and a payload with an `unInit` would run its destructor twice - the same
+    // refusal the promotion makes at the call (`ilPromotePayloadRefused`).
+    val inner: *AstXmlNode = xmlChildPtr(*returnNode, AstNodeKind.Inner)
+    if (xmlIsEmpty(inner)) {
+        return false
+    }
+    val innerName: Str = xmlAttr(*this.resolveAlias(*inner), AstNodeAttributeKind.Name)
+    val innerDecl: *AstXmlNode = this.types.getPtr(innerName)
+    if (innerDecl == null || innerDecl.name != AstNodeKind.DataClass) {
+        return false
+    }
+    if (xmlAttr(*innerDecl, AstNodeAttributeKind.IsUnionClass) == "true") {
+        return false
+    }
+    for (*member in xmlChildren(*innerDecl, AstNodeKind.Function)) {
+        if (xmlAttr(member, AstNodeAttributeKind.Name) == "unInit") {
+            return false
+        }
+    }
+    val body: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.Body)
+    if (xmlIsEmpty(body)) {
+        return false
+    }
+    val returns: Int = this.freshReturnCount(body)
+    return returns > 0
+}
+
+// The number of `return` statements under `node` when every one is `&Ctor(...)` and no
+// lambda hides anywhere (its returns are its own, and a capture could hold the very
+// handle the twin removes the box from); -1 the moment either refuses.
+fun Emitter.freshReturnCount(node: *AstXmlNode): Int {
+    val kind: AstNodeCategory = xmlKind(node)
+    if (kind == AstNodeCategory.ExprLambda) {
+        return -1
+    }
+    var count: Int = 0
+    if (kind == AstNodeCategory.StmtReturn) {
+        count = 1
+        val value: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Value)
+        if (xmlKind(value) != AstNodeCategory.ExprRef) {
+            return -1
+        }
+        val built: *AstXmlNode = xmlChildPtr(value, AstNodeKind.Operand)
+        if (xmlKind(built) != AstNodeCategory.ExprCall) {
+            return -1
+        }
+        val callee: *AstXmlNode = xmlChildPtr(built, AstNodeKind.Callee)
+        val calleeKind: AstNodeCategory = xmlKind(callee)
+        if (calleeKind != AstNodeCategory.ExprName && calleeKind != AstNodeCategory.ExprGenericName) {
+            return -1
+        }
+    }
+    for (*child in node.Children) {
+        val sub: Int = this.freshReturnCount(child)
+        if (sub < 0) {
+            return -1
+        }
+        count = count + sub
+    }
+    return count
+}
+
+// The fresh-handle twins: eligibility over the collected functions, each twin registered
+// in the out-parameter set under its own key (so a retargeted call resolves through
+// `IlEmit`'s sret arm) and the `pkg|name` pair recorded for the promotion pass. A program
+// that already declares the twin's name keeps the authored ABI only - a synthetic name
+// must never capture a real declaration.
+fun Emitter.collectFreshHandles(): Unit {
+    this.freshHandles = Dictionary<Str, Bool>()
+    if (epNoEscape()) {
+        // The escape hatch: no twins at all, the authored box ABI everywhere - the
+        // emitted C++ is what the structural rules alone allow.
+        return
+    }
+    var taken: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    for (*fn in this.functions) {
+        taken.insert(fn.name, true)
+    }
+    for (*fn in this.functions) {
+        if (!this.freshHandleEligible(fn)) {
+            continue
+        }
+        val twinName: Str = fn.name + "_v"
+        if (taken.has(twinName)) {
+            continue
+        }
+        val returnNode: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
+        val inner: *AstXmlNode = xmlChildPtr(*returnNode, AstNodeKind.Inner)
+        val savedFailed: Bool = this.failed
+        val savedError: Str = this.error
+        val text: Str = this.type(*inner)
+        this.failed = savedFailed
+        this.error = savedError
+        if (this.failed || text == "") {
+            continue
+        }
+        val twinKey: Str = this.qualify(fn.packageName, twinName)
+        this.sretFns.insert(twinKey, true)
+        this.sretRets.insert(twinKey, text)
+        this.freshHandles.insert(fn.packageName + "|" + fn.name, true)
     }
 }
 

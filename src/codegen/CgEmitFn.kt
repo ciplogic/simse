@@ -391,6 +391,9 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
         if (!isMain && !mainArgs) {
             this.emitDeducedCallableOverload(fn, decl, ret, fnName, true)
         }
+        if (this.freshHandles.has(fn.packageName + "|" + fn.name)) {
+            this.emitFreshTwin(fn, decl, facts, true)
+        }
         return
     }
     if (!fn.hasBody) {
@@ -471,9 +474,80 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
         return
     }
     this.line(0, "}")
+    if (this.freshHandles.has(fn.packageName + "|" + fn.name)) {
+        this.emitFreshTwin(fn, decl, facts, false)
+    }
     if (!isMain && !mainArgs) {
         this.emitDeducedCallableOverload(fn, decl, ret, fnName, false)
     }
+}
+
+// The value twin of a fresh-handle function (`CgCore.freshHandleEligible`): the same
+// parameters and the same body, emitted `void <name>_v(T* _sm_out, ...)` with every
+// return's `&Ctor(...)` stored into the caller's storage - the ABI a promoted call takes
+// (`PromoteRefs` rewrites the call to the twin; `IlEmit`'s twin branches spell the body).
+// The authored `Ref<T>` function stays for every other call site.
+fun Emitter.emitFreshTwin(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototypeOnly: Bool): Unit {
+    this.curDecl = * fn.decl
+    this.curSretOut = ""
+    this.setActiveTypeParams(fn.templateParams)
+    this.setActiveConstraints(decl)
+    this.machineIter = false
+    val params0: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
+    val returnNode: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.ReturnType)
+    val inner: *AstXmlNode = xmlChildPtr(*returnNode, AstNodeKind.Inner)
+    val payloadText: Str = this.type(*inner)
+    if (this.failed) {
+        return
+    }
+    var params: List<Str> = List<Str>()
+    for (*param in params0) {
+        val paramType: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
+        if (xmlIsEmpty(paramType)) {
+            return
+        }
+        val typeText: Str = this.type(paramType)
+        val paramName: Str = xmlAttr(param, AstNodeAttributeKind.Name)
+        params.append(`@typeText @paramName`)
+        if (this.failed) {
+            return
+        }
+    }
+    val twinName: Str = this.qualify(fn.packageName, fn.name + "_v")
+    val cgJoinText: Str = cgJoin(params, ", ")
+    var paramText: Str = `@payloadText* _sm_out`
+    if (cgJoinText != "") {
+        paramText = `@payloadText* _sm_out, @cgJoinText`
+    }
+    val signature: Str = `void @twinName(@paramText)`
+    if (prototypeOnly) {
+        this.line(0, signature + ";")
+        return
+    }
+    this.sourceComment(decl)
+    this.line(0, signature + " {")
+    this.beginScope(fn, NameKind.Value, xmlEmptyNode())
+    this.curReturnType = *returnNode
+    this.curTwinOut = "_sm_out"
+    var lowered: List<AstXmlNode> =
+        linLowerForEmission(xmlChildren(xmlChildPtr(decl, AstNodeKind.Body), AstNodeKind.Stmt))
+    val semantics: SemBody = SemBody(
+        decl, fn.templateParams, xmlEmptyNode(), xmlEmptyNode(),
+        List<Str>(), List<AstXmlNode>(), Dictionary<Str, AstXmlNode>()
+    )
+    var inferred: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+    lowered = semInferTypes(lowered, facts, semantics, inferred)
+    val finalBody: List<AstXmlNode> = linFinishForEmission(
+        lowered,
+        this.cgReservedNames(decl, false, false),
+        `fn:@signature`
+    )
+    this.emitBodyAt(this.ilFunctionFor(fn, decl, facts, inferred), finalBody, fn.file, 1, true)
+    this.curTwinOut = ""
+    if (this.failed) {
+        return
+    }
+    this.line(0, "}")
 }
 
 // One parameter of a generic function whose declared type is a callable that mentions the

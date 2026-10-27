@@ -300,6 +300,14 @@ data class Emitter(
     // declares (the method table carries no return type for a dst-less call).
     var sretRets: Dictionary<Str, Str>,
     var curSretOut: Str,
+    // The fresh-handle functions with a value twin (`CgCore.collectFreshHandles`): keyed
+    // `pkg|name`, the pair the promotion pass reads - the twin's own sret registration is
+    // keyed the way every sret name is. A call the promotion rewrites resolves the twin
+    // through it; every other call keeps the authored `Ref<T>` ABI.
+    var freshHandles: Dictionary<Str, Bool>,
+    // "_sm_out" while a fresh-handle twin's body is being emitted (its returns store the
+    // construction into the caller's storage and answer plain), "" otherwise.
+    var curTwinOut: Str,
     var nsPrefixes: Dictionary<Str, Str>,
     var typePackages: Dictionary<Str, Str>,
     var statics: List<CgStatic>,
@@ -405,6 +413,8 @@ fun newEmitter(inputs: *List<CgInput>, resourceStored: *List<Str>): Emitter {
         xmlEmptyNode(),
         Dictionary<Str, Bool>(),
         Dictionary<Str, Str>(),
+        "",
+        Dictionary<Str, Bool>(),
         "",
         Dictionary<Str, Str>(),
         Dictionary<Str, Str>(),

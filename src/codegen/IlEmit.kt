@@ -130,6 +130,25 @@ fun Emitter.ilSretRet(key: Str): Str {
     return *text
 }
 
+// Whether `slot` is one of the twin body's aliased returns (only asked while
+// `curTwinOut` is set): a `&T` slot whose single definition is the boxed construction -
+// the twin has no storage of its own for it, the caller's `_sm_out` is where the value
+// lives, so its declaration prints nothing and its return is the plain exit.
+fun Emitter.ilTwinAliased(il: *IlBody, frame: *IlFrame, slot: Int): Bool {
+    if (this.curTwinOut == "" || slot < 0 || slot >= il.vars.size()) {
+        return false
+    }
+    val typeNode: AstXmlNode = ilVarType(il, slot)
+    if (xmlIsEmpty(typeNode) || xmlKind(typeNode) != AstNodeCategory.TypeReference) {
+        return false
+    }
+    val def: Int = this.ilIntAt(frame.defOp, slot, -1)
+    if (def < 0 || def >= il.ops.size() || il.ops[def].kind != IlOpKind.CallCtor) {
+        return false
+    }
+    return true
+}
+
 fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
     // A declaration a jump can cross needs a block of its own.
     var blockEnd: Dictionary<Int, IlCrossing> = Dictionary<Int, IlCrossing>()
@@ -220,6 +239,10 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             }
             val slotType: AstXmlNode = ilVarType(il, slot)
             if (!xmlIsEmpty(slotType)) {
+                if (this.ilTwinAliased(il, frame, slot)) {
+                    i++
+                    continue // the twin's aliased return: the caller's storage, no local
+                }
                 val shared: *List<Str> = declLines.getPtr(i)
                 if (shared != null) {
                     // A declaration a group already lists: the first of its type prints
@@ -422,6 +445,31 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
         }
         if (dst >= 0) {
             val slotType: AstXmlNode = ilVarType(il, dst)
+            if (this.curTwinOut != "" && kind == IlOpKind.CallCtor && this.ilTwinAliased(il, frame, dst)) {
+                // The twin's one store: the construction goes straight into the caller's
+                // storage - the `makeRef` the authored ABI builds here never happens.
+                val aliasedType: AstXmlNode = slotType
+                val payload: *AstXmlNode = xmlChildPtr(aliasedType, AstNodeKind.Inner)
+                if (xmlIsEmpty(payload)) {
+                    return IlText(false, "", "a twin return with no payload")
+                }
+                var twinArgs: List<Str> = List<Str>()
+                var t: Int = 2
+                while (t < op.operands.size()) {
+                    val argNode: AstXmlNode = this.ilOperandNode(il, frame, op.operands[t], 0)
+                    if (xmlIsEmpty(argNode)) {
+                        return IlText(false, "", "a twin return with no argument")
+                    }
+                    twinArgs.append(this.expr(argNode, 0, xmlEmptyNode()))
+                    t++
+                }
+                val payloadText: Str = this.type(*payload)
+                val argsText: Str = cgJoin(twinArgs, ", ")
+                val outName: Str = this.curTwinOut
+                this.ilLine(text, lvl, `*@outName = @payloadText{@argsText};`)
+                i++
+                continue
+            }
             // An instruction that defines an untyped slot *is* that slot's declaration
             // (`auto x = <this>;`); a typed one was declared with the frame at the top.
             val declares: Bool = xmlIsEmpty(slotType) && this.ilIntAt(frame.defOp, dst, -1) == i
@@ -619,6 +667,13 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
         }
         if (kind == IlOpKind.Return || kind == IlOpKind.ReturnVoid) {
             if (kind == IlOpKind.ReturnVoid) {
+                this.ilLine(text, lvl, "return;")
+                i++
+                continue
+            }
+            if (this.ilTwinAliased(il, frame, this.ilOpOperand(op.operands, 0))) {
+                // The aliased construction already stored into `_sm_out`; the return is
+                // only the exit.
                 this.ilLine(text, lvl, "return;")
                 i++
                 continue

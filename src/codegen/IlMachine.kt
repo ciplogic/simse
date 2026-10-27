@@ -438,7 +438,7 @@ fun Emitter.ilFuseConcatUnit(unit: *IlUnit): Unit {
 fun Emitter.emitBodyAt(info: *IlFunction, body: *List<AstXmlNode>, file: *Str, level: Int, measure: Bool): Unit {
     val unit: IlUnit = ilExtractUnit(info, body, file)
     this.ilFuseConcatUnit(unit)
-    ilPromoteRefsUnit(unit, info.facts)
+    ilPromoteRefsUnit(unit, info.facts, *this.freshHandles)
     ilReuseUnit(unit, *this.pureCallees)
     val emitted: IlText = this.emitIlBodyText(unit, level)
     if (!emitted.ok) {

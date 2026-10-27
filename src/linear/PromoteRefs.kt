@@ -231,11 +231,13 @@ fun ilPromoteIsValueSlot(il: *IlBody, slot: Int): Bool {
 }
 
 // The one slot this round would promote, or -1. A candidate is a `&T` slot written exactly once -
-// by a `CallCtor` in the body's first block, or by a `Box` of a value slot nothing else reads - with
-// no use outside the safe set.
+// by a `CallCtor` in the body's first block, by a `Box` of a value slot nothing else reads, or by a
+// call to a fresh-handle function with a value twin (the set keyed `pkg|name` the collect walk
+// registered) - with no use outside the safe set.
 fun ilPromoteFind(
     il: *IlBody, bad: *List<Bool>, defCount: *List<Int>, defOp: *List<Int>,
-    useCount: *List<Int>, initCount: *List<Int>, initOp: *List<Int>, facts: *SemFacts
+    useCount: *List<Int>, initCount: *List<Int>, initOp: *List<Int>, facts: *SemFacts,
+    fresh: *Dictionary<Str, Bool>
 ): Int {
     val slots: Int = il.vars.size()
     val firstBlockEnd: Int = ilReuseFirstBlockEnd(il)
@@ -254,6 +256,17 @@ fun ilPromoteFind(
                     if (!ilPromotePayloadRefused(xmlChildPtr(refNode, AstNodeKind.Inner), facts)) {
                         return c
                     }
+                }
+                // A fresh-handle call: the callee's value twin (registered in the sret set
+                // under its own key by the collect walk) builds the value in the caller's
+                // storage, and the handle points at it - the promoted shape straight from
+                // the source spelling. The escape hatch keeps the authored box ABI.
+                if (def.kind == IlOpKind.Call && def.operands.size() >= 2 && def.operands[0] == c
+                    && at < firstBlockEnd && !epNoEscape()
+                    && ilFreshTwinMethod(il, def, fresh)
+                    && !ilPromotePayloadRefused(xmlChildPtr(refNode, AstNodeKind.Inner), facts)
+                ) {
+                    return c
                 }
                 // `&src` boxing a copy: pointing at `src` itself drops the copy, so long as that
                 // changes nothing observable - `src` is built before the box (once, by its own
@@ -281,6 +294,21 @@ fun ilPromoteFind(
         c++
     }
     return -1
+}
+
+// Whether the method a Call op names is a fresh-handle function with a value twin: the
+// `pkg|name` pair the collect walk registered (`CgCore.collectFreshHandles`). Only a
+// resolved free function can be one - the set never holds another kind.
+fun ilFreshTwinMethod(il: *IlBody, op: *IlOp, fresh: *Dictionary<Str, Bool>): Bool {
+    val at: Int = ilReuseMethodIndex(op)
+    if (at < 0 || at >= il.methods.size()) {
+        return false
+    }
+    val method: IlMethod = il.methods[at]
+    if (method.kind != IlMethodKind.Function || method.staticBase >= 0) {
+        return false
+    }
+    return fresh.has(method.packageName + "|" + method.name)
 }
 
 // The body rebuilt with slot `c` promoted; `at` is its single definition.
@@ -333,6 +361,33 @@ fun ilPromoteApply(il: *IlBody, c: Int, at: Int): Unit {
                 // `c = &src`, the storage `src` already has.
                 ops.append(IlOp(IlOpKind.Deref, ilOps2(c, stack)))
                 lines.append(il.lines[i])
+            } else if (def.kind == IlOpKind.Call) {
+                // The fresh-handle call retargeted to its value twin: the method clone
+                // carries the twin's name (and its package, so the emitter qualifies the
+                // head), the destination is the stack slot, and the sret spelling at the
+                // emitter prepends `&stack` - `name_v(&_sm_stkN, args)`. The handle then
+                // points at the storage the twin built.
+                val methodAt: Int = ilReuseMethodIndex(def)
+                val method: IlMethod = il.methods[methodAt]
+                val twinAt: Int = il.methods.size()
+                il.methods.append(
+                    IlMethod(
+                        method.name + "_v", method.kind, method.argCount, method.staticBase,
+                        method.returnType, method.argTypes, method.packageName, method.recvIsValue
+                    )
+                )
+                var called: List<Int> = List<Int>()
+                called.append(stack)
+                called.append(twinAt)
+                var a: Int = 2
+                while (a < op.operands.size()) {
+                    called.append(op.operands[a])
+                    a++
+                }
+                ops.append(IlOp(IlOpKind.Call, called))
+                lines.append(il.lines[i])
+                ops.append(IlOp(IlOpKind.Deref, ilOps2(c, stack)))
+                lines.append(il.lines[i])
             } else {
                 // The construction now builds the stack value, and the handle points at it.
                 var built: List<Int> = List<Int>()
@@ -373,7 +428,7 @@ fun ilPromoteApply(il: *IlBody, c: Int, at: Int): Unit {
 // The body with every promotable counted-reference local promoted to a stack value and a raw
 // pointer. Answers whether the body changed; repeated to a fixpoint, since promoting one slot
 // rewrites the instruction list (the indices are rebuilt each round).
-fun ilPromoteRefs(il: *IlBody, facts: *SemFacts): Bool {
+fun ilPromoteRefs(il: *IlBody, facts: *SemFacts, fresh: *Dictionary<Str, Bool>): Bool {
     val slots: Int = il.vars.size()
     if (slots == 0 || il.ops.size() == 0) {
         return false
@@ -453,7 +508,7 @@ fun ilPromoteRefs(il: *IlBody, facts: *SemFacts): Bool {
             i++
         }
         val c: Int = ilPromoteFind(
-            il, *bad, *defCount, *defOp, *useCount, *initCount, *initOp, facts
+            il, *bad, *defCount, *defOp, *useCount, *initCount, *initOp, facts, fresh
         )
         if (c >= 0) {
             ilPromoteApply(il, c, defOp[c])
@@ -465,11 +520,11 @@ fun ilPromoteRefs(il: *IlBody, facts: *SemFacts): Bool {
 }
 
 // Every body of a unit - the function and the lambdas it constructs - since a slot of one is not a
-// slot of another.
-fun ilPromoteRefsUnit(unit: *IlUnit, facts: *SemFacts): Bool {
-    var changed: Bool = ilPromoteRefs(*unit.body, facts)
+// slot of another. `fresh` is the fresh-handle pair set the emitter's collect walk registered.
+fun ilPromoteRefsUnit(unit: *IlUnit, facts: *SemFacts, fresh: *Dictionary<Str, Bool>): Bool {
+    var changed: Bool = ilPromoteRefs(*unit.body, facts, fresh)
     for (*lambda in unit.lambdas) {
-        if (ilPromoteRefs(lambda, facts)) {
+        if (ilPromoteRefs(lambda, facts, fresh)) {
             changed = true
         }
     }

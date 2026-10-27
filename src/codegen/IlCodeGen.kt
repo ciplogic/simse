@@ -58,7 +58,7 @@ fun Emitter.dumpIl(
     val unit: IlUnit = ilExtractUnit(this.ilFunctionFor(fn, decl, facts, inferred), body, fn.file)
     // The dump shows the IL the emitter is about to read, so the fusion and the reuse run here too.
     this.ilFuseConcatUnit(unit)
-    ilPromoteRefsUnit(unit, facts)
+    ilPromoteRefsUnit(unit, facts, *this.freshHandles)
     ilReuseUnit(unit, *this.pureCallees)
     val text: Str = printIlUnit(unit)
     // `eprintln` adds a newline the dump already ends with: drop that byte.
