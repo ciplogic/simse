@@ -369,15 +369,19 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
             param = xmlChildPtr(paramNodes[paramOffset + i], AstNodeKind.Type)
         }
         var argNode: AstXmlNode = argNodes[i]
-        if (xmlIsEmpty(param) && xmlIsEmpty(paramOwner) && calleeName == "initByValue"
+        if (xmlIsEmpty(param) && xmlIsEmpty(paramOwner)
             && xmlKind(argNode) == AstNodeCategory.ExprName
+            && this.ilOverloadsAllTakeValue(calleeName, i, argNodes.size())
         ) {
-            // The union arm constructor's C++ is an overload set the C++ compiler resolves
-            // (one arm per field type) - no single Simse target exists here to convert
-            // through - and every arm copies its value *in*. A name the auto-borrow
-            // rewrite holds as `*Str` (`return (message)` in `err2<T>(message: Str)`) is
-            // therefore spelled as the explicit deref, the value read the arm copies;
-            // raw, the pointer would reach an overload wanting `Str`.
+            // A call no single Simse target answers, where every same-arity declaration's
+            // parameter at this position is a *value* - the C++ overload set the call
+            // hands the argument to resolves against value parameters. An auto-borrowed
+            // name (`return (message)` in `err2<T>(message: Str)`, held as `*Str`) is
+            // therefore spelled as the explicit deref, the value the set copies in; raw,
+            // the pointer would reach an overload wanting `Str`. A set that takes a
+            // pointer there (`parseModule(Span, *Str)`) keeps the raw spelling, and so
+            // does a name no declaration records - except the union arm constructor,
+            // whose arms are generated all-value (`initByValue`).
             val at: Int = this.varIndex(xmlAttr(argNode, AstNodeAttributeKind.Name))
             if (at >= 0 && xmlKind(ilVarType(this.out, at)) == AstNodeCategory.TypePointer) {
                 argNode = ilDerefNode(argNode)
@@ -747,6 +751,49 @@ fun IlExtractor.ilConfusingLambdaOverload(
         return `ambiguous call of '@name': a lambda argument fits a declaration taking a callable and one taking a plain value (C++ would silently take the plain one); pass the type arguments explicitly ('@name<...>(...)')`
     }
     return ""
+}
+
+// Whether every same-arity declaration of `name` takes its `at`-th parameter by *value*:
+// the C++ overload set an unresolved call hands the argument to resolves against value
+// parameters then, so an auto-borrowed name must arrive as its value (`ilAllOverloads`'s
+// caller spells the deref). A position where any overload takes a pointer or a handle -
+// `parseModule(Span, *Str)` - answers false, and so does a name no declaration records:
+// nothing proves the set wants the value. The union arm constructor is the one exception
+// spelled by name: its arms are compiler-generated, every one copying its value in, and
+// no declaration of them is collected.
+fun IlExtractor.ilOverloadsAllTakeValue(name: Str, at: Int, argCount: Int): Bool {
+    if (name == "initByValue") {
+        return true
+    }
+    if (this.fn.facts == null) {
+        return false
+    }
+    val named: *List<Int> = this.fn.facts.functionsByName.getPtr(name)
+    if (named == null) {
+        return false
+    }
+    var sawAny: Bool = false
+    for (fi in named) {
+        val fact: *SemFnFact = *this.fn.facts.functions[fi]
+        if (xmlIsEmpty(fact.decl) || fact.paramCount != argCount) {
+            continue
+        }
+        sawAny = true
+        val params: List<AstXmlNode> = xmlChildren(fact.decl, AstNodeKind.Param)
+        val pos: Int = semReceiverParams(fact.decl) + at
+        if (pos >= params.size()) {
+            return false
+        }
+        val paramType: *AstXmlNode = xmlChildPtr(params[pos], AstNodeKind.Type)
+        if (xmlIsEmpty(paramType)) {
+            return false
+        }
+        val kind: AstNodeCategory = xmlKind(paramType)
+        if (kind == AstNodeCategory.TypePointer || kind == AstNodeCategory.TypeReference) {
+            return false
+        }
+    }
+    return sawAny
 }
 
 // The symbol prefix a synthesized class takes: the body's own emitted name.
