@@ -161,6 +161,17 @@ fun Parser.parsePostfix(): ExprNode {
     // One list for the whole walk, cleared per call: the arguments of the call being parsed.
     var args: List<AstXmlNode> = List<AstXmlNode>()
     while (true) {
+        // A continuation line starting with `.` extends the chain (`Box(1)` on one line,
+        // `.bumped()` on the next): the one newline an expression may span, tried
+        // tentatively - a newline that starts no `.` ends the expression as ever.
+        if (this.checkKind(TokenKind.EndOfLine)) {
+            val savedCursor: Span<Token> = this.cursor
+            this.skipNewlines()
+            if (!this.checkText(".")) {
+                this.cursor = savedCursor
+                break
+            }
+        }
         if (this.matchText("(")) {
             args.clear()
             this.skipNewlines()

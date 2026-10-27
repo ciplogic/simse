@@ -76,6 +76,9 @@ its item here retires.
 - **No leading-dot chain continuation.** A method chain must sit on one line; a
   continuation line starting with `.` is a parse error. Long chains: bind the
   intermediate to a name.
+  *Fixed: a continuation line starting with `.` extends the expression above it now -
+  the one newline an expression may span, tried tentatively so every other newline ends
+  it as ever (`Parser.parsePostfix`); `stress/dot-continuation` pins it.*
 - **`Char` is a signed byte.** `ch >= 128` is tautologically false (clang warns); the
   non-ASCII test is `Int(ch) < 0`, the unsigned read `Int(ch) & 255`
   (`bench/simse/kit`).

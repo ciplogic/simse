@@ -86,7 +86,9 @@ String interpolation has two spellings: a backtick string `` `n=@n` `` / `` `@(n
 Kotlin's `$name` / `${expr}` in an ordinary quoted string (`"n is $n"`, `"sum ${a + b}"`). A
 literal `@` in an interpolating backtick string is a diagnostic; a `$` that starts no item is
 a literal dollar (`\$` when the next byte would start one). `+` concatenates `Str`; `fmtStr("|.|", a, b)` builds one
-buffer (prefer it to a chain of `+`).
+buffer (prefer it to a chain of `+`). A method chain may wrap onto continuation lines that
+start with `.` — the one newline an expression may span (`Box(1)` then `.bumped()` on the
+next line); a newline that starts no `.` ends the expression.
 
 ## Functions, extensions, lambdas
 
