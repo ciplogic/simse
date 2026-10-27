@@ -4,8 +4,10 @@ Status: planning baseline for implementation in steps. Each step is independentl
 (`bun tools/iterate.js --full` green, one commit each), ordered by (value / effort). The
 record of what already landed is `impl_specs/capability-matrix.md` (search "viral
 auto-borrow", "out-parameter ABI"); this file is only the forward plan. Where things
-stand: Steps 1–4 are landed, Step 6 is resolved by the landed machinery (its section says
-why nothing remained to land), and Step 5 — the twin ABI — is the one still forward.
+stand: **all six steps are resolved** — 1–4 landed (plus the follow-up sema resolution
+commit `f776d19`), 6 by the landed machinery rather than a seed (its section says why),
+and 5's twin ABI landed as `8739921` with `stress/escape-twin` pinning it. What remains
+here is the smaller cleanups section below.
 
 The two analyses, in one line each:
 
