@@ -212,23 +212,19 @@ unsound as rules:
 
 ## Smaller cleanups (any step's ride-along)
 
-- **Ambiguous native overloads**: the `initByValue`-targeted deref
-  (`LinearFormCall.kt`, `calleeName == "initByValue"` block) is the pattern; a call that
-  resolves no single Simse target and whose every overload's matching parameter is
-  by-value should spell an auto-borrowed name as the explicit deref generally, not just
-  for the one name. Generalize carefully — C++ overload sets that *want* the pointer
-  (`parseModule(Span, *Str)`) must keep the raw spelling; the rule needs the overload
-  set's parameter texts, which the extractor can see through `functionsByName`.
-- **`repeat`/`forEach` dirty through callable params** (seen in the traces:
-  `repeat: body`, `forEach: f`): a call to a *parameter* is an opaque call today. A
-  parameter of callable type that the body only calls (never stores) is a known
-  signature — the call dirts nothing the caller lent. Small predicate on the callee
-  node being an `ExprName` that resolves to a callable-typed parameter of the enclosing
-  declaration.
-- **`bpCallTrusted` surface table** (`BorrowParams.kt`): if the prelude grows more
-  collision-safe spellings (`simse_opt*`/`simse_res*` today), the twin table must grow
-  with them — worth a comment on `optres.kt` pointing at the table so the next accessor
-  does not silently un-borrow every caller.
+All three landed:
+
+- **Callable params trusted by the fixpoint** (`a2a6e0b`): a call to a callable-by-value
+  parameter of the enclosing declaration imposes no obligation - the callee cannot name a
+  place through which to write. `repeat`/`forEach` prove, and `stress/escape-callable`
+  pins it; the same commit fixed the two bugs the case walked into (a zero-name block's
+  closure contract, and a call through a callable value resolving same-named
+  declarations).
+- **The ambiguous-overload deref generalized** (`a8c118d`): every same-arity declaration's
+  parameter at the position by value is the deref rule now, pointer-wanting sets keep the
+  raw spelling, and the union arms remain the pin.
+- **`bpCallTrusted`'s twin table** (`024a252`): `optres.kt`'s header points at it, so the
+  next accessor does not silently un-borrow every caller.
 
 ## Cross-cutting rules for the implementer
 
