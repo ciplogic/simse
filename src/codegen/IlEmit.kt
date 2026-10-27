@@ -49,26 +49,46 @@ fun Emitter.ilSretKey(il: *IlBody, frame: *IlFrame, op: *IlOp): Str {
     val call: AstXmlNode = this.ilCallNode(il, frame, op)
     val callee: *AstXmlNode = xmlChildPtr(call, AstNodeKind.Callee)
     // The key the definition side used: `qualify(package, name)` of the declaration.
-    // The lanes a call resolves through, each validated against the set: a method
-    // declared in the receiver's type (the type's package names it), an extension on
-    // the receiver (the extension is a plain function, `functionPackage` finds it), and
-    // the callee text the by-value rendering resolves the call to - the declaration's
-    // qualified C++ name whenever the call names it directly.
-    if (xmlKind(callee) == AstNodeCategory.ExprMember) {
-        val recv: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
-        if (!xmlIsEmpty(recv)) {
-            val recvType: AstXmlNode = this.inferType(recv)
-            val outer: AstXmlNode = this.resolveAlias(this.pointee(recvType))
-            if (!xmlIsEmpty(outer)) {
-                val outerName: Str = xmlAttr(outer, AstNodeAttributeKind.Name)
-                if (outerName != "") {
-                    val typeKey: Str = this.qualify(this.typePackage(outerName), method.name)
+    // A member call is decided by the same resolution the by-value rendering runs
+    // (`CgCall.kt`'s member arm), so the ABI the call spells and the head the renderer
+    // emits can never name two declarations: an extension or a class method resolves
+    // through the receiver (`findExtensionFn`, the renderer's own lookup) and answers
+    // that declaration's key or "" - and a call it does not resolve is a native
+    // extension (a symbol whose ABI is as declared) or a protocol/member-access shape,
+    // neither of which the out-parameter rewrite covers. The package-table lanes below
+    // are the *free-call* resolution and stop here: a bare name several packages declare
+    // (`sqlite`'s `insert` beside the RTL's `Dictionary.insert`) is a different C++
+    // symbol than the one a receiver-based rendering spells, so guessing by name alone
+    // rewrote calls into the wrong ABI.
+    if (method.kind == IlMethodKind.Method) {
+        if (xmlKind(callee) == AstNodeCategory.ExprMember) {
+            val recv: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
+            if (!xmlIsEmpty(recv)) {
+                val argCount: Int = xmlChildren(call, AstNodeKind.Arg).size()
+                val fnIndex: Int = this.findExtensionFn(method.name, recv, argCount)
+                if (fnIndex >= 0) {
+                    val fn: *CgFn = *this.functions[fnIndex]
+                    val typeKey: Str = this.qualify(fn.packageName, fn.name)
                     if (this.sretFns.has(typeKey)) {
                         return typeKey
+                    }
+                    return ""
+                }
+                // The renderer's own fallback when the receiver's type is unknown
+                // (`CgCall.kt`'s `receiverFnNames` lane): a receiver function spelled
+                // by name, its head the same `functionPackage` qualification the
+                // emitted call carries.
+                if (xmlIsEmpty(this.pointee(this.inferType(recv)))
+                    && this.receiverFnNames.has(method.name)
+                ) {
+                    val byNameKey: Str = this.qualify(this.functionPackage(method.name), method.name)
+                    if (this.sretFns.has(byNameKey)) {
+                        return byNameKey
                     }
                 }
             }
         }
+        return ""
     }
     // The method's own package, when the resolution carried one: a name several packages
     // declare is two C++ functions, and only the resolved one's sret-ness applies
@@ -232,6 +252,17 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             val def: Int = this.ilIntAt(frame.defOp, slot, -1)
             if (def != i + 1) {
                 if (def < 0) {
+                    // The extractor's own report outranks the shape message: a slot the
+                    // failed lowering left behind (a call that could not resolve declares
+                    // its destination before reporting) is the report's consequence, not a
+                    // second error of its own.
+                    var u: Int = 0
+                    while (u < il.ops.size()) {
+                        if (il.ops[u].kind == IlOpKind.Unsupported) {
+                            return IlText(false, "", this.ilUnsupportedReason(il, u))
+                        }
+                        u++
+                    }
                     val nameText2: Str = il.vars[slot].name
                     val at: Str = ilLineOf(il, i)
                     return IlText(

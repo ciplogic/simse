@@ -270,56 +270,133 @@ fun Analyzer.semaPlainCallReturn(call: *AstXmlNode): AstXmlNode {
         typeArgCount = xmlCount(callee, AstNodeKind.TypeArg)
     }
     val args: List<AstXmlNode> = xmlChildren(call, AstNodeKind.Arg)
+    // Every arity match, before any one is chosen: a name several packages declare with
+    // the same parameter count (`xmlIntAttr` over `*AstXmlNode` and over `*XmlNode`) is
+    // resolved by the arguments' own types - the same rule the IL's call resolution
+    // applies (`LinearFormExpr.callTarget`) - so the type the checker reports is the type
+    // of the declaration the emitted call names. No unique unifier answers empty, exactly
+    // what an unresolved call answered before.
+    var matched: List<AstXmlNode> = List<AstXmlNode>()
     for (*overload in overloads) {
         if (generic && xmlCount(overload, AstNodeKind.TypeParam) != typeArgCount) {
             continue
         }
-        val paramCount: Int = xmlCount(overload, AstNodeKind.Param)
-        if (paramCount != argCount) {
-            // A trailing-pack match answers empty: the packed element type is the call
-            // site's knowledge, not the declaration's.
-            if (paramCount > 0) {
-                val packParams: List<AstXmlNode> = xmlChildren(overload, AstNodeKind.Param)
-                val lastType: *AstXmlNode = xmlChildPtr(packParams[paramCount-1], AstNodeKind.Type)
-                if (semIsPackTarget(lastType) && argCount >= paramCount - 1) {
-                    return xmlEmptyNode()
+        if (xmlCount(overload, AstNodeKind.Param) == argCount) {
+            matched.append(overload)
+        }
+    }
+    if (matched.size() > 1) {
+        var unified: List<AstXmlNode> = List<AstXmlNode>()
+        for (*overload in matched) {
+            if (this.semaOverloadUnifies(overload, args, argCount)) {
+                unified.append(overload)
+            }
+        }
+        // Only a *unique* proven unifier overrides the first match: *none* means the
+        // arguments' own types are unknown here, and the first match stays - the answer
+        // the C++ compiler re-checks when it deduces what the call feeds. *Several*
+        // unifiers are typeable exactly when every one answers the same type (the rule
+        // `functionReturn` applies): two declarations of one signature - a
+        // `@SmGen("kt")` bodyless declaration beside the generated implementation -
+        // name the same shape, while `xmlSkipMisc`'s cursor-`Res`/parser-`Unit` pair
+        // does not.
+        if (unified.size() == 1) {
+            matched = unified
+        } else if (unified.size() > 1) {
+            var agreed: AstXmlNode = xmlEmptyNode()
+            var all: Bool = true
+            for (*overload in unified) {
+                val answer: AstXmlNode = this.semaOverloadReturnType(overload, generic, callee, argCount, args)
+                if (xmlIsEmpty(answer)) {
+                    all = false
+                    break
+                }
+                if (xmlIsEmpty(agreed)) {
+                    agreed = answer
+                } else if (semaTypeText(agreed) != semaTypeText(answer)) {
+                    all = false
+                    break
                 }
             }
-            continue
-        }
-        val typeParams: List<Str> = xmlTypeParamNames(overload)
-        var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
-        if (generic) {
-            val typeArgs: List<AstXmlNode> = xmlChildren(callee, AstNodeKind.TypeArg)
-            var t: Int = 0
-            while (t < typeParams.size() && t < typeArgs.size()) {
-                bindings.insert(typeParams[t], typeArgs[t])
-                t++
+            if (all && !xmlIsEmpty(agreed)) {
+                return agreed
             }
-        } else if (typeParams.size() > 0) {
-            // Infer from the arguments: a parameter whose type names a type parameter
-            // binds it to the argument's type, when the argument's type is known.
-            val declParams: List<AstXmlNode> = xmlChildren(overload, AstNodeKind.Param)
-            var a: Int = 0
-            while (a < argCount && a < declParams.size()) {
-                val paramType: *AstXmlNode = xmlChildPtr(declParams[a], AstNodeKind.Type)
-                val argType: AstXmlNode = this.unionArgType(args[a])
-                if (!xmlIsEmpty(argType)) {
-                    semBindTypes(paramType, argType, typeParams, bindings)
-                }
-                a++
-            }
-        }
-        val ret: AstXmlNode = semSubstitute(xmlChildPtr(overload, AstNodeKind.ReturnType), bindings, typeParams)
-        if (xmlIsEmpty(ret)) {
-            return xmlEmptyNode() // Unit: absence, like every unresolved type here
-        }
-        if (!semTypeParamsAllBound(ret, typeParams, bindings)) {
             return xmlEmptyNode()
         }
-        return ret
+    }
+    if (matched.size() > 0) {
+        // The first match decides, the resolution's own rule.
+        return this.semaOverloadReturnType(matched[0], generic, callee, argCount, args)
     }
     return xmlEmptyNode()
+}
+
+// One overload's answer for `semaPlainCallReturn`: its declared return with the type
+// parameters bound - explicitly from the callee's type arguments, otherwise shallowly
+// from the arguments' own types. Empty when a parameter stays unbound.
+fun Analyzer.semaOverloadReturnType(
+    overload: *AstXmlNode, generic: Bool, callee: *AstXmlNode, argCount: Int, args: List<AstXmlNode>
+): AstXmlNode {
+    val typeParams: List<Str> = xmlTypeParamNames(overload)
+    var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+    if (generic) {
+        val typeArgs: List<AstXmlNode> = xmlChildren(callee, AstNodeKind.TypeArg)
+        var t: Int = 0
+        while (t < typeParams.size() && t < typeArgs.size()) {
+            bindings.insert(typeParams[t], typeArgs[t])
+            t++
+        }
+    } else if (typeParams.size() > 0) {
+        // Infer from the arguments: a parameter whose type names a type parameter
+        // binds it to the argument's type, when the argument's type is known.
+        val declParams: List<AstXmlNode> = xmlChildren(overload, AstNodeKind.Param)
+        var a: Int = 0
+        while (a < argCount && a < declParams.size()) {
+            val paramType: *AstXmlNode = xmlChildPtr(declParams[a], AstNodeKind.Type)
+            val argType: AstXmlNode = this.unionArgType(args[a])
+            if (!xmlIsEmpty(argType)) {
+                semBindTypes(paramType, argType, typeParams, bindings)
+            }
+            a++
+        }
+    }
+    val ret: AstXmlNode = semSubstitute(xmlChildPtr(overload, AstNodeKind.ReturnType), bindings, typeParams)
+    if (xmlIsEmpty(ret)) {
+        return xmlEmptyNode() // Unit: absence, like every unresolved type here
+    }
+    if (!semTypeParamsAllBound(ret, typeParams, bindings)) {
+        return xmlEmptyNode()
+    }
+    return ret
+}
+
+// Whether every argument's type unifies with `overload`'s parameter at its position (a
+// pointer parameter accepts an argument of its pointee - the borrow conversion the call
+// applies): the test that picks one declaration among several of the same arity, the rule
+// the IL's call resolution already applies. An argument whose type the rules cannot name
+// disqualifies the overload rather than proving it, so an unknown never picks a winner.
+fun Analyzer.semaOverloadUnifies(overload: *AstXmlNode, args: List<AstXmlNode>, argCount: Int): Bool {
+    val params: List<AstXmlNode> = xmlChildren(overload, AstNodeKind.Param)
+    val typeParams: List<Str> = xmlTypeParamNames(overload)
+    var a: Int = 0
+    while (a < argCount && a < params.size()) {
+        val paramType: *AstXmlNode = xmlChildPtr(params[a], AstNodeKind.Type)
+        if (xmlIsEmpty(paramType)) {
+            return false
+        }
+        val argType: AstXmlNode = this.unionArgType(args[a])
+        if (xmlIsEmpty(argType)) {
+            return false
+        }
+        if (!semUnifyType(*paramType, argType, *typeParams)) {
+            val paramPointee: AstXmlNode = semPointeeOf(paramType)
+            if (xmlIsEmpty(paramPointee) || !semUnifyType(paramPointee, argType, *typeParams)) {
+                return false
+            }
+        }
+        a++
+    }
+    return true
 }
 
 // Whether every type parameter `ret` mentions is bound: a `List<T>` with a `T` nothing

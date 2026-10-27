@@ -14,6 +14,38 @@ import common
 // explicit instantiation (`identity<Int>(7)`) or the types of the arguments - the last is
 // what makes `twice(f, 5)` an `Int`. A result that still mentions an unbound parameter has
 // no type to spell; the checker reports that at the call (`checkCallDeduction`).
+// Whether every argument's type unifies with the fact's parameter at its position (a
+// pointer parameter accepts an argument of its pointee - the borrow conversion the call
+// applies): the test that picks one declaration among several of the same arity, the rule
+// the IL's call resolution applies. An argument whose type the rules cannot name
+// disqualifies the fact rather than proving it, so an unknown never picks a winner.
+fun semFnArgUnifies(fn: *SemFnFact, argTypes: List<AstXmlNode>): Bool {
+    val params: List<AstXmlNode> = xmlChildren(fn.decl, AstNodeKind.Param)
+    val base: Int = semReceiverParams(fn.decl)
+    var t: Int = 0
+    while (t < argTypes.size()) {
+        if (t + base >= params.size()) {
+            return false
+        }
+        val paramType: *AstXmlNode = xmlChildPtr(params[t + base], AstNodeKind.Type)
+        if (xmlIsEmpty(paramType)) {
+            return false
+        }
+        val argType: AstXmlNode = argTypes[t]
+        if (xmlIsEmpty(argType)) {
+            return false
+        }
+        if (!semUnifyType(*paramType, argType, *fn.templateParams)) {
+            val pointee: AstXmlNode = semPointeeOf(paramType)
+            if (xmlIsEmpty(pointee) || !semUnifyType(pointee, argType, *fn.templateParams)) {
+                return false
+            }
+        }
+        t++
+    }
+    return true
+}
+
 fun SemInfer.functionReturn(
     name: *Str, typeArgs: *List<AstXmlNode>, receiver: *AstXmlNode, argNodes: *List<AstXmlNode>
 ): AstXmlNode {
@@ -21,10 +53,23 @@ fun SemInfer.functionReturn(
     if (named == null) {
         return xmlEmptyNode()
     }
+    // Every exact-arity fact first, before one is chosen: a name several packages declare
+    // with the same parameter count (`xmlIntAttr` over `*AstXmlNode` and over `*XmlNode`)
+    // is typed by the arguments' own types - the same rule the IL's call resolution
+    // applies (`LinearFormExpr.callTarget`), so the type this pass reports is the type of
+    // the declaration the emitted call names. No unique unifier answers empty, exactly
+    // what an unresolved call answered before. A trailing-pack fact is a candidate only
+    // when no exact-arity fact exists (the resolution rule `callTarget` applies); its
+    // answer is the substitution's own - a return that still names an unbound parameter
+    // (the packed element type, `listOf(a, b)`'s `List<T>`) refuses itself, while a
+    // concrete one (`fmtStrWith('@', t, a, b)`'s `Str`) is typed, which every
+    // interpolation's destination slot depends on.
+    var exact: List<Int> = List<Int>()
+    var packed: List<Int> = List<Int>()
+    val argCount: Int = argNodes.size()
     for (i in named) {
         val fn: *SemFnFact = *this.facts.functions[i]
-        val ret: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
-        if (xmlIsEmpty(ret)) {
+        if (xmlIsEmpty(xmlChildPtr(fn.decl, AstNodeKind.ReturnType))) {
             continue
         }
         val hasReceiver: Bool = !xmlIsEmpty(fn.receiver)
@@ -36,39 +81,115 @@ fun SemInfer.functionReturn(
         if (!hasReceiver && fn.isExtension) {
             continue
         }
-        var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
-        if (hasReceiver) {
-            if (!semBindTypes(fn.receiver, receiver, fn.templateParams, bindings)) {
-                continue
+        if (fn.paramCount == argCount) {
+            exact.append(i)
+        } else if (fn.paramCount > 0 && fn.packTarget && argCount >= fn.paramCount - 1) {
+            packed.append(i)
+        }
+    }
+    if (exact.size() > 1) {
+        var argTypes: List<AstXmlNode> = List<AstXmlNode>()
+        for (argNode in argNodes) {
+            argTypes.append(this.infer(argNode))
+        }
+        var unified: List<Int> = List<Int>()
+        for (j in exact) {
+            if (semFnArgUnifies(*this.facts.functions[j], argTypes)) {
+                unified.append(j)
             }
         }
-        if (typeArgs.size() > 0) {
-            if (typeArgs.size() != fn.templateParams.size()) {
-                continue
-            }
-            var bound: Bool = true
-            var a: Int = 0
-            while (a < typeArgs.size()) {
-                if (bound) {
-                    bound = semBindOne(bindings, fn.templateParams[a], typeArgs[a])
+        // Only a *unique* proven unifier overrides the first match: *none* means the
+        // arguments' own types are unknown here - a generic's `auto` result, an inference
+        // this pass could not name - and the first match stays, whose type the C++
+        // compiler re-checks when it deduces the `auto` it feeds. *Several* unifiers are
+        // typeable exactly when every one answers the same type: two declarations of one
+        // signature (a `@SmGen("kt")` bodyless declaration beside the generated
+        // implementation, packages apart) name the same shape, while `xmlSkipMisc`'s
+        // cursor-`Res`/parser-`Unit` pair does not, and a pair whose answers this pass
+        // cannot spell proves nothing.
+        if (unified.size() == 1) {
+            exact = unified
+        } else if (unified.size() > 1) {
+            var agreed: AstXmlNode = xmlEmptyNode()
+            var all: Bool = true
+            for (j in unified) {
+                val answer: AstXmlNode = this.functionReturnOf(j, typeArgs, receiver, argNodes)
+                if (xmlIsEmpty(answer)) {
+                    all = false
+                    break
                 }
-                a++
+                if (xmlIsEmpty(agreed)) {
+                    agreed = answer
+                } else if (semaTypeText(agreed) != semaTypeText(answer)) {
+                    all = false
+                    break
+                }
             }
-            if (!bound) {
-                continue
+            if (all && !xmlIsEmpty(agreed)) {
+                return agreed
             }
+            return xmlEmptyNode()
         }
-        if (fn.templateParams.size() > 0) {
-            var argTypes: List<AstXmlNode> = List<AstXmlNode>()
-            for (argNode in argNodes) {
-                argTypes.append(this.infer(argNode))
+    } else if (exact.size() == 0 && packed.size() > 0) {
+        // No exact-arity fact: the packed ones answer in declaration order, no
+        // disambiguation (their argument/parameter counts differ, so a per-position
+        // unifier has nothing to compare).
+        exact = packed
+    }
+    for (i in exact) {
+        val answer: AstXmlNode = this.functionReturnOf(i, typeArgs, receiver, argNodes)
+        if (!xmlIsEmpty(answer)) {
+            return answer
+        }
+    }
+    return xmlEmptyNode()
+}
+
+// One fact's answer for `functionReturn`: its declared return with the receiver, the
+// explicit type arguments and the arguments' own types bound, and the machine class a
+// `..T` return names. Empty when a binding fails or a type parameter stays unbound - the
+// caller's rule for what that emptiness means.
+fun SemInfer.functionReturnOf(
+    i: Int, typeArgs: *List<AstXmlNode>, receiver: *AstXmlNode, argNodes: *List<AstXmlNode>
+): AstXmlNode {
+    val fn: *SemFnFact = *this.facts.functions[i]
+    val ret: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
+    if (xmlIsEmpty(ret)) {
+        return xmlEmptyNode()
+    }
+    val hasReceiver: Bool = !xmlIsEmpty(fn.receiver)
+    var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+    if (hasReceiver) {
+        if (!semBindTypes(fn.receiver, receiver, fn.templateParams, bindings)) {
+            return xmlEmptyNode()
+        }
+    }
+    if (typeArgs.size() > 0) {
+        if (typeArgs.size() != fn.templateParams.size()) {
+            return xmlEmptyNode()
+        }
+        var bound: Bool = true
+        var a: Int = 0
+        while (a < typeArgs.size()) {
+            if (bound) {
+                bound = semBindOne(bindings, fn.templateParams[a], typeArgs[a])
             }
-            semBindCallArgs(fn.decl, xmlEmptyNode(), *argTypes, *fn.templateParams, *bindings)
+            a++
         }
-        val result: AstXmlNode = semSubstitute(ret, bindings, fn.templateParams)
-        if (!xmlIsEmpty(result)) {
-            return semMachineType(result, fn, bindings, receiver)
+        if (!bound) {
+            return xmlEmptyNode()
         }
+    }
+    if (fn.templateParams.size() > 0) {
+        var argTypes: List<AstXmlNode> = List<AstXmlNode>()
+        for (argNode in argNodes) {
+            argTypes.append(this.infer(argNode))
+        }
+        semBindCallArgs(fn.decl, xmlEmptyNode(), *argTypes, *fn.templateParams, *bindings)
+    }
+    val result: AstXmlNode = semSubstitute(ret, bindings, fn.templateParams)
+    if (!xmlIsEmpty(result)) {
+        return semMachineType(result, fn, bindings, receiver)
     }
     return xmlEmptyNode()
 }

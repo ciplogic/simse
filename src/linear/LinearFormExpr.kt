@@ -318,17 +318,6 @@ fun IlExtractor.callTarget(callee: *AstXmlNode, receiver: *AstXmlNode, argNodes:
                 matched = candidates[k2 - 1]
                 matchedCount++
             }
-            if (name == "xmlSkipMisc") {
-                var arg0: AstXmlNode = this.exprType(argNodes[0])
-                if (xmlIsEmpty(arg0)) {
-                    println("skipMisc arg UNKNOWN")
-                } else {
-                    println("skipMisc arg known")
-                }
-            }
-        }
-        if (name == "xmlSkipMisc") {
-            println("narrow done")
         }
         if (matchedCount == 1) {
             return matched
