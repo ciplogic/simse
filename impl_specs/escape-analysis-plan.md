@@ -3,7 +3,9 @@
 Status: planning baseline for implementation in steps. Each step is independently landable
 (`bun tools/iterate.js --full` green, one commit each), ordered by (value / effort). The
 record of what already landed is `impl_specs/capability-matrix.md` (search "viral
-auto-borrow", "out-parameter ABI"); this file is only the forward plan.
+auto-borrow", "out-parameter ABI"); this file is only the forward plan. Where things
+stand: Steps 1–4 are landed, Step 6 is resolved by the landed machinery (its section says
+why nothing remained to land), and Step 5 — the twin ABI — is the one still forward.
 
 The two analyses, in one line each:
 
@@ -186,22 +188,23 @@ function in one program.
 
 ## Step 6 — sret callees are non-retaining (widen the trust both ways)
 
-**Why.** An out-parameter call hands the callee *the caller's* storage for the result;
-the callee writes it and returns. It retains nothing (no box, no field). The retention
-pass does not know this, so an sret call in a body can keep a `&T` local boxed
-unnecessarily; conversely the borrow pass can trust sret names unconditionally (their
-result writes are out of the caller's frame).
+**Status: resolved by the landed machinery, nothing left to land.** The verify scenario
+("a body that calls an sret builder and holds a `&T` local across it — the local must
+still promote") passes today without an sret name set, and the two proposed seeds are
+unsound as rules:
 
-**Implementation.** Both passes read name sets before emission order matters
-(sret is emitter-side, the passes are pre-sema) — so carry the sret *names* backward:
-`collectSretFns` runs in `Emitter.collect`, too late. Instead duplicate the cheap
-eligibility test (free function, body, non-generic, heavy return, not value-used) as a
-pre-sema helper the two passes share, or emit the set from the driver between the passes
-and codegen. Simplest: a `parser`-level twin of `sretEligible` over the same module ASTs
-(the heavy-return test is `bpHeavy`, which the parser package already owns).
-
-**Verify.** A body that calls an sret builder and holds a `&T` local across it — the
-local must still promote.
+- The sret ABI already writes the result into *caller* storage, so a `&T` local boxed on a
+  builder's result points at the sret destination directly (`&makeUser(n)` lowers to
+  `makeUser(&_sm_base1, ...); h = &_sm_base1;` — no copy, no second box), and a handle
+  passed *to* a builder converts at the call site against the parameter's own type
+  (`*T` reads through before the call, so the box is never the call's argument).
+- Every sret-eligible name has a body (eligibility demands one), so the retention fixpoint
+  always votes on its parameters from that body — the table never holds an `Unknown` an
+  sret seed could repair; what propagates through downstream `Unknown`s is honest.
+- Trusting sret names in either pass would be *unsound*: sret constrains only the result
+  channel. An sret-eligible function can still write through a `*T` parameter (the borrow
+  pass must keep refusing it) and still retain a parameter into a field or a static (the
+  retention pass must keep marking `Escapes`). "Never weaken a refusal" is exactly this.
 
 ---
 
