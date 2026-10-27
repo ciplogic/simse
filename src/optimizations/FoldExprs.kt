@@ -102,13 +102,19 @@ fun foldStrLit(like: *AstXmlNode, text: Str): AstXmlNode {
     return foldAsLiteral(like, AstNodeCategory.ExprStrLit, `"@text"`)
 }
 
-// The integer a literal holds, or empty (a literal with anything but decimal digits folds
-// nothing).
+// The integer a literal holds, or empty: the value by its spelling (`0x` prefixes
+// hexadecimal, `litParseInt64`), and one that outranks `Int32` folds nothing - it is an
+// `Int64` literal, exactly the decimal rule.
 fun foldIntValue(e: *AstXmlNode): Opt<Int> {
     if (foldKindOf(e) != FoldKind.Int) {
         return ()
     }
-    return xmlAttr(e, AstNodeAttributeKind.Text).toInt()
+    val wide: Opt<Int64> = litParseInt64(xmlAttr(e, AstNodeAttributeKind.Text))
+    if (!wide.hasValue() || wide.value() > 2147483647) {
+        return ()
+    }
+    val narrow: Int = wide.value()
+    return simse_optSome<Int>(narrow)
 }
 
 // Whether an operator is one of the simple arithmetic ones; `&&`/`||` are not, since the lowering

@@ -131,3 +131,72 @@ fun litSpellChar(ch: Char): Str {
     out.append('\'')
     return out
 }
+
+// A hexadecimal digit's value (the caller has checked `litIsHexDigit`).
+fun litHexValue(ch: Char): Int {
+    val v: Int = ch - '0'
+    if (v >= 0 && v <= 9) {
+        return v
+    }
+    if (ch >= 'a' && ch <= 'f') {
+        return ch - 'a' + 10
+    }
+    return ch - 'A' + 10
+}
+
+// An integer literal's value in `Int64` (`0x`/`0X` prefixes hexadecimal; decimal
+// otherwise - the scanner has already refused what neither spells): the magnitude only,
+// since the sign is the unary operator's. None when the text is malformed or the value
+// outranks `Int64`'s own range.
+fun litParseInt64(text: Str): Opt<Int64> {
+    if (text.size() > 2 && text[0] == '0' && (text[1] == 'x' || text[1] == 'X')) {
+        var value: Int64 = 0
+        var overflow: Bool = false
+        var i: Int = 2
+        while (i < text.size()) {
+            val ch: Char = text[i]
+            if (!litIsHexDigit(ch)) {
+                return simse_optNone<Int64>()
+            }
+            if (!overflow) {
+                value = value * 16 + litHexValue(ch)
+                if (value < 0) {
+                    // The accumulate wrapped past `Int64`'s top: no literal there.
+                    overflow = true
+                }
+            }
+            i++
+        }
+        if (overflow) {
+            return simse_optNone<Int64>()
+        }
+        return simse_optSome<Int64>(value)
+    }
+    val parsed: Opt<Int> = text.toInt()
+    if (!parsed.hasValue()) {
+        return simse_optNone<Int64>()
+    }
+    val widened: Int64 = parsed.value()
+    return simse_optSome<Int64>(widened)
+}
+
+// Whether an integer literal's magnitude outranks `Int32` (an `Int64` literal): decimal
+// by digit count against "2147483647", hexadecimal by value against 0x7FFFFFFF. A value
+// past even `Int64` is the widest literal there is.
+fun litIntLiteralIsInt64(text: Str): Bool {
+    if (text.size() > 2 && text[0] == '0' && (text[1] == 'x' || text[1] == 'X')) {
+        val parsed: Opt<Int64> = litParseInt64(text)
+        if (!parsed.hasValue()) {
+            return true
+        }
+        return parsed.value() > 2147483647
+    }
+    val digits: Int = text.size()
+    if (digits < 10) {
+        return false
+    }
+    if (digits > 10) {
+        return true
+    }
+    return text > "2147483647"
+}

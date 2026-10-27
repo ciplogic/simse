@@ -289,6 +289,18 @@ fun matchAttribute(view: StrView): ScanMatch {
 }
 
 fun matchNumber(view: StrView): ScanMatch {
+    // `0x`/`0X` and at least one hexadecimal digit: the hexadecimal integer, digits to
+    // the end (hex has no fractional spelling - a `.` after one is a member operation).
+    // `0x` alone is the decimal `0` and the name that follows, as ever.
+    if (view.size() > 2 && view.at(0) == '0' && (view.at(1) == 'x' || view.at(1) == 'X')
+        && litIsHexDigit(view.at(2))
+    ) {
+        var i = 2
+        while (i < view.size() && litIsHexDigit(view.at(i))) {
+            i++
+        }
+        return ScanMatch(i, TokenKind.Number)
+    }
     var i = 0
     while (i < view.size() && lexIsDigit(view.at(i))) {
         i++

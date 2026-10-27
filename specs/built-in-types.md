@@ -19,6 +19,16 @@ arithmetic behavior as `Int8`.
 
 `Int` is the default integer type and is an alias of `Int32`.
 
+### Integer literals
+
+An integer literal is a run of decimal digits, or `0x`/`0X` followed by at least one
+hexadecimal digit - the spelling a flag or mask constant wants (`SQLITE_OPEN_READWRITE`
+is `0x00000002`). The sign is the unary operator's, never the literal's. A magnitude that
+does not fit `Int32` makes the literal an `Int64`, exactly as a long decimal does (the
+binding's destination may still narrow it back); `0x` with no digit after it is the
+decimal `0` beside the name that follows. Hexadecimal has no fractional spelling - a `.`
+after one begins a member operation.
+
 ### `Bool`
 
 Status: required for the first implementation.

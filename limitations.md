@@ -22,6 +22,12 @@ its item here retires.
   declarations now emit as C++ overloads of one symbol and each call resolves by its own
   shape - the emitter's by-arity resolution and sema's arguments-picked overload agree on
   which declaration a call names: `stress/overload-shadow` pins both calls of one program.
+- **Hexadecimal `Int` literals.** `0x`/`0X` and the hexadecimal digits, the spelling a C
+  flag or mask wants (`SQLITE_OPEN_READWRITE` is `0x00000002`); a magnitude past `Int32`
+  is an `Int64` literal exactly as a long decimal is, and the value folds like any
+  integer (`specs/built-in-types.md`, "Integer literals"). The one rule lives in
+  `common/literals.kt` (`litParseInt64`/`litIntLiteralIsInt64`), read by the fold and the
+  width test alike: `stress/hex-literals` pins it.
 - **A call's type was invisible.** `exprType` answered "unknown" for every plain call,
   so a union construction could not match its arm against a call's result, a `for` over
   a call's result had no type to wrap, and a `Res`-returning call written directly in a
@@ -70,8 +76,6 @@ its item here retires.
 - **No leading-dot chain continuation.** A method chain must sit on one line; a
   continuation line starting with `.` is a parse error. Long chains: bind the
   intermediate to a name.
-- **Hex literals are not accepted** for `Int` (`0x1` fails to parse); decimal spells
-  the sqlite flags.
 - **`Char` is a signed byte.** `ch >= 128` is tautologically false (clang warns); the
   non-ASCII test is `Int(ch) < 0`, the unsigned read `Int(ch) & 255`
   (`bench/simse/kit`).
