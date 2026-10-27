@@ -135,8 +135,48 @@ fun partReturns(): Int {
     return 0
 }
 
+// ---- deep-containers ----
+
+// A container of containers owns its storage recursively: a `List<List<Str>>` element is
+// itself deep (`bpDeepElement`'s generic arm), so the walk binds each inner list as a
+// place - `iter(`, not `iterValues(` - and the inner walk reads through it. The value
+// form copies the whole inner list per element.
+fun joinGrid(grid: List<List<Str>>): Str {
+    var out: Str = ""
+    for (row in grid) {
+        for (word in row) {
+            out = out + word
+        }
+    }
+    return out
+}
+
+// A `Dictionary<Str, T>` element is deep the same way (its keys own string storage), so
+// the row walk takes the place form over the list of them.
+fun keyTotals(rows: List<Dictionary<Str, Int>>): Int {
+    var total: Int = 0
+    for (row in rows) {
+        total = total + row.size()
+    }
+    return total
+}
+
+fun partDeep(): Int {
+    var grid: List<List<Str>> = List<List<Str>>()
+    grid.append(listOf<Str>("a", "b"))
+    grid.append(listOf<Str>("c", "d"))
+    println(joinGrid(grid))
+    var rows: List<Dictionary<Str, Int>> = List<Dictionary<Str, Int>>()
+    var ages: Dictionary<Str, Int> = Dictionary<Str, Int>()
+    ages.insert("ada", 36)
+    rows.append(ages)
+    println(keyTotals(rows))
+    return 0
+}
+
 fun main(): Int {
     partViral()
     partReturns()
+    partDeep()
     return 0
 }

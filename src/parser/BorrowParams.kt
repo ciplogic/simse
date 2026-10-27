@@ -988,18 +988,36 @@ fun bpClassDeep(
 }
 
 // Whether a `for` variable of this element type is worth the pointer form: the copy is deep
-// (`Str`, or a data class holding one), so the value form copies and allocates per element. A
-// scalar, a handle, a container and a class of those are left as written - `impl_specs/for.md`
-// measured the value form as fast or faster for them.
+// (`Str`, or a data class holding one), or a container of a deep element (`List<List<Str>>`,
+// `Dictionary<Str, T>` - the ownership is recursive through the containers that own heap
+// storage; types are acyclic, so the recursion ends). A scalar, a handle, a view (`Span`,
+// `Array`) and a class of those are left as written - `impl_specs/for.md` measured the value
+// form as fast or faster for them.
 fun bpDeepElement(typeNode: *AstXmlNode): Bool {
-    if (xmlIsEmpty(typeNode) || xmlKind(typeNode) != AstNodeCategory.TypeNamed) {
+    if (xmlIsEmpty(typeNode)) {
+        return false
+    }
+    val kind: AstNodeCategory = xmlKind(typeNode)
+    if (kind != AstNodeCategory.TypeNamed && kind != AstNodeCategory.TypeGeneric) {
         return false
     }
     val name: Str = xmlAttr(typeNode, AstNodeAttributeKind.Name)
-    if (name == "Str") {
-        return true
+    if (kind == AstNodeCategory.TypeNamed) {
+        if (name == "Str") {
+            return true
+        }
+        return bpDeepTypes.has(name)
     }
-    return bpDeepTypes.has(name)
+    if (name != "List" && name != "Dictionary" && name != "Opt" && name != "Res") {
+        return false
+    }
+    val args: List<AstXmlNode> = xmlChildren(typeNode, AstNodeKind.TypeArg)
+    for (*arg in args) {
+        if (bpDeepElement(arg)) {
+            return true
+        }
+    }
+    return false
 }
 
 // Whether `body` only reads `name`: no write through it, no `&`/`*`, no capture, and no call the

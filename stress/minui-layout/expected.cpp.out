@@ -5330,16 +5330,15 @@ void ns2_uiDelay(Int milliseconds) {
 }
 // modules/minui/xml.kt
 void ns2_xmlAttrOf(Str* _sm_out, ns3_XmlNode* node, Str* name) {
-    List<ns3_Attribute>* _sm_base1;
+    List<ns3_Attribute>* _sm_base1, * list;
     Str _sm_base2, _sm_expr3;
-    List<ns3_Attribute> list;
     Span<ns3_Attribute> _sm_expr1;
     Span_iter_yieldable<ns3_Attribute> _sm_for1;
     Bool _sm_expr2;
     ns3_Attribute* attribute;
-    list = node->attributes;
-    _sm_base1 = &list;
-    _sm_expr1 = simse_spanOf(_sm_base1);
+    _sm_base1 = simse_addressOf(node->attributes);
+    list = _sm_base1;
+    _sm_expr1 = simse_spanOf(list);
     _sm_for1 = iter(simse_addressOf(_sm_expr1));
     L1:;
     _sm_expr2 = advance(&_sm_for1);
@@ -5389,10 +5388,9 @@ void ns2_xmlElementName(Str* _sm_out, ns3_XmlNode* node) {
 // modules/minui/xml.kt
 void ns2_xmlCheckAttrs(Res<Int>* _sm_out, ns3_XmlNode* node, Str* allowed) {
     Char* __sm_catP;
-    Str _sm_base1, _sm_expr1, pattern, _sm_expr7, _sm_expr8, _sm_expr14, _sm_expr15, _sm_expr16;
-    List<ns3_Attribute>* _sm_base2;
+    List<ns3_Attribute>* _sm_base1, * list;
+    Str _sm_base2, _sm_expr1, pattern, _sm_expr7, _sm_expr8, _sm_expr14, _sm_expr15, _sm_expr16;
     Str* _sm_base3, * _sm_base4, * _sm_base5, * _sm_base6;
-    List<ns3_Attribute> list;
     Span<ns3_Attribute> _sm_expr2;
     Span_iter_yieldable<ns3_Attribute> _sm_for2;
     Bool _sm_expr3;
@@ -5400,20 +5398,20 @@ void ns2_xmlCheckAttrs(Res<Int>* _sm_out, ns3_XmlNode* node, Str* allowed) {
     Span<Char> _sm_expr4;
     Int _sm_expr9, _sm_expr11;
     Res<Int> _sm_expr17;
-    list = node->attributes;
-    _sm_base1 = *(allowed);
-    _sm_expr1.resize(1 + _sm_base1.size());
+    _sm_base1 = simse_addressOf(node->attributes);
+    list = _sm_base1;
+    _sm_base2 = *(allowed);
+    _sm_expr1.resize(1 + _sm_base2.size());
     __sm_catP = simse_str_data(&_sm_expr1);
     *__sm_catP = (char) (' ');
     __sm_catP = __sm_catP + 1;
-    std::memcpy(__sm_catP, _sm_base1.data(), _sm_base1.size());
+    std::memcpy(__sm_catP, _sm_base2.data(), _sm_base2.size());
     pattern.resize(1 + _sm_expr1.size());
     __sm_catP = simse_str_data(&pattern);
     std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
     __sm_catP = __sm_catP + _sm_expr1.size();
     *__sm_catP = (char) (' ');
-    _sm_base2 = &list;
-    _sm_expr2 = simse_spanOf(_sm_base2);
+    _sm_expr2 = simse_spanOf(list);
     _sm_for2 = iter(simse_addressOf(_sm_expr2));
     L1:;
     _sm_expr3 = advance(&_sm_for2);
