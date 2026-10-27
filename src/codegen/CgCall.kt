@@ -386,6 +386,25 @@ fun Emitter.call(e: *AstXmlNode): Str {
                 }
                 return `simse_print((@arg), stdout)`
             }
+            // A call through a callable *value* (a parameter, a local of function type):
+            // the value's own signature is the conversion truth, never a same-named
+            // declaration's - a callable parameter named `step` must not resolve
+            // `Range.step` and take its argument's address as that declaration's
+            // receiver. The name is a local here, so no package can own it either.
+            val valueSig: AstXmlNode = this.inferType(callee)
+            if (xmlKind(valueSig) == AstNodeCategory.TypeFunction) {
+                var valueArgs: List<Str> = List<Str>()
+                val sigParams: List<AstXmlNode> = xmlChildren(valueSig, AstNodeKind.ParamType)
+                for ((*arg, i) in argNodes) {
+                    var expected: AstXmlNode = xmlEmptyNode()
+                    if (i < sigParams.size()) {
+                        expected = sigParams[i]
+                    }
+                    valueArgs.append(this.expr(arg, 0, expected))
+                }
+                val valueArgsText: Str = cgJoin(valueArgs, ", ")
+                return `@name(@valueArgsText)`
+            }
             val target: AstXmlNode = this.findFunction(name, argNodes.size())
             var args: List<Str> = List<Str>()
             val targetParams: List<AstXmlNode> = xmlChildren(target, AstNodeKind.Param)

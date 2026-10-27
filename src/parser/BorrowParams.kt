@@ -362,7 +362,8 @@ data class BpPure(
 fun bpPureWalk(
     node: *AstXmlNode, out: *BpPure, statics: *Dictionary<Str, Bool>,
     types: *Dictionary<Str, Bool>, mutates: *Dictionary<Str, Bool>,
-    mutatesParams: *Dictionary<Str, Str>, reads: *Dictionary<Str, Bool>
+    mutatesParams: *Dictionary<Str, Str>, reads: *Dictionary<Str, Bool>,
+    callables: *Dictionary<Str, Bool>
 ): Unit {
     val kind: AstNodeCategory = xmlKind(node)
     if (kind == AstNodeCategory.StmtVarDecl) {
@@ -397,6 +398,11 @@ fun bpPureWalk(
             // A `mutates`-marked callee writes only its receiver; on a fresh local that
             // storage is the body's own, so the call imposes no read-only obligation on
             // anybody (`bpMutatesMark`).
+        } else if (ck == AstNodeCategory.ExprName && callables.has(xmlAttr(callee, AstNodeAttributeKind.Name))) {
+            // A call to a callable-by-value parameter of the enclosing declaration: the
+            // callee cannot name a place through which to write (`bpCallableParams`), so
+            // it imposes no obligation either - `repeat`'s `body(i)` and `forEach`'s
+            // `f(x)` are the shapes their own proofs were refused on.
         } else {
             // A positionally-marked callee (`memCopy`'s `mutates:0`): safe when every
             // written position takes a fresh argument - the same rule the rewrite walk
@@ -417,7 +423,7 @@ fun bpPureWalk(
         }
     }
     for (*child in node.Children) {
-        bpPureWalk(child, out, statics, types, mutates, mutatesParams, reads)
+        bpPureWalk(child, out, statics, types, mutates, mutatesParams, reads, callables)
     }
 }
 
@@ -448,8 +454,9 @@ fun bpPurConsider(
         return
     }
     var fact: BpPure = BpPure(name, false, false, List<Str>(), Dictionary<Str, Bool>())
+    var callables: Dictionary<Str, Bool> = bpCallableParams(fn)
     for (*stmt in body.Children) {
-        bpPureWalk(stmt, *fact, statics, types, mutates, mutatesParams, reads)
+        bpPureWalk(stmt, *fact, statics, types, mutates, mutatesParams, reads, *callables)
     }
     out.append(fact)
 }
@@ -679,6 +686,12 @@ data class BpFacts(
     // The declaration's own parameters, for the `taken` provenance check (`narrowTaken`).
     var params: Dictionary<Str, Bool>,
 
+    // The declaration's callable-by-value parameters (`bpCallableParams`): a call to one
+    // is the caller's own function value invoked - its signature takes everything by
+    // value, so the callee cannot write through anything this body lent. `repeat`'s
+    // `body(i)` and `forEach`'s `f(x)` are the shapes.
+    var callables: Dictionary<Str, Bool>,
+
     // Narrow the `taken` mark to provenance: a local initialized from a borrowed place is
     // "taken" only when that place derives from a parameter (or a local already carrying
     // one) - a deref of *object* state (`*this.sections[i]`) derives from `this`, cannot
@@ -765,6 +778,13 @@ data class BpFacts(
             } else if (ck == AstNodeCategory.ExprName || ck == AstNodeCategory.ExprMember) {
                 val calleeName: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
                 safe = this.reads.has(calleeName) || bpCallTrusted(calleeName, this.reads)
+                if (!safe && ck == AstNodeCategory.ExprName && this.callables.has(calleeName)) {
+                    // A call to a callable-by-value *parameter* of the enclosing
+                    // declaration: the callee is the caller's own function value, and its
+                    // signature cannot name a place (`bpCallableParams`), so the most it
+                    // can touch is the copies its arguments are.
+                    safe = true
+                }
             }
             if (!safe && bpMachineStep(callee)) {
                 // The `for` machine's own step; see `bpMachineStep`.
@@ -843,6 +863,31 @@ data class BpFacts(
             this.walk(child)
         }
     }
+}
+
+// The declaration's parameters that may be *called* without dirtying the body: a
+// declared callable type (`(Int) -> Unit`) whose every parameter is a value - no `*T`, no
+// `&T`, either of which would hand the callee a place it could write through. A bare type
+// parameter is not a callable the rules can read, so it stays out (sound refusal).
+fun bpCallableParams(fn: *AstXmlNode): Dictionary<Str, Bool> {
+    var out: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    for (*param in xmlChildren(fn, AstNodeKind.Param)) {
+        val paramType: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
+        if (xmlIsEmpty(paramType) || xmlKind(paramType) != AstNodeCategory.TypeFunction) {
+            continue
+        }
+        var byValue: Bool = true
+        for (*one in xmlChildren(paramType, AstNodeKind.ParamType)) {
+            val oneKind: AstNodeCategory = xmlKind(one)
+            if (oneKind == AstNodeCategory.TypePointer || oneKind == AstNodeCategory.TypeReference) {
+                byValue = false
+            }
+        }
+        if (byValue) {
+            out.insert(xmlAttr(param, AstNodeAttributeKind.Name), true)
+        }
+    }
+    return out
 }
 
 // The `for` lowering's machine step (impl_specs/for.md): the desugar declares a local named
@@ -1028,7 +1073,7 @@ fun bpLoopReadOnly(body: *List<AstXmlNode>, name: *Str): Bool {
         false, false, false, *bpStaticNames, *bpTrustedNames, *bpKnownTypes, *bpMutatesNames,
         bpMutatesParamsNames,
         Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), List<Str>(),
-        "", Dictionary<Str, Bool>(), false
+        "", Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), false
     )
     for (*stmt in body) {
         // The template's own binding (`val <name> = <machine>.current`, the `for`'s first
@@ -1059,7 +1104,7 @@ fun bpPlaceReadOnly(body: *List<AstXmlNode>, name: *Str, root: *Str): Bool {
         false, false, false, *bpStaticNames, *bpTrustedNames, *bpKnownTypes, *bpMutatesNames,
         bpMutatesParamsNames,
         Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), List<Str>(),
-        *root, Dictionary<Str, Bool>(), false
+        *root, Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), false
     )
     for (*stmt in body) {
         // The promoted declaration itself is the binding being retyped, not a write.
@@ -1279,7 +1324,7 @@ fun bpBorrowDecl(
     var facts: BpFacts = BpFacts(
         false, false, false, statics, reads, types, *bpMutatesNames, bpMutatesParamsNames,
         Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), List<Str>(),
-        "", paramNames, true
+        "", paramNames, bpCallableParams(decl), true
     )
     for (*stmt in body.Children) {
         facts.walk(stmt)

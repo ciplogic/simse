@@ -772,7 +772,7 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
     var read: List<Str> = List<Str>()
     var readSeen: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var declared: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
-    val paramNames: List<Str> = ilSplitParams(xmlAttr(e, AstNodeAttributeKind.Params))
+    var paramNames: List<Str> = ilSplitParams(xmlAttr(e, AstNodeAttributeKind.Params))
     for (paramName in paramNames) {
         declared.insert(paramName, true)
     }
@@ -794,9 +794,13 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
     }
 
     // The parameter types: the lambda's own annotations when it has one per name, else the
-    // callable type's. A lambda with neither is reported by the emitter, at the lambda.
+    // callable type's. A lambda with neither is reported by the emitter, at the lambda -
+    // and a block with no names and no annotations of its own is the *contract's* shape to
+    // take (`paramNames.size() == 0` below), not a zero-parameter lambda.
     var paramTypes: List<AstXmlNode> = xmlChildren(e, AstNodeKind.ParamType)
-    if (paramTypes.size() != paramNames.size()) {
+    if (paramTypes.size() != paramNames.size()
+        || (paramNames.size() == 0 && paramTypes.size() == 0)
+    ) {
         paramTypes = List<AstXmlNode>()
         if (!xmlIsEmpty(callable)) {
             val expectedParams: List<AstXmlNode> = xmlChildren(callable, AstNodeKind.ParamType)
@@ -807,6 +811,22 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
                     } else {
                         paramTypes.append(expectedParam)
                     }
+                }
+            } else if (paramNames.size() == 0 && expectedParams.size() > 0) {
+                // A block that names no parameter ignores every argument, so it takes the
+                // callable's whole list as unnamed ones: the closure's signature is the
+                // contract's, which is the only shape its conversion operator may spell -
+                // `repeat(4) { out = out + "!" }` never names the index, and its box
+                // converts to `Func<void(Int)>` only when it is one.
+                var at: Int = 0
+                for (*expectedParam in expectedParams) {
+                    paramNames.append("_sm_arg" + at.toString())
+                    if (ilTypeMentions(expectedParam, *unspellable)) {
+                        paramTypes.append(xmlEmptyNode())
+                    } else {
+                        paramTypes.append(expectedParam)
+                    }
+                    at++
                 }
             }
         }
