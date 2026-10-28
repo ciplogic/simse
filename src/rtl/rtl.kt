@@ -105,10 +105,10 @@ fun append<T>(this: List<T>, value: T): Unit
 @SmGen("res", "listops", "simse_listOf")
 borrow fun listOf<T>(values: *List<T>): List<T>
 
-@SmGen("res", "listops", "simse_list_removeAt")
+@SmGen("res", "listops", "simse_list_removeAt", "mutates")
 fun removeAt<T>(this: List<T>, index: Int): Unit
 
-@SmGen("res", "listops", "simse_list_removeRange")
+@SmGen("res", "listops", "simse_list_removeRange", "mutates")
 fun removeRange<T>(this: List<T>, start: Int, end: Int): Unit
 
 @SmGen("res", "dictops", "simse_list_contains")
@@ -159,8 +159,8 @@ fun Dictionary<K, V>.contains<K, V>(key: K): Bool {
 // `std::sort` hands each element as a `T&`, so a pointer reads it where it lives - a by-value
 // comparator copies both elements per comparison, a heap copy per compare for a `Str`.
 // `compareLessThan` below is the `Str` ordering for the common case.
-@SmGen("res", "dictops", "simse_list_sort")
-borrow fun sort<T>(this: List<T>, less: (*T, *T) -> Bool): Unit
+@SmGen("res", "dictops", "simse_list_sort", "mutates")
+fun sort<T>(this: List<T>, less: (*T, *T) -> Bool): Unit
 
 // The `Str` ordering for `sort` (`specs/containers.md`): the two strings compared as *views*,
 // in place, so `keys.sort(compareLessThan)` copies nothing per comparison.
@@ -232,7 +232,7 @@ fun Array<T>.toList<T>(): List<T> {
 fun Str.initByValue(): Unit {
 }
 
-@SmGen("res", "strops", "simse_str_initByValue")
+@SmGen("res", "strops", "simse_str_initByValue", "mutates")
 fun initByValue(this: Str, value: Str): Unit
 
 // `Dictionary<K, V>` is a value type; keys and values come back in its iteration order,
@@ -253,10 +253,10 @@ borrow fun get<K, V>(this: Dictionary<K, V>, key: K): Opt<V>
 @SmGen("res", "dictops", "simse_dict_has")
 borrow fun has<K, V>(this: Dictionary<K, V>, key: K): Bool
 
-@SmGen("res", "dictops", "simse_dict_insert")
+@SmGen("res", "dictops", "simse_dict_insert", "mutates")
 fun insert<K, V>(this: Dictionary<K, V>, key: K, value: V): Unit
 
-@SmGen("res", "dictops", "simse_dict_remove")
+@SmGen("res", "dictops", "simse_dict_remove", "mutates")
 fun remove<K, V>(this: Dictionary<K, V>, key: K): Unit
 
 @SmGen("res", "dictops", "simse_dict_size")
@@ -268,7 +268,7 @@ borrow fun keys<K, V>(this: Dictionary<K, V>): List<K>
 @SmGen("res", "dictops", "simse_dict_values")
 borrow fun values<K, V>(this: Dictionary<K, V>): List<V>
 
-@SmGen("res", "dictops", "simse_dict_clear")
+@SmGen("res", "dictops", "simse_dict_clear", "mutates")
 fun clear<K, V>(this: Dictionary<K, V>): Unit
 
 // `Str` is a byte string, so `append` takes a Char.

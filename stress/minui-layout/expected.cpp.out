@@ -1186,7 +1186,7 @@ void ns2_mouseMove(ns2_UiEvent* _sm_out, Int x, Int y);
 void ns2_mouseDown(ns2_UiEvent* _sm_out, Int x, Int y, ns2_Button button);
 void ns2_mouseUp(ns2_UiEvent* _sm_out, Int x, Int y, ns2_Button button);
 void ns2_keyDown(ns2_UiEvent* _sm_out, Int key);
-void ns2_newFrame(ns2_Frame* _sm_out, ns2_Size size);
+void ns2_newFrame(ns2_Frame* _sm_out, ns2_Size* size);
 Int ns2_addNode(ns2_Frame* f, Int parent, ns2_NodeKind kind, Int x, Int y, Int width, Int height);
 Int ns2_addGrid(ns2_Frame* f, Int parent, Str name, Int x, Int y, Int cell, Int cols, Int rows);
 Int ns2_nodeNamed(ns2_Frame* f, Str* name);
@@ -3197,7 +3197,7 @@ void ns2_keyDown(ns2_UiEvent* _sm_out, Int key) {
     return;
 }
 // modules/minui/tree.kt
-void ns2_newFrame(ns2_Frame* _sm_out, ns2_Size size) {
+void ns2_newFrame(ns2_Frame* _sm_out, ns2_Size* size) {
     Int _sm_base1, _sm_base2, _sm_expr2, _sm_expr4, _sm_expr7, _sm_expr8, _sm_expr9;
     ns2_NodeKind _sm_base3;
     ns2_Rect _sm_expr1;
@@ -3208,8 +3208,8 @@ void ns2_newFrame(ns2_Frame* _sm_out, ns2_Size size) {
     ns2_Listener _sm_expr5;
     List<ns2_Listener> _sm_expr6;
     ns2_Frame _sm_expr10;
-    _sm_base1 = size.width;
-    _sm_base2 = size.height;
+    _sm_base1 = size->width;
+    _sm_base2 = size->height;
     _sm_expr1 = ns2_Rect{0, 0, _sm_base1, _sm_base2};
     _sm_expr2 = -1;
     _sm_expr3 = List<Int>(0, 0);
@@ -6872,17 +6872,18 @@ void ns2_xmlMapElement(Res<Int>* _sm_out, ns2_Frame* f, Int parent, ns3_XmlNode 
 void ns2_loadScreen(Res<ns2_Frame>* _sm_out, Str text) {
     Char* __sm_catP;
     Str* _sm_base1, * _sm_base4, * _sm_base5, * _sm_base7, * _sm_base9, * _sm_base11, * _sm_base13,
-        * _sm_base15, * _sm_base17, * _sm_base18, * _sm_base21, * _sm_base24, * _sm_base26, * _sm_base30,
-        * _sm_base32, * _sm_base36, * _sm_base38, * _sm_base44;
-    ns3_XmlNode* _sm_base2, * _sm_base3, * _sm_base6, * _sm_base10, * _sm_base14, * _sm_base20,
-        * _sm_base25, * _sm_base29, * _sm_base35;
-    Str _sm_base8, _sm_base12, _sm_base16, _sm_base19, _sm_base22, _sm_base31, _sm_base37, _sm_expr3,
+        * _sm_base15, * _sm_base17, * _sm_base18, * _sm_base22, * _sm_base25, * _sm_base27, * _sm_base31,
+        * _sm_base33, * _sm_base37, * _sm_base39, * _sm_base45;
+    ns3_XmlNode* _sm_base2, * _sm_base3, * _sm_base6, * _sm_base10, * _sm_base14, * _sm_base21,
+        * _sm_base26, * _sm_base30, * _sm_base36;
+    Str _sm_base8, _sm_base12, _sm_base16, _sm_base19, _sm_base23, _sm_base32, _sm_base38, _sm_expr3,
         tag, _sm_expr7, _sm_expr8, _sm_expr12, _sm_expr17, _sm_expr22, name, _sm_expr37, _sm_expr41,
         _sm_expr46, _sm_expr51, _sm_expr58;
-    ns2_Frame* _sm_base23, * _sm_base27, * _sm_base33, * _sm_base39, * _sm_base41, * _sm_base45;
-    Int _sm_base28, _sm_base34, _sm_base40, _sm_base42, line, _sm_expr14, _sm_expr19, _sm_expr24,
+    ns2_Size* _sm_base20;
+    ns2_Frame* _sm_base24, * _sm_base28, * _sm_base34, * _sm_base40, * _sm_base42, * _sm_base46;
+    Int _sm_base29, _sm_base35, _sm_base41, _sm_base43, line, _sm_expr14, _sm_expr19, _sm_expr24,
         _sm_expr29, _sm_expr30, _sm_expr48, _sm_expr53, index;
-    ns3_XmlNode _sm_base43, doc;
+    ns3_XmlNode _sm_base44, doc;
     Res<ns3_XmlNode> parsed;
     Bool _sm_expr1, _sm_expr2;
     Res<ns2_Frame> _sm_expr4;
@@ -6995,18 +6996,19 @@ void ns2_loadScreen(Res<ns2_Frame>* _sm_out, Str text) {
     _sm_expr29 = simse_resValue(simse_addressOf(widthResult));
     _sm_expr30 = simse_resValue(simse_addressOf(heightResult));
     ns2_smSize(&_sm_expr31, _sm_expr29, _sm_expr30);
-    ns2_newFrame(&f, _sm_expr31);
-    _sm_base20 = &doc;
-    _sm_base22 = __sm_stringTable[193];
-    _sm_base21 = &_sm_base22;
-    ns2_xmlAttrOf(&name, _sm_base20, _sm_base21);
+    _sm_base20 = &_sm_expr31;
+    ns2_newFrame(&f, _sm_base20);
+    _sm_base21 = &doc;
+    _sm_base23 = __sm_stringTable[193];
+    _sm_base22 = &_sm_base23;
+    ns2_xmlAttrOf(&name, _sm_base21, _sm_base22);
     _sm_expr24 = simse_lenOf(name);
     _sm_expr1 = _sm_expr24 > 0;
     if (_sm_expr1) goto L14;
     goto L17;
     L14:;
-    _sm_base23 = &f;
-    _sm_expr1 = ns2_nameRoot(_sm_base23, name);
+    _sm_base24 = &f;
+    _sm_expr1 = ns2_nameRoot(_sm_base24, name);
     _sm_expr2 = !_sm_expr1;
     if (_sm_expr2) goto L16;
     goto L17;
@@ -7021,92 +7023,92 @@ void ns2_loadScreen(Res<ns2_Frame>* _sm_out, Str text) {
     std::memcpy(__sm_catP, _sm_expr7.data(), _sm_expr7.size());
     __sm_catP = __sm_catP + _sm_expr7.size();
     std::memcpy(__sm_catP, "\" is already used", 17);
-    _sm_base24 = &_sm_expr37;
-    _sm_expr4 = ns2_xmlFail<ns2_Frame>(line, _sm_base24);
+    _sm_base25 = &_sm_expr37;
+    _sm_expr4 = ns2_xmlFail<ns2_Frame>(line, _sm_base25);
     *_sm_out = _sm_expr4;
     return;
     L17:;
-    _sm_base25 = &doc;
-    ns2_xmlLayoutAttr(&layout, _sm_base25);
+    _sm_base26 = &doc;
+    ns2_xmlLayoutAttr(&layout, _sm_base26);
     _sm_expr1 = simse_resHasValue(simse_addressOf(layout));
     _sm_expr2 = !_sm_expr1;
     if (_sm_expr2) goto L18;
     goto L19;
     L18:;
     _sm_expr41 = simse_resError(simse_addressOf(layout));
-    _sm_base26 = &_sm_expr41;
-    _sm_expr4 = simse_resErr<ns2_Frame>(_sm_base26);
+    _sm_base27 = &_sm_expr41;
+    _sm_expr4 = simse_resErr<ns2_Frame>(_sm_base27);
     *_sm_out = _sm_expr4;
     return;
     L19:;
     _sm_expr43 = simse_resValue(simse_addressOf(layout));
-    _sm_base27 = &f;
-    _sm_base28 = f.root;
-    ns2_setLayout(_sm_base27, _sm_base28, _sm_expr43);
-    _sm_base29 = &doc;
-    _sm_base31 = __sm_stringTable[141];
-    _sm_base30 = &_sm_base31;
-    ns2_xmlNonNegative(&spacing, _sm_base29, _sm_base30);
+    _sm_base28 = &f;
+    _sm_base29 = f.root;
+    ns2_setLayout(_sm_base28, _sm_base29, _sm_expr43);
+    _sm_base30 = &doc;
+    _sm_base32 = __sm_stringTable[141];
+    _sm_base31 = &_sm_base32;
+    ns2_xmlNonNegative(&spacing, _sm_base30, _sm_base31);
     _sm_expr1 = simse_resHasValue(simse_addressOf(spacing));
     _sm_expr2 = !_sm_expr1;
     if (_sm_expr2) goto L20;
     goto L21;
     L20:;
     _sm_expr46 = simse_resError(simse_addressOf(spacing));
-    _sm_base32 = &_sm_expr46;
-    _sm_expr4 = simse_resErr<ns2_Frame>(_sm_base32);
+    _sm_base33 = &_sm_expr46;
+    _sm_expr4 = simse_resErr<ns2_Frame>(_sm_base33);
     *_sm_out = _sm_expr4;
     return;
     L21:;
     _sm_expr48 = simse_resValue(simse_addressOf(spacing));
-    _sm_base33 = &f;
-    _sm_base34 = f.root;
-    ns2_setSpacing(_sm_base33, _sm_base34, _sm_expr48);
-    _sm_base35 = &doc;
-    _sm_base37 = __sm_stringTable[138];
-    _sm_base36 = &_sm_base37;
-    ns2_xmlNonNegative(&padding, _sm_base35, _sm_base36);
+    _sm_base34 = &f;
+    _sm_base35 = f.root;
+    ns2_setSpacing(_sm_base34, _sm_base35, _sm_expr48);
+    _sm_base36 = &doc;
+    _sm_base38 = __sm_stringTable[138];
+    _sm_base37 = &_sm_base38;
+    ns2_xmlNonNegative(&padding, _sm_base36, _sm_base37);
     _sm_expr1 = simse_resHasValue(simse_addressOf(padding));
     _sm_expr2 = !_sm_expr1;
     if (_sm_expr2) goto L22;
     goto L23;
     L22:;
     _sm_expr51 = simse_resError(simse_addressOf(padding));
-    _sm_base38 = &_sm_expr51;
-    _sm_expr4 = simse_resErr<ns2_Frame>(_sm_base38);
+    _sm_base39 = &_sm_expr51;
+    _sm_expr4 = simse_resErr<ns2_Frame>(_sm_base39);
     *_sm_out = _sm_expr4;
     return;
     L23:;
     _sm_expr53 = simse_resValue(simse_addressOf(padding));
-    _sm_base39 = &f;
-    _sm_base40 = f.root;
-    ns2_setPadding(_sm_base39, _sm_base40, _sm_expr53);
+    _sm_base40 = &f;
+    _sm_base41 = f.root;
+    ns2_setPadding(_sm_base40, _sm_base41, _sm_expr53);
     index = 0;
     children = doc.Children;
     L24:;
     _sm_expr24 = simse_array_count(children);
     _sm_expr1 = index < _sm_expr24;
     if (!(_sm_expr1)) goto L25;
-    _sm_base41 = &f;
-    _sm_base42 = f.root;
-    _sm_base43 = children[index];
-    ns2_xmlMapElement(&mapped, _sm_base41, _sm_base42, _sm_base43);
+    _sm_base42 = &f;
+    _sm_base43 = f.root;
+    _sm_base44 = children[index];
+    ns2_xmlMapElement(&mapped, _sm_base42, _sm_base43, _sm_base44);
     _sm_expr1 = simse_resHasValue(simse_addressOf(mapped));
     _sm_expr2 = !_sm_expr1;
     if (_sm_expr2) goto L26;
     goto L27;
     L26:;
     _sm_expr58 = simse_resError(simse_addressOf(mapped));
-    _sm_base44 = &_sm_expr58;
-    _sm_expr4 = simse_resErr<ns2_Frame>(_sm_base44);
+    _sm_base45 = &_sm_expr58;
+    _sm_expr4 = simse_resErr<ns2_Frame>(_sm_base45);
     *_sm_out = _sm_expr4;
     return;
     L27:;
     index = index + 1;
     goto L24;
     L25:;
-    _sm_base45 = &f;
-    ns2_layoutFrame(_sm_base45);
+    _sm_base46 = &f;
+    ns2_layoutFrame(_sm_base46);
     _sm_expr4 = simse_resOk<ns2_Frame>(f);
     *_sm_out = _sm_expr4;
     return;
@@ -10057,35 +10059,37 @@ void ns1_textOf(Str* _sm_out, ns2_Frame* f, Str* name) {
 }
 // stress/minui-layout/src/main.kt
 void ns1_partColumn() {
-    Int _sm_base1, _sm_base3, _sm_base4, _sm_base5, _sm_base7, _sm_base9, one, fill, two;
-    ns2_BoxLayout _sm_base2;
-    ns2_NodeKind _sm_base6, _sm_base8, _sm_base10;
+    ns2_Size* _sm_base1;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base6, _sm_base8, _sm_base10, one, fill, two;
+    ns2_BoxLayout _sm_base3;
+    ns2_NodeKind _sm_base7, _sm_base9, _sm_base11;
     ns2_Size _sm_expr1;
     ns2_Frame f;
     ns2_Frame* fp;
     Str _sm_expr2, _sm_expr3, _sm_expr4;
     simse_println((__sm_stringTable[15]), stdout);
     ns2_smSize(&_sm_expr1, 220, 320);
-    ns2_newFrame(&f, _sm_expr1);
+    _sm_base1 = &_sm_expr1;
+    ns2_newFrame(&f, _sm_base1);
     fp = &f;
-    _sm_base1 = fp->root;
-    _sm_base2 = ns2_BoxLayout::Column;
-    ns2_setLayout(fp, _sm_base1, _sm_base2);
-    _sm_base3 = fp->root;
-    ns2_setPadding(fp, _sm_base3, 10);
+    _sm_base2 = fp->root;
+    _sm_base3 = ns2_BoxLayout::Column;
+    ns2_setLayout(fp, _sm_base2, _sm_base3);
     _sm_base4 = fp->root;
-    ns2_setSpacing(fp, _sm_base4, 5);
+    ns2_setPadding(fp, _sm_base4, 10);
     _sm_base5 = fp->root;
-    _sm_base6 = ns2_NodeKind::Button;
-    one = ns2_addNode(fp, _sm_base5, _sm_base6, 0, 0, 90, 30);
+    ns2_setSpacing(fp, _sm_base5, 5);
+    _sm_base6 = fp->root;
+    _sm_base7 = ns2_NodeKind::Button;
+    one = ns2_addNode(fp, _sm_base6, _sm_base7, 0, 0, 90, 30);
     ns2_setName(fp, one, __sm_stringTable[212]);
-    _sm_base7 = fp->root;
-    _sm_base8 = ns2_NodeKind::Panel;
-    fill = ns2_addNode(fp, _sm_base7, _sm_base8, 0, 0, 0, 0);
+    _sm_base8 = fp->root;
+    _sm_base9 = ns2_NodeKind::Panel;
+    fill = ns2_addNode(fp, _sm_base8, _sm_base9, 0, 0, 0, 0);
     ns2_setName(fp, fill, __sm_stringTable[187]);
-    _sm_base9 = fp->root;
-    _sm_base10 = ns2_NodeKind::Button;
-    two = ns2_addNode(fp, _sm_base9, _sm_base10, 0, 0, 0, 30);
+    _sm_base10 = fp->root;
+    _sm_base11 = ns2_NodeKind::Button;
+    two = ns2_addNode(fp, _sm_base10, _sm_base11, 0, 0, 0, 30);
     ns2_setName(fp, two, __sm_stringTable[216]);
     ns2_layoutFrame(fp);
     ns1_rectText(&_sm_expr2, fp, one);
@@ -10097,34 +10101,36 @@ void ns1_partColumn() {
 }
 // stress/minui-layout/src/main.kt
 void ns1_partRow() {
-    Int _sm_base1, _sm_base3, _sm_base4, _sm_base8, panel, inner, rest;
-    ns2_BoxLayout _sm_base2, _sm_base6;
-    ns2_NodeKind _sm_base5, _sm_base7, _sm_base9;
+    ns2_Size* _sm_base1;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base9, panel, inner, rest;
+    ns2_BoxLayout _sm_base3, _sm_base7;
+    ns2_NodeKind _sm_base6, _sm_base8, _sm_base10;
     ns2_Size _sm_expr1;
     ns2_Frame f;
     ns2_Frame* fp;
     Str _sm_expr2, _sm_expr3, _sm_expr4;
     simse_println((__sm_stringTable[45]), stdout);
     ns2_smSize(&_sm_expr1, 200, 100);
-    ns2_newFrame(&f, _sm_expr1);
+    _sm_base1 = &_sm_expr1;
+    ns2_newFrame(&f, _sm_base1);
     fp = &f;
-    _sm_base1 = fp->root;
-    _sm_base2 = ns2_BoxLayout::Row;
-    ns2_setLayout(fp, _sm_base1, _sm_base2);
-    _sm_base3 = fp->root;
-    ns2_setSpacing(fp, _sm_base3, 4);
+    _sm_base2 = fp->root;
+    _sm_base3 = ns2_BoxLayout::Row;
+    ns2_setLayout(fp, _sm_base2, _sm_base3);
     _sm_base4 = fp->root;
-    _sm_base5 = ns2_NodeKind::Panel;
-    panel = ns2_addNode(fp, _sm_base4, _sm_base5, 0, 0, 50, 0);
+    ns2_setSpacing(fp, _sm_base4, 4);
+    _sm_base5 = fp->root;
+    _sm_base6 = ns2_NodeKind::Panel;
+    panel = ns2_addNode(fp, _sm_base5, _sm_base6, 0, 0, 50, 0);
     ns2_setName(fp, panel, __sm_stringTable[175]);
-    _sm_base6 = ns2_BoxLayout::Column;
-    ns2_setLayout(fp, panel, _sm_base6);
-    _sm_base7 = ns2_NodeKind::Button;
-    inner = ns2_addNode(fp, panel, _sm_base7, 0, 0, 0, 24);
+    _sm_base7 = ns2_BoxLayout::Column;
+    ns2_setLayout(fp, panel, _sm_base7);
+    _sm_base8 = ns2_NodeKind::Button;
+    inner = ns2_addNode(fp, panel, _sm_base8, 0, 0, 0, 24);
     ns2_setName(fp, inner, __sm_stringTable[172]);
-    _sm_base8 = fp->root;
-    _sm_base9 = ns2_NodeKind::Button;
-    rest = ns2_addNode(fp, _sm_base8, _sm_base9, 0, 0, 0, 20);
+    _sm_base9 = fp->root;
+    _sm_base10 = ns2_NodeKind::Button;
+    rest = ns2_addNode(fp, _sm_base9, _sm_base10, 0, 0, 0, 20);
     ns2_setName(fp, rest, __sm_stringTable[197]);
     ns2_layoutFrame(fp);
     ns1_rectText(&_sm_expr2, fp, panel);
@@ -10260,28 +10266,29 @@ void ns1_partXmlErrors() {
 void ns1_partControls() {
     Char* __sm_catP;
     Int __sm_catC0;
-    Int _sm_base1, _sm_base3, _sm_base5, _sm_base7, _sm_base9, _sm_base31, _sm_base55, _sm_base76, opt,
+    ns2_Size* _sm_base1;
+    Int _sm_base2, _sm_base4, _sm_base6, _sm_base8, _sm_base10, _sm_base32, _sm_base56, _sm_base77, opt,
         off, vol, gain, field, _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr5, _sm_expr6, _sm_expr8, _sm_expr11,
         _sm_expr14, _sm_expr28, _sm_expr34, _sm_expr40, _sm_expr48, _sm_expr52, _sm_expr56, _sm_expr60;
-    ns2_NodeKind _sm_base2, _sm_base4, _sm_base6, _sm_base8, _sm_base10;
-    ns1_Act _sm_base11, _sm_base12, _sm_base13, _sm_base14;
-    ns2_UiEvent* _sm_base15, * _sm_base28, * _sm_base30, * _sm_base34, * _sm_base37, * _sm_base40,
-        * _sm_base44, * _sm_base46, * _sm_base50, * _sm_base52, * _sm_base54, * _sm_base56, * _sm_base57,
-        * _sm_base61, * _sm_base64, * _sm_base65, * _sm_base66, * _sm_base69, * _sm_base73, * _sm_base75,
-        * _sm_base77, * _sm_base82, * _sm_base84, * _sm_base85, * _sm_base89;
-    Int* _sm_base16, * _sm_base19, * _sm_base22, * _sm_base60, * _sm_base78, * _sm_base90;
-    Str* _sm_base17, * _sm_base20, * _sm_base23, * _sm_base26, * _sm_base32, * _sm_base35, * _sm_base38,
-        * _sm_base41, * _sm_base58, * _sm_base62, * _sm_base67, * _sm_base70, * _sm_base79, * _sm_base87,
-        * _sm_base91;
-    Str _sm_base18, _sm_base21, _sm_base24, _sm_base27, _sm_base33, _sm_base36, _sm_base39, _sm_base42,
-        _sm_base59, _sm_base63, _sm_base68, _sm_base71, _sm_base80, _sm_base88, _sm_base92, _sm_expr17,
+    ns2_NodeKind _sm_base3, _sm_base5, _sm_base7, _sm_base9, _sm_base11;
+    ns1_Act _sm_base12, _sm_base13, _sm_base14, _sm_base15;
+    ns2_UiEvent* _sm_base16, * _sm_base29, * _sm_base31, * _sm_base35, * _sm_base38, * _sm_base41,
+        * _sm_base45, * _sm_base47, * _sm_base51, * _sm_base53, * _sm_base55, * _sm_base57, * _sm_base58,
+        * _sm_base62, * _sm_base65, * _sm_base66, * _sm_base67, * _sm_base70, * _sm_base74, * _sm_base76,
+        * _sm_base78, * _sm_base83, * _sm_base85, * _sm_base86, * _sm_base90;
+    Int* _sm_base17, * _sm_base20, * _sm_base23, * _sm_base61, * _sm_base79, * _sm_base91;
+    Str* _sm_base18, * _sm_base21, * _sm_base24, * _sm_base27, * _sm_base33, * _sm_base36, * _sm_base39,
+        * _sm_base42, * _sm_base59, * _sm_base63, * _sm_base68, * _sm_base71, * _sm_base80, * _sm_base88,
+        * _sm_base92;
+    Str _sm_base19, _sm_base22, _sm_base25, _sm_base28, _sm_base34, _sm_base37, _sm_base40, _sm_base43,
+        _sm_base60, _sm_base64, _sm_base69, _sm_base72, _sm_base81, _sm_base89, _sm_base93, _sm_expr17,
         _sm_expr21, _sm_expr22, _sm_expr24, _sm_expr27, _sm_expr31, _sm_expr33, _sm_expr36, _sm_expr39,
         _sm_expr42, _sm_expr45, _sm_expr47, _sm_expr50, _sm_expr54, _sm_expr58, _sm_expr62, _sm_expr67,
         _sm_expr69, _sm_expr73, _sm_expr74, _sm_expr77, _sm_expr79, _sm_expr81, _sm_expr83, _sm_expr85,
         _sm_expr89, _sm_expr91, _sm_expr93, _sm_expr95, _sm_expr98, _sm_expr99, _sm_expr103, _sm_expr104,
         _sm_expr106, _sm_expr112, _sm_expr113, _sm_expr115, _sm_expr119, _sm_expr120, _sm_expr122;
-    ns2_Button _sm_base29, _sm_base43, _sm_base45, _sm_base49, _sm_base51, _sm_base53, _sm_base72,
-        _sm_base74, _sm_base81, _sm_base83;
+    ns2_Button _sm_base30, _sm_base44, _sm_base46, _sm_base50, _sm_base52, _sm_base54, _sm_base73,
+        _sm_base75, _sm_base82, _sm_base84;
     ns2_Size _sm_expr1;
     ns2_Frame f;
     ns2_Frame* fp;
@@ -10296,30 +10303,31 @@ void ns1_partControls() {
     ns2_Hit stray, refused, escape;
     simse_println((__sm_stringTable[98]), stdout);
     ns2_smSize(&_sm_expr1, 220, 180);
-    ns2_newFrame(&f, _sm_expr1);
+    _sm_base1 = &_sm_expr1;
+    ns2_newFrame(&f, _sm_base1);
     fp = &f;
-    _sm_base1 = fp->root;
-    _sm_base2 = ns2_NodeKind::Checkbox;
-    opt = ns2_addNode(fp, _sm_base1, _sm_base2, 10, 10, 140, 20);
+    _sm_base2 = fp->root;
+    _sm_base3 = ns2_NodeKind::Checkbox;
+    opt = ns2_addNode(fp, _sm_base2, _sm_base3, 10, 10, 140, 20);
     ns2_setName(fp, opt, __sm_stringTable[213]);
     ns2_setText(fp, opt, __sm_stringTable[146]);
-    _sm_base3 = fp->root;
-    _sm_base4 = ns2_NodeKind::Checkbox;
-    off = ns2_addNode(fp, _sm_base3, _sm_base4, 10, 40, 140, 20);
+    _sm_base4 = fp->root;
+    _sm_base5 = ns2_NodeKind::Checkbox;
+    off = ns2_addNode(fp, _sm_base4, _sm_base5, 10, 40, 140, 20);
     ns2_setName(fp, off, __sm_stringTable[211]);
     ns2_setText(fp, off, __sm_stringTable[147]);
     ns2_setEnabled(fp, off, false);
-    _sm_base5 = fp->root;
-    _sm_base6 = ns2_NodeKind::Slider;
-    vol = ns2_addNode(fp, _sm_base5, _sm_base6, 10, 70, 200, 20);
+    _sm_base6 = fp->root;
+    _sm_base7 = ns2_NodeKind::Slider;
+    vol = ns2_addNode(fp, _sm_base6, _sm_base7, 10, 70, 200, 20);
     ns2_setName(fp, vol, __sm_stringTable[217]);
-    _sm_base7 = fp->root;
-    _sm_base8 = ns2_NodeKind::Slider;
-    gain = ns2_addNode(fp, _sm_base7, _sm_base8, 10, 100, 100, 20);
+    _sm_base8 = fp->root;
+    _sm_base9 = ns2_NodeKind::Slider;
+    gain = ns2_addNode(fp, _sm_base8, _sm_base9, 10, 100, 100, 20);
     ns2_setName(fp, gain, __sm_stringTable[188]);
-    _sm_base9 = fp->root;
-    _sm_base10 = ns2_NodeKind::Edit;
-    field = ns2_addNode(fp, _sm_base9, _sm_base10, 10, 130, 180, 26);
+    _sm_base10 = fp->root;
+    _sm_base11 = ns2_NodeKind::Edit;
+    field = ns2_addNode(fp, _sm_base10, _sm_base11, 10, 130, 180, 26);
     ns2_setName(fp, field, __sm_stringTable[170]);
     ns2_setPayload(fp, field, 4);
     _sm_expr2 = -1;
@@ -10329,27 +10337,27 @@ void ns1_partControls() {
     taken = ns1_Taken{_sm_expr2, _sm_expr3, _sm_expr4, _sm_expr5};
     takenPtr = &taken;
     answer = ns1_partControls_closure1{takenPtr, fp};
-    _sm_base11 = ns1_Act::Opt;
-    _sm_expr6 = static_cast<Int>(_sm_base11);
+    _sm_base12 = ns1_Act::Opt;
+    _sm_expr6 = static_cast<Int>(_sm_base12);
     bound = ns2_frameOn(fp, __sm_stringTable[213], _sm_expr6);
-    _sm_base12 = ns1_Act::Off;
-    _sm_expr8 = static_cast<Int>(_sm_base12);
+    _sm_base13 = ns1_Act::Off;
+    _sm_expr8 = static_cast<Int>(_sm_base13);
     _sm_expr9 = ns2_frameOn(fp, __sm_stringTable[211], _sm_expr8);
     _sm_expr7 = _sm_expr9;
     if (!(_sm_expr7)) goto _sm_sc1;
     _sm_expr7 = bound;
     _sm_sc1:;
     bound = _sm_expr7;
-    _sm_base13 = ns1_Act::Gain;
-    _sm_expr11 = static_cast<Int>(_sm_base13);
+    _sm_base14 = ns1_Act::Gain;
+    _sm_expr11 = static_cast<Int>(_sm_base14);
     _sm_expr9 = ns2_frameOn(fp, __sm_stringTable[188], _sm_expr11);
     _sm_expr10 = _sm_expr9;
     if (!(_sm_expr10)) goto _sm_sc2;
     _sm_expr10 = bound;
     _sm_sc2:;
     bound = _sm_expr10;
-    _sm_base14 = ns1_Act::Commit;
-    _sm_expr14 = static_cast<Int>(_sm_base14);
+    _sm_base15 = ns1_Act::Commit;
+    _sm_expr14 = static_cast<Int>(_sm_base15);
     _sm_expr9 = ns2_frameOn(fp, __sm_stringTable[170], _sm_expr14);
     _sm_expr13 = _sm_expr9;
     if (!(_sm_expr13)) goto _sm_sc3;
@@ -10363,20 +10371,20 @@ void ns1_partControls() {
     std::memcpy(__sm_catP, strBoolView(bound).ptr, strBoolView(bound).len);
     simse_println((_sm_expr17), stdout);
     ns2_keyDown(&_sm_expr18, 120);
-    _sm_base15 = &_sm_expr18;
-    ns2_uiEvent(&stray, fp, _sm_base15, answer);
-    _sm_base16 = simse_addressOf(stray.hit);
-    __sm_catC0 = strCountDigits((*_sm_base16));
+    _sm_base16 = &_sm_expr18;
+    ns2_uiEvent(&stray, fp, _sm_base16, answer);
+    _sm_base17 = simse_addressOf(stray.hit);
+    __sm_catC0 = strCountDigits((*_sm_base17));
     _sm_expr21.resize(30 + __sm_catC0);
     __sm_catP = simse_str_data(&_sm_expr21);
     std::memcpy(__sm_catP, "key with no focus: hit=", 23);
     __sm_catP = __sm_catP + 23;
-    strAddInt(__sm_catP, (*_sm_base16), __sm_catC0);
+    strAddInt(__sm_catP, (*_sm_base17), __sm_catC0);
     __sm_catP = __sm_catP + __sm_catC0;
     std::memcpy(__sm_catP, " text=\"", 7);
-    _sm_base18 = __sm_stringTable[170];
-    _sm_base17 = &_sm_base18;
-    ns1_textOf(&_sm_expr22, fp, _sm_base17);
+    _sm_base19 = __sm_stringTable[170];
+    _sm_base18 = &_sm_base19;
+    ns1_textOf(&_sm_expr22, fp, _sm_base18);
     _sm_expr24.resize(1 + _sm_expr21.size() + _sm_expr22.size());
     __sm_catP = simse_str_data(&_sm_expr24);
     std::memcpy(__sm_catP, _sm_expr21.data(), _sm_expr21.size());
@@ -10386,21 +10394,21 @@ void ns1_partControls() {
     *__sm_catP = (char) ('\"');
     simse_println((_sm_expr24), stdout);
     {
-        ns2_Hit _sm_sret261;
-        ns1_click(&_sm_sret261, fp, 20, answer);
+        ns2_Hit _sm_sret263;
+        ns1_click(&_sm_sret263, fp, 20, answer);
     }
-    _sm_base19 = simse_addressOf(taken.action);
-    __sm_catC0 = strCountDigits((*_sm_base19));
+    _sm_base20 = simse_addressOf(taken.action);
+    __sm_catC0 = strCountDigits((*_sm_base20));
     _sm_expr27.resize(28 + __sm_catC0);
     __sm_catP = simse_str_data(&_sm_expr27);
     std::memcpy(__sm_catP, "click on opt: action=", 21);
     __sm_catP = __sm_catP + 21;
-    strAddInt(__sm_catP, (*_sm_base19), __sm_catC0);
+    strAddInt(__sm_catP, (*_sm_base20), __sm_catC0);
     __sm_catP = __sm_catP + __sm_catC0;
     std::memcpy(__sm_catP, " value=", 7);
-    _sm_base21 = __sm_stringTable[213];
-    _sm_base20 = &_sm_base21;
-    _sm_expr28 = ns1_valueOf(fp, _sm_base20);
+    _sm_base22 = __sm_stringTable[213];
+    _sm_base21 = &_sm_base22;
+    _sm_expr28 = ns1_valueOf(fp, _sm_base21);
     __sm_catC0 = strCountDigits(_sm_expr28);
     _sm_expr31.resize(9 + _sm_expr27.size() + __sm_catC0);
     __sm_catP = simse_str_data(&_sm_expr31);
@@ -10409,21 +10417,21 @@ void ns1_partControls() {
     strAddInt(__sm_catP, _sm_expr28, __sm_catC0);
     __sm_catP = __sm_catP + __sm_catC0;
     std::memcpy(__sm_catP, " carried=", 9);
-    _sm_base22 = simse_addressOf(taken.value);
-    __sm_catC0 = strCountDigits((*_sm_base22));
+    _sm_base23 = simse_addressOf(taken.value);
+    __sm_catC0 = strCountDigits((*_sm_base23));
     _sm_expr33.resize(_sm_expr31.size() + __sm_catC0);
     __sm_catP = simse_str_data(&_sm_expr33);
     std::memcpy(__sm_catP, _sm_expr31.data(), _sm_expr31.size());
     __sm_catP = __sm_catP + _sm_expr31.size();
-    strAddInt(__sm_catP, (*_sm_base22), __sm_catC0);
+    strAddInt(__sm_catP, (*_sm_base23), __sm_catC0);
     simse_println((_sm_expr33), stdout);
     {
-        ns2_Hit _sm_sret271;
-        ns1_click(&_sm_sret271, fp, 20, answer);
+        ns2_Hit _sm_sret273;
+        ns1_click(&_sm_sret273, fp, 20, answer);
     }
-    _sm_base24 = __sm_stringTable[213];
-    _sm_base23 = &_sm_base24;
-    _sm_expr34 = ns1_valueOf(fp, _sm_base23);
+    _sm_base25 = __sm_stringTable[213];
+    _sm_base24 = &_sm_base25;
+    _sm_expr34 = ns1_valueOf(fp, _sm_base24);
     __sm_catC0 = strCountDigits(_sm_expr34);
     _sm_expr36.resize(13 + __sm_catC0);
     __sm_catP = simse_str_data(&_sm_expr36);
@@ -10434,20 +10442,20 @@ void ns1_partControls() {
     takenPtr->action = -1;
     takenPtr->value = -1;
     {
-        ns2_Hit _sm_sret279;
-        ns1_click(&_sm_sret279, fp, 50, answer);
+        ns2_Hit _sm_sret281;
+        ns1_click(&_sm_sret281, fp, 50, answer);
     }
-    __sm_catC0 = strCountDigits((*_sm_base19));
+    __sm_catC0 = strCountDigits((*_sm_base20));
     _sm_expr39.resize(28 + __sm_catC0);
     __sm_catP = simse_str_data(&_sm_expr39);
     std::memcpy(__sm_catP, "click on off: action=", 21);
     __sm_catP = __sm_catP + 21;
-    strAddInt(__sm_catP, (*_sm_base19), __sm_catC0);
+    strAddInt(__sm_catP, (*_sm_base20), __sm_catC0);
     __sm_catP = __sm_catP + __sm_catC0;
     std::memcpy(__sm_catP, " value=", 7);
-    _sm_base27 = __sm_stringTable[211];
-    _sm_base26 = &_sm_base27;
-    _sm_expr40 = ns1_valueOf(fp, _sm_base26);
+    _sm_base28 = __sm_stringTable[211];
+    _sm_base27 = &_sm_base28;
+    _sm_expr40 = ns1_valueOf(fp, _sm_base27);
     __sm_catC0 = strCountDigits(_sm_expr40);
     _sm_expr42.resize(_sm_expr39.size() + __sm_catC0);
     __sm_catP = simse_str_data(&_sm_expr42);
@@ -10456,20 +10464,20 @@ void ns1_partControls() {
     strAddInt(__sm_catP, _sm_expr40, __sm_catC0);
     simse_println((_sm_expr42), stdout);
     ns2_mouseMove(&_sm_expr43, 120, 80);
-    _sm_base28 = &_sm_expr43;
+    _sm_base29 = &_sm_expr43;
     {
-        ns2_Hit _sm_sret288;
-        ns2_uiEvent(&_sm_sret288, fp, _sm_base28, answer);
+        ns2_Hit _sm_sret290;
+        ns2_uiEvent(&_sm_sret290, fp, _sm_base29, answer);
     }
-    _sm_base29 = ns2_Button::Left;
-    ns2_mouseDown(&_sm_expr44, 120, 80, _sm_base29);
-    _sm_base30 = &_sm_expr44;
+    _sm_base30 = ns2_Button::Left;
+    ns2_mouseDown(&_sm_expr44, 120, 80, _sm_base30);
+    _sm_base31 = &_sm_expr44;
     {
-        ns2_Hit _sm_sret292;
-        ns2_uiEvent(&_sm_sret292, fp, _sm_base30, answer);
+        ns2_Hit _sm_sret294;
+        ns2_uiEvent(&_sm_sret294, fp, _sm_base31, answer);
     }
-    _sm_base31 = fp->pressed;
-    ns1_nameOf(&_sm_expr45, fp, _sm_base31);
+    _sm_base32 = fp->pressed;
+    ns1_nameOf(&_sm_expr45, fp, _sm_base32);
     _sm_expr47.resize(28 + _sm_expr45.size());
     __sm_catP = simse_str_data(&_sm_expr47);
     std::memcpy(__sm_catP, "down on vol: pressed=", 21);
@@ -10477,9 +10485,9 @@ void ns1_partControls() {
     std::memcpy(__sm_catP, _sm_expr45.data(), _sm_expr45.size());
     __sm_catP = __sm_catP + _sm_expr45.size();
     std::memcpy(__sm_catP, " value=", 7);
-    _sm_base33 = __sm_stringTable[217];
-    _sm_base32 = &_sm_base33;
-    _sm_expr48 = ns1_valueOf(fp, _sm_base32);
+    _sm_base34 = __sm_stringTable[217];
+    _sm_base33 = &_sm_base34;
+    _sm_expr48 = ns1_valueOf(fp, _sm_base33);
     __sm_catC0 = strCountDigits(_sm_expr48);
     _sm_expr50.resize(_sm_expr47.size() + __sm_catC0);
     __sm_catP = simse_str_data(&_sm_expr50);
@@ -10488,14 +10496,14 @@ void ns1_partControls() {
     strAddInt(__sm_catP, _sm_expr48, __sm_catC0);
     simse_println((_sm_expr50), stdout);
     ns2_mouseMove(&_sm_expr51, 70, 80);
-    _sm_base34 = &_sm_expr51;
+    _sm_base35 = &_sm_expr51;
     {
-        ns2_Hit _sm_sret303;
-        ns2_uiEvent(&_sm_sret303, fp, _sm_base34, answer);
+        ns2_Hit _sm_sret305;
+        ns2_uiEvent(&_sm_sret305, fp, _sm_base35, answer);
     }
-    _sm_base36 = __sm_stringTable[217];
-    _sm_base35 = &_sm_base36;
-    _sm_expr52 = ns1_valueOf(fp, _sm_base35);
+    _sm_base37 = __sm_stringTable[217];
+    _sm_base36 = &_sm_base37;
+    _sm_expr52 = ns1_valueOf(fp, _sm_base36);
     __sm_catC0 = strCountDigits(_sm_expr52);
     _sm_expr54.resize(18 + __sm_catC0);
     __sm_catP = simse_str_data(&_sm_expr54);
@@ -10504,14 +10512,14 @@ void ns1_partControls() {
     strAddInt(__sm_catP, _sm_expr52, __sm_catC0);
     simse_println((_sm_expr54), stdout);
     ns2_mouseMove(&_sm_expr55, 400, 80);
-    _sm_base37 = &_sm_expr55;
+    _sm_base38 = &_sm_expr55;
     {
-        ns2_Hit _sm_sret311;
-        ns2_uiEvent(&_sm_sret311, fp, _sm_base37, answer);
+        ns2_Hit _sm_sret313;
+        ns2_uiEvent(&_sm_sret313, fp, _sm_base38, answer);
     }
-    _sm_base39 = __sm_stringTable[217];
-    _sm_base38 = &_sm_base39;
-    _sm_expr56 = ns1_valueOf(fp, _sm_base38);
+    _sm_base40 = __sm_stringTable[217];
+    _sm_base39 = &_sm_base40;
+    _sm_expr56 = ns1_valueOf(fp, _sm_base39);
     __sm_catC0 = strCountDigits(_sm_expr56);
     _sm_expr58.resize(25 + __sm_catC0);
     __sm_catP = simse_str_data(&_sm_expr58);
@@ -10520,14 +10528,14 @@ void ns1_partControls() {
     strAddInt(__sm_catP, _sm_expr56, __sm_catC0);
     simse_println((_sm_expr58), stdout);
     ns2_mouseMove(&_sm_expr59, 5, 80);
-    _sm_base40 = &_sm_expr59;
+    _sm_base41 = &_sm_expr59;
     {
-        ns2_Hit _sm_sret319;
-        ns2_uiEvent(&_sm_sret319, fp, _sm_base40, answer);
+        ns2_Hit _sm_sret321;
+        ns2_uiEvent(&_sm_sret321, fp, _sm_base41, answer);
     }
-    _sm_base42 = __sm_stringTable[217];
-    _sm_base41 = &_sm_base42;
-    _sm_expr60 = ns1_valueOf(fp, _sm_base41);
+    _sm_base43 = __sm_stringTable[217];
+    _sm_base42 = &_sm_base43;
+    _sm_expr60 = ns1_valueOf(fp, _sm_base42);
     __sm_catC0 = strCountDigits(_sm_expr60);
     _sm_expr62.resize(29 + __sm_catC0);
     __sm_catP = simse_str_data(&_sm_expr62);
@@ -10535,58 +10543,58 @@ void ns1_partControls() {
     __sm_catP = __sm_catP + 29;
     strAddInt(__sm_catP, _sm_expr60, __sm_catC0);
     simse_println((_sm_expr62), stdout);
-    _sm_base43 = ns2_Button::Left;
-    ns2_mouseUp(&_sm_expr63, 5, 80, _sm_base43);
-    _sm_base44 = &_sm_expr63;
+    _sm_base44 = ns2_Button::Left;
+    ns2_mouseUp(&_sm_expr63, 5, 80, _sm_base44);
+    _sm_base45 = &_sm_expr63;
     {
-        ns2_Hit _sm_sret328;
-        ns2_uiEvent(&_sm_sret328, fp, _sm_base44, answer);
+        ns2_Hit _sm_sret330;
+        ns2_uiEvent(&_sm_sret330, fp, _sm_base45, answer);
     }
-    _sm_base45 = ns2_Button::Left;
-    ns2_mouseDown(&_sm_expr64, 60, 110, _sm_base45);
-    _sm_base46 = &_sm_expr64;
+    _sm_base46 = ns2_Button::Left;
+    ns2_mouseDown(&_sm_expr64, 60, 110, _sm_base46);
+    _sm_base47 = &_sm_expr64;
     {
-        ns2_Hit _sm_sret332;
-        ns2_uiEvent(&_sm_sret332, fp, _sm_base46, answer);
+        ns2_Hit _sm_sret334;
+        ns2_uiEvent(&_sm_sret334, fp, _sm_base47, answer);
     }
-    __sm_catC0 = strCountDigits((*_sm_base19));
+    __sm_catC0 = strCountDigits((*_sm_base20));
     _sm_expr67.resize(30 + __sm_catC0);
     __sm_catP = simse_str_data(&_sm_expr67);
     std::memcpy(__sm_catP, "down on gain: action=", 21);
     __sm_catP = __sm_catP + 21;
-    strAddInt(__sm_catP, (*_sm_base19), __sm_catC0);
+    strAddInt(__sm_catP, (*_sm_base20), __sm_catC0);
     __sm_catP = __sm_catP + __sm_catC0;
     std::memcpy(__sm_catP, " carried=", 9);
-    __sm_catC0 = strCountDigits((*_sm_base22));
+    __sm_catC0 = strCountDigits((*_sm_base23));
     _sm_expr69.resize(_sm_expr67.size() + __sm_catC0);
     __sm_catP = simse_str_data(&_sm_expr69);
     std::memcpy(__sm_catP, _sm_expr67.data(), _sm_expr67.size());
     __sm_catP = __sm_catP + _sm_expr67.size();
-    strAddInt(__sm_catP, (*_sm_base22), __sm_catC0);
+    strAddInt(__sm_catP, (*_sm_base23), __sm_catC0);
     simse_println((_sm_expr69), stdout);
-    _sm_base49 = ns2_Button::Left;
-    ns2_mouseUp(&_sm_expr70, 60, 110, _sm_base49);
-    _sm_base50 = &_sm_expr70;
+    _sm_base50 = ns2_Button::Left;
+    ns2_mouseUp(&_sm_expr70, 60, 110, _sm_base50);
+    _sm_base51 = &_sm_expr70;
     {
-        ns2_Hit _sm_sret339;
-        ns2_uiEvent(&_sm_sret339, fp, _sm_base50, answer);
+        ns2_Hit _sm_sret341;
+        ns2_uiEvent(&_sm_sret341, fp, _sm_base51, answer);
     }
-    _sm_base51 = ns2_Button::Left;
-    ns2_mouseDown(&_sm_expr71, 50, 143, _sm_base51);
-    _sm_base52 = &_sm_expr71;
+    _sm_base52 = ns2_Button::Left;
+    ns2_mouseDown(&_sm_expr71, 50, 143, _sm_base52);
+    _sm_base53 = &_sm_expr71;
     {
-        ns2_Hit _sm_sret343;
-        ns2_uiEvent(&_sm_sret343, fp, _sm_base52, answer);
+        ns2_Hit _sm_sret345;
+        ns2_uiEvent(&_sm_sret345, fp, _sm_base53, answer);
     }
-    _sm_base53 = ns2_Button::Left;
-    ns2_mouseUp(&_sm_expr72, 50, 143, _sm_base53);
-    _sm_base54 = &_sm_expr72;
+    _sm_base54 = ns2_Button::Left;
+    ns2_mouseUp(&_sm_expr72, 50, 143, _sm_base54);
+    _sm_base55 = &_sm_expr72;
     {
-        ns2_Hit _sm_sret347;
-        ns2_uiEvent(&_sm_sret347, fp, _sm_base54, answer);
+        ns2_Hit _sm_sret349;
+        ns2_uiEvent(&_sm_sret349, fp, _sm_base55, answer);
     }
-    _sm_base55 = fp->keyFocus;
-    ns1_nameOf(&_sm_expr73, fp, _sm_base55);
+    _sm_base56 = fp->keyFocus;
+    ns1_nameOf(&_sm_expr73, fp, _sm_base56);
     _sm_expr74.resize(22 + _sm_expr73.size());
     __sm_catP = simse_str_data(&_sm_expr74);
     std::memcpy(__sm_catP, "press on field: focus=", 22);
@@ -10594,20 +10602,20 @@ void ns1_partControls() {
     std::memcpy(__sm_catP, _sm_expr73.data(), _sm_expr73.size());
     simse_println((_sm_expr74), stdout);
     ns2_keyDown(&_sm_expr75, 104);
-    _sm_base56 = &_sm_expr75;
+    _sm_base57 = &_sm_expr75;
     {
-        ns2_Hit _sm_sret354;
-        ns2_uiEvent(&_sm_sret354, fp, _sm_base56, answer);
+        ns2_Hit _sm_sret356;
+        ns2_uiEvent(&_sm_sret356, fp, _sm_base57, answer);
     }
     ns2_keyDown(&_sm_expr76, 105);
-    _sm_base57 = &_sm_expr76;
+    _sm_base58 = &_sm_expr76;
     {
-        ns2_Hit _sm_sret357;
-        ns2_uiEvent(&_sm_sret357, fp, _sm_base57, answer);
+        ns2_Hit _sm_sret359;
+        ns2_uiEvent(&_sm_sret359, fp, _sm_base58, answer);
     }
-    _sm_base59 = __sm_stringTable[170];
-    _sm_base58 = &_sm_base59;
-    ns1_textOf(&_sm_expr77, fp, _sm_base58);
+    _sm_base60 = __sm_stringTable[170];
+    _sm_base59 = &_sm_base60;
+    ns1_textOf(&_sm_expr77, fp, _sm_base59);
     _sm_expr79.resize(24 + _sm_expr77.size());
     __sm_catP = simse_str_data(&_sm_expr79);
     std::memcpy(__sm_catP, "typed \"hi\": text=\"", 18);
@@ -10615,23 +10623,23 @@ void ns1_partControls() {
     std::memcpy(__sm_catP, _sm_expr77.data(), _sm_expr77.size());
     __sm_catP = __sm_catP + _sm_expr77.size();
     std::memcpy(__sm_catP, "\" hit=", 6);
-    _sm_base60 = simse_addressOf(taken.hit);
-    __sm_catC0 = strCountDigits((*_sm_base60));
+    _sm_base61 = simse_addressOf(taken.hit);
+    __sm_catC0 = strCountDigits((*_sm_base61));
     _sm_expr81.resize(_sm_expr79.size() + __sm_catC0);
     __sm_catP = simse_str_data(&_sm_expr81);
     std::memcpy(__sm_catP, _sm_expr79.data(), _sm_expr79.size());
     __sm_catP = __sm_catP + _sm_expr79.size();
-    strAddInt(__sm_catP, (*_sm_base60), __sm_catC0);
+    strAddInt(__sm_catP, (*_sm_base61), __sm_catC0);
     simse_println((_sm_expr81), stdout);
     ns2_keyDown(&_sm_expr82, 8);
-    _sm_base61 = &_sm_expr82;
+    _sm_base62 = &_sm_expr82;
     {
-        ns2_Hit _sm_sret367;
-        ns2_uiEvent(&_sm_sret367, fp, _sm_base61, answer);
+        ns2_Hit _sm_sret369;
+        ns2_uiEvent(&_sm_sret369, fp, _sm_base62, answer);
     }
-    _sm_base63 = __sm_stringTable[170];
-    _sm_base62 = &_sm_base63;
-    ns1_textOf(&_sm_expr83, fp, _sm_base62);
+    _sm_base64 = __sm_stringTable[170];
+    _sm_base63 = &_sm_base64;
+    ns1_textOf(&_sm_expr83, fp, _sm_base63);
     _sm_expr85.resize(18 + _sm_expr83.size());
     __sm_catP = simse_str_data(&_sm_expr85);
     std::memcpy(__sm_catP, "backspace: text=\"", 17);
@@ -10641,26 +10649,26 @@ void ns1_partControls() {
     *__sm_catP = (char) ('\"');
     simse_println((_sm_expr85), stdout);
     ns2_keyDown(&_sm_expr86, 97);
-    _sm_base64 = &_sm_expr86;
+    _sm_base65 = &_sm_expr86;
     {
-        ns2_Hit _sm_sret375;
-        ns2_uiEvent(&_sm_sret375, fp, _sm_base64, answer);
+        ns2_Hit _sm_sret377;
+        ns2_uiEvent(&_sm_sret377, fp, _sm_base65, answer);
     }
     ns2_keyDown(&_sm_expr87, 98);
-    _sm_base65 = &_sm_expr87;
+    _sm_base66 = &_sm_expr87;
     {
-        ns2_Hit _sm_sret378;
-        ns2_uiEvent(&_sm_sret378, fp, _sm_base65, answer);
+        ns2_Hit _sm_sret380;
+        ns2_uiEvent(&_sm_sret380, fp, _sm_base66, answer);
     }
     ns2_keyDown(&_sm_expr88, 99);
-    _sm_base66 = &_sm_expr88;
+    _sm_base67 = &_sm_expr88;
     {
-        ns2_Hit _sm_sret381;
-        ns2_uiEvent(&_sm_sret381, fp, _sm_base66, answer);
+        ns2_Hit _sm_sret383;
+        ns2_uiEvent(&_sm_sret383, fp, _sm_base67, answer);
     }
-    _sm_base68 = __sm_stringTable[170];
-    _sm_base67 = &_sm_base68;
-    ns1_textOf(&_sm_expr89, fp, _sm_base67);
+    _sm_base69 = __sm_stringTable[170];
+    _sm_base68 = &_sm_base69;
+    ns1_textOf(&_sm_expr89, fp, _sm_base68);
     _sm_expr91.resize(30 + _sm_expr89.size());
     __sm_catP = simse_str_data(&_sm_expr91);
     std::memcpy(__sm_catP, "typed \"abc\" (limit 4): text=\"", 29);
@@ -10670,14 +10678,14 @@ void ns1_partControls() {
     *__sm_catP = (char) ('\"');
     simse_println((_sm_expr91), stdout);
     ns2_keyDown(&_sm_expr92, 100);
-    _sm_base69 = &_sm_expr92;
+    _sm_base70 = &_sm_expr92;
     {
-        ns2_Hit _sm_sret389;
-        ns2_uiEvent(&_sm_sret389, fp, _sm_base69, answer);
+        ns2_Hit _sm_sret391;
+        ns2_uiEvent(&_sm_sret391, fp, _sm_base70, answer);
     }
-    _sm_base71 = __sm_stringTable[170];
-    _sm_base70 = &_sm_base71;
-    ns1_textOf(&_sm_expr93, fp, _sm_base70);
+    _sm_base72 = __sm_stringTable[170];
+    _sm_base71 = &_sm_base72;
+    ns1_textOf(&_sm_expr93, fp, _sm_base71);
     _sm_expr95.resize(21 + _sm_expr93.size());
     __sm_catP = simse_str_data(&_sm_expr95);
     std::memcpy(__sm_catP, "a fifth char: text=\"", 20);
@@ -10686,22 +10694,22 @@ void ns1_partControls() {
     __sm_catP = __sm_catP + _sm_expr93.size();
     *__sm_catP = (char) ('\"');
     simse_println((_sm_expr95), stdout);
-    _sm_base72 = ns2_Button::Left;
-    ns2_mouseDown(&_sm_expr96, 215, 175, _sm_base72);
-    _sm_base73 = &_sm_expr96;
+    _sm_base73 = ns2_Button::Left;
+    ns2_mouseDown(&_sm_expr96, 215, 175, _sm_base73);
+    _sm_base74 = &_sm_expr96;
     {
-        ns2_Hit _sm_sret398;
-        ns2_uiEvent(&_sm_sret398, fp, _sm_base73, answer);
+        ns2_Hit _sm_sret400;
+        ns2_uiEvent(&_sm_sret400, fp, _sm_base74, answer);
     }
-    _sm_base74 = ns2_Button::Left;
-    ns2_mouseUp(&_sm_expr97, 215, 175, _sm_base74);
-    _sm_base75 = &_sm_expr97;
+    _sm_base75 = ns2_Button::Left;
+    ns2_mouseUp(&_sm_expr97, 215, 175, _sm_base75);
+    _sm_base76 = &_sm_expr97;
     {
-        ns2_Hit _sm_sret402;
-        ns2_uiEvent(&_sm_sret402, fp, _sm_base75, answer);
+        ns2_Hit _sm_sret404;
+        ns2_uiEvent(&_sm_sret404, fp, _sm_base76, answer);
     }
-    _sm_base76 = fp->keyFocus;
-    ns1_nameOf(&_sm_expr98, fp, _sm_base76);
+    _sm_base77 = fp->keyFocus;
+    ns1_nameOf(&_sm_expr98, fp, _sm_base77);
     _sm_expr99.resize(31 + _sm_expr98.size());
     __sm_catP = simse_str_data(&_sm_expr99);
     std::memcpy(__sm_catP, "press on the background: focus=", 31);
@@ -10709,20 +10717,20 @@ void ns1_partControls() {
     std::memcpy(__sm_catP, _sm_expr98.data(), _sm_expr98.size());
     simse_println((_sm_expr99), stdout);
     ns2_keyDown(&_sm_expr100, 120);
-    _sm_base77 = &_sm_expr100;
-    ns2_uiEvent(&refused, fp, _sm_base77, answer);
-    _sm_base78 = simse_addressOf(refused.hit);
-    __sm_catC0 = strCountDigits((*_sm_base78));
+    _sm_base78 = &_sm_expr100;
+    ns2_uiEvent(&refused, fp, _sm_base78, answer);
+    _sm_base79 = simse_addressOf(refused.hit);
+    __sm_catC0 = strCountDigits((*_sm_base79));
     _sm_expr103.resize(36 + __sm_catC0);
     __sm_catP = simse_str_data(&_sm_expr103);
     std::memcpy(__sm_catP, "key with no focus again: hit=", 29);
     __sm_catP = __sm_catP + 29;
-    strAddInt(__sm_catP, (*_sm_base78), __sm_catC0);
+    strAddInt(__sm_catP, (*_sm_base79), __sm_catC0);
     __sm_catP = __sm_catP + __sm_catC0;
     std::memcpy(__sm_catP, " text=\"", 7);
-    _sm_base80 = __sm_stringTable[170];
-    _sm_base79 = &_sm_base80;
-    ns1_textOf(&_sm_expr104, fp, _sm_base79);
+    _sm_base81 = __sm_stringTable[170];
+    _sm_base80 = &_sm_base81;
+    ns1_textOf(&_sm_expr104, fp, _sm_base80);
     _sm_expr106.resize(1 + _sm_expr103.size() + _sm_expr104.size());
     __sm_catP = simse_str_data(&_sm_expr106);
     std::memcpy(__sm_catP, _sm_expr103.data(), _sm_expr103.size());
@@ -10731,38 +10739,38 @@ void ns1_partControls() {
     __sm_catP = __sm_catP + _sm_expr104.size();
     *__sm_catP = (char) ('\"');
     simse_println((_sm_expr106), stdout);
-    _sm_base81 = ns2_Button::Left;
-    ns2_mouseDown(&_sm_expr107, 50, 143, _sm_base81);
-    _sm_base82 = &_sm_expr107;
+    _sm_base82 = ns2_Button::Left;
+    ns2_mouseDown(&_sm_expr107, 50, 143, _sm_base82);
+    _sm_base83 = &_sm_expr107;
     {
-        ns2_Hit _sm_sret420;
-        ns2_uiEvent(&_sm_sret420, fp, _sm_base82, answer);
+        ns2_Hit _sm_sret422;
+        ns2_uiEvent(&_sm_sret422, fp, _sm_base83, answer);
     }
-    _sm_base83 = ns2_Button::Left;
-    ns2_mouseUp(&_sm_expr108, 50, 143, _sm_base83);
-    _sm_base84 = &_sm_expr108;
+    _sm_base84 = ns2_Button::Left;
+    ns2_mouseUp(&_sm_expr108, 50, 143, _sm_base84);
+    _sm_base85 = &_sm_expr108;
     {
-        ns2_Hit _sm_sret424;
-        ns2_uiEvent(&_sm_sret424, fp, _sm_base84, answer);
+        ns2_Hit _sm_sret426;
+        ns2_uiEvent(&_sm_sret426, fp, _sm_base85, answer);
     }
     takenPtr->action = -1;
     ns2_keyDown(&_sm_expr109, 13);
-    _sm_base85 = &_sm_expr109;
+    _sm_base86 = &_sm_expr109;
     {
-        ns2_Hit _sm_sret428;
-        ns2_uiEvent(&_sm_sret428, fp, _sm_base85, answer);
+        ns2_Hit _sm_sret430;
+        ns2_uiEvent(&_sm_sret430, fp, _sm_base86, answer);
     }
-    __sm_catC0 = strCountDigits((*_sm_base19));
+    __sm_catC0 = strCountDigits((*_sm_base20));
     _sm_expr112.resize(22 + __sm_catC0);
     __sm_catP = simse_str_data(&_sm_expr112);
     std::memcpy(__sm_catP, "return: action=", 15);
     __sm_catP = __sm_catP + 15;
-    strAddInt(__sm_catP, (*_sm_base19), __sm_catC0);
+    strAddInt(__sm_catP, (*_sm_base20), __sm_catC0);
     __sm_catP = __sm_catP + __sm_catC0;
     std::memcpy(__sm_catP, " text=\"", 7);
-    _sm_base88 = __sm_stringTable[170];
-    _sm_base87 = &_sm_base88;
-    ns1_textOf(&_sm_expr113, fp, _sm_base87);
+    _sm_base89 = __sm_stringTable[170];
+    _sm_base88 = &_sm_base89;
+    ns1_textOf(&_sm_expr113, fp, _sm_base88);
     _sm_expr115.resize(1 + _sm_expr112.size() + _sm_expr113.size());
     __sm_catP = simse_str_data(&_sm_expr115);
     std::memcpy(__sm_catP, _sm_expr112.data(), _sm_expr112.size());
@@ -10772,20 +10780,20 @@ void ns1_partControls() {
     *__sm_catP = (char) ('\"');
     simse_println((_sm_expr115), stdout);
     ns2_keyDown(&_sm_expr116, 27);
-    _sm_base89 = &_sm_expr116;
-    ns2_uiEvent(&escape, fp, _sm_base89, answer);
-    _sm_base90 = simse_addressOf(escape.hit);
-    __sm_catC0 = strCountDigits((*_sm_base90));
+    _sm_base90 = &_sm_expr116;
+    ns2_uiEvent(&escape, fp, _sm_base90, answer);
+    _sm_base91 = simse_addressOf(escape.hit);
+    __sm_catC0 = strCountDigits((*_sm_base91));
     _sm_expr119.resize(33 + __sm_catC0);
     __sm_catP = simse_str_data(&_sm_expr119);
     std::memcpy(__sm_catP, "escape while focused: hit=", 26);
     __sm_catP = __sm_catP + 26;
-    strAddInt(__sm_catP, (*_sm_base90), __sm_catC0);
+    strAddInt(__sm_catP, (*_sm_base91), __sm_catC0);
     __sm_catP = __sm_catP + __sm_catC0;
     std::memcpy(__sm_catP, " text=\"", 7);
-    _sm_base92 = __sm_stringTable[170];
-    _sm_base91 = &_sm_base92;
-    ns1_textOf(&_sm_expr120, fp, _sm_base91);
+    _sm_base93 = __sm_stringTable[170];
+    _sm_base92 = &_sm_base93;
+    ns1_textOf(&_sm_expr120, fp, _sm_base92);
     _sm_expr122.resize(1 + _sm_expr119.size() + _sm_expr120.size());
     __sm_catP = simse_str_data(&_sm_expr122);
     std::memcpy(__sm_catP, _sm_expr119.data(), _sm_expr119.size());

@@ -5661,3 +5661,20 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   parameters went back to by-value until the write-signature work models the receiver
   position. Verified: `bun tools/iterate.js --full` - **143/143** and both fixed points;
   the published bootstrap refreshed (the compiler's own emission moved).
+
+- **The receiver-only mutators carry the `mutates` mark, and `sort`'s `borrow` was a
+  miscompile.** A second probe of the same shape as the receiver-check fix, this one in
+  the author's marks: `List.sort` was `borrow`-marked - "read-only receiver and
+  parameters" - while `simse_list_sort` runs `std::sort(self.begin(), self.end(), ...)`
+  in place. A body calling `xs.sort(cmp)` on its own parameter proved clean on that
+  promise, the parameter borrowed, and the reorder reached the caller's list through the
+  by-value boundary (`stress/borrow-mutates-sort`: `mine[0]` printed the reordered
+  element, `ccc` where the boundary owes `a`). The mark is `mutates` now - the honest
+  shape, the receiver written and nothing else - and the same mark landed on every
+  unmarked receiver-only mutator the scan found: `Dictionary.insert/remove/clear`,
+  `List.removeAt/removeRange`, `Str.initByValue`. On the compiler's own build `insert`
+  stops blocking 288 bodies and the `strings` corpus case's count loop promotes to
+  places (`word` binds `Str*`, no per-iteration copy); `minui-layout`'s `newFrame`
+  borrows its `Size`. Verified: `bun tools/iterate.js --full` - **144/144** and both
+  fixed points; two emission goldens refreshed additively; the published bootstrap
+  refreshed.
