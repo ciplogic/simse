@@ -5641,3 +5641,23 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   stays spelled by name (its arms are compiler-generated, all-value). Verified:
   `bun tools/iterate.js --full` - **138/138** and both fixed points; the union arms remain
   the corpus's pin for the rule.
+
+- **The mutates relaxation proves only on a receiver the body built (a soundness fix).**
+  The borrow fixpoint's `mutates` arm (`bpPureWalk`) trusted a receiver-mutating callee
+  unconditionally - the comment said "on a fresh local", the code never checked - while the
+  rewrite walk (`BpFacts.walk`) always applied the fresh-receiver test. The gap was a real
+  miscompile: `f(p: *List<Str>) { p.append(x) }` proved borrow-clean by name, a caller `g`
+  borrowed its by-value `q` on the strength of that proof, and `f`'s append reached the
+  caller of `g` through the borrowed pointer (a probe printed the caller's list size as 2
+  where the by-value boundary owes 1). The fixpoint arm now runs the same test
+  (`bpFreshReceiver`): a fresh local or a place chain rooted at one is obligation-free,
+  anything else - a parameter, `this`, an alias, a static - is the body's own write and
+  refuses the proof. `stress/borrow-mutates-param` pins both halves: the miscompile shape
+  (`g` keeps its copy, `mine` stays 1) and the positive control (`keep`'s append on a
+  body-built local still borrows its list). The blast radius on the compiler's own build
+  is four declarations - `Sections.appendText/appendLine/appendTo` (their `target` derives
+  from `this` through a deref, which the coarse `fresh` set cannot see even though the
+  rewrite walk's narrowed-provenance rule correctly allowed it) - and their `Str`
+  parameters went back to by-value until the write-signature work models the receiver
+  position. Verified: `bun tools/iterate.js --full` - **143/143** and both fixed points;
+  the published bootstrap refreshed (the compiler's own emission moved).

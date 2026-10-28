@@ -174,6 +174,30 @@ fun bpWrittenArgsFresh(
     return indexes.size() > 0
 }
 
+// Whether a member call's receiver is storage the body itself built: a plain local the
+// fresh set holds, or a place chain rooted at one (`node.attributes.append(...)`). The
+// rewrite walk's own relaxation (`BpFacts.walk`), as the predicate the fixpoint walk
+// shares - a `mutates`-marked callee is obligation-free only on a receiver like this.
+fun bpFreshReceiver(callee: *AstXmlNode, fresh: *Dictionary<Str, Bool>): Bool {
+    val receiver: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
+    if (xmlKind(receiver) == AstNodeCategory.ExprMember) {
+        var chain: *AstXmlNode = receiver
+        var crossed: Bool = false
+        var guard: Int = 0
+        while (xmlKind(chain) == AstNodeCategory.ExprMember && guard < 32) {
+            guard++
+            crossed = true
+            chain = xmlChildPtr(chain, AstNodeKind.Receiver)
+        }
+        return crossed && xmlKind(chain) == AstNodeCategory.ExprName
+            && fresh.has(xmlAttr(chain, AstNodeAttributeKind.Name))
+    }
+    if (xmlKind(receiver) == AstNodeCategory.ExprName) {
+        return fresh.has(xmlAttr(receiver, AstNodeAttributeKind.Name))
+    }
+    return false
+}
+
 // The same declaration walk the fixpoint needs, plus the sets the rule reads: the names a
 // value may be borrowed *of* (a `data class`), the callees a body may trust to begin with
 // (the `data`/`borrow` marks - the borrow-clean fixpoint grows this set), the callees whose
@@ -395,9 +419,17 @@ fun bpPureWalk(
         } else if (bpMachineStep(callee)) {
             // The `for` machine's own step; see `bpMachineStep`.
         } else if (ck == AstNodeCategory.ExprMember && mutates.has(xmlAttr(callee, AstNodeAttributeKind.Name))) {
-            // A `mutates`-marked callee writes only its receiver; on a fresh local that
-            // storage is the body's own, so the call imposes no read-only obligation on
-            // anybody (`bpMutatesMark`).
+            // A `mutates`-marked callee writes only its receiver: on a local this body
+            // built - or a place chain rooted at one - that storage is the body's own and
+            // the call imposes no read-only obligation (`bpMutatesMark`, `bpFreshReceiver`).
+            // Any other receiver (a parameter, `this`, an alias, a static) is storage a
+            // caller may see, and the write through it is this body's own write - the same
+            // test the rewrite walk makes. Without it a body like
+            // `f(p: *List<Str>) { p.append(x) }` proved clean, its callers borrowed what
+            // they passed it, and the append reached the caller's caller.
+            if (!bpFreshReceiver(callee, out.fresh)) {
+                out.hasWrite = true
+            }
         } else if (ck == AstNodeCategory.ExprName && callables.has(xmlAttr(callee, AstNodeAttributeKind.Name))) {
             // A call to a callable-by-value parameter of the enclosing declaration: the
             // callee cannot name a place through which to write (`bpCallableParams`), so
