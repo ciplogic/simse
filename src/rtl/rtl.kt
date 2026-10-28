@@ -194,7 +194,11 @@ data fun size(this: Str): Int
 @SmGen("res", "lenops", "simse_lenOf")
 data fun size<T>(this: List<T>): Int
 
-fun List<T>.toArray<T>(): Array<T> {
+// The `borrow` mark on a bodied declaration carries the result-provenance promise the
+// fixpoint cannot prove (it proves writes, not what a result aliases): read-only
+// parameters, and a result derived from them - a fresh block here, never a view of a
+// static or a caller's storage the body did not build.
+borrow fun List<T>.toArray<T>(): Array<T> {
     val count: Int = this.size()
     if (count == 0) {
         return arrayEmpty<T>()
@@ -208,7 +212,8 @@ fun List<T>.toArray<T>(): Array<T> {
     return out
 }
 
-fun Array<T>.toList<T>(): List<T> {
+// The same promise as `toArray` above: read-only receiver, a fresh list built from it.
+borrow fun Array<T>.toList<T>(): List<T> {
     var out: List<T> = List<T>(0)
     val count: Int = this.count()
     out.reserve(count)

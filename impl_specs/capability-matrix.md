@@ -5678,3 +5678,50 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   borrows its `Size`. Verified: `bun tools/iterate.js --full` - **144/144** and both
   fixed points; two emission goldens refreshed additively; the published bootstrap
   refreshed.
+
+- **The write-signature fixpoint: a name whose writes reach known parameter positions
+  carries them, and callers that built the written storage still prove.** The borrow
+  pass's boolean - clean or refused - is now two tables: the clean names (`reads`, as
+  before) and a *signature* table, name -> the 0-based parameter positions its writes
+  can reach (a method's receiver at 0, the author's `mutates` marks seeded in and
+  normalized to the same indexing). A body's writes attribute through one classifier
+  (`bpClassifyPlace`) both walks share: a write through a field/index/deref chain
+  attributes to the position its root reaches - a parameter or the receiver - a local
+  the body built costs nothing, and anything else (a static, an alias of many places)
+  still refuses. A call is one precomputed event with every slot the callee could write
+  classified, and the round consults the callee's signature: a fresh argument at a
+  written position imposes nothing, a parameter's position propagates into the caller's
+  own signature, and an unattributable slot refuses. The rewrite consults the same table
+  (`slotsSafe`), so `Sections.appendText` - whose `target` derives from `this` through a
+  deref - writes position 0 and borrows its `text` again (the precision the receiver-check
+  fix cost), and the parser's `*At` builders, `xmlAddChild` (writes parameter 0), and
+  `Cursor`-style receiver writers carry {0} for their callers. `stress/escape-signature`
+  pins all three shapes: the {0} carrier whose own rewrite is refused, the fresh-argument
+  caller that borrows the rest, and the parameter-at-the-written-position caller that
+  stays by-value. On the compiler's own build: 141 borrowed declarations (26 fewer than
+  the marks-era baseline - the builder family below), 275 signature-carrying names, and
+  346 fewer dirty names (669 from 1015).
+  Two soundness rules the design earned. (1) *Only an author's mark promises a result's
+  provenance*: the fixpoint proves a name writes nothing, which says nothing about what
+  its result aliases - a proved-clean `getSourceGens` hands back a static's storage, and
+  a local initialized from it laundered the static into "fresh" (`bpResultTrusted` is the
+  marked set; an unmarked callee's result is unattributable). `Array.toList` and
+  `List.toArray` carry `borrow` marks for exactly this promise now - read-only, result
+  built from the arguments - which is what recovers the `xmlAddChild` shape. (2) *The
+  span hoist refuses a root whose index reads sit under a `*` or `&`* (`semaSpanPlace
+  Context`): the rewrite turns `c[i]` into `spanOf(c).ptr[i]`, a chain rooted at a call
+  is not a place the IL can address, and the deref materialized a *copy* - a latent
+  hoist bug the signature unlock exposed as a live miscompile (`tgSuite`'s module drop
+  wrote the copy, so a `--tests` build emitted two `main`s; `stress/for-promote`'s golden
+  had pinned the broken spelling as expected output, and now pins the restored
+  `simse_addressOf(items[i])`). Three probes of the by-value boundary stay sound through
+  the whole change: the mutates chain, `sort`'s mark, and a typed alias handed back by a
+  trusted call (`var v = leak(q); v.append(...)` mutated the caller's list before).
+  Still open, the named follow-up: a *result-provenance* fixpoint (which proved callees
+  return only argument-derived storage) would recover the ~30 builder-family borrows the
+  marked-only rule refuses (`var attrs = this.posAttrs(...)` initializes from a proved,
+  unmarked callee); and an LTO-only emission divergence is latent at HEAD (`build.bat
+  --release` with /GL makes even the committed compiler emit the duplicate-`main` shape;
+  `--no-lto`, which the loop builds with, does not). Verified: `bun tools/iterate.js
+  --full` - **145/145** and both fixed points; two emission goldens refreshed (one of
+  them un-pinning the hoist bug); the published bootstrap refreshed.

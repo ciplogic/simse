@@ -9,6 +9,13 @@ commit `f776d19`), 6 by the landed machinery rather than a seed (its section say
 and 5's twin ABI landed as `8739921` with `stress/escape-twin` pinning it. What remains
 here is the smaller cleanups section below.
 
+A later session grew the plan's own idea one step wider - the *write-signature* fixpoint
+(the borrow pass's boolean became clean-or-positions, with the receiver-check soundness
+fix, the classifier, and the span-hoist place bug it exposed; the capability matrix's
+last entry is the record). The named follow-up from there: a result-provenance fixpoint,
+so a proved callee's result stops needing an author's mark to be trusted as
+argument-derived.
+
 The two analyses, in one line each:
 
 - **Borrowness** (`src/parser/BorrowParams.kt`, pre-sema, name-keyed fixpoint grown from

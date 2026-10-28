@@ -964,31 +964,26 @@ int main() {
 }
 // stress/for-promote/src/main.kt
 Int ns1_renderOffers(List<ns1_Offer> items, Str* out) {
-    List<ns1_Offer>* _sm_base1;
+    ns1_Offer* _sm_base1, * it;
     Str _sm_base2;
-    Int i, _sm_expr1, _sm_expr6;
+    Int i, _sm_expr1, _sm_expr4;
     Bool _sm_expr2;
-    Span<ns1_Offer> _sm_expr3;
-    ns1_Offer _sm_expr4;
-    ns1_Offer* it;
-    Char _sm_expr7;
+    Char _sm_expr5;
     i = 0;
     L1:;
     _sm_expr1 = simse_lenOf(items);
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_base1 = &items;
-    _sm_expr3 = simse_spanOf(_sm_base1);
-    _sm_expr4 = (_sm_expr3.ptr[i]);
-    it = &_sm_expr4;
+    _sm_base1 = simse_addressOf(items[i]);
+    it = _sm_base1;
     simse_str_append((*out), '[');
     _sm_base2 = it->sku;
     simse_str_appendStr((*out), _sm_base2);
     simse_str_append((*out), ':');
     _sm_expr1 = it->qty;
-    _sm_expr6 = 48 + _sm_expr1;
-    _sm_expr7 = Char(_sm_expr6);
-    simse_str_append((*out), _sm_expr7);
+    _sm_expr4 = 48 + _sm_expr1;
+    _sm_expr5 = Char(_sm_expr4);
+    simse_str_append((*out), _sm_expr5);
     simse_str_append((*out), ']');
     i = i + 1;
     goto L1;

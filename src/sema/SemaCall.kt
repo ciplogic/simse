@@ -2180,6 +2180,16 @@ fun Analyzer.hoistSpanAt(stmts: *List<AstXmlNode>, index: Int): Unit {
             this.semaPromoRefuse("hoistSpan", root, "storage not stable in the loop")
             continue
         }
+        var placeCtx: Bool = semaSpanPlaceContext(*cond, root, false)
+        var stmtAt: Int = 0
+        while (!placeCtx && stmtAt < body.size()) {
+            placeCtx = semaSpanPlaceContext(body[stmtAt], root, false)
+            stmtAt++
+        }
+        if (placeCtx) {
+            this.semaPromoRefuse("hoistSpan", root, "index read under a deref")
+            continue
+        }
         // The rewrite is declaration-free: every c[i] becomes spanOf(c).ptr[i] in place,
         // correct by construction (no injected declaration to place or reorder), typed by
         // the existing rules (the call is Span<T>, the member *T, the index T), and the
@@ -2209,6 +2219,33 @@ fun semaBodyYields(node: *AstXmlNode): Bool {
 }
 
 // The names indexed directly in `node` (c[i], any depth): the hoist candidates.
+// Whether any `root[i]` read under `node` sits in a *place* context - under a `*` or an
+// `&`: the hoist's rewrite turns the index into a member of a span view
+// (`spanOf(c).ptr[i]`), and a chain rooted at a call is not a place the IL can address,
+// so the deref would materialize a copy and address the copy (`tgSuite`'s module loop:
+// the drop wrote the copy, not the tree). A root like this is refused - the hoist is an
+// optimization, and a shape it cannot spell stays unhoisted.
+fun semaSpanPlaceContext(node: AstXmlNode, root: Str, underPlace: Bool): Bool {
+    val kind: AstNodeCategory = xmlKind(node)
+    if (kind == AstNodeCategory.ExprIndex && underPlace) {
+        val receiver: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Receiver)
+        if (xmlKind(receiver) == AstNodeCategory.ExprName
+            && xmlAttr(receiver, AstNodeAttributeKind.Name) == root
+        ) {
+            return true
+        }
+    }
+    val childPlace: Bool = underPlace
+        || kind == AstNodeCategory.ExprDeref
+        || kind == AstNodeCategory.ExprRef
+    for (*child in node.Children) {
+        if (semaSpanPlaceContext(child, root, childPlace)) {
+            return true
+        }
+    }
+    return false
+}
+
 fun semaSpanCollectIndexRoots(node: AstXmlNode, roots: *List<Str>): Unit {
     if (xmlKind(node) == AstNodeCategory.ExprIndex) {
         val receiver: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Receiver)

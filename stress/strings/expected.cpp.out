@@ -1880,16 +1880,16 @@ Int ns1_partStrings() {
 }
 // stress/strings/src/main.kt
 Int ns1_partTextProcessing() {
-    Str* _sm_base1, * _sm_base10, * _sm_base12, * _sm_base14, * _sm_base16, * word;
+    Str* _sm_base1, * _sm_base3, * _sm_base10, * _sm_base12, * _sm_base14, * _sm_base16, * word;
     Str _sm_base2, _sm_base4, _sm_base5, _sm_base6, _sm_base11, _sm_base13, _sm_base15, _sm_base17, text,
-        _sm_expr4, longest, _sm_expr18, shout, _sm_expr24;
-    List<Str>* _sm_base3, * _sm_base8, * _sm_base9;
+        longest, _sm_expr16, shout, _sm_expr22;
+    List<Str>* _sm_base8, * _sm_base9;
     List<Str> words, keys;
     Dictionary<Str, Int> counts;
-    Int i, _sm_expr1, _sm_expr7, _sm_expr8, _sm_expr9, _sm_expr11, _sm_expr13, k, _sm_expr20;
-    Bool _sm_expr2, _sm_expr14, _sm_expr23, _sm_expr25;
-    Span<Str> _sm_expr3;
-    Opt<Int> seen, _sm_expr10, _sm_expr12;
+    Int i, _sm_expr1, _sm_expr5, _sm_expr6, _sm_expr7, _sm_expr9, _sm_expr11, k, _sm_expr18;
+    Bool _sm_expr2, _sm_expr12, _sm_expr21, _sm_expr23;
+    Opt<Int> seen, _sm_expr8, _sm_expr10;
+    Span<Str> _sm_expr15;
     text = __sm_stringTable[0];
     _sm_base2 = __sm_stringTable[77];
     _sm_base1 = &_sm_base2;
@@ -1900,10 +1900,8 @@ Int ns1_partTextProcessing() {
     _sm_expr1 = simse_lenOf(words);
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_base3 = &words;
-    _sm_expr3 = simse_spanOf(_sm_base3);
-    _sm_expr4 = (_sm_expr3.ptr[i]);
-    word = &_sm_expr4;
+    _sm_base3 = simse_addressOf(words[i]);
+    word = _sm_base3;
     _sm_base4 = *(word);
     seen = simse_dict_get(counts, _sm_base4);
     _sm_expr2 = simse_optHasValue(simse_addressOf(seen));
@@ -1911,9 +1909,9 @@ Int ns1_partTextProcessing() {
     goto L4;
     L3:;
     _sm_expr1 = simse_optValue(simse_addressOf(seen));
-    _sm_expr7 = _sm_expr1 + 1;
+    _sm_expr5 = _sm_expr1 + 1;
     _sm_base5 = *(word);
-    simse_dict_insert(counts, _sm_base5, _sm_expr7);
+    simse_dict_insert(counts, _sm_base5, _sm_expr5);
     goto L5;
     L4:;
     _sm_base6 = *(word);
@@ -1922,18 +1920,18 @@ Int ns1_partTextProcessing() {
     i = i + 1;
     goto L1;
     L2:;
-    _sm_expr8 = simse_lenOf(words);
-    simse_println((_sm_expr8), stdout);
-    _sm_expr9 = simse_dict_size(counts);
+    _sm_expr6 = simse_lenOf(words);
+    simse_println((_sm_expr6), stdout);
+    _sm_expr7 = simse_dict_size(counts);
+    simse_println((_sm_expr7), stdout);
+    _sm_expr8 = simse_dict_get(counts, __sm_stringTable[55]);
+    _sm_expr9 = simse_optValue(simse_addressOf(_sm_expr8));
     simse_println((_sm_expr9), stdout);
-    _sm_expr10 = simse_dict_get(counts, __sm_stringTable[55]);
+    _sm_expr10 = simse_dict_get(counts, __sm_stringTable[51]);
     _sm_expr11 = simse_optValue(simse_addressOf(_sm_expr10));
     simse_println((_sm_expr11), stdout);
-    _sm_expr12 = simse_dict_get(counts, __sm_stringTable[51]);
-    _sm_expr13 = simse_optValue(simse_addressOf(_sm_expr12));
-    simse_println((_sm_expr13), stdout);
-    _sm_expr14 = simse_dict_has(counts, __sm_stringTable[50]);
-    simse_println((_sm_expr14), stdout);
+    _sm_expr12 = simse_dict_has(counts, __sm_stringTable[50]);
+    simse_println((_sm_expr12), stdout);
     longest = __sm_stringTable[98];
     keys = simse_dict_keys(counts);
     simse_list_sort(keys, compareLessThan);
@@ -1943,17 +1941,17 @@ Int ns1_partTextProcessing() {
     _sm_expr2 = k < _sm_expr1;
     if (!(_sm_expr2)) goto L7;
     _sm_base8 = &keys;
-    _sm_expr3 = simse_spanOf(_sm_base8);
-    _sm_expr18 = (_sm_expr3.ptr[k]);
-    _sm_expr1 = simse_lenOf(_sm_expr18);
-    _sm_expr20 = simse_lenOf(longest);
-    _sm_expr2 = _sm_expr1 > _sm_expr20;
+    _sm_expr15 = simse_spanOf(_sm_base8);
+    _sm_expr16 = (_sm_expr15.ptr[k]);
+    _sm_expr1 = simse_lenOf(_sm_expr16);
+    _sm_expr18 = simse_lenOf(longest);
+    _sm_expr2 = _sm_expr1 > _sm_expr18;
     if (_sm_expr2) goto L8;
     goto L9;
     L8:;
     _sm_base9 = &keys;
-    _sm_expr3 = simse_spanOf(_sm_base9);
-    longest = (_sm_expr3.ptr[k]);
+    _sm_expr15 = simse_spanOf(_sm_base9);
+    longest = (_sm_expr15.ptr[k]);
     L9:;
     k = k + 1;
     goto L6;
@@ -1962,17 +1960,17 @@ Int ns1_partTextProcessing() {
     shout = toUpper(simse_addressOf(text));
     _sm_base11 = __sm_stringTable[47];
     _sm_base10 = &_sm_base11;
-    _sm_expr23 = startsWith(simse_addressOf(shout), _sm_base10);
-    simse_println((_sm_expr23), stdout);
+    _sm_expr21 = startsWith(simse_addressOf(shout), _sm_base10);
+    simse_println((_sm_expr21), stdout);
     _sm_base13 = __sm_stringTable[51];
     _sm_base12 = &_sm_base13;
     _sm_base15 = __sm_stringTable[50];
     _sm_base14 = &_sm_base15;
-    _sm_expr24 = replace(simse_addressOf(text), _sm_base12, _sm_base14);
+    _sm_expr22 = replace(simse_addressOf(text), _sm_base12, _sm_base14);
     _sm_base17 = __sm_stringTable[50];
     _sm_base16 = &_sm_base17;
-    _sm_expr25 = endsWith(simse_addressOf(_sm_expr24), _sm_base16);
-    simse_println((_sm_expr25), stdout);
+    _sm_expr23 = endsWith(simse_addressOf(_sm_expr22), _sm_base16);
+    simse_println((_sm_expr23), stdout);
     return 0;
 }
 // stress/strings/src/main.kt
