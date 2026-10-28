@@ -1671,6 +1671,16 @@ fun Analyzer.iteratedType(expr: *AstXmlNode): AstXmlNode {
     if (xmlKind(expr) == AstNodeCategory.ExprName) {
         return this.exprType(expr)
     }
+    // A handle read through explicitly (`(*p).split(",")` - the one spelling the `ExprName`
+    // arm above does not cover): the pointee is what is iterated, and `exprType`'s own
+    // deref/ref arms state that rule. Without this arm the `for` machinery's inference
+    // (`spanForAt`, `checkForIterable`, `promoteForAt`) saw no type, silently skipped the
+    // span rewrite *and* the not-iterable diagnostic, and the emitted machine stayed a
+    // member `iterValues()` the C++ cannot compile - a transpile-clean miscompile
+    // (`stress/for-deref-receiver` pins it).
+    if (xmlKind(expr) == AstNodeCategory.ExprDeref || xmlKind(expr) == AstNodeCategory.ExprRef) {
+        return this.exprType(expr)
+    }
     if (xmlKind(expr) == AstNodeCategory.ExprIntLit) {
         // A literal receiver (`0 until n` is `0.until(n)`, the parser's sugar for the range
         // extension): its type is its spelling, the `unionArgType` convention.

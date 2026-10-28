@@ -28,12 +28,14 @@ min/median of the five rounds (`tools/_onebrc_ab.mjs`):
 
 | Implementation | Time (min/median) | Throughput | Peak working set |
 | --- | --- | --- | --- |
-| **Simse: in-place parse, in-place aggregate (`readLineView`, `getPtr`)** | **1313 / 1346 ms** | **103 / 100 MB/s** | 6.5 MB |
-| C++ STL baseline | 1370 / 1400 ms | 98 / 96 MB/s | 5.9 MB |
-| Bun reference aggregate (`check`) | 676 / 706 ms | 201 / 195 MB/s | — |
+| **Simse: in-place parse, in-place aggregate (`readLineView`, `getPtr`)** | **1316 / 1322 ms** | **102 / 102 MB/s** | 6.5 MB |
+| C++ STL baseline | 1350 / 1360 ms | 99 / 99 MB/s | 5.9 MB |
+| Bun reference aggregate (`check`) | 707 / 721 ms | 192 / 188 MB/s | — |
 
-**The Simse program is 1.04x faster than the naive C++ one** on the same data
-(this session), and 1.93x behind the JavaScript reference. All three reports are byte-identical to each
+**The Simse program is 1.03x faster than the naive C++ one** on the same data
+(this session, October 28, 2026 - the compiler carrying the result-provenance
+fixpoint; the program's own emission is unchanged by it, the row re-measured), and
+1.83x behind the JavaScript reference. All three reports are byte-identical to each
 other (100 stations, values in exact tenths).
 
 **The `getPtr` change is worth 7% of the loop**, and it is the one number here that
@@ -42,7 +44,7 @@ ran **1246 / 1256 ms against 1157 / 1167 ms**, in the same five interleaved roun
 with no round of either leg overlapping the other.
 
 The ratio is one session's number, not a constant: measured in the same style on the
-same data it has run **1.04x-1.40x**, because the C++ baseline varies more than the
+same data it has run **1.03x-1.40x**, because the C++ baseline varies more than the
 Simse program does (1340-1580 ms against 1056-1397 ms across sessions, each with the
 reference leg as a canary - 673-771 ms). The Simse side is the stable one. The
 `1.16x` session ran without `/GL` on the baseline; adding it (this session) made the

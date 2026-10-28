@@ -12,9 +12,12 @@ here is the smaller cleanups section below.
 A later session grew the plan's own idea one step wider - the *write-signature* fixpoint
 (the borrow pass's boolean became clean-or-positions, with the receiver-check soundness
 fix, the classifier, and the span-hoist place bug it exposed; the capability matrix's
-last entry is the record). The named follow-up from there: a result-provenance fixpoint,
-so a proved callee's result stops needing an author's mark to be trusted as
-argument-derived.
+last entries are the record). The named follow-up from there - a *result-provenance*
+fixpoint, so a proved callee's result stops needing an author's mark to be trusted as
+argument-derived - **has landed**: `bpInferResults` (`src/parser/BorrowParams.kt`) proves
+`fresh`-or-position entries for the write fixpoint's clean names, the classifier consults
+the table beside the marks, and the builder family borrows (`stress/borrow-provenance`
+pins the unlock and the laundering refusal; the capability matrix entry has the numbers).
 
 The two analyses, in one line each:
 

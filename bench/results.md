@@ -17,40 +17,37 @@ estimate, explained below it.
 
 ## Windows - Snapdragon X2, Windows 11, cl.exe /O2 /Ob3 /GL (LTCG)
 
-From `bun bench/run.js --reps 5` (the Windows harness), medium size (October 26,
-2026 - the compiler carrying the borrow-relaxation and refusal-diagnostics work; the
-emission of every hot loop here is unchanged by those, and the run is the tightest
-of three full passes taken back to back, the machine throttling visibly across a
-bench session). The October 25 session's ratios sit in brackets where they moved
-beyond the passes' own spread - both directions, recorded as measured: the
-flat-scan edge on `sum` did not reproduce this session (four passes say
-0.95-1.06 where October 25 said 1.31; the emitted scan loop is byte-identical to
-that session's), while `blur` and `respond` came in ahead of their October 25
-ratios. Rows within the passes' spread carry one number.
+From `bun bench/run.js --reps 5` (the Windows harness), medium size (October 28,
+2026 - the compiler carrying the result-provenance fixpoint beside the
+write-signature one; the suite's own rows borrow nothing new through it - they are
+single-file straight-line ports - so this session is a re-measurement on the
+session-spread record, not a before/after of the optimization. The October 26
+session's ratios sit in brackets where they moved beyond the spread - both
+directions, recorded as measured).
 
 | benchmark | tuned C++ | Simse | Goose (est.) |
 | --- | ---: | ---: | ---: |
-| sum | 1.06 | 1.01 [1.31] | 1.60 |
-| push | 1.13 | 1.09 [1.24] | 3.13 |
-| strlist | - | 0.95 [1.00] | 3.52 |
-| records | 1.45 | 0.94 [1.00] | 2.77 |
-| tree | 1.71 | 1.76 [1.81] | 4.41 |
-| interp | 1.52 | 1.56 [1.54] | 5.51 |
-| graph | 5.42 | 0.75 [0.81] | 4.96 |
-| words | 2.25 | 1.14 [1.05] | 2.20 |
-| particles | 0.93 | 0.99 [1.11] | 1.20 |
-| sexp | 1.49 | 1.11 [1.13] | 3.72 |
-| lru | 4.87 | 3.54 [3.88] | 3.36 |
-| scene | 1.55 | 1.61 [1.92] | 5.78 |
-| calc | 3.70 | 3.15 [3.15] | 4.06 |
-| bintrees | 4.34 | 4.11 [4.05] | 15.58 |
-| respond | 1.81 | 0.76 [0.69] | 2.10 |
-| blur | 2.19 | 0.85 [0.95] | 3.59 |
-| **geometric mean** | **2.01** | **1.35** | **3.51** |
+| sum | 1.02 | 0.98 [1.01] | 1.60 |
+| push | 1.22 | 1.14 [1.09] | 3.13 |
+| strlist | - | 0.97 [0.95] | 3.52 |
+| records | 1.45 | 0.97 [0.94] | 2.77 |
+| tree | 1.72 | 1.79 [1.76] | 4.41 |
+| interp | 1.16 | 1.01 [1.56] | 5.51 |
+| graph | 5.00 | 0.83 [0.75] | 4.96 |
+| words | 3.13 | 1.04 [1.14] | 2.20 |
+| particles | 1.00 | 0.92 [0.99] | 1.20 |
+| sexp | 1.54 | 1.14 [1.11] | 3.72 |
+| lru | 4.55 | 3.57 [3.54] | 3.36 |
+| scene | 1.89 | 1.75 [1.61] | 5.78 |
+| calc | 3.85 | 2.94 [3.15] | 4.06 |
+| bintrees | 4.00 | 3.85 [4.11] | 15.58 |
+| respond | 1.59 | 0.69 [0.76] | 2.10 |
+| blur | 1.85 | 0.78 [0.85] | 3.59 |
+| **geometric mean** | **2.00** | **1.30** | **3.51** |
 
 (The tuned-C++ geomean is over the fifteen benchmarks with a tuned row; the
-port runs `strlist`'s idiomatic C++ row only. The bracketed October 25 numbers
-are not averaged into the geomeans - the table is the October 26 session.)
+port runs `strlist`'s idiomatic C++ row only. The bracketed October 26 numbers
+are not averaged into the geomeans - the table is the October 28 session.)
 
 ## Linux - Core i3-N305, g++ 13.3.0 / clang++ 19.1.1, -O2 -DNDEBUG -flto
 

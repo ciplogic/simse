@@ -372,7 +372,15 @@ data class BpPure(
     var events: List<BpCallEvent>,
     var writes: Dictionary<Int, Bool>,
     var fresh: Dictionary<Str, Bool>,
-    var alias: Dictionary<Str, Int>
+    var alias: Dictionary<Str, Int>,
+    // The declaration the facts came from (by value: the walk that collected it
+    // iterated `xmlDecls`' fresh list, so a pointer into it would dangle), and its
+    // parameter indexes: the result-provenance fixpoint below re-walks the body
+    // each round (its classification depends on the current provenance table), so
+    // it keeps what `bpPurConsider` already computed rather than resolving the
+    // decl again.
+    var decl: AstXmlNode,
+    var params: Dictionary<Str, Int>
 )
 
 // One call the fixpoint weighs: the callee's name, and every slot the callee could write
@@ -471,13 +479,58 @@ fun bpClassifyPlace(
             return bpSlotOther
         }
         val calleeName: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
-        // Only a declaration the *author* marked (`data`/`borrow`) promises its result
-        // derives from what it was handed: the fixpoint's proof covers writes, not the
-        // result's provenance, and a proved-clean callee can still hand back a view of
-        // a static (`getSourceGens`), which a write through the local would reach. The
-        // sound answer for an unmarked callee is refusal.
-        if (!bpResultTrusted.has(calleeName)) {
+        // Only a declaration the *author* marked (`data`/`borrow`) - or the
+        // result-provenance fixpoint proved (a borrow-clean body whose every return
+        // classifies, `bpInferResults`) - promises its result derives from what it was
+        // handed: the write proof alone says nothing about the result, and a
+        // proved-clean callee can still hand back a view of a static (`getSourceGens`),
+        // which a write through the local would reach. The sound answer for a callee
+        // neither covers is refusal.
+        val provenance: *Str = bpResultNames.getPtr(calleeName)
+        if (!bpResultTrusted.has(calleeName) && provenance == null) {
             return bpSlotOther
+        }
+        if (provenance != null && !bpResultTrusted.has(calleeName)) {
+            if (*provenance == "fresh") {
+                return bpSlotFresh
+            }
+            // The entry names the positions the result can reach; classify the call's
+            // slot at each (the receiver at 0 on a member call, the arguments after
+            // it - the same indexing `slotsSafe` checks) and join. A slot the call
+            // does not have, or one the classifier cannot attribute, refuses.
+            var reach: Int = bpSlotFresh
+            var positions: List<Str> = (*provenance).split(",")
+            for (posText in positions) {
+                val parsed: Opt<Int> = posText.trim().toInt()
+                if (!parsed.hasValue() || parsed.value() < 0) {
+                    return bpSlotOther
+                }
+                val at: Int = parsed.value()
+                var slot: *AstXmlNode = null
+                if (calleeKind == AstNodeCategory.ExprMember) {
+                    if (at == 0) {
+                        slot = xmlChildPtr(callee, AstNodeKind.Receiver)
+                    } else {
+                        slot = bpArgAt(node, at - 1)
+                    }
+                } else {
+                    slot = bpArgAt(node, at)
+                }
+                if (slot == null) {
+                    return bpSlotOther
+                }
+                val cls: Int = bpClassifyPlace(slot, fresh, alias, params, types)
+                if (cls == bpSlotOther) {
+                    return bpSlotOther
+                }
+                if (cls >= 0) {
+                    if (reach >= 0 && reach != cls) {
+                        return bpSlotOther
+                    }
+                    reach = cls
+                }
+            }
+            return reach
         }
         // A trusted callee's result derives from what it was handed - `leak(p)` hands
         // back `p`'s storage, `strBytes(x)` a view into `x` - so the places it was
@@ -645,12 +698,12 @@ fun bpPurConsider(
     if (xmlIsEmpty(body)) {
         return
     }
+    var params: Dictionary<Str, Int> = bpParamIndexes(fn, method)
     var fact: BpPure = BpPure(
         name, false, false, List<BpCallEvent>(), Dictionary<Int, Bool>(),
-        Dictionary<Str, Bool>(), Dictionary<Str, Int>()
+        Dictionary<Str, Bool>(), Dictionary<Str, Int>(), fn, params
     )
     var callables: Dictionary<Str, Bool> = bpCallableParams(fn)
-    var params: Dictionary<Str, Int> = bpParamIndexes(fn, method)
     for (*stmt in body.Children) {
         bpPureWalk(stmt, fact, statics, types, reads, *callables, *params)
     }
@@ -850,6 +903,229 @@ fun bpInferWrites(
         for (*name in writesOf.keys()) {
             val sigText: Str = *writesOf.getPtr(name)
             bpNote(`borrow~ @name @sigText`)
+        }
+    }
+}
+
+// ---- the result-provenance fixpoint -------------------------------------------
+//
+// `bpResultTrusted` above is the author's word - the only names whose *result* the
+// classifier may derive from their arguments. The fixpoint here proves the same fact for
+// the names the write-signature fixpoint already proved borrow-clean: a clean body whose
+// every return classifies (by `bpClassifyPlace`, against the current tables) to storage
+// the body built (`fresh`) or to exactly one parameter position carries a provenance
+// entry, and the classifier consults the table wherever the mark set misses. That is the
+// named follow-up from the write-signature change: `var attrs = this.posAttrs(...)`
+// initializes from a proved, unmarked callee, and without an entry the local is
+// unattributable - a write through it refused the whole body.
+//
+// The rounds re-walk the bodies: a return's classification depends on the callees in it,
+// whose entries grow as the table grows, so the facts cannot be precomputed the way
+// `bpInferWrites` precomputes its events. Entries only widen (`fresh` -> positions ->
+// more positions) or drop (a widened callee turns a join into two different positions,
+// which is `bpSlotOther`), and a drop cannot un-drop (the widening that caused it is
+// permanent), so the iteration from the empty table reaches a stable, self-justified
+// table - every entry in it is justified by the final table it is read against.
+//
+// Soundness stays the author's one rule: *only a proved-clean name earns an entry* (a
+// body the write fixpoint refused could write through anything, result included), and a
+// body whose result escapes the classifier - a file-level `var` (`getSourceGens` hands
+// back a static's storage), an unmarked callee's result, a lambda value - contributes
+// `bpSlotOther` and leaves the name out. The laundering shape this guards is pinned by
+// `stress/borrow-provenance`.
+
+// The proved table itself: name -> `fresh` or the comma positions (the receiver at 0)
+// the result's storage can reach. Absent means refused - the classifier treats the
+// result as unattributable, exactly the behavior before the fixpoint existed.
+var bpResultNames: Dictionary<Str, Str> = Dictionary<Str, Str>()
+
+// The join of two return classifications: anything with `bpSlotOther` refuses; a
+// position joins `fresh` to itself; two different positions refuse (the place could
+// reach either).
+fun bpProvJoin(left: Int, right: Int): Int {
+    if (left == bpSlotOther || right == bpSlotOther) {
+        return bpSlotOther
+    }
+    if (left == bpSlotFresh) {
+        return right
+    }
+    if (right == bpSlotFresh) {
+        return left
+    }
+    if (left == right) {
+        return left
+    }
+    return bpSlotOther
+}
+
+// One declaration's returns classified: `bpPureWalk`'s local bookkeeping (a declared
+// local classified by its initializer, a rebinding keeping the alias it derives from)
+// plus one classification per `StmtReturn`. A lambda's own returns are the lambda's -
+// the walk does not enter it - and its effects on the enclosing body's locals are by
+// value (captures copy), so the enclosing classification cannot see them.
+fun bpProvWalk(
+    node: *AstXmlNode, fresh: *Dictionary<Str, Bool>, alias: *Dictionary<Str, Int>,
+    params: *Dictionary<Str, Int>, statics: *Dictionary<Str, Bool>,
+    types: *Dictionary<Str, Bool>, out: *List<Int>
+): Unit {
+    val kind: AstNodeCategory = xmlKind(node)
+    if (kind == AstNodeCategory.ExprLambda) {
+        return
+    }
+    if (kind == AstNodeCategory.StmtVarDecl) {
+        val declared: Str = xmlAttr(node, AstNodeAttributeKind.Name)
+        if (!statics.has(declared)) {
+            val cls: Int = bpClassifyPlace(
+                xmlChildPtr(node, AstNodeKind.Init), fresh, alias, params, types
+            )
+            if (cls == bpSlotFresh) {
+                fresh.insert(declared, true)
+            } else if (cls >= 0) {
+                alias.insert(declared, cls)
+            }
+        }
+    }
+    if (kind == AstNodeCategory.StmtAssign) {
+        val target: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Target)
+        if (xmlKind(target) == AstNodeCategory.ExprName && !statics.has(xmlAttr(target, AstNodeAttributeKind.Name))) {
+            val targetName: Str = xmlAttr(target, AstNodeAttributeKind.Name)
+            val cls: Int = bpClassifyPlace(
+                xmlChildPtr(node, AstNodeKind.Value), fresh, alias, params, types
+            )
+            if (cls >= 0 || cls == bpSlotOther) {
+                alias.insert(targetName, cls)
+            }
+        }
+    }
+    if (kind == AstNodeCategory.StmtReturn) {
+        out.append(
+            bpClassifyPlace(
+                xmlChildPtr(node, AstNodeKind.Value), fresh, alias, params, types
+            )
+        )
+        return
+    }
+    for (*child in node.Children) {
+        bpProvWalk(child, fresh, alias, params, statics, types, out)
+    }
+}
+
+// One round's entry text for a classification: "fresh", the sole position, or "" for a
+// refusal (no entry).
+fun bpProvText(cls: Int): Str {
+    if (cls == bpSlotFresh) {
+        return "fresh"
+    }
+    if (cls >= 0) {
+        return cls.toString()
+    }
+    return ""
+}
+
+// The provenance table over the proved-clean names: rounds of `bpProvWalk` per
+// declaration, the join per name over its declarations, until a round changes nothing.
+// Only names in `reads` (the write fixpoint's proof) are walked; a name with no
+// value-returning declaration among them stays absent (its result is never a place).
+fun bpInferResults(facts: *List<BpPure>, reads: *Dictionary<Str, Bool>): Unit {
+    var rounds: Int = 0
+    var changed: Bool = true
+    while (changed && rounds < 32) {
+        changed = false
+        rounds++
+        var next: Dictionary<Str, Str> = Dictionary<Str, Str>()
+        for (*fact in facts) {
+            if (!reads.has(fact.name)) {
+                continue
+            }
+            // The declaration is a value copy the fact owns, so the borrows below
+            // (the body pointer, its children) stay alive for the whole walk - a
+            // pointer into the collecting walk's list would dangle (`BpPure.decl`).
+            var declNode: AstXmlNode = fact.decl
+            var params: Dictionary<Str, Int> = fact.params
+            var fresh: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+            var alias: Dictionary<Str, Int> = Dictionary<Str, Int>()
+            var rets: List<Int> = List<Int>()
+            val body: *AstXmlNode = xmlChildPtr(*declNode, AstNodeKind.Body)
+            if (!xmlIsEmpty(body)) {
+                for (*stmt in body.Children) {
+                    bpProvWalk(
+                        stmt, *fresh, *alias, *params, *bpStaticNames, *bpKnownTypes,
+                        *rets
+                    )
+                }
+            }
+            if (rets.size() == 0) {
+                continue
+            }
+            var acc: Int = bpSlotFresh
+            for (at in rets) {
+                acc = bpProvJoin(acc, at)
+            }
+            val text: Str = bpProvText(acc)
+            if (text == "") {
+                // A refusing declaration drags the name: the join is over every
+                // declaration the name has.
+                next.insert(fact.name, "")
+                continue
+            }
+            val old: *Str = next.getPtr(fact.name)
+            if (old != null && *old == "") {
+                continue
+            }
+            if (old == null) {
+                next.insert(fact.name, text)
+            } else {
+                // Two declaring positions join as classifications: fold through the
+                // text round-trip, keeping `fresh` under a position.
+                var left: Int = bpSlotFresh
+                if (*old != "fresh") {
+                    val parsed: Opt<Int> = (*old).trim().toInt()
+                    left = parsed.value()
+                }
+                var right: Int = bpSlotFresh
+                if (text != "fresh") {
+                    val parsedRight: Opt<Int> = text.trim().toInt()
+                    right = parsedRight.value()
+                }
+                val joined: Int = bpProvJoin(left, right)
+                val joinedText: Str = bpProvText(joined)
+                if (joinedText == "") {
+                    next.insert(fact.name, "")
+                } else {
+                    next.insert(fact.name, joinedText)
+                }
+            }
+        }
+        // A refused name leaves no entry ("" was the join's marker inside the round).
+        var refused: List<Str> = List<Str>()
+        for (*name in next.keys()) {
+            if ((*next.getPtr(name)).size() == 0) {
+                refused.append(*name)
+            }
+        }
+        for (name in refused) {
+            next.remove(name)
+        }
+        // The commit: entries that appeared, widened or dropped all count as a change.
+        var differs: Bool = next.size() != bpResultNames.size()
+        if (!differs) {
+            for (*name in next.keys()) {
+                val was: *Str = bpResultNames.getPtr(name)
+                if (was == null || *was != *next.getPtr(name)) {
+                    differs = true
+                    break
+                }
+            }
+        }
+        if (differs) {
+            bpResultNames = next
+            changed = true
+        }
+    }
+    if (bpShow() || diagOn("borrow")) {
+        for (*name in bpResultNames.keys()) {
+            val provText: Str = *bpResultNames.getPtr(name)
+            bpNote(`borrowprov @name @provText`)
         }
     }
 }
@@ -1824,6 +2100,33 @@ fun bpRewriteModule(
     return AstXmlNode(module.name, module.kind, module.attributes, kids.toArray())
 }
 
+// The fixpoint's facts, rebuilt from the modules: the classification inside `bpPureWalk`
+// consults the provenance table (`bpClassifyPlace`), so each outer round of the two
+// fixpoints below re-collects them against the table it just seeded.
+fun bpCollectFacts(
+    preludeModules: List<AstXmlNode>, modules: List<AstXmlNode>,
+    statics: *Dictionary<Str, Bool>, types: *Dictionary<Str, Bool>,
+    reads: *Dictionary<Str, Bool>
+): List<BpPure> {
+    var factList: List<BpPure> = List<BpPure>()
+    for (*pre in preludeModules) {
+        bpPurCollect(pre, *statics, *types, *reads, *factList)
+    }
+    for (*mod in modules) {
+        bpPurCollect(mod, *statics, *types, *reads, *factList)
+    }
+    return factList
+}
+
+// A shallow copy of one of the pass's sets, per the outer round's fresh seed.
+fun bpCopyReads(src: *Dictionary<Str, Bool>): Dictionary<Str, Bool> {
+    var out: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    for (key in src.keys()) {
+        out.insert(key, true)
+    }
+    return out
+}
+
 // What the pass produced: the prelude and the modules, both rewritten. The prelude comes back
 // because its Simse bodies borrow like a module's; only a name hand-written C++ may call keeps
 // its authored signature (`bpCppCalled`).
@@ -1876,14 +2179,8 @@ fun bpBorrowParams(
 
     // Grows `reads` and the signature table from the marks and the bodies (see
     // `bpInferWrites`): all the bodies a name has must attribute, and any declaration
-    // without a body must be marked.
-    var factList: List<BpPure> = List<BpPure>()
-    for (*pre in preludeModules) {
-        bpPurCollect(pre, *statics, *types, *reads, *factList)
-    }
-    for (*mod in modules) {
-        bpPurCollect(mod, *statics, *types, *reads, *factList)
-    }
+    // without a body must be marked. The blocked set is shape-only (no body, no mark,
+    // not already read) and never changes across the rounds below.
     var blocked: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     for (*pre in preludeModules) {
         bpBlockedNames(pre, *reads, *blocked)
@@ -1891,16 +2188,81 @@ fun bpBorrowParams(
     for (*mod in modules) {
         bpBlockedNames(mod, *reads, *blocked)
     }
+    // The two fixpoints alternate: the write fixpoint proves which names borrow-clean
+    // (`reads`), the provenance fixpoint proves which of *those* names' results derive
+    // from their arguments - and each entry makes more bodies attribute, which grows
+    // `reads` again (the `var attrs = this.posAttrs(...)` family: the write through the
+    // local attributes once the callee's result classifies). Each outer round re-collects
+    // the facts against the table the previous round seeded, then re-runs the write
+    // fixpoint from the marks; both tables only grow, so the alternation settles, and a
+    // round that moves nothing is the exit. The cap never binds on real programs; if it
+    // ever does, the reset below falls back to the table-less behavior (every unmarked
+    // result unattributable), which is the sound floor the pass had before the
+    // provenance fixpoint existed.
+    bpResultNames = Dictionary<Str, Str>()
+    // `bpProvWalk` classifies against these two (they are shape-only: the file-level
+    // vars and the data classes, neither of which the rounds below change); the rest of
+    // the pass's globals keep their assignment below, from the tables the rounds settle
+    // on.
+    bpStaticNames = statics
+    bpKnownTypes = types
+    var seedReads: Dictionary<Str, Bool> = bpCopyReads(*reads)
     var writesOf: Dictionary<Str, Str> = Dictionary<Str, Str>()
+    var factList: List<BpPure> = bpCollectFacts(preludeModules, modules, *statics, *types, *reads)
     bpInferWrites(*factList, *blocked, *reads, *writesOf, *authorSigs)
+    var outer: Int = 0
+    var moved: Bool = true
+    while (moved && outer < 4) {
+        outer++
+        bpInferResults(*factList, *reads)
+        var readsBefore: Dictionary<Str, Bool> = bpCopyReads(*reads)
+        var writesBefore: Dictionary<Str, Str> = Dictionary<Str, Str>()
+        for (key in writesOf.keys()) {
+            writesBefore.insert(key, *writesOf.getPtr(key))
+        }
+        reads = bpCopyReads(*seedReads)
+        writesOf = Dictionary<Str, Str>()
+        factList = bpCollectFacts(preludeModules, modules, *statics, *types, *reads)
+        bpInferWrites(*factList, *blocked, *reads, *writesOf, *authorSigs)
+        moved = reads.size() != readsBefore.size() || writesOf.size() != writesBefore.size()
+        if (!moved) {
+            for (key in reads.keys()) {
+                if (!readsBefore.has(key)) {
+                    moved = true
+                    break
+                }
+            }
+        }
+        if (!moved) {
+            for (key in writesOf.keys()) {
+                if (!writesBefore.has(key)) {
+                    moved = true
+                    break
+                }
+                if (*writesBefore.getPtr(key) != *writesOf.getPtr(key)) {
+                    moved = true
+                    break
+                }
+            }
+        }
+        if (moved && outer == 4) {
+            bpResultNames = Dictionary<Str, Str>()
+            reads = bpCopyReads(*seedReads)
+            writesOf = Dictionary<Str, Str>()
+            factList = bpCollectFacts(preludeModules, modules, *statics, *types, *reads)
+            bpInferWrites(*factList, *blocked, *reads, *writesOf, *authorSigs)
+            moved = false
+        }
+    }
     if (diagOn("borrow")) {
         val readsDiag: Str = reads.size().toString()
         val writesDiag: Str = writesOf.size().toString()
+        val resultsDiag: Str = bpResultNames.size().toString()
         val staticsDiag: Str = statics.size().toString()
         val blockedDiag: Str = blocked.size().toString()
         diagTrace(
             "borrow",
-            `fixpoint: @readsDiag trusted, @writesDiag signatures, @staticsDiag statics, @blockedDiag blocked`
+            `fixpoint: @readsDiag trusted, @writesDiag signatures, @resultsDiag provenance, @staticsDiag statics, @blockedDiag blocked`
         )
     }
 
@@ -1915,8 +2277,6 @@ fun bpBorrowParams(
     }
     bpDeepTypes = bpDeepClasses(*allModules)
     bpTrustedNames = reads
-    bpStaticNames = statics
-    bpKnownTypes = types
     bpMutatesNames = mutates
     bpWritesNames = writesOf
 

@@ -5717,11 +5717,53 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `simse_addressOf(items[i])`). Three probes of the by-value boundary stay sound through
   the whole change: the mutates chain, `sort`'s mark, and a typed alias handed back by a
   trusted call (`var v = leak(q); v.append(...)` mutated the caller's list before).
-  Still open, the named follow-up: a *result-provenance* fixpoint (which proved callees
-  return only argument-derived storage) would recover the ~30 builder-family borrows the
-  marked-only rule refuses (`var attrs = this.posAttrs(...)` initializes from a proved,
-  unmarked callee); and an LTO-only emission divergence is latent at HEAD (`build.bat
-  --release` with /GL makes even the committed compiler emit the duplicate-`main` shape;
-  `--no-lto`, which the loop builds with, does not). Verified: `bun tools/iterate.js
+  The LTO-only divergence this entry feared turned out not to reproduce at that HEAD:
+  building the committed compiler with `/GL`, and compiling the published bootstrap with
+  `/GL` and asking it to self-transpile, both reproduce the file byte for byte (the
+  span-hoist place fix in the same commit had closed the `/GL`-visible path too; checked
+  again when the provenance fixpoint below landed - corpus, self-build and bootstrap
+  directions, all byte-identical). Verified: `bun tools/iterate.js
   --full` - **145/145** and both fixed points; two emission goldens refreshed (one of
   them un-pinning the hoist bug); the published bootstrap refreshed.
+
+- **The result-provenance fixpoint: a proved-clean callee's result stops needing an
+  author's mark, and the builder-family borrows land.** The write fixpoint proves a name
+  writes nothing observable; it says nothing about what the result *aliases*, which is
+  why `bpClassifyPlace` refused every unmarked callee's result (`bpResultTrusted` was the
+  marks-only set) and a body like `var attrs = this.posAttrs(...)` followed by a write
+  through `attrs` was refused whole. The new fixpoint (`bpInferResults`) re-walks the
+  proved-clean declarations' bodies each round and classifies every return with the same
+  classifier: a body whose returns all classify to storage it built earns `fresh`, one
+  whose returns reach exactly one parameter position (the receiver at 0) earns that
+  position, anything else - a file-level `var` (`leakPool`), an unattributable callee's
+  result, a lambda value - earns no entry at all. The classifier consults the table
+  wherever the mark set misses, joining the entry's positions at the call site (the
+  receiver at 0, the arguments after - `slotsSafe`'s indexing). The two fixpoints
+  alternate to a joint fixed point: each round seeds the provenance table, re-collects
+  the write facts against it (the classification inside `bpPureWalk` consults the table),
+  and re-runs the write fixpoint from the marks; entries only widen or drop and drops
+  cannot un-drop, so the alternation settles, with a conservative reset (empty table,
+  the pass's prior behavior) as the never-taken cap. On the compiler's own build: **570
+  provenance entries, 752 trusted names (from 719), 308 signatures (from 275), and 163
+  borrowed declarations (from 141)** - the parser's builder family
+  (`interpTemplateNode`, `namedTypeNode`, ...) borrows its `Str`/`SourcePos`/`AstXmlNode`
+  parameters where it copied them before. The self-transpile pays for the re-walks:
+  ~3.14 s to ~3.41 s on the release build. `stress/borrow-provenance` pins the three
+  shapes with an emission golden: the receiver-derived view unlocks `restock`'s `label`
+  (`Str*`), the fresh builder unlocks `tally`'s, and the static-laundering `leakPool`
+  leaves `stain`'s by value - the soundness rule unchanged (*only a proved-clean name
+  earns an entry; an author's mark stays the word for the body-less*). Verified:
+  `bun tools/iterate.js --full` - **147/147** and both fixed points; the published
+  bootstrap refreshed.
+
+- **`iteratedType` reads through a deref, closing a transpile-clean miscompile.** A
+  member call on an explicit deref as a `for`'s iterated expression
+  (`for (word in (*text).split(","))`) reached `iteratedType`, which had no deref arm:
+  the inference answered no type, `spanForAt` and the not-iterable diagnostic both
+  silently skipped, and the emitter fell to its member fallback - `List.iterValues()`
+  and `machine.advance()` as C++ member calls that cannot compile. The fix is the arm
+  (deref/ref delegate to `exprType`, the pointee rule); the emitted loop is the span's
+  own machine like any other container `for`. `stress/for-deref-receiver` pins it (the
+  case's C++ fails to compile on the compiler before the fix). Found while spelling the
+  provenance classifier's split loop (`for (part in (*provenance).split(","))` hit it
+  in the compiler's own sources). Same commit.
