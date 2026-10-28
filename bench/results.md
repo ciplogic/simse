@@ -17,33 +17,34 @@ estimate, explained below it.
 
 ## Windows - Snapdragon X2, Windows 11, cl.exe /O2 /Ob3 /GL (LTCG)
 
-From `bun bench/run.js --reps 5` (the Windows harness), medium size (October 28,
-2026 - the compiler carrying the result-provenance fixpoint beside the
-write-signature one; the suite's own rows borrow nothing new through it - they are
-single-file straight-line ports - so this session is a re-measurement on the
-session-spread record, not a before/after of the optimization. The October 26
-session's ratios sit in brackets where they moved beyond the spread - both
+From `bun bench/run.js --reps 5` (the Windows harness), medium size (October 28, 2026,
+the day's second session - the compiler carrying the result-provenance fixpoint and the
+span binding: a storage-stable loop's span derived once in the preheader instead of per
+access, the scan loops' and the blur store's shape. The A/B'd row effects are recorded
+in `impl_specs/for-walk.md` ("The span binding"): blur ~-7% (only its store binds; its
+loads are helper-call-spelled in the port), an index-spelled read scan 1.5x. The
+October 26 session's ratios sit in brackets where they moved beyond the spread - both
 directions, recorded as measured).
 
 | benchmark | tuned C++ | Simse | Goose (est.) |
 | --- | ---: | ---: | ---: |
 | sum | 1.02 | 0.98 [1.01] | 1.60 |
-| push | 1.22 | 1.14 [1.09] | 3.13 |
-| strlist | - | 0.97 [0.95] | 3.52 |
-| records | 1.45 | 0.97 [0.94] | 2.77 |
-| tree | 1.72 | 1.79 [1.76] | 4.41 |
-| interp | 1.16 | 1.01 [1.56] | 5.51 |
-| graph | 5.00 | 0.83 [0.75] | 4.96 |
-| words | 3.13 | 1.04 [1.14] | 2.20 |
-| particles | 1.00 | 0.92 [0.99] | 1.20 |
-| sexp | 1.54 | 1.14 [1.11] | 3.72 |
-| lru | 4.55 | 3.57 [3.54] | 3.36 |
-| scene | 1.89 | 1.75 [1.61] | 5.78 |
-| calc | 3.85 | 2.94 [3.15] | 4.06 |
-| bintrees | 4.00 | 3.85 [4.11] | 15.58 |
-| respond | 1.59 | 0.69 [0.76] | 2.10 |
-| blur | 1.85 | 0.78 [0.85] | 3.59 |
-| **geometric mean** | **2.00** | **1.30** | **3.51** |
+| push | 1.09 | 1.72 [1.09] | 3.13 |
+| strlist | - | 0.96 [0.95] | 3.52 |
+| records | 1.54 | 0.91 [0.94] | 2.77 |
+| tree | 1.54 | 1.35 [1.76] | 4.41 |
+| interp | 2.27 | 2.04 [1.56] | 5.51 |
+| graph | 5.00 | 0.98 [0.75] | 4.96 |
+| words | 2.56 | 1.00 [1.14] | 2.20 |
+| particles | 0.87 | 0.98 [0.99] | 1.20 |
+| sexp | 1.56 | 1.15 [1.11] | 3.72 |
+| lru | 4.17 | 3.57 [3.54] | 3.36 |
+| scene | 1.67 | 1.39 [1.61] | 5.78 |
+| calc | 3.57 | 2.94 [3.15] | 4.06 |
+| bintrees | 3.85 | 4.00 [4.11] | 15.58 |
+| respond | 1.82 | 0.75 [0.76] | 2.10 |
+| blur | 1.82 | 0.98 [0.85] | 3.59 |
+| **geometric mean** | **2.01** | **1.39** | **3.51** |
 
 (The tuned-C++ geomean is over the fifteen benchmarks with a tuned row; the
 port runs `strlist`'s idiomatic C++ row only. The bracketed October 26 numbers
@@ -64,22 +65,22 @@ derivation.
 
 | benchmark | tuned C++ g++ | tuned C++ clang++ | Simse g++ | Simse clang++ | Goose (est.) |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| sum | 1.50 | 1.52 | 0.97 | 1.19 | 1.60 |
-| push | 1.50 | 1.46 | 1.01 | 0.95 | 3.13 |
-| strlist | - | - | 0.91 | 0.88 | 3.52 |
-| records | 1.67 | 1.64 | 1.02 | 0.94 | 2.77 |
-| tree | 2.11 | 2.08 | 1.56 | 1.66 | 4.41 |
-| interp | 1.54 | 1.39 | 1.26 | 1.34 | 5.51 |
-| graph | 2.87 | 2.69 | 0.53 | 0.47 | 4.96 |
-| words | 2.18 | 2.33 | 1.12 | 1.07 | 2.20 |
-| particles | 0.87 | 1.02 | 0.92 | 1.00 | 1.20 |
-| sexp | 1.81 | 2.14 | 1.84 | 1.86 | 3.72 |
-| lru | 4.90 | 5.47 | 4.16 | 4.55 | 3.36 |
-| scene | 1.73 | 2.41 | 2.38 | 2.31 | 5.78 |
-| calc | 2.90 | 3.04 | 2.24 | 2.66 | 4.06 |
-| bintrees | 5.41 | 4.60 | 4.19 | 3.71 | 15.58 |
-| respond | 1.40 | 1.54 | 0.81 | 0.58 | 2.10 |
-| blur | 1.12 | 3.16 | 0.75 | 0.88 | 3.59 |
+| sum | 1.02 | 0.98 [1.01] | 0.97 | 1.19 | 1.60 |
+| push | 1.09 | 1.72 [1.09] | 1.01 | 0.95 | 3.13 |
+| strlist | - | 0.96 [0.95] | 0.91 | 0.88 | 3.52 |
+| records | 1.54 | 0.91 [0.94] | 1.02 | 0.94 | 2.77 |
+| tree | 1.54 | 1.35 [1.76] | 1.56 | 1.66 | 4.41 |
+| interp | 2.27 | 2.04 [1.56] | 1.26 | 1.34 | 5.51 |
+| graph | 5.00 | 0.98 [0.75] | 0.53 | 0.47 | 4.96 |
+| words | 2.56 | 1.00 [1.14] | 1.12 | 1.07 | 2.20 |
+| particles | 0.87 | 0.98 [0.99] | 0.92 | 1.00 | 1.20 |
+| sexp | 1.56 | 1.15 [1.11] | 1.84 | 1.86 | 3.72 |
+| lru | 4.17 | 3.57 [3.54] | 4.16 | 4.55 | 3.36 |
+| scene | 1.67 | 1.39 [1.61] | 2.38 | 2.31 | 5.78 |
+| calc | 3.57 | 2.94 [3.15] | 2.24 | 2.66 | 4.06 |
+| bintrees | 3.85 | 4.00 [4.11] | 4.19 | 3.71 | 15.58 |
+| respond | 1.82 | 0.75 [0.76] | 0.81 | 0.58 | 2.10 |
+| blur | 1.82 | 0.98 [0.85] | 0.75 | 0.88 | 3.59 |
 | **geometric mean** | **1.96** | **2.19** | **1.33** | **1.34** | **3.51** |
 
 ## The Goose column (estimated)

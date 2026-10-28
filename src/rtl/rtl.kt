@@ -96,7 +96,7 @@ fun ..T.toPtrs<T>(): ..*T {
 // A machine is already iterable: `x.iterValues()` on one *is* `x`, so `for (x in m)` and
 // iterating `m` in a `while` see the same values with no wrapper object.
 
-@SmGen("res", "listops", "simse_list_append", "mutates")
+@SmGen("res", "listops", "simse_list_append", "mutates", "grows")
 fun append<T>(this: List<T>, value: T): Unit
 
 // The list literal: `listOf<Str>("a", "b")` builds one `Pack` in that order, with no call
@@ -237,7 +237,7 @@ borrow fun Array<T>.toList<T>(): List<T> {
 fun Str.initByValue(): Unit {
 }
 
-@SmGen("res", "strops", "simse_str_initByValue", "mutates")
+@SmGen("res", "strops", "simse_str_initByValue", "mutates", "grows")
 fun initByValue(this: Str, value: Str): Unit
 
 // `Dictionary<K, V>` is a value type; keys and values come back in its iteration order,
@@ -277,11 +277,11 @@ borrow fun values<K, V>(this: Dictionary<K, V>): List<V>
 fun clear<K, V>(this: Dictionary<K, V>): Unit
 
 // `Str` is a byte string, so `append` takes a Char.
-@SmGen("res", "listops", "simse_str_append", "mutates")
+@SmGen("res", "listops", "simse_str_append", "mutates", "grows")
 fun append(this: Str, value: Char): Unit
 
 // In-place append of a whole `Str`: `out = out + text` copies the accumulated buffer.
-@SmGen("res", "listops", "simse_str_appendStr", "mutates")
+@SmGen("res", "listops", "simse_str_appendStr", "mutates", "grows")
 fun appendStr(this: Str, value: Str): Unit
 
 // `out += value`: the compound assignment resolved as the in-place append (`specs/
@@ -289,18 +289,18 @@ fun appendStr(this: Str, value: Str): Unit
 // back to `out = out + value` where no `plusAssign` matches). Both spellings name one C++
 // symbol whose overloads C++ picks by the value's type - the same-name trick `spanOf`
 // avoids, safe here because both declarations share the symbol.
-@SmGen("res", "listops", "simse_str_plusAssign", "mutates")
+@SmGen("res", "listops", "simse_str_plusAssign", "mutates", "grows")
 operator fun plusAssign(this: Str, value: Str): Unit
 
-@SmGen("res", "listops", "simse_str_plusAssign", "mutates")
+@SmGen("res", "listops", "simse_str_plusAssign", "mutates", "grows")
 operator fun plusAssign(this: Str, value: Char): Unit
 
 // `parts += item`: the list's in-place append under the same convention.
-@SmGen("res", "listops", "simse_list_plusAssign", "mutates")
+@SmGen("res", "listops", "simse_list_plusAssign", "mutates", "grows")
 operator fun plusAssign<T>(this: List<T>, value: T): Unit
 
 // The same append for a borrowed text (`*Str`): nothing is copied on the way.
-@SmGen("res", "listops", "simse_str_appendStrPtr", "mutates")
+@SmGen("res", "listops", "simse_str_appendStrPtr", "mutates", "grows")
 fun appendStrPtr(this: Str, value: *Str): Unit
 
 // The format text with each `|` replaced, in order, by one item - `fmtStr("|:|", a, b)`.
@@ -462,7 +462,7 @@ fun strBoolView(value: Bool): StrView {
 
 // Pre-allocates the buffer for a run of `append`/`appendStr`: a *hint*, not a length - the
 // string keeps its size, and a longer run grows it as usual.
-@SmGen("res", "listops", "simse_str_reserve", "mutates")
+@SmGen("res", "listops", "simse_str_reserve", "mutates", "grows")
 fun reserve(this: Str, count: Int): Unit
 
 // The first index at or after `from` where `sub` occurs, or -1 (the language's spelling of

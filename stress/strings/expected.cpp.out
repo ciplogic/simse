@@ -1377,8 +1377,8 @@ void set(Str* self, Int index, Char value) {
 Bool startsWith(Str* self, Str* prefix) {
     Int count, _sm_expr1, i;
     Bool _sm_expr2;
-    Char _sm_expr4, _sm_expr6;
-    Span<Char> _sm_expr5;
+    Span<Char> _sm_span2;
+    Char _sm_expr4, _sm_expr5;
     count = simse_lenOf((*prefix));
     _sm_expr1 = simse_lenOf((*self));
     _sm_expr2 = count > _sm_expr1;
@@ -1388,13 +1388,13 @@ Bool startsWith(Str* self, Str* prefix) {
     return false;
     L2:;
     i = 0;
+    _sm_span2 = simse_spanOfStr(prefix);
     L3:;
     _sm_expr2 = i < count;
     if (!(_sm_expr2)) goto L4;
     _sm_expr4 = (*self)[i];
-    _sm_expr5 = simse_spanOfStr(prefix);
-    _sm_expr6 = get(simse_addressOf(_sm_expr5), i);
-    _sm_expr2 = _sm_expr4 != _sm_expr6;
+    _sm_expr5 = get(simse_addressOf(_sm_span2), i);
+    _sm_expr2 = _sm_expr4 != _sm_expr5;
     if (_sm_expr2) goto L5;
     goto L6;
     L5:;
@@ -1408,8 +1408,8 @@ Bool startsWith(Str* self, Str* prefix) {
 Bool endsWith(Str* self, Str* suffix) {
     Int count, len, i, _sm_expr3, _sm_expr4;
     Bool _sm_expr1;
-    Char _sm_expr5, _sm_expr7;
-    Span<Char> _sm_expr6;
+    Span<Char> _sm_span3;
+    Char _sm_expr5, _sm_expr6;
     count = simse_lenOf((*suffix));
     len = simse_lenOf((*self));
     _sm_expr1 = count > len;
@@ -1419,15 +1419,15 @@ Bool endsWith(Str* self, Str* suffix) {
     return false;
     L2:;
     i = 0;
+    _sm_span3 = simse_spanOfStr(suffix);
     L3:;
     _sm_expr1 = i < count;
     if (!(_sm_expr1)) goto L4;
     _sm_expr3 = len - count;
     _sm_expr4 = _sm_expr3 + i;
     _sm_expr5 = (*self)[_sm_expr4];
-    _sm_expr6 = simse_spanOfStr(suffix);
-    _sm_expr7 = get(simse_addressOf(_sm_expr6), i);
-    _sm_expr1 = _sm_expr5 != _sm_expr7;
+    _sm_expr6 = get(simse_addressOf(_sm_span3), i);
+    _sm_expr1 = _sm_expr5 != _sm_expr6;
     if (_sm_expr1) goto L5;
     goto L6;
     L5:;
@@ -1694,12 +1694,12 @@ Bool isSpace(Char* self) {
 }
 Str intToStr(Int64 value) {
     Str* _sm_base1;
+    Char _sm_base2, ch;
     Int64 rest, _sm_expr4;
     Bool _sm_expr1;
     Str reversed, out;
     Int digit, _sm_expr6, i;
-    Char ch, _sm_expr11;
-    Span<Char> _sm_expr10;
+    Span<Char> _sm_span4;
     rest = value;
     _sm_expr1 = rest > 0;
     if (_sm_expr1) goto L1;
@@ -1735,13 +1735,13 @@ Str intToStr(Int64 value) {
     L8:;
     digit = simse_lenOf(reversed);
     i = digit - 1;
+    _sm_base1 = &reversed;
+    _sm_span4 = simse_spanOfStr(_sm_base1);
     L9:;
     _sm_expr1 = i >= 0;
     if (!(_sm_expr1)) goto L10;
-    _sm_base1 = &reversed;
-    _sm_expr10 = simse_spanOfStr(_sm_base1);
-    _sm_expr11 = get(simse_addressOf(_sm_expr10), i);
-    simse_str_append(out, _sm_expr11);
+    _sm_base2 = get(simse_addressOf(_sm_span4), i);
+    simse_str_append(out, _sm_base2);
     i = i - 1;
     goto L9;
     L10:;
@@ -1881,15 +1881,15 @@ Int ns1_partStrings() {
 // stress/strings/src/main.kt
 Int ns1_partTextProcessing() {
     Str* _sm_base1, * _sm_base3, * _sm_base10, * _sm_base12, * _sm_base14, * _sm_base16, * word;
-    Str _sm_base2, _sm_base4, _sm_base5, _sm_base6, _sm_base11, _sm_base13, _sm_base15, _sm_base17, text,
-        longest, _sm_expr16, shout, _sm_expr22;
-    List<Str>* _sm_base8, * _sm_base9;
+    Str _sm_base2, _sm_base4, _sm_base5, _sm_base6, _sm_base9, _sm_base11, _sm_base13, _sm_base15,
+        _sm_base17, text, longest, shout, _sm_expr19;
+    List<Str>* _sm_base8;
     List<Str> words, keys;
     Dictionary<Str, Int> counts;
-    Int i, _sm_expr1, _sm_expr5, _sm_expr6, _sm_expr7, _sm_expr9, _sm_expr11, k, _sm_expr18;
-    Bool _sm_expr2, _sm_expr12, _sm_expr21, _sm_expr23;
+    Int i, _sm_expr1, _sm_expr5, _sm_expr6, _sm_expr7, _sm_expr9, _sm_expr11, k, _sm_expr16;
+    Bool _sm_expr2, _sm_expr12, _sm_expr18, _sm_expr20;
     Opt<Int> seen, _sm_expr8, _sm_expr10;
-    Span<Str> _sm_expr15;
+    Span<Str> _sm_span5;
     text = __sm_stringTable[0];
     _sm_base2 = __sm_stringTable[77];
     _sm_base1 = &_sm_base2;
@@ -1936,22 +1936,20 @@ Int ns1_partTextProcessing() {
     keys = simse_dict_keys(counts);
     simse_list_sort(keys, compareLessThan);
     k = 0;
+    _sm_base8 = &keys;
+    _sm_span5 = simse_spanOf(_sm_base8);
     L6:;
     _sm_expr1 = simse_lenOf(keys);
     _sm_expr2 = k < _sm_expr1;
     if (!(_sm_expr2)) goto L7;
-    _sm_base8 = &keys;
-    _sm_expr15 = simse_spanOf(_sm_base8);
-    _sm_expr16 = (_sm_expr15.ptr[k]);
-    _sm_expr1 = simse_lenOf(_sm_expr16);
-    _sm_expr18 = simse_lenOf(longest);
-    _sm_expr2 = _sm_expr1 > _sm_expr18;
+    _sm_base9 = (_sm_span5.ptr[k]);
+    _sm_expr1 = simse_lenOf(_sm_base9);
+    _sm_expr16 = simse_lenOf(longest);
+    _sm_expr2 = _sm_expr1 > _sm_expr16;
     if (_sm_expr2) goto L8;
     goto L9;
     L8:;
-    _sm_base9 = &keys;
-    _sm_expr15 = simse_spanOf(_sm_base9);
-    longest = (_sm_expr15.ptr[k]);
+    longest = (_sm_span5.ptr[k]);
     L9:;
     k = k + 1;
     goto L6;
@@ -1960,17 +1958,17 @@ Int ns1_partTextProcessing() {
     shout = toUpper(simse_addressOf(text));
     _sm_base11 = __sm_stringTable[47];
     _sm_base10 = &_sm_base11;
-    _sm_expr21 = startsWith(simse_addressOf(shout), _sm_base10);
-    simse_println((_sm_expr21), stdout);
+    _sm_expr18 = startsWith(simse_addressOf(shout), _sm_base10);
+    simse_println((_sm_expr18), stdout);
     _sm_base13 = __sm_stringTable[51];
     _sm_base12 = &_sm_base13;
     _sm_base15 = __sm_stringTable[50];
     _sm_base14 = &_sm_base15;
-    _sm_expr22 = replace(simse_addressOf(text), _sm_base12, _sm_base14);
+    _sm_expr19 = replace(simse_addressOf(text), _sm_base12, _sm_base14);
     _sm_base17 = __sm_stringTable[50];
     _sm_base16 = &_sm_base17;
-    _sm_expr23 = endsWith(simse_addressOf(_sm_expr22), _sm_base16);
-    simse_println((_sm_expr23), stdout);
+    _sm_expr20 = endsWith(simse_addressOf(_sm_expr19), _sm_base16);
+    simse_println((_sm_expr20), stdout);
     return 0;
 }
 // stress/strings/src/main.kt

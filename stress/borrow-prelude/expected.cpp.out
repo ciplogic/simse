@@ -800,8 +800,8 @@ void set(Str* self, Int index, Char value) {
 Bool startsWith(Str* self, Str* prefix) {
     Int count, _sm_expr1, i;
     Bool _sm_expr2;
-    Char _sm_expr4, _sm_expr6;
-    Span<Char> _sm_expr5;
+    Span<Char> _sm_span2;
+    Char _sm_expr4, _sm_expr5;
     count = simse_lenOf((*prefix));
     _sm_expr1 = simse_lenOf((*self));
     _sm_expr2 = count > _sm_expr1;
@@ -811,13 +811,13 @@ Bool startsWith(Str* self, Str* prefix) {
     return false;
     L2:;
     i = 0;
+    _sm_span2 = simse_spanOfStr(prefix);
     L3:;
     _sm_expr2 = i < count;
     if (!(_sm_expr2)) goto L4;
     _sm_expr4 = (*self)[i];
-    _sm_expr5 = simse_spanOfStr(prefix);
-    _sm_expr6 = get(simse_addressOf(_sm_expr5), i);
-    _sm_expr2 = _sm_expr4 != _sm_expr6;
+    _sm_expr5 = get(simse_addressOf(_sm_span2), i);
+    _sm_expr2 = _sm_expr4 != _sm_expr5;
     if (_sm_expr2) goto L5;
     goto L6;
     L5:;
@@ -831,8 +831,8 @@ Bool startsWith(Str* self, Str* prefix) {
 Bool endsWith(Str* self, Str* suffix) {
     Int count, len, i, _sm_expr3, _sm_expr4;
     Bool _sm_expr1;
-    Char _sm_expr5, _sm_expr7;
-    Span<Char> _sm_expr6;
+    Span<Char> _sm_span3;
+    Char _sm_expr5, _sm_expr6;
     count = simse_lenOf((*suffix));
     len = simse_lenOf((*self));
     _sm_expr1 = count > len;
@@ -842,15 +842,15 @@ Bool endsWith(Str* self, Str* suffix) {
     return false;
     L2:;
     i = 0;
+    _sm_span3 = simse_spanOfStr(suffix);
     L3:;
     _sm_expr1 = i < count;
     if (!(_sm_expr1)) goto L4;
     _sm_expr3 = len - count;
     _sm_expr4 = _sm_expr3 + i;
     _sm_expr5 = (*self)[_sm_expr4];
-    _sm_expr6 = simse_spanOfStr(suffix);
-    _sm_expr7 = get(simse_addressOf(_sm_expr6), i);
-    _sm_expr1 = _sm_expr5 != _sm_expr7;
+    _sm_expr6 = get(simse_addressOf(_sm_span3), i);
+    _sm_expr1 = _sm_expr5 != _sm_expr6;
     if (_sm_expr1) goto L5;
     goto L6;
     L5:;

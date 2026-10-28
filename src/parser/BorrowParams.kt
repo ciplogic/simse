@@ -116,6 +116,34 @@ fun bpMutatesPositions(decl: *AstXmlNode): Str {
     return ""
 }
 
+// The fourth author's mark: a trailing `"grows"` argument says this callee may *move the
+// buffer* of what it writes - change a container's capacity, or replace its storage
+// outright (the append family, `reserve`, `resize`, `setBytes`, `initByValue`).
+// `mutates` and the write signatures say what is written; they cannot say whether the
+// write leaves the buffer where it was (`set` does, `append` may not), and that
+// difference is the span binding's whole soundness question (`impl_specs/for-walk.md`,
+// "The span binding"): a span bound before a loop stays valid only while nothing in the
+// loop moves the buffer it views. The buffer-preserving mutators (`removeAt`,
+// `removeRange`, `sort`) carry no `grows`, and neither does the `Dictionary` surface (no
+// span views it).
+fun bpGrowsMark(decl: *AstXmlNode): Bool {
+    val generator: Str = xmlAttr(decl, AstNodeAttributeKind.Generator)
+    if (generator != "res" && generator != "cpp") {
+        return false
+    }
+    val args: Str = xmlAttr(decl, AstNodeAttributeKind.GeneratorArgs)
+    if (args.size() == 0) {
+        return false
+    }
+    val parts: List<Str> = args.split(",")
+    for (part in parts) {
+        if (part.trim() == "grows") {
+            return true
+        }
+    }
+    return false
+}
+
 // The `at`-th `Arg` child of a call, as a pointer (no node copies on the walk's hot
 // path); null when the call has no argument there.
 fun bpArgAt(call: *AstXmlNode, at: Int): *AstXmlNode {
@@ -173,7 +201,7 @@ fun bpSigAdd(sigs: *Dictionary<Str, Str>, name: Str, positions: Str): Unit {
 fun bpCollectDecls(
     module: *AstXmlNode, types: *Dictionary<Str, Bool>, reads: *Dictionary<Str, Bool>,
     statics: *Dictionary<Str, Bool>, mutates: *Dictionary<Str, Bool>,
-    authorSigs: *Dictionary<Str, Str>
+    authorSigs: *Dictionary<Str, Str>, grows: *Dictionary<Str, Bool>
 ): Unit {
     for (*decl in xmlDecls(module)) {
         val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
@@ -202,6 +230,9 @@ fun bpCollectDecls(
         }
         if (decl.name == AstNodeKind.Function && bpMutatesMark(decl)) {
             mutates.insert(name, true)
+        }
+        if (decl.name == AstNodeKind.Function && bpGrowsMark(decl)) {
+            grows.insert(name, true)
         }
         if (decl.name == AstNodeKind.Function) {
             // The author's marks, normalized into the table's indexing: a receiver-only
@@ -1130,6 +1161,33 @@ fun bpInferResults(facts: *List<BpPure>, reads: *Dictionary<Str, Bool>): Unit {
     }
 }
 
+// The growing names, closed over the bodies: a body whose events call a growing name can
+// itself move a buffer (whatever slot it passes), so its own name grows too. Names the
+// fixpoint never weighed do not join - a loop calling them is already refused by the
+// stability walk's unknown-call rule, which is the only consumer of this table.
+fun bpInferGrows(facts: *List<BpPure>, grows: *Dictionary<Str, Bool>): Unit {
+    var changed: Bool = true
+    while (changed) {
+        changed = false
+        for (*fact in facts) {
+            if (grows.has(fact.name)) {
+                continue
+            }
+            var hit: Bool = false
+            for (*event in fact.events) {
+                if (grows.has(event.callee)) {
+                    hit = true
+                    break
+                }
+            }
+            if (hit) {
+                grows.insert(fact.name, true)
+                changed = true
+            }
+        }
+    }
+}
+
 // A declaration the fixpoint cannot read: no body, or a native. A call by its name may reach
 // it, so unless the author's mark already answers for the name, it blocks the proof - `data`
 // and `borrow` answer "writes nothing" (the name is in `reads` before this runs), `mutates`
@@ -1536,6 +1594,13 @@ var bpTrustedNames: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
 var bpStaticNames: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
 var bpKnownTypes: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
 var bpMutatesNames: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+// The names that can move a container's buffer (the author's `grows` marks, closed over
+// the bodies by `bpInferGrows`): the span binding's extra gate for pointer roots reads
+// it - a span bound before a loop dangles the moment anything in the loop reallocates
+// the buffer it views, and through a raw pointer the alias is invisible, so the gate
+// refuses a growing call on *any* receiver (`impl_specs/for-walk.md`, "The span
+// binding").
+var bpGrowsNames: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
 // The names whose declarations carry an author's `data`/`borrow` mark: the only callees
 // whose *result* the classifier may derive from their arguments. The fixpoint proves a
 // name writes nothing, which says nothing about what its result aliases - a proved-clean
@@ -2145,6 +2210,7 @@ fun bpBorrowParams(
     var reads: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var statics: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var mutates: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    var grows: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var authorSigs: Dictionary<Str, Str> = Dictionary<Str, Str>()
     bpResultTrusted = Dictionary<Str, Bool>()
     // The emitter-spelled builtins (`print`/`println`) take their argument by `const T&`
@@ -2155,10 +2221,10 @@ fun bpBorrowParams(
         reads.insert(builtin, true)
     }
     for (*pre in preludeModules) {
-        bpCollectDecls(pre, *types, *reads, *statics, *mutates, *authorSigs)
+        bpCollectDecls(pre, *types, *reads, *statics, *mutates, *authorSigs, *grows)
     }
     for (*mod in modules) {
-        bpCollectDecls(mod, *types, *reads, *statics, *mutates, *authorSigs)
+        bpCollectDecls(mod, *types, *reads, *statics, *mutates, *authorSigs, *grows)
     }
 
     var candidates: List<AstXmlNode> = List<AstXmlNode>()
@@ -2278,6 +2344,10 @@ fun bpBorrowParams(
     bpDeepTypes = bpDeepClasses(*allModules)
     bpTrustedNames = reads
     bpMutatesNames = mutates
+    // The growing closure runs after the outer rounds settle: it reads the final facts,
+    // and nothing in the rounds consults it (the span gate runs in sema, after the pass).
+    bpInferGrows(*factList, *grows)
+    bpGrowsNames = grows
     bpWritesNames = writesOf
 
     // Both sides are rewritten: a Simse-bodied prelude declaration borrows exactly like a module

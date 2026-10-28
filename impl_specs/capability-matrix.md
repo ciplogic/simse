@@ -5767,3 +5767,40 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   case's C++ fails to compile on the compiler before the fix). Found while spelling the
   provenance classifier's split loop (`for (part in (*provenance).split(","))` hit it
   in the compiler's own sources). Same commit.
+
+- **The span binding: a storage-stable loop's span is bound once in the preheader, and
+  the pointer-root store loop joins.** The span hoist's declaration-free rewrite bet on
+  LICM - `spanOf(c)` planted at every `c[i]`, the optimizer expected to hoist the
+  derivation - and `tools/_spanprobe/` (the blur kernel A/B'd in raw C++, five
+  spellings) measured the bet losing three ways: MSVC hoists neither the per-access
+  `set(&temp)` shape (-7% when the store's span is bound by hand), nor even one
+  per-iteration derivation (today's name-root read shape, ~30% over a bound span), and
+  with both paths bound the masked loads reach the flat-pointer row's speed - the mask
+  was never the vectorizer's blocker, the recalculated internal span was
+  (`SmString::operator[]` -> `raw()`, the inline-or-heap branch, per access). The
+  binding is `hoistSpanAt`'s new emission: `var _sm_span<n> = <conversion>(root)`
+  inserted before the `while` (the for-walk's container insert and `shift`
+  bookkeeping - *not* the v2 body-prepend that miscompiled gzip; that history and the
+  v3 lessons, role names and `spanDirect`, carry over), every `root[i]` in the
+  condition and body through the slot. Name roots bind under the existing
+  storage-stability proof unchanged. Pointer roots - `dst[i] = v` over a `*Str`
+  parameter, the scan-kernel store - bind only when the whole loop is **immobile**:
+  no call to a growing name on any receiver, no write through a deref
+  (`semaSpanImmobile`); a refused pointer root keeps the per-access rewrite exactly as
+  before. The growing names are the new `"grows"` author's mark (`@SmGen(...,
+  "mutates", "grows")`) on the ten RTL mutators that can move a buffer (the append
+  family, `reserve`, `resize`, `setBytes`, `initByValue` - not the buffer-preserving
+  `removeAt`/`sort`), closed transitively over the bodies (`bpInferGrows`: a body
+  calling a growing name grows) - the fact the write-signature table cannot express,
+  since `mutates` says what is written, not whether the write moves it. Measured,
+  old vs new compiler binaries interleaved: the blur row 152/164 -> 147/151 ms (its
+  loads are helper-call-spelled, so only the store binds - the port's byteAt shape,
+  which stays as written); an index-spelled read scan (4M built, 8 passes) 27/29 ->
+  18/19.5 ms, **1.5x**; the compiler's own build binds throughout (the bootstrap
+  refreshed). The corpus's emission goldens moved additively (one binding per hoisted
+  loop; `minui-layout` additionally dropped the never-referenced `Range` family dead
+  declarations - verified compiled and identical output). `stress/span-binding` pins
+  the four shapes: the pointer-root store and the name-root read bind, the growing
+  call on another container and the member-write through the pointer keep the
+  per-access spelling. Verified: `bun tools/iterate.js --full` - **148/148** and both
+  fixed points; the published bootstrap refreshed.

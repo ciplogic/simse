@@ -904,12 +904,12 @@ void set(Str* self, Int index, Char value) {
 }
 Str intToStr(Int64 value) {
     Str* _sm_base1;
+    Char _sm_base2, ch;
     Int64 rest, _sm_expr4;
     Bool _sm_expr1;
     Str reversed, out;
     Int digit, _sm_expr6, i;
-    Char ch, _sm_expr11;
-    Span<Char> _sm_expr10;
+    Span<Char> _sm_span4;
     rest = value;
     _sm_expr1 = rest > 0;
     if (_sm_expr1) goto L1;
@@ -945,13 +945,13 @@ Str intToStr(Int64 value) {
     L8:;
     digit = simse_lenOf(reversed);
     i = digit - 1;
+    _sm_base1 = &reversed;
+    _sm_span4 = simse_spanOfStr(_sm_base1);
     L9:;
     _sm_expr1 = i >= 0;
     if (!(_sm_expr1)) goto L10;
-    _sm_base1 = &reversed;
-    _sm_expr10 = simse_spanOfStr(_sm_base1);
-    _sm_expr11 = get(simse_addressOf(_sm_expr10), i);
-    simse_str_append(out, _sm_expr11);
+    _sm_base2 = get(simse_addressOf(_sm_span4), i);
+    simse_str_append(out, _sm_base2);
     i = i - 1;
     goto L9;
     L10:;

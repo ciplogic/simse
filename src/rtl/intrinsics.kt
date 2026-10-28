@@ -50,10 +50,10 @@ data fun strBytes(text: *Str): *Char
 
 // A string's bytes replaced by a copy of a byte range: the owned-copy primitive. One
 // resize and one block copy (`memCopy`), where a per-byte `append` would walk the bytes.
-@SmGen("cpp", "simse_str_setBytes", "mutates")
+@SmGen("cpp", "simse_str_setBytes", "mutates", "grows")
 fun setBytes(this: Str, src: *Char, srcIndex: Int, count: Int): Unit
 
 // Grows or shrinks the text to `count` bytes (NUL-padded), in place - the resize half of
 // a builder that follows with a tail `memCopy` (`StrView.plus` is the shape).
-@SmGen("cpp", "simse_str_resize", "mutates")
+@SmGen("cpp", "simse_str_resize", "mutates", "grows")
 fun resize(this: Str, count: Int): Unit

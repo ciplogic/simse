@@ -228,3 +228,75 @@ this proposal inherits.
 - **Blast radius under the flag** is the point of the flag: golden movement stays inside
   the new cases.
 - **Vectorization is a hypothesis until measured** - see acceptance 4.
+
+## The span binding: the buffer derived once (2026-10-28)
+
+Status: **landed**. The probes are `tools/_spanprobe/` (raw C++ A/B, the `_walkprobe`
+template; run by hand, never by the loop). Landed measurements, old-compiler vs
+new-compiler binaries of the same program interleaved (`tools/_bench_ab.mjs`): the blur
+row (pointer-root stores; its loads are helper-call-spelled, so only the store binds)
+152/164 -> 147/151 ms, the probes' predicted ~7%; an index-spelled read scan (build 4M,
+scan 8 passes) 27/29 -> 18/19.5 ms - **1.5x on the program**, the generation half
+unchanged. `stress/span-binding` pins the four shapes with an emission golden.
+
+**The measured fact.** The span hoist's declaration-free rewrite bets on the C++
+optimizer: `spanOf(c)` planted at every `c[i]`, LICM expected to hoist the derivation
+out of the loop. The probes say the bet loses, three ways over (the blur kernel,
+W=2048, one interleaved batch per row - the machine's session drift is why rows from
+different batches are not comparable, only each batch's pair):
+
+| the kernel's spelling | one batch | reading |
+| --- | --- | --- |
+| as emitted today (loads via helper calls, store via in-loop `spanOf` + `set`) | 147/153 vs 137/142 | hoisting just the store's span by hand: -7% |
+| helper calls vs inline `(*src)[j]` loads | 135/142 vs 133/141 | the *call* is not the cost; the deref spelling is |
+| a per-iteration derived span (today's name-root read shape) vs one bound span | 93/97 vs 69/73 | even one derivation per iteration survives LICM |
+| today's emission vs the bound shape | 113/116 vs 71/73 | **the optimization: ~1.6x on the kernel** |
+| the bound shape vs flat `uint8_t*` (the tuned row) | 89/93 vs 89/94 | parity - the mask is not the vectorizer's blocker |
+
+The recalculated thing is the string's internal span: `SmString::operator[]` ->
+`raw()`, the inline-or-heap branch, per access. MSVC neither CSEs nine of them through
+a deref spelling nor hoists even one per-iteration derivation. Bind the span once and
+the masked loads reach the tuned row's speed on their own.
+
+**The rule.** A loop the span hoist accepts gets the container's span *bound once in
+the loop's preheader*: `var _sm_span<n> = <conversion>(<root>)` inserted before the
+`while` - the for-walk's container insert, the same `shift` bookkeeping - and every
+`root[i]` in the condition and body reads and writes through the slot. The per-access
+`spanOf(root)` derivation disappears.
+
+**The gates.**
+
+- *Name roots* (`c: Str` / `List<T>`): the existing storage-stability proof
+  (`bpSpanStableNode`) is exactly the soundness a pre-loop binding needs - it refuses
+  the rebind, the escape (`*c` / `&c`), and the mutating call on the root; nothing else
+  can move a value's buffer (a second name is a copy, `&c` boxes a copy).
+- *Pointer roots* (`p: *Str` / `*List<T>` - `semaReceiverOuter` already strips the
+  pointer for the conversion, which is why `dst[i] = v` fires today): aliasing through
+  a raw pointer is invisible, so the binding is sound only when nothing in the loop can
+  move *any* buffer:
+  1. every call must already pass the stability walk (unknown calls refuse, as today);
+  2. no call names a **growing** callee - the new `grows` table - whatever receiver it
+     is on;
+  3. no statement writes through a deref (`*x = ...` rebinds a pointee and drops the
+     buffer it had).
+  A pointer root that fails the extra gates keeps today's per-access rewrite: no
+  regression, just no binding.
+
+**The `grows` fact.** The write-signature table cannot express this: `mutates` and the
+signatures name *what is written*, not whether the write **moves the buffer**. The new
+author's mark is a trailing `"grows"` argument on the `@SmGen` list, seeded on the RTL
+mutators that can change a container's capacity or replace its buffer - the append
+family (`simse_list_append`, `simse_str_append`, `simse_str_appendStr`,
+`simse_str_appendStrPtr`, both `simse_str_plusAssign`, `simse_list_plusAssign`),
+`simse_str_reserve`, `simse_str_initByValue`, `simse_str_resize`,
+`simse_str_setBytes` - and *not* the buffer-preserving mutators (`removeAt`,
+`removeRange`, `sort`, the `Dictionary` names, which no span views). The borrow pass
+grows the set transitively - a proved body whose events call a growing name carries
+`grows` - into `bpGrowsNames`, which the span gate reads beside `bpMutatesNames`.
+
+**History, respected.** The v2 buffer hoist was a *body-prepend* binding and
+miscompiled gzip (`impl_specs/typed-il.md`'s Status); the declaration-free rewrite was
+the retreat. The binding specified here is a **preheader sibling** - the insert shape
+the for-walk already does safely (its counter declaration) - and the v3 lessons carry
+verbatim: synthetic nodes carry their role names and positions; span reads and writes
+spell `.ptr[i]` through the `spanDirect` guards.

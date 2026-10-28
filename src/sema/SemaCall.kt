@@ -1487,6 +1487,32 @@ fun semaWalkIsElementBinding(stmt: *AstXmlNode, machineName: Str): Bool {
 // counter declaration or its step, standing where the template's would have. The container's
 // Children block is rebuilt whole (the parser's own template writes several statements); the
 // `Stmt` count matches the statement list the caller walked, in order.
+// The statement *before* the ordinal-th `Stmt` child lands (`index` < 0 prepends): the
+// span binding's insert, in front of its loop.
+fun semaStmtInsertBefore(container: *AstXmlNode, index: Int, fresh: AstXmlNode): Unit {
+    var kids: List<AstXmlNode> = List<AstXmlNode>()
+    var seen: Int = -1
+    var inserted: Bool = false
+    if (index < 0) {
+        kids.append(fresh)
+        inserted = true
+    }
+    for (*child in container.Children) {
+        if (!inserted && child.name == AstNodeKind.Stmt) {
+            seen++
+            if (seen == index) {
+                kids.append(fresh)
+                inserted = true
+            }
+        }
+        kids.append(child)
+    }
+    if (!inserted) {
+        kids.append(fresh)
+    }
+    container.Children = kids.toArray()
+}
+
 fun semaStmtInsertAfter(container: *AstXmlNode, index: Int, fresh: AstXmlNode): Unit {
     var kids: List<AstXmlNode> = List<AstXmlNode>()
     var seen: Int = -1
@@ -1860,9 +1886,10 @@ fun Analyzer.checkExtensionCallArity(call: *AstXmlNode): Unit {
 // `--no-borrow` turns it off with the rest of the rewrite.
 fun Analyzer.promoteForLoops(container: *AstXmlNode, stmts: *List<AstXmlNode>): Unit {
     var i: Int = 0
-    // The statements the for-walk has inserted into the container so far: every insert moves
-    // the container slot of every later statement in this list.
-    var walkShift: Int = 0
+    // The statements this list's passes have inserted into the container so far (the span
+    // bindings, the for-walk's counters): every insert moves the container slot of every
+    // later statement in this list.
+    var shift: Int = 0
     while (i < stmts.size()) {
         val stmt: *AstXmlNode = *stmts[i]
         // Every place a statement list can hide: a block's body, and an `if`'s arms. Missing
@@ -1884,13 +1911,13 @@ fun Analyzer.promoteForLoops(container: *AstXmlNode, stmts: *List<AstXmlNode>): 
         if (!bpNoBorrow()) {
             this.promoteForAt(stmts, i)
             this.promotePlaceAt(stmts, i)
-            this.hoistSpanAt(stmts, i)
+            shift = shift + this.hoistSpanAt(container, stmts, i, shift)
         }
         // The for-walk is its own flag, not the borrow rewrite: when the contract holds, the
         // span's own machine lowers as the flat counter walk (impl_specs/for-walk.md); when
         // it does not - or the flag is off - the machine stands, byte for byte.
         if (semaForWalk()) {
-            walkShift = walkShift + this.forWalkAt(container, stmts, i, walkShift)
+            shift = shift + this.forWalkAt(container, stmts, i, shift)
         }
         i++
     }
@@ -2128,33 +2155,132 @@ fun Analyzer.promotePlaceAt(stmts: *List<AstXmlNode>, index: Int): Unit {
     }
 }
 
-// The span hoist (impl_specs/typed-il.md, the buffer form): a loop whose body indexes a
-// container - c[i] reads and writes - and keeps it storage-stable gets the container
-// buffer bound once before the loop: var _sm_span<n>: Span<T> = spanOf(c), and every
-// c[i] in the condition and body indexes the span instead - one pointer load where every
-// access used to re-derive the buffer through the container inline-or-heap branch
-// (raw(), src/rtl/containers.hpp). Element writes are stable, which is what a scan
-// kernel dst[i] = v needs; a mutates-marked callee on another named receiver is trusted.
-// A yielding body is the machine pass own territory, and `this` is the receiver, not a
-// local container - neither hoists. --no-borrow turns it off with the rest.
+// The span hoist (impl_specs/typed-il.md's buffer form; impl_specs/for-walk.md, "The
+// span binding"): a loop whose body indexes a container - c[i] reads and writes - and
+// keeps it storage-stable gets the container's span **bound once in the preheader** -
+// `var _sm_span<n>: Span<T> = spanOf(c)` inserted before the `while` - and every `c[i]`
+// in the condition and body indexes the slot: one pointer load where every access used
+// to re-derive the buffer through the container's inline-or-heap branch (`raw()`,
+// src/rtl/containers.hpp). The probes (`tools/_spanprobe/`) measured the old
+// declaration-free bet - `spanOf(c)` planted per access, LICM expected to hoist it - and
+// it loses: MSVC hoists neither the per-access `set(&temp)` shape nor even one
+// per-iteration derivation, and binding once is ~1.6x on the blur kernel, reaching the
+// flat-pointer row's speed with the loads still masked.
+//
+// A name root's binding is sound under the existing storage-stability proof (a value's
+// buffer moves only through the rebind, the escape, or the mutating call it refuses). A
+// *pointer* root - `dst[i] = v` over a `*Str` parameter, the scan-kernel store - can
+// alias anything, so its binding additionally needs the loop to be **immobile**: no call
+// to a growing name on any receiver (`bpGrowsNames`, the `grows` marks closed over the
+// bodies), and no write through a deref (`*x = ...` rebinds a pointee and drops the
+// buffer it had). A pointer root that cannot prove immobility keeps the declaration-free
+// rewrite exactly as it was - no regression, just no binding.
+//
+// Element writes are stable, which is what a scan kernel dst[i] = v needs; a
+// mutates-marked callee on another named receiver is trusted. A yielding body is the
+// machine pass own territory, and `this` is the receiver, not a local container -
+// neither hoists. --no-borrow turns it off with the rest.
 var semaSpanHoistId: Int = 0
 
-fun Analyzer.hoistSpanAt(stmts: *List<AstXmlNode>, index: Int): Unit {
+// Whether nothing under `node` can move a buffer: no growing callee (the `grows` marks
+// and their transitive closure - whatever receiver it is on), and no assignment through
+// a deref. The pointer-root binding's extra gate.
+fun semaSpanImmobile(node: *AstXmlNode): Bool {
+    val kind: AstNodeCategory = xmlKind(node)
+    if (kind == AstNodeCategory.StmtAssign) {
+        val target: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Target)
+        if (xmlKind(target) == AstNodeCategory.ExprDeref) {
+            return false
+        }
+    }
+    if (kind == AstNodeCategory.ExprCall) {
+        val callee: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Callee)
+        val ck: AstNodeCategory = xmlKind(callee)
+        if (ck == AstNodeCategory.ExprName || ck == AstNodeCategory.ExprMember) {
+            if (bpGrowsNames.has(xmlAttr(callee, AstNodeAttributeKind.Name))) {
+                return false
+            }
+        }
+    }
+    for (*child in node.Children) {
+        if (!semaSpanImmobile(child)) {
+            return false
+        }
+    }
+    return true
+}
+
+// `var _sm_span<n>: <spanType> = <conversion>(root)` - the binding, built for insertion
+// before the loop. The declared type is the conversion call's own inferred type (the
+// call-site-bound `Span<...>`, the for-walk slot's rule); the Type child stays empty
+// when that type cannot be named, and the caller keeps the declaration-free rewrite.
+fun Analyzer.semaSpanBinding(
+    root: Str, conversion: Str, rootType: AstXmlNode, line: Int, column: Int
+): AstXmlNode {
+    semaSpanHoistId++
+    val name: Str = "_sm_span" + semaSpanHoistId.toString()
+    var init: AstXmlNode = semaSpanBuffer(root, conversion, line, column, "")
+    var spanType: AstXmlNode = this.exprType(*init)
+    if (xmlIsEmpty(spanType)) {
+        // A value-rooted conversion (`spanOf(vals)` over a `List<Int>` name) does not
+        // unify its `T` through the inferred borrow for `exprType`'s plain-call return;
+        // the span's own element answer names the type directly (`Span<E>`, `E` the
+        // container's - a raw type parameter inside a generic body is in scope where the
+        // binding lives).
+        val element: AstXmlNode = this.semaSpanElement(rootType)
+        if (!xmlIsEmpty(element)) {
+            var genericAttrs: List<AstNodeAttribute> = semaWalkPos(line, column)
+            genericAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, "Span"))
+            spanType = AstXmlNode(
+                AstNodeKind.Type, AstNodeCategory.TypeGeneric, genericAttrs, Array<AstXmlNode>()
+            )
+            var argNode: AstXmlNode = element
+            argNode.name = AstNodeKind.TypeArg
+            xmlAddChild(spanType, argNode)
+        }
+    }
+    var attrs: List<AstNodeAttribute> = semaWalkPos(line, column)
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsVar, "true"))
+    var decl: AstXmlNode = AstXmlNode(
+        AstNodeKind.Stmt, AstNodeCategory.StmtVarDecl, attrs, Array<AstXmlNode>()
+    )
+    if (!xmlIsEmpty(spanType)) {
+        var typeNode: AstXmlNode = spanType
+        typeNode.name = AstNodeKind.Type
+        xmlAddChild(decl, typeNode)
+    }
+    var initChild: AstXmlNode = init
+    initChild.name = AstNodeKind.Init
+    xmlAddChild(decl, initChild)
+    return decl
+}
+
+// The slot name of a built binding (the rewrite's target): the `Name` attribute the
+// builder recorded.
+fun semaSpanBindingName(decl: *AstXmlNode): Str {
+    return xmlAttr(decl, AstNodeAttributeKind.Name)
+}
+
+fun Analyzer.hoistSpanAt(
+    container: *AstXmlNode, stmts: *List<AstXmlNode>, index: Int, shift: Int
+): Int {
+    var inserted: Int = 0
     val loop: *AstXmlNode = *stmts[index]
     if (xmlKind(loop) != AstNodeCategory.StmtWhile) {
-        return
+        return 0
     }
     val cond: *AstXmlNode = xmlChildPtr(loop, AstNodeKind.Cond)
     val bodyNode: *AstXmlNode = xmlChildPtr(loop, AstNodeKind.Body)
     if (xmlIsEmpty(bodyNode)) {
-        return
+        return 0
     }
     val body: List<AstXmlNode> = xmlChildren(bodyNode, AstNodeKind.Stmt)
     if (body.size() == 0) {
-        return
+        return 0
     }
     if (semaBodyYields(bodyNode)) {
-        return
+        return 0
     }
     var roots: List<Str> = List<Str>()
     semaSpanCollectIndexRoots(*cond, *roots)
@@ -2200,20 +2326,67 @@ fun Analyzer.hoistSpanAt(stmts: *List<AstXmlNode>, index: Int): Unit {
             this.semaPromoRefuse("hoistSpan", root, "index read under a deref")
             continue
         }
-        // The rewrite is declaration-free: every c[i] becomes spanOf(c).ptr[i] in place,
+        // The binding decision. A pointer (or handle) root can alias storage no proof in
+        // this body sees, so its span may be bound once only when the whole loop is
+        // immobile - no growing call anywhere, no write through a deref. A name root
+        // needs nothing beyond the stability proof above: a value's buffer moves only
+        // through the rebind, the escape, or the mutating call that proof refuses.
+        val rootKind: AstNodeCategory = xmlKind(rootType)
+        val pointerRoot: Bool = rootKind == AstNodeCategory.TypePointer
+            || rootKind == AstNodeCategory.TypeReference
+        var bind: Bool = true
+        if (pointerRoot) {
+            bind = semaSpanImmobile(*cond)
+            var immobileAt: Int = 0
+            while (bind && immobileAt < body.size()) {
+                bind = semaSpanImmobile(body[immobileAt])
+                immobileAt++
+            }
+            if (!bind) {
+                this.semaPromoRefuse("hoistSpan", root, "pointer root: loop not immobile (grows call or deref write)")
+            }
+        }
+        if (bind) {
+            val line: Int = xmlLine(*loop)
+            val column: Int = xmlColumn(*loop)
+            val binding: AstXmlNode = this.semaSpanBinding(root, conversion, rootType, line, column)
+            if (xmlIsEmpty(xmlChildPtr(*binding, AstNodeKind.Type))) {
+                // The span type could not be named for this site: keep the per-access
+                // rewrite rather than a binding the checker cannot type.
+                this.semaPromoRefuse("hoistSpan", root, "binding type unknown")
+                bind = false
+            } else {
+                // The insert goes through the tree's own container (`forWalkAt`'s rule:
+                // the `stmts` list is a copy, so only a container insert lands), before
+                // the loop, accounted in the caller's `shift`.
+                semaStmtInsertBefore(container, index + shift, binding)
+                val slot: Str = semaSpanBindingName(*binding)
+                this.semaSpanRewrite(*cond, root, conversion, slot)
+                for (*stmt in body) {
+                    this.semaSpanRewrite(stmt, root, conversion, slot)
+                }
+                inserted++
+                if (diagOn("sema")) {
+                    val fileDiag: Str = this.file
+                    diagTrace("sema", `hoistSpan @root -> @conversion bound @slot file=@fileDiag`)
+                }
+                continue
+            }
+        }
+        // The declaration-free rewrite: every c[i] becomes spanOf(c).ptr[i] in place,
         // correct by construction (no injected declaration to place or reorder), typed by
-        // the existing rules (the call is Span<T>, the member *T, the index T), and the
-        // C++ optimizer hoists the loop-invariant spanOf out of the loop itself - the
-        // buffer load it exists to remove is gone either way.
-        this.semaSpanRewrite(*cond, root, conversion)
+        // the existing rules (the call is Span<T>, the member *T, the index T) - the
+        // pointer-root fallback and the refused-binding path both land here.
+        this.semaSpanRewrite(*cond, root, conversion, "")
         for (*stmt in body) {
-            this.semaSpanRewrite(stmt, root, conversion)
+            this.semaSpanRewrite(stmt, root, conversion, "")
         }
         if (diagOn("sema")) {
             val fileDiag: Str = this.file
             diagTrace("sema", `hoistSpan @root -> @conversion file=@fileDiag`)
         }
     }
+    return inserted
 }
 
 fun semaBodyYields(node: *AstXmlNode): Bool {
@@ -2276,8 +2449,8 @@ fun semaSpanCollectIndexRoots(node: AstXmlNode, roots: *List<Str>): Unit {
 // One container accesses rewritten in place: every c[i] under `node` keeps its own index
 // and only the receiver becomes the span name; the receiver of a `set` call follows too
 // (c[i] = v on a Str is c.set(i, v), the parser operator rewrite).
-fun Analyzer.semaSpanRewrite(node: *AstXmlNode, root: Str, conversion: Str): Unit {
-    var buffer: AstXmlNode = semaSpanBuffer(root, conversion, xmlLine(node), xmlColumn(node))
+fun Analyzer.semaSpanRewrite(node: *AstXmlNode, root: Str, conversion: Str, slot: Str): Unit {
+    var buffer: AstXmlNode = semaSpanBuffer(root, conversion, xmlLine(node), xmlColumn(node), slot)
     if (xmlKind(node) == AstNodeCategory.ExprIndex) {
         var at: Int = 0
         while (at < node.Children.count()) {
@@ -2305,7 +2478,7 @@ fun Analyzer.semaSpanRewrite(node: *AstXmlNode, root: Str, conversion: Str): Uni
             if (xmlKind(receiver) == AstNodeCategory.ExprName
                 && xmlAttr(receiver, AstNodeAttributeKind.Name) == root
             ) {
-                var second: AstXmlNode = semaSpanBuffer(root, conversion, xmlLine(node), xmlColumn(node))
+                var second: AstXmlNode = semaSpanBuffer(root, conversion, xmlLine(node), xmlColumn(node), slot)
                 second.name = AstNodeKind.Receiver
                 var swapped: Bool = false
                 var atC: Int = 0
@@ -2324,14 +2497,18 @@ fun Analyzer.semaSpanRewrite(node: *AstXmlNode, root: Str, conversion: Str): Uni
         }
     }
     for (*child in node.Children) {
-        this.semaSpanRewrite(child, root, conversion)
+        this.semaSpanRewrite(child, root, conversion, slot)
     }
 }
 
-// `spanOf(root)` - the buffer expression every index in the loop reads through;
-// the emitter spells the span index through its pointer itself (CgCall, IlEmit).
-// A fresh node per site (the tree shares nothing between uses).
-fun semaSpanBuffer(root: Str, conversion: Str, line: Int, column: Int): AstXmlNode {
+// The buffer expression every index in the loop reads through: `spanOf(root)` - the
+// emitter spells the span index through its pointer itself (CgCall, IlEmit) - or, when a
+// binding was inserted, the slot's name (a fresh node per site; the tree shares nothing
+// between uses).
+fun semaSpanBuffer(root: Str, conversion: Str, line: Int, column: Int, slot: Str): AstXmlNode {
+    if (slot != "") {
+        return semaWalkNameExpr(slot, line, column)
+    }
     var callAttrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
     callAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, conversion))
     callAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, line.toString()))
