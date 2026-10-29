@@ -1264,7 +1264,7 @@ Bool advance(ns3_XmlNode_elements_yieldable* self) {
     Bool _sm_base1, _sm_base3, _sm_expr2;
     Int _sm_base2, _sm_base4, _sm_base7, _sm_base11, _sm_base16, _sm_base17, _sm_expr1;
     Array<ns3_XmlNode>* _sm_base5, * _sm_base9;
-    ns3_XmlNode* _sm_base6, * _sm_base10, * _sm_base14, * _sm_base15, * _sm_expr5;
+    ns3_XmlNode* _sm_base6, * _sm_base10, * _sm_base14, * _sm_expr5;
     ns3_XmlNode _sm_base8;
     Str* _sm_base12, * _sm_base13;
     Span<Char> _sm_expr3;
@@ -1295,8 +1295,7 @@ Bool advance(ns3_XmlNode_elements_yieldable* self) {
     if (_sm_expr2) goto L3;
     goto LY1;
     L3:;
-    _sm_base15 = simse_addressOf(self->child);
-    _sm_expr5 = _sm_base15;
+    _sm_expr5 = _sm_base14;
     self->current = _sm_expr5;
     self->branch = 1;
     return true;
@@ -2390,9 +2389,9 @@ void ns2_paintFrame(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Func<void(Int)
 }
 // modules/minui/paint.kt
 void ns2_paintNode(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node, Func<void(Int)> custom) {
-    ns2_Node* _sm_base1, * _sm_base4, * _sm_base8;
-    List<ns2_Node>* _sm_base2, * _sm_base5, * _sm_base9;
-    List<Int>* _sm_base3, * _sm_base7;
+    ns2_Node* _sm_base1, * _sm_base4;
+    List<ns2_Node>* _sm_base2, * _sm_base5;
+    List<Int>* _sm_base3;
     Int _sm_base6, i, _sm_expr3;
     Bool _sm_expr1, _sm_expr2;
     _sm_base2 = simse_addressOf(f->nodes);
@@ -2413,10 +2412,7 @@ void ns2_paintNode(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node, Func<
     _sm_expr3 = simse_lenOf((*_sm_base3));
     _sm_expr1 = i < _sm_expr3;
     if (!(_sm_expr1)) goto L4;
-    _sm_base9 = simse_addressOf(f->nodes);
-    _sm_base8 = simse_addressOf((*_sm_base9)[node]);
-    _sm_base7 = simse_addressOf(_sm_base8->children);
-    _sm_base6 = (*_sm_base7)[i];
+    _sm_base6 = (*_sm_base3)[i];
     ns2_paintNode(f, theme, ui, _sm_base6, custom);
     i = i + 1;
     goto L3;
@@ -2424,8 +2420,8 @@ void ns2_paintNode(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node, Func<
 }
 // modules/minui/paint.kt
 void ns2_paintSelf(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node, Func<void(Int)> custom) {
-    ns2_Node* _sm_base1, * _sm_base3, * _sm_base6, * _sm_base10;
-    List<ns2_Node>* _sm_base2, * _sm_base4, * _sm_base11;
+    ns2_Node* _sm_base1, * _sm_base6, * _sm_base10;
+    List<ns2_Node>* _sm_base2;
     ns2_Color _sm_base5, _sm_base9;
     ns2_Palette _sm_base8;
     Int _sm_base12, _sm_expr3, _sm_expr4;
@@ -2440,12 +2436,10 @@ void ns2_paintSelf(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node, Func<
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    _sm_base4 = simse_addressOf(f->nodes);
-    _sm_base3 = simse_addressOf((*_sm_base4)[node]);
-    rect = _sm_base3->rect;
+    rect = _sm_base1->rect;
     _sm_base5 = theme->panel;
     ns2_uiRoundFill(ui, rect, 8, _sm_base5);
-    _sm_base6 = simse_addressOf((*_sm_base4)[node]);
+    _sm_base6 = simse_addressOf((*_sm_base2)[node]);
     _sm_expr3 = _sm_base6->palette;
     _sm_base8 = ns2_Palette::Emphasized;
     _sm_expr4 = static_cast<Int>(_sm_base8);
@@ -2479,8 +2473,7 @@ void ns2_paintSelf(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node, Func<
     if (_sm_expr2) goto L9;
     goto L10;
     L9:;
-    _sm_base11 = simse_addressOf(f->nodes);
-    _sm_base10 = simse_addressOf((*_sm_base11)[node]);
+    _sm_base10 = simse_addressOf((*_sm_base2)[node]);
     _sm_rect_2 = _sm_base10->rect;
     _sm_base12 = _sm_base10->sprite;
     ns2_uiSprite(ui, _sm_base12, _sm_rect_2);
@@ -2530,7 +2523,7 @@ void ns2_paintSelf(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node, Func<
 // modules/minui/paint.kt
 void ns2_paintCheckbox(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node) {
     ns2_Node* _sm_base1, * _sm_base6, * _sm_base10;
-    List<ns2_Node>* _sm_base2, * _sm_base7, * _sm_base11;
+    List<ns2_Node>* _sm_base2;
     Int _sm_base5, _sm_expr2, _sm_expr7, _sm_expr8, _sm_expr9, boxY, _sm_expr11, _sm_expr14, _sm_expr15,
         _sm_expr17, _sm_expr18, _sm_expr20, _sm_expr23, _sm_expr24, _sm_expr32, baseline, _sm_expr33,
         _sm_expr34;
@@ -2573,8 +2566,7 @@ void ns2_paintCheckbox(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node) {
     _sm_base5 = rect.x;
     ns2_smRect(&_sm_expr10, _sm_base5, boxY, 16, 16);
     ns2_uiRoundFill(ui, _sm_expr10, 3, face);
-    _sm_base7 = simse_addressOf(f->nodes);
-    _sm_base6 = simse_addressOf((*_sm_base7)[node]);
+    _sm_base6 = simse_addressOf((*_sm_base2)[node]);
     _sm_expr11 = _sm_base6->value;
     enabled = _sm_expr11 != 0;
     if (enabled) goto L9;
@@ -2596,8 +2588,7 @@ void ns2_paintCheckbox(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node) {
     _sm_base9 = theme->accent;
     ns2_uiLine(ui, _sm_expr20, _sm_expr18, _sm_expr23, _sm_expr24, _sm_base9);
     L10:;
-    _sm_base11 = simse_addressOf(f->nodes);
-    _sm_base10 = simse_addressOf((*_sm_base11)[node]);
+    _sm_base10 = simse_addressOf((*_sm_base2)[node]);
     text = _sm_base10->text;
     _sm_expr2 = simse_lenOf(text);
     enabled = _sm_expr2 > 0;
@@ -2620,7 +2611,7 @@ void ns2_paintCheckbox(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node) {
 // modules/minui/paint.kt
 void ns2_paintEdit(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node) {
     ns2_Node* _sm_base1, * _sm_base5;
-    List<ns2_Node>* _sm_base2, * _sm_base6;
+    List<ns2_Node>* _sm_base2;
     ns2_Color _sm_base7, _sm_base8, face, edge;
     ns2_Rect rect;
     Bool _sm_expr1, _sm_expr2;
@@ -2648,8 +2639,7 @@ void ns2_paintEdit(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node) {
     edge = theme->accent;
     L4:;
     ns2_uiOutline(ui, rect, edge);
-    _sm_base6 = simse_addressOf(f->nodes);
-    _sm_base5 = simse_addressOf((*_sm_base6)[node]);
+    _sm_base5 = simse_addressOf((*_sm_base2)[node]);
     text = _sm_base5->text;
     inset = 8;
     _sm_expr3 = rect.y;
@@ -2693,9 +2683,9 @@ void ns2_paintEdit(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node) {
 // modules/minui/paint.kt
 void ns2_paintSlider(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node) {
     ns2_Node* _sm_base1, * _sm_base10;
-    List<ns2_Node>* _sm_base2, * _sm_base11;
+    List<ns2_Node>* _sm_base2;
     Int _sm_base5, _sm_base6, _sm_base8, _sm_expr1, _sm_expr2, _sm_expr3, midY, value, _sm_expr4,
-        _sm_expr6, _sm_expr7, fillWidth, _sm_expr9, _sm_expr18;
+        _sm_expr6, _sm_expr7, fillWidth, _sm_expr18;
     ns2_Color _sm_base7, _sm_base9, thumb;
     ns2_Rect rect, _sm_expr5, _sm_expr10;
     Bool _sm_expr8, _sm_expr12;
@@ -2720,15 +2710,13 @@ void ns2_paintSlider(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node) {
     if (_sm_expr8) goto L1;
     goto L2;
     L1:;
-    _sm_expr9 = midY - 2;
     _sm_base8 = rect.x;
-    ns2_smRect(&_sm_expr10, _sm_base8, _sm_expr9, fillWidth, 4);
+    ns2_smRect(&_sm_expr10, _sm_base8, _sm_expr4, fillWidth, 4);
     _sm_base9 = theme->accent;
     ns2_uiRoundFill(ui, _sm_expr10, 2, _sm_base9);
     L2:;
     thumb = theme->button;
-    _sm_base11 = simse_addressOf(f->nodes);
-    _sm_base10 = simse_addressOf((*_sm_base11)[node]);
+    _sm_base10 = simse_addressOf((*_sm_base2)[node]);
     _sm_expr8 = _sm_base10->enabled;
     _sm_expr12 = !_sm_expr8;
     if (_sm_expr12) goto L3;
@@ -2761,7 +2749,7 @@ void ns2_paintProgress(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node) {
     ns2_Node* _sm_base1;
     List<ns2_Node>* _sm_base2;
     Int _sm_base5, _sm_base6, _sm_base8, _sm_expr1, _sm_expr2, _sm_expr3, midY, value, _sm_expr4,
-        _sm_expr6, _sm_expr7, fillWidth, _sm_expr9;
+        _sm_expr6, _sm_expr7, fillWidth;
     ns2_Color _sm_base7, _sm_base9;
     ns2_Rect rect, _sm_expr5, _sm_expr10;
     Bool _sm_expr8;
@@ -2786,9 +2774,8 @@ void ns2_paintProgress(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node) {
     if (_sm_expr8) goto L1;
     goto L2;
     L1:;
-    _sm_expr9 = midY - 2;
     _sm_base8 = rect.x;
-    ns2_smRect(&_sm_expr10, _sm_base8, _sm_expr9, fillWidth, 4);
+    ns2_smRect(&_sm_expr10, _sm_base8, _sm_expr4, fillWidth, 4);
     _sm_base9 = theme->accent;
     ns2_uiRoundFill(ui, _sm_expr10, 2, _sm_base9);
     L2:;
@@ -2796,7 +2783,7 @@ void ns2_paintProgress(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node) {
 // modules/minui/paint.kt
 void ns2_paintLabel(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node) {
     ns2_Node* _sm_base1, * _sm_base8;
-    List<ns2_Node>* _sm_base2, * _sm_base9;
+    List<ns2_Node>* _sm_base2;
     ns2_Palette _sm_base5, _sm_base6, _sm_base7;
     ns2_Align _sm_base12, _sm_base13;
     ns2_Rect rect;
@@ -2838,8 +2825,7 @@ void ns2_paintLabel(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node) {
     L7:;
     color = theme->dim;
     L8:;
-    _sm_base9 = simse_addressOf(f->nodes);
-    _sm_base8 = simse_addressOf((*_sm_base9)[node]);
+    _sm_base8 = simse_addressOf((*_sm_base2)[node]);
     text = _sm_base8->text;
     align = _sm_base8->align;
     _sm_base12 = ns2_Align::Center;
@@ -2881,7 +2867,7 @@ void ns2_paintLabel(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node) {
 // modules/minui/paint.kt
 void ns2_paintButton(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node) {
     ns2_Node* _sm_base1, * _sm_base6;
-    List<ns2_Node>* _sm_base2, * _sm_base7;
+    List<ns2_Node>* _sm_base2;
     Str _sm_base5;
     ns2_Color _sm_base8, face;
     ns2_Rect rect;
@@ -2915,8 +2901,7 @@ void ns2_paintButton(ns2_Frame* f, ns2_UiTheme* theme, ns2_Ui* ui, Int node) {
     face = theme->buttonHover;
     L8:;
     ns2_uiRoundFill(ui, rect, 6, face);
-    _sm_base7 = simse_addressOf(f->nodes);
-    _sm_base6 = simse_addressOf((*_sm_base7)[node]);
+    _sm_base6 = simse_addressOf((*_sm_base2)[node]);
     _sm_base5 = _sm_base6->text;
     _sm_base8 = theme->body;
     ns2_uiTextBox(ui, rect, _sm_base5, _sm_base8, false);
@@ -2944,7 +2929,7 @@ void ns2_stackPush(ns2_ScreenStack* stack, Ref<ns2_Frame> frame, Str name, Bool 
 }
 // modules/minui/screens.kt
 Bool ns2_stackPop(ns2_ScreenStack* stack) {
-    List<ns2_Layer>* _sm_base1, * _sm_base2;
+    List<ns2_Layer>* _sm_base1;
     Int _sm_expr1, _sm_expr4;
     Bool _sm_expr2;
     _sm_base1 = simse_addressOf(stack->layers);
@@ -2955,10 +2940,9 @@ Bool ns2_stackPop(ns2_ScreenStack* stack) {
     L1:;
     return false;
     L2:;
-    _sm_base2 = simse_addressOf(stack->layers);
-    _sm_expr1 = simse_lenOf((*_sm_base2));
+    _sm_expr1 = simse_lenOf((*_sm_base1));
     _sm_expr4 = _sm_expr1 - 1;
-    simse_list_removeAt((*_sm_base2), _sm_expr4);
+    simse_list_removeAt((*_sm_base1), _sm_expr4);
     return true;
 }
 // modules/minui/screens.kt
@@ -3000,7 +2984,7 @@ ns2_Frame* ns2_stackTop(ns2_ScreenStack* stack) {
 }
 // modules/minui/screens.kt
 Int ns2_stackPaintBase(ns2_ScreenStack* stack) {
-    List<ns2_Layer>* _sm_base1, * _sm_base3;
+    List<ns2_Layer>* _sm_base1;
     ns2_Layer* _sm_base2;
     Int base, level, _sm_expr1;
     Bool _sm_expr2;
@@ -3011,8 +2995,7 @@ Int ns2_stackPaintBase(ns2_ScreenStack* stack) {
     _sm_expr1 = simse_lenOf((*_sm_base1));
     _sm_expr2 = level < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_base3 = simse_addressOf(stack->layers);
-    _sm_base2 = simse_addressOf((*_sm_base3)[level]);
+    _sm_base2 = simse_addressOf((*_sm_base1)[level]);
     _sm_expr2 = _sm_base2->opaque;
     if (_sm_expr2) goto L3;
     goto L4;
@@ -3026,7 +3009,7 @@ Int ns2_stackPaintBase(ns2_ScreenStack* stack) {
 }
 // modules/minui/screens.kt
 void ns2_stackPaint(ns2_ScreenStack* stack, ns2_UiTheme* theme, ns2_Ui* ui, Func<void(Str, Int)> custom) {
-    List<ns2_Layer>* _sm_base1, * _sm_base2;
+    List<ns2_Layer>* _sm_base1;
     ns2_Frame* _sm_base3;
     ns2_UiTheme* _sm_base4;
     Int base, level;
@@ -3042,8 +3025,7 @@ void ns2_stackPaint(ns2_ScreenStack* stack, ns2_UiTheme* theme, ns2_Ui* ui, Func
     base = simse_lenOf((*_sm_base1));
     _sm_expr2 = level < base;
     if (!(_sm_expr2)) goto L2;
-    _sm_base2 = simse_addressOf(stack->layers);
-    layer = (*_sm_base2)[level];
+    layer = (*_sm_base1)[level];
     name = layer.name;
     box = layer.frame;
     perNode = ns2_stackPaint_closure1{custom, name};
@@ -3292,8 +3274,8 @@ Bool ns2_setName(ns2_Frame* f, Int node, Str name) {
 // modules/minui/tree.kt
 Bool ns2_nameRoot(ns2_Frame* f, Str name) {
     ns2_Node* _sm_base1, * _sm_base5;
-    List<ns2_Node>* _sm_base2, * _sm_base6;
-    Dictionary<Str, Int>* _sm_base3, * _sm_base4;
+    List<ns2_Node>* _sm_base2;
+    Dictionary<Str, Int>* _sm_base3;
     Int _sm_base8, _sm_expr1, _sm_expr2;
     Str old;
     Bool _sm_expr3;
@@ -3321,14 +3303,12 @@ Bool ns2_nameRoot(ns2_Frame* f, Str name) {
     L5:;
     return false;
     L6:;
-    _sm_base4 = simse_addressOf(f->names);
-    simse_dict_remove((*_sm_base4), old);
+    simse_dict_remove((*_sm_base3), old);
     _sm_expr1 = f->root;
-    _sm_base6 = simse_addressOf(f->nodes);
-    _sm_base5 = simse_addressOf((*_sm_base6)[_sm_expr1]);
+    _sm_base5 = simse_addressOf((*_sm_base2)[_sm_expr1]);
     _sm_base5->name = name;
     _sm_base8 = f->root;
-    simse_dict_insert((*_sm_base4), name, _sm_base8);
+    simse_dict_insert((*_sm_base3), name, _sm_base8);
     return true;
 }
 // modules/minui/tree.kt
@@ -3434,7 +3414,7 @@ void ns2_layoutFrame(ns2_Frame* f) {
 // modules/minui/tree.kt
 void ns2_layoutNode(ns2_Frame* f, Int node) {
     ns2_Node* _sm_base1, * _sm_base4;
-    List<ns2_Node>* _sm_base2, * _sm_base5;
+    List<ns2_Node>* _sm_base2;
     ns2_BoxLayout _sm_base3;
     List<Int>* _sm_base6;
     Int layout, _sm_expr1, kid;
@@ -3453,8 +3433,7 @@ void ns2_layoutNode(ns2_Frame* f, Int node) {
     L1:;
     ns2_layoutChildren(f, node, layout);
     L2:;
-    _sm_base5 = simse_addressOf(f->nodes);
-    _sm_base4 = simse_addressOf((*_sm_base5)[node]);
+    _sm_base4 = simse_addressOf((*_sm_base2)[node]);
     kids = _sm_base4->children;
     _sm_base6 = &kids;
     _sm_expr3 = simse_spanOf(_sm_base6);
@@ -3469,13 +3448,11 @@ void ns2_layoutNode(ns2_Frame* f, Int node) {
 }
 // modules/minui/tree.kt
 void ns2_layoutChildren(ns2_Frame* f, Int box, Int layout) {
-    ns2_Node* _sm_base1, * _sm_base3, * _sm_base12, * _sm_base15, * _sm_base18, * _sm_base21,
-        * _sm_base23, * _sm_base26;
-    List<ns2_Node>* _sm_base2, * _sm_base4, * _sm_base13, * _sm_base16, * _sm_base19, * _sm_base22,
-        * _sm_base24, * _sm_base27;
+    ns2_Node* _sm_base1, * _sm_base12, * _sm_base18, * _sm_base23, * _sm_base26;
+    List<ns2_Node>* _sm_base2, * _sm_base13, * _sm_base19, * _sm_base24;
     ns2_BoxLayout _sm_base9;
     List<Int>* _sm_base10;
-    ns2_Rect* _sm_base11, * _sm_base14, * _sm_base17, * _sm_base20, * _sm_base25;
+    ns2_Rect* _sm_base11, * _sm_base17, * _sm_base25;
     List<Int> kids;
     Int count, pad, gap, _sm_expr2, innerX, _sm_expr3, innerY, _sm_expr4, _sm_expr5, innerWidth,
         _sm_expr6, innerHeight, _sm_expr8, fixed, fills, i, child, each, remain, cursor, _sm_child_2, x, y,
@@ -3493,11 +3470,9 @@ void ns2_layoutChildren(ns2_Frame* f, Int box, Int layout) {
     L1:;
     return;
     L2:;
-    _sm_base4 = simse_addressOf(f->nodes);
-    _sm_base3 = simse_addressOf((*_sm_base4)[box]);
-    rect = _sm_base3->rect;
-    pad = _sm_base3->padding;
-    gap = _sm_base3->spacing;
+    rect = _sm_base1->rect;
+    pad = _sm_base1->padding;
+    gap = _sm_base1->spacing;
     _sm_expr2 = rect.x;
     innerX = _sm_expr2 + pad;
     _sm_expr3 = rect.y;
@@ -3530,10 +3505,7 @@ void ns2_layoutChildren(ns2_Frame* f, Int box, Int layout) {
     if (_sm_expr1) goto L7;
     goto L8;
     L7:;
-    _sm_base16 = simse_addressOf(f->nodes);
-    _sm_base15 = simse_addressOf((*_sm_base16)[child]);
-    _sm_base14 = simse_addressOf(_sm_base15->rect);
-    _sm_expr2 = _sm_base14->height;
+    _sm_expr2 = _sm_base11->height;
     fixed = fixed + _sm_expr2;
     goto L13;
     L8:;
@@ -3548,10 +3520,7 @@ void ns2_layoutChildren(ns2_Frame* f, Int box, Int layout) {
     if (_sm_expr1) goto L11;
     goto L12;
     L11:;
-    _sm_base22 = simse_addressOf(f->nodes);
-    _sm_base21 = simse_addressOf((*_sm_base22)[child]);
-    _sm_base20 = simse_addressOf(_sm_base21->rect);
-    _sm_expr2 = _sm_base20->width;
+    _sm_expr2 = _sm_base17->width;
     fixed = fixed + _sm_expr2;
     goto L13;
     L12:;
@@ -3657,8 +3626,7 @@ void ns2_layoutChildren(ns2_Frame* f, Int box, Int layout) {
     L36:;
     ns2_moveNode(f, _sm_child_2, dx, dy);
     L37:;
-    _sm_base27 = simse_addressOf(f->nodes);
-    _sm_base26 = simse_addressOf((*_sm_base27)[_sm_child_2]);
+    _sm_base26 = simse_addressOf((*_sm_base24)[_sm_child_2]);
     _sm_base25 = simse_addressOf(_sm_base26->rect);
     _sm_base25->width = width;
     _sm_base25->height = height;
@@ -3754,13 +3722,11 @@ Int ns2_uiHitTest(ns2_Frame* f, Int x, Int y) {
 }
 // modules/minui/tree.kt
 Int ns2_uiHitTestNode(ns2_Frame* f, Int node, Int x, Int y) {
-    ns2_Node* _sm_base1, * _sm_base4, * _sm_base8, * _sm_base11, * _sm_base14, * _sm_base20,
-        * _sm_base23;
-    List<ns2_Node>* _sm_base2, * _sm_base5, * _sm_base9, * _sm_base12, * _sm_base15, * _sm_base21,
-        * _sm_base24;
+    ns2_Node* _sm_base1, * _sm_base8, * _sm_base11;
+    List<ns2_Node>* _sm_base2, * _sm_base9, * _sm_base12;
     List<Int>* _sm_base3, * _sm_base7;
     Int _sm_base6, _sm_expr4, i, found, _sm_expr10, _sm_expr11;
-    ns2_Rect* _sm_base10, * _sm_base13, * _sm_base19, * _sm_base22;
+    ns2_Rect* _sm_base10;
     Bool _sm_expr1, _sm_expr2;
     _sm_base2 = simse_addressOf(f->nodes);
     _sm_base1 = simse_addressOf((*_sm_base2)[node]);
@@ -3771,9 +3737,7 @@ Int ns2_uiHitTestNode(ns2_Frame* f, Int node, Int x, Int y) {
     L1:;
     return -1;
     L2:;
-    _sm_base5 = simse_addressOf(f->nodes);
-    _sm_base4 = simse_addressOf((*_sm_base5)[node]);
-    _sm_base3 = simse_addressOf(_sm_base4->children);
+    _sm_base3 = simse_addressOf(_sm_base1->children);
     _sm_expr4 = simse_lenOf((*_sm_base3));
     i = _sm_expr4 - 1;
     L3:;
@@ -3801,29 +3765,20 @@ Int ns2_uiHitTestNode(ns2_Frame* f, Int node, Int x, Int y) {
     if (_sm_expr1) goto L11;
     goto L8;
     L11:;
-    _sm_base15 = simse_addressOf(f->nodes);
-    _sm_base14 = simse_addressOf((*_sm_base15)[node]);
-    _sm_base13 = simse_addressOf(_sm_base14->rect);
-    _sm_expr4 = _sm_base13->x;
-    _sm_expr10 = _sm_base13->width;
+    _sm_expr4 = _sm_base10->x;
+    _sm_expr10 = _sm_base10->width;
     _sm_expr11 = _sm_expr4 + _sm_expr10;
     _sm_expr1 = x < _sm_expr11;
     if (_sm_expr1) goto L10;
     goto L8;
     L10:;
-    _sm_base21 = simse_addressOf(f->nodes);
-    _sm_base20 = simse_addressOf((*_sm_base21)[node]);
-    _sm_base19 = simse_addressOf(_sm_base20->rect);
-    _sm_expr4 = _sm_base19->y;
+    _sm_expr4 = _sm_base10->y;
     _sm_expr1 = y >= _sm_expr4;
     if (_sm_expr1) goto L9;
     goto L8;
     L9:;
-    _sm_base24 = simse_addressOf(f->nodes);
-    _sm_base23 = simse_addressOf((*_sm_base24)[node]);
-    _sm_base22 = simse_addressOf(_sm_base23->rect);
-    _sm_expr4 = _sm_base22->y;
-    _sm_expr10 = _sm_base22->height;
+    _sm_expr4 = _sm_base10->y;
+    _sm_expr10 = _sm_base10->height;
     _sm_expr11 = _sm_expr4 + _sm_expr10;
     _sm_expr1 = y < _sm_expr11;
     if (_sm_expr1) goto L7;
@@ -3836,8 +3791,8 @@ Int ns2_uiHitTestNode(ns2_Frame* f, Int node, Int x, Int y) {
 }
 // modules/minui/tree.kt
 Int ns2_uiBubbleTarget(ns2_Frame* f, Int leaf) {
-    ns2_Node* _sm_base1, * _sm_base3, * _sm_base5, * _sm_base7;
-    List<ns2_Node>* _sm_base2, * _sm_base4, * _sm_base6, * _sm_base8;
+    ns2_Node* _sm_base1;
+    List<ns2_Node>* _sm_base2;
     Int node, _sm_expr10;
     Bool _sm_expr1, _sm_expr2, control;
     ns2_NodeKind kind, _sm_expr3;
@@ -3861,15 +3816,11 @@ Int ns2_uiBubbleTarget(ns2_Frame* f, Int leaf) {
     _sm_expr2 = _sm_expr1;
     _sm_sc1:;
     control = _sm_expr2;
-    _sm_base4 = simse_addressOf(f->nodes);
-    _sm_base3 = simse_addressOf((*_sm_base4)[node]);
-    _sm_expr1 = _sm_base3->enabled;
+    _sm_expr1 = _sm_base1->enabled;
     if (_sm_expr1) goto L5;
     goto L4;
     L5:;
-    _sm_base6 = simse_addressOf(f->nodes);
-    _sm_base5 = simse_addressOf((*_sm_base6)[node]);
-    _sm_expr10 = _sm_base5->listener;
+    _sm_expr10 = _sm_base1->listener;
     _sm_expr1 = _sm_expr10 >= 0;
     if (_sm_expr1) goto L3;
     if (control) goto L3;
@@ -3877,17 +3828,15 @@ Int ns2_uiBubbleTarget(ns2_Frame* f, Int leaf) {
     L3:;
     return node;
     L4:;
-    _sm_base8 = simse_addressOf(f->nodes);
-    _sm_base7 = simse_addressOf((*_sm_base8)[node]);
-    node = _sm_base7->parent;
+    node = _sm_base1->parent;
     goto L1;
     L2:;
     return -1;
 }
 // modules/minui/tree.kt
 void ns2_uiWalk(ns2_Hit* _sm_out, ns2_Frame* f, ns2_UiEvent* e, Int from, Int reported, Func<Bool(ns2_Hit, ns2_UiEvent*)> answer) {
-    ns2_Node* _sm_base1, * _sm_base3, * _sm_base11;
-    List<ns2_Node>* _sm_base2, * _sm_base4, * _sm_base12;
+    ns2_Node* _sm_base1, * _sm_base11;
+    List<ns2_Node>* _sm_base2;
     Int _sm_base5, _sm_base8, node, listener, _sm_expr5, _sm_expr6;
     ns2_Listener* _sm_base6;
     List<ns2_Listener>* _sm_base7;
@@ -3904,9 +3853,7 @@ void ns2_uiWalk(ns2_Hit* _sm_out, ns2_Frame* f, ns2_UiEvent* e, Int from, Int re
     if (_sm_expr1) goto L5;
     goto L7;
     L5:;
-    _sm_base4 = simse_addressOf(f->nodes);
-    _sm_base3 = simse_addressOf((*_sm_base4)[node]);
-    _sm_expr1 = _sm_base3->enabled;
+    _sm_expr1 = _sm_base1->enabled;
     if (_sm_expr1) goto L3;
     goto L7;
     L3:;
@@ -3922,8 +3869,7 @@ void ns2_uiWalk(ns2_Hit* _sm_out, ns2_Frame* f, ns2_UiEvent* e, Int from, Int re
     *_sm_out = h;
     return;
     L7:;
-    _sm_base12 = simse_addressOf(f->nodes);
-    _sm_base11 = simse_addressOf((*_sm_base12)[node]);
+    _sm_base11 = simse_addressOf((*_sm_base2)[node]);
     node = _sm_base11->parent;
     goto L1;
     L2:;
@@ -3939,8 +3885,8 @@ void ns2_uiEvent(ns2_Hit* _sm_out, ns2_Frame* f, ns2_UiEvent* e, Func<Bool(ns2_H
         _sm_base9, _sm_base10, _sm_base21, _sm_base22, _sm_base23, _sm_base24, _sm_base25, _sm_base26, leaf,
         _sm_expr4, _sm_expr7, _sm_expr8, _sm_leaf_2, _sm_leaf_3, captured, _sm_expr28, _sm_expr29,
         _sm_expr35, _sm_expr36, _sm_expr37;
-    ns2_Node* _sm_base11, * _sm_base13, * _sm_base15, * _sm_base17, * _sm_base19;
-    List<ns2_Node>* _sm_base12, * _sm_base14, * _sm_base16, * _sm_base18, * _sm_base20;
+    ns2_Node* _sm_base11;
+    List<ns2_Node>* _sm_base12;
     ns2_UiEventKind _sm_expr1, _sm_expr2;
     Bool _sm_expr3;
     ns2_Hit _sm_expr6;
@@ -4007,27 +3953,19 @@ void ns2_uiEvent(ns2_Hit* _sm_out, ns2_Frame* f, ns2_UiEvent* e, Func<Bool(ns2_H
     if (_sm_expr3) goto L12;
     goto L15;
     L12:;
-    _sm_base14 = simse_addressOf(f->nodes);
-    _sm_base13 = simse_addressOf((*_sm_base14)[_sm_leaf_2]);
-    _sm_expr3 = _sm_base13->enabled;
+    _sm_expr3 = _sm_base11->enabled;
     if (_sm_expr3) goto L10;
     goto L15;
     L10:;
-    _sm_base16 = simse_addressOf(f->nodes);
-    _sm_base15 = simse_addressOf((*_sm_base16)[_sm_leaf_2]);
-    _sm_expr4 = _sm_base15->value;
+    _sm_expr4 = _sm_base11->value;
     _sm_expr3 = _sm_expr4 == 0;
     if (_sm_expr3) goto L13;
     goto L14;
     L13:;
-    _sm_base18 = simse_addressOf(f->nodes);
-    _sm_base17 = simse_addressOf((*_sm_base18)[_sm_leaf_2]);
-    _sm_base17->value = 1;
+    _sm_base11->value = 1;
     goto L15;
     L14:;
-    _sm_base20 = simse_addressOf(f->nodes);
-    _sm_base19 = simse_addressOf((*_sm_base20)[_sm_leaf_2]);
-    _sm_base19->value = 0;
+    _sm_base11->value = 0;
     L15:;
     _sm_base21 = f->hover;
     f->pressed = _sm_base21;
@@ -4084,8 +4022,8 @@ void ns2_uiEvent(ns2_Hit* _sm_out, ns2_Frame* f, ns2_UiEvent* e, Func<Bool(ns2_H
 }
 // modules/minui/tree.kt
 Int ns2_uiEditAt(ns2_Frame* f, Int leaf) {
-    ns2_Node* _sm_base1, * _sm_base3;
-    List<ns2_Node>* _sm_base2, * _sm_base4;
+    ns2_Node* _sm_base1;
+    List<ns2_Node>* _sm_base2;
     Bool _sm_expr1;
     ns2_NodeKind _sm_expr2, _sm_expr3;
     _sm_expr1 = leaf < 0;
@@ -4096,9 +4034,7 @@ Int ns2_uiEditAt(ns2_Frame* f, Int leaf) {
     _sm_expr3 = ns2_NodeKind::Edit;
     _sm_expr1 = _sm_expr2 != _sm_expr3;
     if (_sm_expr1) goto L1;
-    _sm_base4 = simse_addressOf(f->nodes);
-    _sm_base3 = simse_addressOf((*_sm_base4)[leaf]);
-    _sm_expr1 = _sm_base3->enabled;
+    _sm_expr1 = _sm_base1->enabled;
     if (_sm_expr1) goto L2;
     L1:;
     return -1;
@@ -4107,8 +4043,8 @@ Int ns2_uiEditAt(ns2_Frame* f, Int leaf) {
 }
 // modules/minui/tree.kt
 void ns2_sliderTrack(ns2_Frame* f, Int node, Int x) {
-    ns2_Node* _sm_base1, * _sm_base3, * _sm_base5, * _sm_base7;
-    List<ns2_Node>* _sm_base2, * _sm_base4, * _sm_base6, * _sm_base8;
+    ns2_Node* _sm_base1, * _sm_base5;
+    List<ns2_Node>* _sm_base2, * _sm_base6;
     Bool _sm_expr1;
     ns2_NodeKind _sm_expr2, _sm_expr3;
     ns2_Rect rect;
@@ -4121,9 +4057,7 @@ void ns2_sliderTrack(ns2_Frame* f, Int node, Int x) {
     _sm_expr3 = ns2_NodeKind::Slider;
     _sm_expr1 = _sm_expr2 != _sm_expr3;
     if (_sm_expr1) goto L1;
-    _sm_base4 = simse_addressOf(f->nodes);
-    _sm_base3 = simse_addressOf((*_sm_base4)[node]);
-    _sm_expr1 = _sm_base3->enabled;
+    _sm_expr1 = _sm_base1->enabled;
     if (_sm_expr1) goto L2;
     L1:;
     return;
@@ -4155,15 +4089,12 @@ void ns2_sliderTrack(ns2_Frame* f, Int node, Int x) {
     L9:;
     value = 1000;
     L10:;
-    _sm_base8 = simse_addressOf(f->nodes);
-    _sm_base7 = simse_addressOf((*_sm_base8)[node]);
-    _sm_base7->value = value;
+    _sm_base5->value = value;
 }
 // modules/minui/tree.kt
 void ns2_uiKey(ns2_Hit* _sm_out, ns2_Frame* f, ns2_UiEvent* e, Func<Bool(ns2_Hit, ns2_UiEvent*)> answer) {
-    ns2_Node* _sm_base1, * _sm_base3, * _sm_base5, * _sm_base7, * _sm_base10, * _sm_base12, * _sm_base16;
-    List<ns2_Node>* _sm_base2, * _sm_base4, * _sm_base6, * _sm_base8, * _sm_base11, * _sm_base13,
-        * _sm_base17;
+    ns2_Node* _sm_base1, * _sm_base5, * _sm_base10, * _sm_base16;
+    List<ns2_Node>* _sm_base2;
     Str _sm_base9, _sm_base15, text, _sm_text_2;
     Char _sm_base14;
     Int focus, _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr9, _sm_expr10, _sm_expr11, key, _sm_expr14,
@@ -4190,9 +4121,7 @@ void ns2_uiKey(ns2_Hit* _sm_out, ns2_Frame* f, ns2_UiEvent* e, Func<Bool(ns2_Hit
     _sm_expr6 = ns2_NodeKind::Edit;
     _sm_expr1 = kind != _sm_expr6;
     if (_sm_expr1) goto L3;
-    _sm_base4 = simse_addressOf(f->nodes);
-    _sm_base3 = simse_addressOf((*_sm_base4)[focus]);
-    _sm_expr1 = _sm_base3->enabled;
+    _sm_expr1 = _sm_base1->enabled;
     if (_sm_expr1) goto L4;
     L3:;
     _sm_expr9 = -1;
@@ -4207,8 +4136,7 @@ void ns2_uiKey(ns2_Hit* _sm_out, ns2_Frame* f, ns2_UiEvent* e, Func<Bool(ns2_Hit
     if (_sm_expr1) goto L6;
     goto L7;
     L6:;
-    _sm_base6 = simse_addressOf(f->nodes);
-    _sm_base5 = simse_addressOf((*_sm_base6)[focus]);
+    _sm_base5 = simse_addressOf((*_sm_base2)[focus]);
     text = _sm_base5->text;
     _sm_expr14 = simse_lenOf(text);
     _sm_expr1 = _sm_expr14 > 0;
@@ -4217,10 +4145,8 @@ void ns2_uiKey(ns2_Hit* _sm_out, ns2_Frame* f, ns2_UiEvent* e, Func<Bool(ns2_Hit
     L8:;
     _sm_expr14 = simse_lenOf(text);
     _sm_expr17 = _sm_expr14 - 1;
-    _sm_base8 = simse_addressOf(f->nodes);
-    _sm_base7 = simse_addressOf((*_sm_base8)[focus]);
     _sm_base9 = substr(simse_addressOf(text), 0, _sm_expr17);
-    _sm_base7->text = _sm_base9;
+    _sm_base5->text = _sm_base9;
     L9:;
     _sm_expr18 = -1;
     _sm_expr19 = -1;
@@ -4244,8 +4170,7 @@ void ns2_uiKey(ns2_Hit* _sm_out, ns2_Frame* f, ns2_UiEvent* e, Func<Bool(ns2_Hit
     if (_sm_expr1) goto L12;
     goto L13;
     L12:;
-    _sm_base11 = simse_addressOf(f->nodes);
-    _sm_base10 = simse_addressOf((*_sm_base11)[focus]);
+    _sm_base10 = simse_addressOf((*_sm_base2)[focus]);
     limit = _sm_base10->payload;
     _sm_expr1 = limit <= 0;
     if (_sm_expr1) goto L15;
@@ -4253,9 +4178,7 @@ void ns2_uiKey(ns2_Hit* _sm_out, ns2_Frame* f, ns2_UiEvent* e, Func<Bool(ns2_Hit
     L15:;
     limit = 120;
     L16:;
-    _sm_base13 = simse_addressOf(f->nodes);
-    _sm_base12 = simse_addressOf((*_sm_base13)[focus]);
-    _sm_text_2 = _sm_base12->text;
+    _sm_text_2 = _sm_base10->text;
     _sm_expr14 = simse_lenOf(_sm_text_2);
     _sm_expr1 = _sm_expr14 < limit;
     if (_sm_expr1) goto L17;
@@ -4265,8 +4188,7 @@ void ns2_uiKey(ns2_Hit* _sm_out, ns2_Frame* f, ns2_UiEvent* e, Func<Bool(ns2_Hit
     _sm_base15 = __sm_stringTable[5];
     _sm_base14 = _sm_base15[_sm_expr14];
     simse_str_append(_sm_text_2, _sm_base14);
-    _sm_base17 = simse_addressOf(f->nodes);
-    _sm_base16 = simse_addressOf((*_sm_base17)[focus]);
+    _sm_base16 = simse_addressOf((*_sm_base2)[focus]);
     _sm_base16->text = _sm_text_2;
     L18:;
     _sm_expr29 = -1;
@@ -7416,8 +7338,8 @@ void ns2_xmlElement(Res<ns3_XmlNode>* _sm_out, ns2_XmlCursor* c) {
     Char* __sm_catP;
     Str* _sm_base1, * _sm_base2, * _sm_base4, * _sm_base5, * _sm_base6, * _sm_base7, * _sm_base9,
         * _sm_base10, * _sm_base11, * _sm_base12, * _sm_base13, * _sm_base16, * _sm_base17, * _sm_base18,
-        * _sm_base19, * _sm_base20, * _sm_base21, * _sm_base23, * _sm_base25, * _sm_base26, * _sm_base27,
-        * _sm_base28, * _sm_base29, * _sm_base30;
+        * _sm_base20, * _sm_base21, * _sm_base23, * _sm_base25, * _sm_base26, * _sm_base27, * _sm_base28,
+        * _sm_base29, * _sm_base30;
     Int _sm_base3, _sm_base8, _sm_base22, open, attrLine, _sm_expr62, _sm_expr63, _sm_expr64, closeLine;
     Str _sm_base14, _sm_expr3, tag, _sm_expr5, _sm_expr8, _sm_expr9, _sm_expr17, _sm_expr24, key,
         _sm_expr29, _sm_expr33, _sm_expr38, value, _sm_expr40, _sm_expr43, _sm_expr53, content, _sm_expr58,
@@ -7698,8 +7620,7 @@ void ns2_xmlElement(Res<ns3_XmlNode>* _sm_out, ns2_XmlCursor* c) {
     L40:;
     _sm_expr62 = c->at;
     _sm_expr63 = _sm_expr62 + 1;
-    _sm_base19 = simse_addressOf(c->text);
-    _sm_expr14 = (*_sm_base19)[_sm_expr63];
+    _sm_expr14 = (*_sm_base18)[_sm_expr63];
     _sm_expr1 = _sm_expr14 == '/';
     if (_sm_expr1) goto L38;
     goto L39;
@@ -7848,8 +7769,7 @@ void ns2_xmlElement(Res<ns3_XmlNode>* _sm_out, ns2_XmlCursor* c) {
 }
 // modules/minui/xmlread.kt
 void ns2_xmlSkipMisc(Res<Int>* _sm_out, ns2_XmlCursor* c) {
-    Str* _sm_base1, * _sm_base2, * _sm_base3, * _sm_base4, * _sm_base5, * _sm_base6, * _sm_base8,
-        * _sm_base9, * _sm_base10;
+    Str* _sm_base1, * _sm_base6, * _sm_base8;
     Str _sm_base7;
     Int _sm_expr1, _sm_expr2, _sm_expr3, line;
     Bool _sm_expr4;
@@ -7866,32 +7786,28 @@ void ns2_xmlSkipMisc(Res<Int>* _sm_out, ns2_XmlCursor* c) {
     goto L4;
     L8:;
     _sm_expr1 = c->at;
-    _sm_base2 = simse_addressOf(c->text);
-    _sm_expr6 = (*_sm_base2)[_sm_expr1];
+    _sm_expr6 = (*_sm_base1)[_sm_expr1];
     _sm_expr4 = _sm_expr6 == '<';
     if (_sm_expr4) goto L7;
     goto L4;
     L7:;
     _sm_expr1 = c->at;
     _sm_expr2 = _sm_expr1 + 1;
-    _sm_base3 = simse_addressOf(c->text);
-    _sm_expr6 = (*_sm_base3)[_sm_expr2];
+    _sm_expr6 = (*_sm_base1)[_sm_expr2];
     _sm_expr4 = _sm_expr6 == '!';
     if (_sm_expr4) goto L6;
     goto L4;
     L6:;
     _sm_expr1 = c->at;
     _sm_expr2 = _sm_expr1 + 2;
-    _sm_base4 = simse_addressOf(c->text);
-    _sm_expr6 = (*_sm_base4)[_sm_expr2];
+    _sm_expr6 = (*_sm_base1)[_sm_expr2];
     _sm_expr4 = _sm_expr6 == '-';
     if (_sm_expr4) goto L5;
     goto L4;
     L5:;
     _sm_expr1 = c->at;
     _sm_expr2 = _sm_expr1 + 3;
-    _sm_base5 = simse_addressOf(c->text);
-    _sm_expr6 = (*_sm_base5)[_sm_expr2];
+    _sm_expr6 = (*_sm_base1)[_sm_expr2];
     _sm_expr4 = _sm_expr6 == '-';
     if (_sm_expr4) goto L3;
     goto L4;
@@ -7927,16 +7843,14 @@ void ns2_xmlSkipMisc(Res<Int>* _sm_out, ns2_XmlCursor* c) {
     L16:;
     _sm_expr1 = c->at;
     _sm_expr2 = _sm_expr1 + 1;
-    _sm_base9 = simse_addressOf(c->text);
-    _sm_expr6 = (*_sm_base9)[_sm_expr2];
+    _sm_expr6 = (*_sm_base8)[_sm_expr2];
     _sm_expr4 = _sm_expr6 == '-';
     if (_sm_expr4) goto L15;
     goto L14;
     L15:;
     _sm_expr1 = c->at;
     _sm_expr2 = _sm_expr1 + 2;
-    _sm_base10 = simse_addressOf(c->text);
-    _sm_expr6 = (*_sm_base10)[_sm_expr2];
+    _sm_expr6 = (*_sm_base8)[_sm_expr2];
     _sm_expr4 = _sm_expr6 == '>';
     if (_sm_expr4) goto L13;
     goto L14;
@@ -9347,7 +9261,7 @@ void ns3_xmlUpTo(Str* _sm_out, ns3_XmlParser* p, Str end) {
 }
 // modules/xml/parse.kt
 Bool ns3_xmlHas(ns3_XmlParser* p, Str* prefix) {
-    Str* _sm_base1, * _sm_base2;
+    Str* _sm_base1;
     Int _sm_base3, _sm_expr1, _sm_expr2, _sm_expr3, _sm_expr4;
     Str _sm_base4, _sm_expr7;
     Bool _sm_expr5;
@@ -9362,17 +9276,16 @@ Bool ns3_xmlHas(ns3_XmlParser* p, Str* prefix) {
     L1:;
     return false;
     L2:;
-    _sm_base2 = simse_addressOf(p->text);
     _sm_base3 = p->at;
-    _sm_expr7 = substr(_sm_base2, _sm_base3, _sm_expr2);
+    _sm_expr7 = substr(_sm_base1, _sm_base3, _sm_expr2);
     _sm_base4 = *(prefix);
     _sm_expr5 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_expr7))), simse_spanOfStr(simse_addressOf(_sm_base4)));
     return _sm_expr5;
 }
 // modules/xml/query.kt
 Opt<Str> ns3_attribute(ns3_XmlNode* self, Str name) {
-    List<ns3_Attribute>* _sm_base1, * _sm_base3, * _sm_base6;
-    ns3_Attribute* _sm_base2, * _sm_base5;
+    List<ns3_Attribute>* _sm_base1;
+    ns3_Attribute* _sm_base2;
     Str _sm_base4, _sm_expr3;
     Int i, _sm_expr1;
     Bool _sm_expr2;
@@ -9383,16 +9296,13 @@ Opt<Str> ns3_attribute(ns3_XmlNode* self, Str name) {
     _sm_expr1 = simse_lenOf((*_sm_base1));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_base3 = simse_addressOf(self->attributes);
-    _sm_base2 = simse_addressOf((*_sm_base3)[i]);
+    _sm_base2 = simse_addressOf((*_sm_base1)[i]);
     _sm_expr3 = _sm_base2->name;
     _sm_expr2 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_expr3))), simse_spanOfStr(simse_addressOf(name)));
     if (_sm_expr2) goto L3;
     goto L4;
     L3:;
-    _sm_base6 = simse_addressOf(self->attributes);
-    _sm_base5 = simse_addressOf((*_sm_base6)[i]);
-    _sm_base4 = _sm_base5->value;
+    _sm_base4 = _sm_base2->value;
     _sm_expr5 = simse_optSome<Str>(_sm_base4);
     return _sm_expr5;
     L4:;
@@ -9422,7 +9332,7 @@ void ns3_attributeOr(Str* _sm_out, ns3_XmlNode* self, Str* name, Str* fallback) 
 }
 // modules/xml/query.kt
 Opt<ns3_XmlNode> ns3_child(ns3_XmlNode* self, Str name) {
-    Array<ns3_XmlNode>* _sm_base1, * _sm_base3, * _sm_base5;
+    Array<ns3_XmlNode>* _sm_base1;
     ns3_XmlNode* _sm_base2;
     ns3_XmlNode _sm_base4;
     Int i, _sm_expr1;
@@ -9435,15 +9345,13 @@ Opt<ns3_XmlNode> ns3_child(ns3_XmlNode* self, Str name) {
     _sm_expr1 = simse_array_count((*_sm_base1));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_base3 = simse_addressOf(self->Children);
-    _sm_base2 = simse_addressOf((*_sm_base3)[i]);
+    _sm_base2 = simse_addressOf((*_sm_base1)[i]);
     _sm_expr3 = _sm_base2->name;
     _sm_expr2 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_expr3))), simse_spanOfStr(simse_addressOf(name)));
     if (_sm_expr2) goto L3;
     goto L4;
     L3:;
-    _sm_base5 = simse_addressOf(self->Children);
-    _sm_base4 = (*_sm_base5)[i];
+    _sm_base4 = (*_sm_base1)[i];
     _sm_expr5 = simse_optSome<ns3_XmlNode>(_sm_base4);
     return _sm_expr5;
     L4:;
@@ -9455,11 +9363,11 @@ Opt<ns3_XmlNode> ns3_child(ns3_XmlNode* self, Str name) {
 }
 // modules/xml/query.kt
 void ns3_textOf(Str* _sm_out, ns3_XmlNode* self) {
-    Array<ns3_XmlNode>* _sm_base1, * _sm_base5, * _sm_base8, * _sm_base14, * _sm_base19;
+    Array<ns3_XmlNode>* _sm_base1, * _sm_base8;
     Str* _sm_base2, * _sm_base3, * _sm_base9, * _sm_base10;
-    ns3_XmlNode* _sm_base4, * _sm_base7, * _sm_base13, * _sm_base18;
-    List<ns3_Attribute>* _sm_base6, * _sm_base12, * _sm_base17;
-    ns3_Attribute* _sm_base11, * _sm_base16;
+    ns3_XmlNode* _sm_base4, * _sm_base7;
+    List<ns3_Attribute>* _sm_base6;
+    ns3_Attribute* _sm_base11;
     Str _sm_base15, out;
     Int i, _sm_expr1, a;
     Bool _sm_expr2;
@@ -9471,8 +9379,7 @@ void ns3_textOf(Str* _sm_out, ns3_XmlNode* self) {
     _sm_expr1 = simse_array_count((*_sm_base1));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_base5 = simse_addressOf(self->Children);
-    _sm_base4 = simse_addressOf((*_sm_base5)[i]);
+    _sm_base4 = simse_addressOf((*_sm_base1)[i]);
     _sm_base3 = simse_addressOf(_sm_base4->name);
     _sm_base2 = _sm_base3;
     _sm_expr3 = simse_spanOfStr(_sm_base2);
@@ -9488,10 +9395,7 @@ void ns3_textOf(Str* _sm_out, ns3_XmlNode* self) {
     _sm_expr1 = simse_lenOf((*_sm_base6));
     _sm_expr2 = a < _sm_expr1;
     if (!(_sm_expr2)) goto L6;
-    _sm_base14 = simse_addressOf(self->Children);
-    _sm_base13 = simse_addressOf((*_sm_base14)[i]);
-    _sm_base12 = simse_addressOf(_sm_base13->attributes);
-    _sm_base11 = simse_addressOf((*_sm_base12)[a]);
+    _sm_base11 = simse_addressOf((*_sm_base6)[a]);
     _sm_base10 = simse_addressOf(_sm_base11->name);
     _sm_base9 = _sm_base10;
     _sm_expr3 = simse_spanOfStr(_sm_base9);
@@ -9499,11 +9403,7 @@ void ns3_textOf(Str* _sm_out, ns3_XmlNode* self) {
     if (_sm_expr2) goto L7;
     goto L8;
     L7:;
-    _sm_base19 = simse_addressOf(self->Children);
-    _sm_base18 = simse_addressOf((*_sm_base19)[i]);
-    _sm_base17 = simse_addressOf(_sm_base18->attributes);
-    _sm_base16 = simse_addressOf((*_sm_base17)[a]);
-    _sm_base15 = _sm_base16->value;
+    _sm_base15 = _sm_base11->value;
     simse_str_appendStr(out, _sm_base15);
     L8:;
     a = a + 1;
@@ -9536,7 +9436,7 @@ void ns3_textValue(Str* _sm_out, ns3_XmlNode* self) {
 }
 // modules/xml/query.kt
 void ns3_elementList(List<ns3_XmlNode>* _sm_out, ns3_XmlNode* self) {
-    Array<ns3_XmlNode>* _sm_base1, * _sm_base5, * _sm_base7;
+    Array<ns3_XmlNode>* _sm_base1;
     Str* _sm_base2, * _sm_base3;
     ns3_XmlNode* _sm_base4;
     ns3_XmlNode _sm_base6;
@@ -9551,8 +9451,7 @@ void ns3_elementList(List<ns3_XmlNode>* _sm_out, ns3_XmlNode* self) {
     _sm_expr1 = simse_array_count((*_sm_base1));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_base5 = simse_addressOf(self->Children);
-    _sm_base4 = simse_addressOf((*_sm_base5)[i]);
+    _sm_base4 = simse_addressOf((*_sm_base1)[i]);
     _sm_base3 = simse_addressOf(_sm_base4->name);
     _sm_base2 = _sm_base3;
     _sm_expr3 = simse_spanOfStr(_sm_base2);
@@ -9560,8 +9459,7 @@ void ns3_elementList(List<ns3_XmlNode>* _sm_out, ns3_XmlNode* self) {
     if (_sm_expr2) goto L3;
     goto L4;
     L3:;
-    _sm_base7 = simse_addressOf(self->Children);
-    _sm_base6 = (*_sm_base7)[i];
+    _sm_base6 = (*_sm_base1)[i];
     simse_list_append(out, _sm_base6);
     L4:;
     i = i + 1;
@@ -9582,7 +9480,7 @@ void ns3_descendants(List<ns3_XmlNode>* _sm_out, ns3_XmlNode* self, Str name) {
 }
 // modules/xml/query.kt
 void ns3_xmlDescendantsInto(ns3_XmlNode node, Str name, List<ns3_XmlNode>* out) {
-    Array<ns3_XmlNode>* _sm_base1, * _sm_base2;
+    Array<ns3_XmlNode>* _sm_base1;
     Str* _sm_base3, * _sm_base4;
     Int i, _sm_expr1;
     Bool _sm_expr2;
@@ -9595,8 +9493,7 @@ void ns3_xmlDescendantsInto(ns3_XmlNode node, Str name, List<ns3_XmlNode>* out) 
     _sm_expr1 = simse_array_count((*_sm_base1));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_base2 = simse_addressOf(node.Children);
-    child = (*_sm_base2)[i];
+    child = (*_sm_base1)[i];
     _sm_base4 = simse_addressOf(child.name);
     _sm_base3 = _sm_base4;
     _sm_expr3 = simse_spanOfStr(_sm_base3);
@@ -9694,11 +9591,11 @@ void ns3_xmlWritePretty(Str* _sm_out, ns3_XmlNode node) {
 void ns3_xmlWriteLevel(Str* _sm_out, ns3_XmlNode node, Str indent, Int depth) {
     Str _sm_base1, _sm_base5, _sm_base15, _sm_base16, _sm_base22, pad, out, _sm_expr4, _sm_expr9,
         _sm_expr15, _sm_expr20, _sm_expr21, _sm_expr23;
-    List<ns3_Attribute>* _sm_base2, * _sm_base4;
+    List<ns3_Attribute>* _sm_base2;
     ns3_Attribute* _sm_base3, * attribute;
     Str* _sm_base6, * _sm_base7, * _sm_base11, * _sm_base12, * _sm_base14, * _sm_base19, * _sm_base20,
         * _sm_base21;
-    Array<ns3_XmlNode>* _sm_base8, * _sm_base10, * _sm_base17, * _sm_base18;
+    Array<ns3_XmlNode>* _sm_base8, * _sm_base17;
     ns3_XmlNode* _sm_base9, * child;
     List<Str>* _sm_base13;
     Int i, a, _sm_expr2, elements, c, t, k, _sm_expr22;
@@ -9727,8 +9624,7 @@ void ns3_xmlWriteLevel(Str* _sm_out, ns3_XmlNode node, Str indent, Int depth) {
     _sm_expr2 = simse_lenOf((*_sm_base2));
     _sm_expr1 = a < _sm_expr2;
     if (!(_sm_expr1)) goto L4;
-    _sm_base4 = simse_addressOf(node.attributes);
-    _sm_base3 = simse_addressOf((*_sm_base4)[a]);
+    _sm_base3 = simse_addressOf((*_sm_base2)[a]);
     attribute = _sm_base3;
     simse_str_append(out, ' ');
     _sm_base5 = attribute->name;
@@ -9750,8 +9646,7 @@ void ns3_xmlWriteLevel(Str* _sm_out, ns3_XmlNode node, Str indent, Int depth) {
     _sm_expr2 = simse_array_count((*_sm_base8));
     _sm_expr1 = c < _sm_expr2;
     if (!(_sm_expr1)) goto L6;
-    _sm_base10 = simse_addressOf(node.Children);
-    _sm_base9 = simse_addressOf((*_sm_base10)[c]);
+    _sm_base9 = simse_addressOf((*_sm_base8)[c]);
     child = _sm_base9;
     _sm_base12 = simse_addressOf(child->name);
     _sm_base11 = _sm_base12;
@@ -9811,8 +9706,7 @@ void ns3_xmlWriteLevel(Str* _sm_out, ns3_XmlNode node, Str indent, Int depth) {
     _sm_expr2 = simse_array_count((*_sm_base17));
     _sm_expr1 = k < _sm_expr2;
     if (!(_sm_expr1)) goto L17;
-    _sm_base18 = simse_addressOf(node.Children);
-    _sm_child_2 = (*_sm_base18)[k];
+    _sm_child_2 = (*_sm_base17)[k];
     _sm_base20 = simse_addressOf(_sm_child_2.name);
     _sm_base19 = _sm_base20;
     _sm_expr7 = simse_spanOfStr(_sm_base19);

@@ -338,12 +338,12 @@ fun ilReusePure(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
 fun ilReuseUnit(unit: *IlUnit, pure: *Dictionary<Str, Bool>): Bool {
     // The simple expressions first (ReuseExprs.kt): merging an address is what lets a later
     // pure read name the same slot a write's argument does, so the purity rule sees the alias.
-    var changed: Bool = ilReuseExprs(*unit.body)
+    var changed: Bool = ilReuseExprs(*unit.body, pure)
     if (ilReusePure(*unit.body, pure)) {
         changed = true
     }
     for (*lambda in unit.lambdas) {
-        if (ilReuseExprs(lambda)) {
+        if (ilReuseExprs(lambda, pure)) {
             changed = true
         }
         if (ilReusePure(lambda, pure)) {

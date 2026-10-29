@@ -84,14 +84,30 @@ The mechanism B needs - per-call purity, effect classes and value numbering - is
 **Landed (the memory-independent half).** `src/linear/ReuseExprs.kt` implements the value
 numbering for the opcodes that read no memory - `BinaryOp`, `UnaryOp`, `FieldAddr`, `IndexAddr`,
 `GetStaticAddr`. A pure op's key is `(opcode, constant operands, each slot operand's last writer)`;
-a later key equal to an earlier one *in the same basic block* becomes a read of it, and the pass is
-iterated to a fixpoint so `&(a merged address)` matches its twin. The operands are compared by
-value (a slot contributes its number *and* the instruction that last wrote it), and the kept and
-merged-away slots must be written exactly once in the body - the guard that makes redirecting every
-read of the merged-away slot sound where the local merge reuses a slot. It runs before `ReusePure`,
-so merging `&self->out` is what lets a later read through it match. The *memory-reading* class
-(`x.f`, `x[i]`, `size`/`spanOfStr`, `*p`) and the write/kill rule are still open - that is what
-still repeats `spanOfStr(op)` per arm of `isCompoundAssignOp`'s `||` chain.
+a later key equal to an earlier one becomes a read of it, and the pass is iterated to a fixpoint
+so `&(a merged address)` matches its twin. The operands are compared by value (a slot contributes
+its number *and* the instruction that last wrote it), and the kept and merged-away slots must be
+written exactly once in the body - the guard that makes redirecting every read of the merged-away
+slot sound where the local merge reuses a slot. It runs before `ReusePure`, so merging `&self->out`
+is what lets a later read through it match. The *memory-reading* class (`x.f`, `x[i]`, `*p`) and
+the write/kill rule are still open - that is what still repeats `spanOfStr(op)` per arm of
+`isCompoundAssignOp`'s `||` chain.
+
+**Landed after it (linear regions).** The tables no longer stop at every label and branch: a
+conditional branch keeps them (it reads a condition and modifies nothing), a label keeps the
+entries recorded at or before its *earliest* jump (`ilReuseLabelFacts`), and a back edge - a loop
+- empties them. An entry that survives to a later op is one every path to that op ran, which is
+the whole soundness story; the earliest-jump filter is what drops an entry at exactly the join
+that skips it (a `when` arm's body, entered after an earlier arm's test failed). A callee the
+purity table proves writes nothing does not split the element-address classes (`ilReusePureCall`)
+- the same trust `ReusePure`'s folds rest on - so an arm's `&(*base)[i]` keeps the body's twin
+computed before a `spanOfStr`. On the compiler's own tree this removed 539 address computations
+and 853 statements (273 lines of the amalgamation): the attribute-scan loop's three
+`&e->attributes` per iteration became one (the shape `AGENTS.md` names as the compiler's profile),
+and the dominated chains of the IL extractor (`&op->operands` per test) collapsed into their
+first occurrence. `stress/reuse-region` pins both sides: the loop's merge and the `when` arm's
+refusal. The self-transpile A/B measured ~1%, inside noise - the win is the shape, and it holds
+wherever such loops run hot.
 
 **C. The branch shape (`if` / `goto` ordering).** The user asked for `ifTrue cond -> then; goto
 else; then:` rather than the negated, branch-swapped form a peephole produces. Worth stating its

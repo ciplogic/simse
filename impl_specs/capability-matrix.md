@@ -5833,3 +5833,29 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `sin(0.75)` reaching libm at run time, and both reciprocal families. Verified:
   `bun tools/iterate.js --full` - **149/149** and both fixed points; the published
   bootstrap refreshed.
+
+- **The expression-reuse pass works over linear regions, not basic blocks.**
+  `ReuseExprs.kt`'s value-numbering tables used to stop at every label and
+  branch; they now stop only where an occurrence's dominance actually ends. A
+  conditional branch keeps them (it reads a condition and modifies nothing); a
+  label keeps the entries recorded at or before its *earliest* jump
+  (`ilReuseLabelFacts`) - every path to the label ran those - and a back edge
+  (a loop) empties them, because the region runs again over slots the body has
+  written. A callee the purity table proves writes nothing no longer splits the
+  element-address classes (`ilReusePureCall`, the same trust `ReusePure`'s
+  folds rest on): the arm's `&(*base)[i]` keeps the body's twin computed before
+  a `spanOfStr`. The boundary is the `when` arm - entered after an earlier
+  arm's test failed, so the join skips the earlier arm and the filter drops its
+  entries; an undominated arm keeps its own computation rather than read a slot
+  the surviving path never wrote. On the compiler's own tree: **539 address
+  computations and 853 statements removed** (273 lines of the amalgamation) -
+  the attribute-scan loop's three `&e->attributes` per iteration became one
+  (the shape `AGENTS.md` names as the compiler's profile), and the IL
+  extractor's dominated chains (`&op->operands` per test) collapsed into their
+  first occurrence. The self-transpile A/B measured ~1%, inside noise: the win
+  is the shape, and it holds wherever such loops run hot. `stress/reuse-region`
+  pins both sides in one emission golden - the loop's merge (three reads of
+  `n.attributes` per iteration keep the loop-top's one) and the `when` arm's
+  refusal; `stress/minui-layout`'s golden moved with the merge (its per-arm
+  node chains). Verified: `bun tools/iterate.js --full` - **150/150** and both
+  fixed points; the published bootstrap refreshed.
