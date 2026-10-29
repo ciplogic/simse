@@ -5859,3 +5859,27 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   refusal; `stress/minui-layout`'s golden moved with the merge (its per-arm
   node chains). Verified: `bun tools/iterate.js --full` - **150/150** and both
   fixed points; the published bootstrap refreshed.
+
+- **The compiler's own emission is fully typed: zero `auto` declarations.** Measured
+  first (the house rule): the amalgamation carried 42 `auto` slots, every one of them
+  in *function* bodies - none in a closure's `_invoke` and none in a machine's
+  `advance`, which settles the plan's premise: the optimization passes already run on
+  lambda and machine bodies, and the type-gated refusals there had no live case in the
+  compiler's own tree. The 42 fell to three causes, each closed by a one-rule fix in
+  the type pass: **`*Unit` is spellable** (27 of them - `RawPtr` fields and FFI
+  natives; a pointer to void is a value and `Emitter.type` already spells the C++
+  `RawPtr` alias, so `spellable` was refusing a type the emitter can write; bare
+  `Unit` stays unspellable), **a member read walks the receiver's `typealias`s**
+  (`resolveTypeAliases`, the walk the destructuring bind already made - 9 of them,
+  `StrView`'s extensions reading `this.len`), and **a call through a callable
+  field** of a data class answers the callable's return type (`classMemberReturn`,
+  the rule `callableReturn` applies to a value - 1, `LinOptPass.run`). The RawPtr
+  typing exposed one rule the lowering had never needed: a raw pointer has no
+  pointee *value*, so `binaryOperand` refuses the read-through it applies to a
+  counted reference's operands - two `RawPtr`s compare as the pointers they are
+  (`stress/raw-ptr-handle` caught it at compile time, and now carries an emission
+  golden). The spec's old three-gaps paragraph is rewritten: two of its gaps died
+  earlier (prelude methods are facts; `spanOf` is a plain native), the third is the
+  callable-local case the lambda-parameter work owns. Verified:
+  `bun tools/iterate.js --full` shape - **150/150**, both fixed points, the
+  published bootstrap refreshed; the `auto` count is the headline (42 -> 0).

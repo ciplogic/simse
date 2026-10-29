@@ -396,12 +396,24 @@ val n = identity<Int>(7);   ->  Int n = identity<Int>(7);
   crossing a `yield`. The frame still needs it, so the pass reports every binding it
   proved and the IL carries them (`impl_specs/linear-il.md`).
 
-In the compiler's own output the pass types every declaration it can see except three
-recorded gaps: a prelude *struct method* (`Span.size()`, `Span.isEmpty()` - prelude
-data-class methods are not collected as facts, only their native extensions are), a native
-extension called as a plain function (`spanOf(list)`), and a call through a function-typed
-local (a lambda parameter). Closing them means teaching the pass about struct-method facts
-and callable types; none needs a new idea.
+In the compiler's own output the pass types **every declaration it can see** - the three gaps
+this section used to record are closed, and the closure of the last three found by measuring
+the residue (42 `auto` declarations in the amalgamation, October 2026) took three one-rule
+fixes: `*Unit` (`RawPtr`) is spellable - a pointer to void is a value and `Emitter.type`
+spells the C++ `RawPtr` alias, while bare `Unit` stays unspellable (`void` has no values); a
+member read walks the receiver's `typealias`s first (`StrView.startsWith`'s `this.len` reads
+`Span<Char>`'s field - the same walk the destructuring bind makes, `resolveTypeAliases`);
+and a call through a *callable field* of a data class (`LinOptPass.run(...)`) answers the
+callable's own return type, the rule `callableReturn` applies to a value. The last two of
+the old gaps died on their own or by another's hand: prelude data-class methods *are*
+collected as facts (`Emitter.collect` walks them, and `classMemberReturn` reads the class's
+own declarations as the fallback), and `spanOf` became a plain native. One rule the RawPtr
+typing exposed: a raw pointer has no pointee *value*, so two `RawPtr`s compare as the
+pointers they are (`binaryOperand` refuses the read-through it applies to a counted
+reference's operands) - `stress/raw-ptr-handle` pins the emission, golden included. A call
+through a function-typed *local* (a lambda parameter with neither an annotation nor an
+expected callable type) is the one gap left, and it belongs to the lambda-parameter work
+below.
 
 Typing the closure frame fixed two silent errors: a `for` inside a lambda over a machine used
 to emit `iter(simse_addressOf(_sm_expr1))` for a receiver that was already a machine - a C++

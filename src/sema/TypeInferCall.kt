@@ -635,6 +635,23 @@ fun SemInfer.classMemberReturn(recv: *AstXmlNode, calleeName: *Str): AstXmlNode 
                     return result
                 }
             }
+            // A field holding a callable (`LinOptPass.run(...)`): a call through it answers
+            // the callable's own return type, the same rule `callableReturn` applies to a
+            // value. Methods win over a same-named field - the call shape a class declares.
+            val fields: List<AstXmlNode> = xmlChildren(*classDecl, AstNodeKind.Field)
+            for (*field in fields) {
+                if (xmlAttr(field, AstNodeAttributeKind.Name) != calleeName) {
+                    continue
+                }
+                val fieldTypeNode: *AstXmlNode = xmlChildPtr(field, AstNodeKind.Type)
+                if (xmlIsEmpty(fieldTypeNode)) {
+                    continue
+                }
+                val fieldType: AstXmlNode = semSubstitute(fieldTypeNode, bindings, classParams)
+                if (xmlKind(fieldType) == AstNodeCategory.TypeFunction) {
+                    return xmlChild(fieldType, AstNodeKind.ReturnType)
+                }
+            }
         }
         classDecl = semaBaseDecl(*this.facts.types, *classDecl)
         classParams = List<Str>()
@@ -862,9 +879,12 @@ fun SemInfer.infer(e: *AstXmlNode): AstXmlNode {
                     return semNamedType("Str")
                 }
             }
-            val baseKind: AstNodeCategory = xmlKind(base)
+            // A `typealias` receiver (`StrView.startsWith`'s `this.len`) reads the class the
+            // alias names: the same walk the destructuring bind makes (`resolveTypeAliases`).
+            val resolved: AstXmlNode = this.resolveTypeAliases(base)
+            val baseKind: AstNodeCategory = xmlKind(resolved)
             if (baseKind == AstNodeCategory.TypeNamed || baseKind == AstNodeCategory.TypeGeneric) {
-                val baseName: Str = xmlAttr(base, AstNodeAttributeKind.Name)
+                val baseName: Str = xmlAttr(resolved, AstNodeAttributeKind.Name)
                 var decl: *AstXmlNode = this.facts.types.getPtr(baseName)
                 if (decl == null) {
                     if (!xmlIsEmpty(this.body.selfDecl)
@@ -878,7 +898,7 @@ fun SemInfer.infer(e: *AstXmlNode): AstXmlNode {
                 if (decl != null && decl.name == AstNodeKind.DataClass) {
                     val field: AstXmlNode = semFindField(*this.facts.types, *decl, memberText)
                     if (!xmlIsEmpty(field)) {
-                        return this.instantiate(decl, base, xmlChild(field, AstNodeKind.Type))
+                        return this.instantiate(decl, resolved, xmlChild(field, AstNodeKind.Type))
                     }
                 }
             }

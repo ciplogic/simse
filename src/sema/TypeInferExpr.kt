@@ -105,6 +105,12 @@ fun SemInfer.spellable(typeNode: *AstXmlNode): Bool {
         }
 
         AstNodeCategory.TypeReference, AstNodeCategory.TypePointer -> {
+            // `*Unit` is `RawPtr` (`specs/memory-model.md`'s desugar): `Emitter.type` spells
+            // the C++ alias of types.hpp, so the frame can declare one - a pointer to void is
+            // a value. Bare `Unit` is `void` and stays unspellable.
+            if (xmlKind(typeNode) == AstNodeCategory.TypePointer && xmlIsRawPtrType(typeNode)) {
+                return true
+            }
             return this.spellable(xmlChildPtr(typeNode, AstNodeKind.Inner))
         }
 
@@ -311,6 +317,26 @@ fun SemInfer.stmts(list: *List<AstXmlNode>): List<AstXmlNode> {
     return out
 }
 
+// A type's own name with every `typealias` in the way walked (`StrView` is `Span<Char>`),
+// the way `Analyzer.unionResolveAlias` walks them: the fan-out runs at lowering, where the
+// checker's tables are the facts. A non-alias name - or a cycle, bounded - answers itself.
+fun SemInfer.resolveTypeAliases(typeNode: AstXmlNode): AstXmlNode {
+    var resolved: AstXmlNode = typeNode
+    var guard: Int = 0
+    while (!xmlIsEmpty(resolved) && guard < 16) {
+        guard++
+        if (xmlKind(resolved) != AstNodeCategory.TypeNamed) {
+            break
+        }
+        val alias: *AstXmlNode = this.facts.types.getPtr(xmlAttr(resolved, AstNodeAttributeKind.Name))
+        if (alias == null || alias.name != AstNodeKind.TypeAlias) {
+            break
+        }
+        resolved = xmlChildPtr(alias, AstNodeKind.TargetType)
+    }
+    return resolved
+}
+
 // `val (a, b, _) = e` (specs/declarations.md, "Destructuring bind"): the parser's one temp
 // declaration becomes the temp plus one ordinary declaration per binder, each initialized
 // by a field read of the temp - the shape `for`'s desugar leaves, which the lowering
@@ -328,22 +354,8 @@ fun SemInfer.destructureStmt(stmtNode: AstXmlNode): List<AstXmlNode> {
         out.append(this.stmt(stmtNode))
         return out
     }
-    // The value's class, aliases walked the way `Analyzer.unionResolveAlias` walks them
-    // (`facts.types` here - the fan-out runs at lowering, where the checker's tables are
-    // the facts).
-    var resolved: AstXmlNode = typeNode
-    var guard: Int = 0
-    while (!xmlIsEmpty(resolved) && guard < 16) {
-        guard++
-        if (xmlKind(resolved) != AstNodeCategory.TypeNamed) {
-            break
-        }
-        val alias: *AstXmlNode = this.facts.types.getPtr(xmlAttr(resolved, AstNodeAttributeKind.Name))
-        if (alias == null || alias.name != AstNodeKind.TypeAlias) {
-            break
-        }
-        resolved = xmlChildPtr(alias, AstNodeKind.TargetType)
-    }
+    // The value's class, aliases walked (`resolveTypeAliases`).
+    val resolved: AstXmlNode = this.resolveTypeAliases(typeNode)
     if (xmlIsEmpty(resolved)) {
         out.append(this.stmt(stmtNode))
         return out

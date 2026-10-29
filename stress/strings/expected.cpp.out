@@ -698,11 +698,11 @@ void set(Span<T>* self, Int index, T value) {
     _sm_base1[index] = value;
 }
 Bool startsWith(Span<Char>* self, Str* text) {
-    Int count, compareResult;
+    Char* _sm_base1, * _sm_expr2;
+    Int count, thisLen;
     Bool _sm_expr1;
-    Char* _sm_expr2;
     count = simse_lenOf((*text));
-    auto thisLen = self->len;
+    thisLen = self->len;
     _sm_expr1 = count > thisLen;
     if (_sm_expr1) goto L1;
     goto L2;
@@ -710,15 +710,16 @@ Bool startsWith(Span<Char>* self, Str* text) {
     return false;
     L2:;
     _sm_expr2 = simse_str_data(text);
-    compareResult = simse_mem_compare(self->ptr, 0, _sm_expr2, 0, count);
-    _sm_expr1 = compareResult == 0;
+    _sm_base1 = self->ptr;
+    thisLen = simse_mem_compare(_sm_base1, 0, _sm_expr2, 0, count);
+    _sm_expr1 = thisLen == 0;
     return _sm_expr1;
 }
 Int find(Span<Char>* self, Str* sub) {
+    Char* _sm_base1, * _sm_base3, * _sm_base4, * subBytes;
     Char _sm_base2, _sm_base5;
     Int needle, len, _sm_expr3, i, _sm_expr10, _sm_expr12;
     Bool _sm_expr1;
-    Char* subBytes;
     needle = simse_lenOf((*sub));
     _sm_expr1 = needle == 0;
     if (_sm_expr1) goto L1;
@@ -735,8 +736,9 @@ Int find(Span<Char>* self, Str* sub) {
     return _sm_expr3;
     L4:;
     subBytes = simse_str_data(sub);
+    _sm_base1 = self->ptr;
     _sm_base2 = subBytes[0];
-    i = simse_mem_findByte(self->ptr, 0, len, _sm_base2);
+    i = simse_mem_findByte(_sm_base1, 0, len, _sm_base2);
     L5:;
     _sm_expr1 = i >= 0;
     if (_sm_expr1) goto L11;
@@ -749,7 +751,8 @@ Int find(Span<Char>* self, Str* sub) {
     L10:;
     _sm_expr1 = needle == 1;
     if (_sm_expr1) goto L7;
-    _sm_expr3 = simse_mem_compare(self->ptr, i, subBytes, 0, needle);
+    _sm_base3 = self->ptr;
+    _sm_expr3 = simse_mem_compare(_sm_base3, i, subBytes, 0, needle);
     _sm_expr1 = _sm_expr3 == 0;
     if (_sm_expr1) goto L7;
     goto L8;
@@ -759,8 +762,9 @@ Int find(Span<Char>* self, Str* sub) {
     _sm_expr10 = i + 1;
     _sm_expr3 = len - i;
     _sm_expr12 = _sm_expr3 - 1;
+    _sm_base4 = self->ptr;
     _sm_base5 = subBytes[0];
-    i = simse_mem_findByte(self->ptr, _sm_expr10, _sm_expr12, _sm_base5);
+    i = simse_mem_findByte(_sm_base4, _sm_expr10, _sm_expr12, _sm_base5);
     goto L5;
     L6:;
     _sm_expr3 = -1;
@@ -772,6 +776,7 @@ Int indexOf(Span<Char>* self, Str* sub) {
     return _sm_expr1;
 }
 Str substr(Span<Char>* self, Int from, Int count) {
+    Char* _sm_base1;
     Int len, begin, take;
     Bool _sm_expr1;
     len = size(self);
@@ -804,7 +809,8 @@ Str substr(Span<Char>* self, Int from, Int count) {
     if (_sm_expr1) goto L8;
     goto L9;
     L8:;
-    simse_str_setBytes(out, self->ptr, begin, take);
+    _sm_base1 = self->ptr;
+    simse_str_setBytes(out, _sm_base1, begin, take);
     L9:;
     return out;
 }
@@ -816,35 +822,40 @@ Str toString(Span<Char>* self) {
     return _sm_expr2;
 }
 Int compareTo(Span<Char>* self, Span<Char> other) {
-    Bool _sm_expr3, _sm_expr4, _sm_expr7;
-    Int _sm_diff_2, _sm_expr8, diff;
-    auto _sm_expr1 = self->len;
-    auto _sm_expr2 = other.len;
+    Char* _sm_base1, * _sm_base2, * _sm_base4, * _sm_base5;
+    Int _sm_base3, _sm_base6, _sm_expr1, _sm_expr2, _sm_diff_2, diff;
+    Bool _sm_expr3;
+    _sm_expr1 = self->len;
+    _sm_expr2 = other.len;
     _sm_expr3 = _sm_expr1 <= _sm_expr2;
     if (_sm_expr3) goto L1;
     goto L2;
     L1:;
-    _sm_diff_2 = simse_mem_compare(self->ptr, 0, other.ptr, 0, self->len);
-    _sm_expr4 = _sm_diff_2 != 0;
-    if (_sm_expr4) goto L3;
+    _sm_base1 = self->ptr;
+    _sm_base2 = other.ptr;
+    _sm_base3 = self->len;
+    _sm_diff_2 = simse_mem_compare(_sm_base1, 0, _sm_base2, 0, _sm_base3);
+    _sm_expr3 = _sm_diff_2 != 0;
+    if (_sm_expr3) goto L3;
     goto L4;
     L3:;
     return _sm_diff_2;
     L4:;
-    {
-        auto _sm_expr5 = self->len;
-        auto _sm_expr6 = other.len;
-        _sm_expr7 = _sm_expr5 == _sm_expr6;
-        if (_sm_expr7) goto L5;
-        goto L6;
-        L5:;
-        return 0;
-        L6:;
-        _sm_expr8 = -1;
-        return _sm_expr8;
-    }
+    _sm_expr1 = self->len;
+    _sm_expr2 = other.len;
+    _sm_expr3 = _sm_expr1 == _sm_expr2;
+    if (_sm_expr3) goto L5;
+    goto L6;
+    L5:;
+    return 0;
+    L6:;
+    _sm_expr1 = -1;
+    return _sm_expr1;
     L2:;
-    diff = simse_mem_compare(self->ptr, 0, other.ptr, 0, other.len);
+    _sm_base4 = self->ptr;
+    _sm_base5 = other.ptr;
+    _sm_base6 = other.len;
+    diff = simse_mem_compare(_sm_base4, 0, _sm_base5, 0, _sm_base6);
     _sm_expr3 = diff != 0;
     if (_sm_expr3) goto L7;
     goto L8;
@@ -854,41 +865,47 @@ Int compareTo(Span<Char>* self, Span<Char> other) {
     return 1;
 }
 Bool equals(Span<Char>* self, Span<Char> other) {
+    Char* _sm_base1, * _sm_base2;
+    Int _sm_base3, _sm_expr1, _sm_expr2;
     Bool _sm_expr3;
-    Int _sm_expr4;
-    auto _sm_expr1 = self->len;
-    auto _sm_expr2 = other.len;
+    _sm_expr1 = self->len;
+    _sm_expr2 = other.len;
     _sm_expr3 = _sm_expr1 != _sm_expr2;
     if (_sm_expr3) goto L1;
     goto L2;
     L1:;
     return false;
     L2:;
-    _sm_expr4 = simse_mem_compare(self->ptr, 0, other.ptr, 0, self->len);
-    _sm_expr3 = _sm_expr4 == 0;
+    _sm_base1 = self->ptr;
+    _sm_base2 = other.ptr;
+    _sm_base3 = self->len;
+    _sm_expr1 = simse_mem_compare(_sm_base1, 0, _sm_base2, 0, _sm_base3);
+    _sm_expr3 = _sm_expr1 == 0;
     return _sm_expr3;
 }
 Str plus(Span<Char>* self, Span<Char> other) {
+    Char* _sm_base1, * _sm_base4, * _sm_expr5;
+    Int _sm_base2, _sm_base5, _sm_expr1, at, _sm_expr4;
     Str* _sm_base3;
     Bool _sm_expr2;
-    Int at, _sm_expr4;
-    Char* _sm_expr5;
     Str result;
-    simse_str_setBytes(result, self->ptr, 0, self->len);
-    auto _sm_expr1 = other.len;
+    _sm_base1 = self->ptr;
+    _sm_base2 = self->len;
+    simse_str_setBytes(result, _sm_base1, 0, _sm_base2);
+    _sm_expr1 = other.len;
     _sm_expr2 = _sm_expr1 > 0;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
     at = simse_lenOf(result);
-    {
-        auto _sm_expr3 = other.len;
-        _sm_expr4 = at + _sm_expr3;
-        simse_str_resize(result, _sm_expr4);
-        _sm_base3 = &result;
-        _sm_expr5 = simse_str_data(_sm_base3);
-        simse_mem_copy(_sm_expr5, at, other.ptr, 0, other.len);
-    }
+    _sm_expr1 = other.len;
+    _sm_expr4 = at + _sm_expr1;
+    simse_str_resize(result, _sm_expr4);
+    _sm_base3 = &result;
+    _sm_expr5 = simse_str_data(_sm_base3);
+    _sm_base4 = other.ptr;
+    _sm_base5 = other.len;
+    simse_mem_copy(_sm_expr5, at, _sm_base4, 0, _sm_base5);
     L2:;
     return result;
 }

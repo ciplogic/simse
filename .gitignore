@@ -117,3 +117,4 @@ bench/.work/
 bench/.work-linux/
 tools/_walkprobe/*.cpp
 tools/_walkprobe/*.exe
+.zcode/

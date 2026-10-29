@@ -438,6 +438,11 @@ fun IlExtractor.binaryOperand(me: *AstXmlNode, other: *AstXmlNode, slot: Int): I
     if (xmlIsEmpty(mine) || !ilIsHandleType(mine)) {
         return slot
     }
+    if (xmlIsRawPtrType(mine)) {
+        // A raw pointer has no pointee *value* to read through (`void` has none): two
+        // `RawPtr`s compare as the pointers they are, the C++ the emitter writes.
+        return slot
+    }
     val theirs: AstXmlNode = this.exprType(other)
     if (xmlIsEmpty(theirs)) {
         return slot

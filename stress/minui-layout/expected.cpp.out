@@ -1476,11 +1476,11 @@ void set(Span<T>* self, Int index, T value) {
     _sm_base1[index] = value;
 }
 Bool startsWith(Span<Char>* self, Str* text) {
-    Int count, compareResult;
+    Char* _sm_base1, * _sm_expr2;
+    Int count, thisLen;
     Bool _sm_expr1;
-    Char* _sm_expr2;
     count = simse_lenOf((*text));
-    auto thisLen = self->len;
+    thisLen = self->len;
     _sm_expr1 = count > thisLen;
     if (_sm_expr1) goto L1;
     goto L2;
@@ -1488,15 +1488,16 @@ Bool startsWith(Span<Char>* self, Str* text) {
     return false;
     L2:;
     _sm_expr2 = simse_str_data(text);
-    compareResult = simse_mem_compare(self->ptr, 0, _sm_expr2, 0, count);
-    _sm_expr1 = compareResult == 0;
+    _sm_base1 = self->ptr;
+    thisLen = simse_mem_compare(_sm_base1, 0, _sm_expr2, 0, count);
+    _sm_expr1 = thisLen == 0;
     return _sm_expr1;
 }
 Int find(Span<Char>* self, Str* sub) {
+    Char* _sm_base1, * _sm_base3, * _sm_base4, * subBytes;
     Char _sm_base2, _sm_base5;
     Int needle, len, _sm_expr3, i, _sm_expr10, _sm_expr12;
     Bool _sm_expr1;
-    Char* subBytes;
     needle = simse_lenOf((*sub));
     _sm_expr1 = needle == 0;
     if (_sm_expr1) goto L1;
@@ -1513,8 +1514,9 @@ Int find(Span<Char>* self, Str* sub) {
     return _sm_expr3;
     L4:;
     subBytes = simse_str_data(sub);
+    _sm_base1 = self->ptr;
     _sm_base2 = subBytes[0];
-    i = simse_mem_findByte(self->ptr, 0, len, _sm_base2);
+    i = simse_mem_findByte(_sm_base1, 0, len, _sm_base2);
     L5:;
     _sm_expr1 = i >= 0;
     if (_sm_expr1) goto L11;
@@ -1527,7 +1529,8 @@ Int find(Span<Char>* self, Str* sub) {
     L10:;
     _sm_expr1 = needle == 1;
     if (_sm_expr1) goto L7;
-    _sm_expr3 = simse_mem_compare(self->ptr, i, subBytes, 0, needle);
+    _sm_base3 = self->ptr;
+    _sm_expr3 = simse_mem_compare(_sm_base3, i, subBytes, 0, needle);
     _sm_expr1 = _sm_expr3 == 0;
     if (_sm_expr1) goto L7;
     goto L8;
@@ -1537,14 +1540,16 @@ Int find(Span<Char>* self, Str* sub) {
     _sm_expr10 = i + 1;
     _sm_expr3 = len - i;
     _sm_expr12 = _sm_expr3 - 1;
+    _sm_base4 = self->ptr;
     _sm_base5 = subBytes[0];
-    i = simse_mem_findByte(self->ptr, _sm_expr10, _sm_expr12, _sm_base5);
+    i = simse_mem_findByte(_sm_base4, _sm_expr10, _sm_expr12, _sm_base5);
     goto L5;
     L6:;
     _sm_expr3 = -1;
     return _sm_expr3;
 }
 Str substr(Span<Char>* self, Int from, Int count) {
+    Char* _sm_base1;
     Int len, begin, take;
     Bool _sm_expr1;
     len = size(self);
@@ -1577,7 +1582,8 @@ Str substr(Span<Char>* self, Int from, Int count) {
     if (_sm_expr1) goto L8;
     goto L9;
     L8:;
-    simse_str_setBytes(out, self->ptr, begin, take);
+    _sm_base1 = self->ptr;
+    simse_str_setBytes(out, _sm_base1, begin, take);
     L9:;
     return out;
 }
@@ -1589,35 +1595,40 @@ Str toString(Span<Char>* self) {
     return _sm_expr2;
 }
 Int compareTo(Span<Char>* self, Span<Char> other) {
-    Bool _sm_expr3, _sm_expr4, _sm_expr7;
-    Int _sm_diff_2, _sm_expr8, diff;
-    auto _sm_expr1 = self->len;
-    auto _sm_expr2 = other.len;
+    Char* _sm_base1, * _sm_base2, * _sm_base4, * _sm_base5;
+    Int _sm_base3, _sm_base6, _sm_expr1, _sm_expr2, _sm_diff_2, diff;
+    Bool _sm_expr3;
+    _sm_expr1 = self->len;
+    _sm_expr2 = other.len;
     _sm_expr3 = _sm_expr1 <= _sm_expr2;
     if (_sm_expr3) goto L1;
     goto L2;
     L1:;
-    _sm_diff_2 = simse_mem_compare(self->ptr, 0, other.ptr, 0, self->len);
-    _sm_expr4 = _sm_diff_2 != 0;
-    if (_sm_expr4) goto L3;
+    _sm_base1 = self->ptr;
+    _sm_base2 = other.ptr;
+    _sm_base3 = self->len;
+    _sm_diff_2 = simse_mem_compare(_sm_base1, 0, _sm_base2, 0, _sm_base3);
+    _sm_expr3 = _sm_diff_2 != 0;
+    if (_sm_expr3) goto L3;
     goto L4;
     L3:;
     return _sm_diff_2;
     L4:;
-    {
-        auto _sm_expr5 = self->len;
-        auto _sm_expr6 = other.len;
-        _sm_expr7 = _sm_expr5 == _sm_expr6;
-        if (_sm_expr7) goto L5;
-        goto L6;
-        L5:;
-        return 0;
-        L6:;
-        _sm_expr8 = -1;
-        return _sm_expr8;
-    }
+    _sm_expr1 = self->len;
+    _sm_expr2 = other.len;
+    _sm_expr3 = _sm_expr1 == _sm_expr2;
+    if (_sm_expr3) goto L5;
+    goto L6;
+    L5:;
+    return 0;
+    L6:;
+    _sm_expr1 = -1;
+    return _sm_expr1;
     L2:;
-    diff = simse_mem_compare(self->ptr, 0, other.ptr, 0, other.len);
+    _sm_base4 = self->ptr;
+    _sm_base5 = other.ptr;
+    _sm_base6 = other.len;
+    diff = simse_mem_compare(_sm_base4, 0, _sm_base5, 0, _sm_base6);
     _sm_expr3 = diff != 0;
     if (_sm_expr3) goto L7;
     goto L8;
@@ -1627,41 +1638,47 @@ Int compareTo(Span<Char>* self, Span<Char> other) {
     return 1;
 }
 Bool equals(Span<Char>* self, Span<Char> other) {
+    Char* _sm_base1, * _sm_base2;
+    Int _sm_base3, _sm_expr1, _sm_expr2;
     Bool _sm_expr3;
-    Int _sm_expr4;
-    auto _sm_expr1 = self->len;
-    auto _sm_expr2 = other.len;
+    _sm_expr1 = self->len;
+    _sm_expr2 = other.len;
     _sm_expr3 = _sm_expr1 != _sm_expr2;
     if (_sm_expr3) goto L1;
     goto L2;
     L1:;
     return false;
     L2:;
-    _sm_expr4 = simse_mem_compare(self->ptr, 0, other.ptr, 0, self->len);
-    _sm_expr3 = _sm_expr4 == 0;
+    _sm_base1 = self->ptr;
+    _sm_base2 = other.ptr;
+    _sm_base3 = self->len;
+    _sm_expr1 = simse_mem_compare(_sm_base1, 0, _sm_base2, 0, _sm_base3);
+    _sm_expr3 = _sm_expr1 == 0;
     return _sm_expr3;
 }
 Str plus(Span<Char>* self, Span<Char> other) {
+    Char* _sm_base1, * _sm_base4, * _sm_expr5;
+    Int _sm_base2, _sm_base5, _sm_expr1, at, _sm_expr4;
     Str* _sm_base3;
     Bool _sm_expr2;
-    Int at, _sm_expr4;
-    Char* _sm_expr5;
     Str result;
-    simse_str_setBytes(result, self->ptr, 0, self->len);
-    auto _sm_expr1 = other.len;
+    _sm_base1 = self->ptr;
+    _sm_base2 = self->len;
+    simse_str_setBytes(result, _sm_base1, 0, _sm_base2);
+    _sm_expr1 = other.len;
     _sm_expr2 = _sm_expr1 > 0;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
     at = simse_lenOf(result);
-    {
-        auto _sm_expr3 = other.len;
-        _sm_expr4 = at + _sm_expr3;
-        simse_str_resize(result, _sm_expr4);
-        _sm_base3 = &result;
-        _sm_expr5 = simse_str_data(_sm_base3);
-        simse_mem_copy(_sm_expr5, at, other.ptr, 0, other.len);
-    }
+    _sm_expr1 = other.len;
+    _sm_expr4 = at + _sm_expr1;
+    simse_str_resize(result, _sm_expr4);
+    _sm_base3 = &result;
+    _sm_expr5 = simse_str_data(_sm_base3);
+    _sm_base4 = other.ptr;
+    _sm_base5 = other.len;
+    simse_mem_copy(_sm_expr5, at, _sm_base4, 0, _sm_base5);
     L2:;
     return result;
 }
@@ -4213,8 +4230,9 @@ void ns2_uiFailed(Str* _sm_out) {
 }
 // modules/minui/ui.kt
 Bool ns2_uiIsOpen(ns2_Ui* ui) {
+    RawPtr _sm_expr1;
     Bool _sm_expr2;
-    auto _sm_expr1 = ui->window;
+    _sm_expr1 = ui->window;
     _sm_expr2 = _sm_expr1 != nullptr;
     return _sm_expr2;
 }
@@ -4226,7 +4244,7 @@ void ns2_uiOpen(ns2_Ui* _sm_out, Str title, ns2_Size size, Bool resizable, Bool 
         _sm_base32, _sm_base33, _sm_base35, _sm_base36, _sm_base52, _sm_expr3, windowFlags, rendererFlags,
         _sm_expr7, _sm_expr13;
     RawPtr _sm_base15, _sm_base19, _sm_base20, _sm_base23, _sm_base24, _sm_base37, _sm_base45,
-        _sm_base46, _sm_base47, _sm_base50, _sm_base51;
+        _sm_base46, _sm_base47, _sm_base50, _sm_base51, _sm_expr5;
     ns2_Ui* _sm_base22, * _sm_base30, * _sm_base44, * _sm_base49, * _sm_base53;
     Int8* _sm_base31, * _sm_base39;
     ns2_SkImageInfo* _sm_base38;
@@ -4260,7 +4278,7 @@ void ns2_uiOpen(ns2_Ui* _sm_out, Str title, ns2_Size size, Bool resizable, Bool 
     _sm_base17 = size.height;
     _sm_base15 = __sm_native_SDL_CreateWindow(title, 805240832, 805240832, _sm_base16, _sm_base17, windowFlags);
     ui.window = _sm_base15;
-    auto _sm_expr5 = ui.window;
+    _sm_expr5 = ui.window;
     _sm_expr4 = _sm_expr5 == nullptr;
     if (_sm_expr4) goto L5;
     goto L6;
@@ -4279,8 +4297,8 @@ void ns2_uiOpen(ns2_Ui* _sm_out, Str title, ns2_Size size, Bool resizable, Bool 
     _sm_base20 = ui.window;
     _sm_base19 = __sm_native_SDL_CreateRenderer(_sm_base20, _sm_expr7, rendererFlags);
     ui.renderer = _sm_base19;
-    auto _sm_expr8 = ui.renderer;
-    _sm_expr4 = _sm_expr8 == nullptr;
+    _sm_expr5 = ui.renderer;
+    _sm_expr4 = _sm_expr5 == nullptr;
     if (_sm_expr4) goto L9;
     goto L10;
     L9:;
@@ -4296,8 +4314,8 @@ void ns2_uiOpen(ns2_Ui* _sm_out, Str title, ns2_Size size, Bool resizable, Bool 
     _sm_base28 = size.height;
     _sm_base23 = __sm_native_SDL_CreateTexture(_sm_base24, _sm_base25, _sm_base26, _sm_base27, _sm_base28);
     ui.texture = _sm_base23;
-    auto _sm_expr10 = ui.texture;
-    _sm_expr4 = _sm_expr10 == nullptr;
+    _sm_expr5 = ui.texture;
+    _sm_expr4 = _sm_expr5 == nullptr;
     if (_sm_expr4) goto L11;
     goto L12;
     L11:;
@@ -4319,8 +4337,8 @@ void ns2_uiOpen(ns2_Ui* _sm_out, Str title, ns2_Size size, Bool resizable, Bool 
     _sm_base39 = ui.pixels;
     _sm_base37 = __sm_native_sk_surface_new_raster_direct(_sm_base38, _sm_base39, _sm_expr13, nullptr, nullptr, nullptr);
     ui.surface = _sm_base37;
-    auto _sm_expr14 = ui.surface;
-    _sm_expr4 = _sm_expr14 == nullptr;
+    _sm_expr5 = ui.surface;
+    _sm_expr4 = _sm_expr5 == nullptr;
     if (_sm_expr4) goto L13;
     goto L14;
     L13:;
@@ -4334,8 +4352,8 @@ void ns2_uiOpen(ns2_Ui* _sm_out, Str title, ns2_Size size, Bool resizable, Bool 
     ui.canvas = _sm_base45;
     _sm_base47 = __sm_native_sk_paint_new();
     ui.paint = _sm_base47;
-    auto _sm_expr16 = ui.paint;
-    _sm_expr4 = _sm_expr16 == nullptr;
+    _sm_expr5 = ui.paint;
+    _sm_expr4 = _sm_expr5 == nullptr;
     if (_sm_expr4) goto L15;
     goto L16;
     L15:;
@@ -4357,9 +4375,10 @@ void ns2_uiOpen(ns2_Ui* _sm_out, Str title, ns2_Size size, Bool resizable, Bool 
 }
 // modules/minui/ui.kt
 void ns2_uiClose(ns2_Ui* ui) {
-    RawPtr _sm_base2, _sm_base5, _sm_base8, _sm_base11, _sm_base14, _sm_base17, _sm_base20, _sm_base23;
+    RawPtr _sm_base2, _sm_base5, _sm_base8, _sm_base11, _sm_base14, _sm_base17, _sm_base20, _sm_base23,
+        _sm_expr1;
     Bool _sm_expr2;
-    auto _sm_expr1 = ui->sheet;
+    _sm_expr1 = ui->sheet;
     _sm_expr2 = _sm_expr1 != nullptr;
     if (_sm_expr2) goto L1;
     goto L2;
@@ -4368,8 +4387,8 @@ void ns2_uiClose(ns2_Ui* ui) {
     __sm_native_sk_image_unref(_sm_base2);
     ui->sheet = nullptr;
     L2:;
-    auto _sm_expr3 = ui->font;
-    _sm_expr2 = _sm_expr3 != nullptr;
+    _sm_expr1 = ui->font;
+    _sm_expr2 = _sm_expr1 != nullptr;
     if (_sm_expr2) goto L3;
     goto L4;
     L3:;
@@ -4377,8 +4396,8 @@ void ns2_uiClose(ns2_Ui* ui) {
     __sm_native_sk_font_delete(_sm_base5);
     ui->font = nullptr;
     L4:;
-    auto _sm_expr5 = ui->bold;
-    _sm_expr2 = _sm_expr5 != nullptr;
+    _sm_expr1 = ui->bold;
+    _sm_expr2 = _sm_expr1 != nullptr;
     if (_sm_expr2) goto L5;
     goto L6;
     L5:;
@@ -4386,8 +4405,8 @@ void ns2_uiClose(ns2_Ui* ui) {
     __sm_native_sk_font_delete(_sm_base8);
     ui->bold = nullptr;
     L6:;
-    auto _sm_expr7 = ui->paint;
-    _sm_expr2 = _sm_expr7 != nullptr;
+    _sm_expr1 = ui->paint;
+    _sm_expr2 = _sm_expr1 != nullptr;
     if (_sm_expr2) goto L7;
     goto L8;
     L7:;
@@ -4395,8 +4414,8 @@ void ns2_uiClose(ns2_Ui* ui) {
     __sm_native_sk_paint_delete(_sm_base11);
     ui->paint = nullptr;
     L8:;
-    auto _sm_expr9 = ui->surface;
-    _sm_expr2 = _sm_expr9 != nullptr;
+    _sm_expr1 = ui->surface;
+    _sm_expr2 = _sm_expr1 != nullptr;
     if (_sm_expr2) goto L9;
     goto L10;
     L9:;
@@ -4404,8 +4423,8 @@ void ns2_uiClose(ns2_Ui* ui) {
     __sm_native_sk_surface_unref(_sm_base14);
     ui->surface = nullptr;
     L10:;
-    auto _sm_expr11 = ui->texture;
-    _sm_expr2 = _sm_expr11 != nullptr;
+    _sm_expr1 = ui->texture;
+    _sm_expr2 = _sm_expr1 != nullptr;
     if (_sm_expr2) goto L11;
     goto L12;
     L11:;
@@ -4413,8 +4432,8 @@ void ns2_uiClose(ns2_Ui* ui) {
     __sm_native_SDL_DestroyTexture(_sm_base17);
     ui->texture = nullptr;
     L12:;
-    auto _sm_expr13 = ui->renderer;
-    _sm_expr2 = _sm_expr13 != nullptr;
+    _sm_expr1 = ui->renderer;
+    _sm_expr2 = _sm_expr1 != nullptr;
     if (_sm_expr2) goto L13;
     goto L14;
     L13:;
@@ -4422,8 +4441,8 @@ void ns2_uiClose(ns2_Ui* ui) {
     __sm_native_SDL_DestroyRenderer(_sm_base20);
     ui->renderer = nullptr;
     L14:;
-    auto _sm_expr15 = ui->window;
-    _sm_expr2 = _sm_expr15 != nullptr;
+    _sm_expr1 = ui->window;
+    _sm_expr2 = _sm_expr1 != nullptr;
     if (_sm_expr2) goto L15;
     goto L16;
     L15:;
@@ -4461,7 +4480,8 @@ void ns2_uiPresent(ns2_Ui* ui) {
 }
 // modules/minui/ui.kt
 Bool ns2_uiResize(ns2_Ui* ui, ns2_Size size) {
-    RawPtr _sm_base1, _sm_base5, _sm_base6, _sm_base7, _sm_base18, _sm_base22, _sm_base29, _sm_base30;
+    RawPtr _sm_base1, _sm_base5, _sm_base6, _sm_base7, _sm_base18, _sm_base22, _sm_base29, _sm_base30,
+        _sm_expr6;
     Int _sm_base2, _sm_base3, _sm_base8, _sm_base9, _sm_base10, _sm_base11, _sm_base12, _sm_base13,
         _sm_base15, _sm_base16, _sm_base20, _sm_base21, _sm_expr2, _sm_expr11;
     Int8* _sm_base14, * _sm_base24;
@@ -4486,7 +4506,7 @@ Bool ns2_uiResize(ns2_Ui* ui, ns2_Size size) {
     _sm_base2 = size.width;
     _sm_base3 = size.height;
     __sm_native_SDL_SetWindowSize(_sm_base1, _sm_base2, _sm_base3);
-    auto _sm_expr6 = ui->texture;
+    _sm_expr6 = ui->texture;
     _sm_expr1 = _sm_expr6 != nullptr;
     if (_sm_expr1) goto L5;
     goto L6;
@@ -4509,8 +4529,8 @@ Bool ns2_uiResize(ns2_Ui* ui, ns2_Size size) {
     _sm_base16 = size.height;
     _sm_base14 = simse_ui_pixels(_sm_base15, _sm_base16);
     ui->pixels = _sm_base14;
-    auto _sm_expr8 = ui->surface;
-    _sm_expr1 = _sm_expr8 != nullptr;
+    _sm_expr6 = ui->surface;
+    _sm_expr1 = _sm_expr6 != nullptr;
     if (_sm_expr1) goto L7;
     goto L8;
     L7:;
@@ -4526,8 +4546,8 @@ Bool ns2_uiResize(ns2_Ui* ui, ns2_Size size) {
     _sm_base24 = ui->pixels;
     _sm_base22 = __sm_native_sk_surface_new_raster_direct(_sm_base23, _sm_base24, _sm_expr11, nullptr, nullptr, nullptr);
     ui->surface = _sm_base22;
-    auto _sm_expr12 = ui->surface;
-    _sm_expr1 = _sm_expr12 == nullptr;
+    _sm_expr6 = ui->surface;
+    _sm_expr1 = _sm_expr6 == nullptr;
     if (_sm_expr1) goto L9;
     goto L10;
     L9:;
@@ -4536,8 +4556,8 @@ Bool ns2_uiResize(ns2_Ui* ui, ns2_Size size) {
     _sm_base30 = ui->surface;
     _sm_base29 = __sm_native_sk_surface_get_canvas(_sm_base30);
     ui->canvas = _sm_base29;
-    auto _sm_expr14 = ui->texture;
-    _sm_expr1 = _sm_expr14 != nullptr;
+    _sm_expr6 = ui->texture;
+    _sm_expr1 = _sm_expr6 != nullptr;
     return _sm_expr1;
 }
 // modules/minui/ui.kt
@@ -4742,6 +4762,7 @@ Bool ns2_uiPushMouse(ns2_UiEventKind kind, Int x, Int y, ns2_Button button) {
     Int code, _sm_expr7, _sm_expr9;
     ns2_UiEventKind _sm_expr1;
     Bool _sm_expr2;
+    RawPtr _sm_expr8;
     code = 0;
     _sm_expr1 = ns2_UiEventKind::MouseMove;
     _sm_expr2 = kind == _sm_expr1;
@@ -4770,7 +4791,7 @@ Bool ns2_uiPushMouse(ns2_UiEventKind kind, Int x, Int y, ns2_Button button) {
     return false;
     L9:;
     _sm_expr7 = static_cast<Int>(button);
-    auto _sm_expr8 = simse_ui_mouseEvent(code, x, y, _sm_expr7);
+    _sm_expr8 = simse_ui_mouseEvent(code, x, y, _sm_expr7);
     _sm_expr9 = __sm_native_SDL_PushEvent(_sm_expr8);
     _sm_expr2 = _sm_expr9 != 0;
     return _sm_expr2;
@@ -4780,6 +4801,7 @@ Bool ns2_uiPushKey(ns2_UiEventKind kind, Int key) {
     Int code, _sm_expr6;
     ns2_UiEventKind _sm_expr1;
     Bool _sm_expr2;
+    RawPtr _sm_expr5;
     code = 0;
     _sm_expr1 = ns2_UiEventKind::KeyDown;
     _sm_expr2 = kind == _sm_expr1;
@@ -4799,7 +4821,7 @@ Bool ns2_uiPushKey(ns2_UiEventKind kind, Int key) {
     L5:;
     return false;
     L6:;
-    auto _sm_expr5 = simse_ui_keyEvent(code, key);
+    _sm_expr5 = simse_ui_keyEvent(code, key);
     _sm_expr6 = __sm_native_SDL_PushEvent(_sm_expr5);
     _sm_expr2 = _sm_expr6 != 0;
     return _sm_expr2;
@@ -4963,7 +4985,7 @@ void ns2_uiPie(ns2_Ui* ui, ns2_Rect rect, Int startDegrees, Int sweepDegrees, ns
 }
 // modules/minui/ui.kt
 Bool ns2_uiLoadFont(ns2_Ui* ui, Str family, Int size, Int boldSize) {
-    RawPtr _sm_base3, _sm_base4, manager, style, face;
+    RawPtr _sm_base3, _sm_base4, manager, style, face, _sm_expr3;
     Bool _sm_expr1;
     manager = __sm_native_sk_fontmgr_create_default();
     _sm_expr1 = manager == nullptr;
@@ -4988,7 +5010,7 @@ Bool ns2_uiLoadFont(ns2_Ui* ui, Str family, Int size, Int boldSize) {
     ui->font = _sm_base3;
     _sm_base4 = ns2_uiMakeFont(face, boldSize, true);
     ui->bold = _sm_base4;
-    auto _sm_expr3 = ui->font;
+    _sm_expr3 = ui->font;
     _sm_expr1 = _sm_expr3 != nullptr;
     return _sm_expr1;
 }
@@ -5092,7 +5114,7 @@ void ns2_uiTextBox(ns2_Ui* ui, ns2_Rect rect, Str text, ns2_Color color, Bool bo
 }
 // modules/minui/ui.kt
 Bool ns2_uiLoadSheet(ns2_Ui* ui, Str path, Int cell) {
-    RawPtr _sm_base4, encoded, image;
+    RawPtr _sm_base4, encoded, image, _sm_expr3;
     Int _sm_base5, _sm_base6;
     Bool _sm_expr1;
     encoded = __sm_native_sk_data_new_from_file(path);
@@ -5110,7 +5132,7 @@ Bool ns2_uiLoadSheet(ns2_Ui* ui, Str path, Int cell) {
     L3:;
     return false;
     L4:;
-    auto _sm_expr3 = ui->sheet;
+    _sm_expr3 = ui->sheet;
     _sm_expr1 = _sm_expr3 != nullptr;
     if (_sm_expr1) goto L5;
     goto L6;
@@ -5128,13 +5150,13 @@ Bool ns2_uiLoadSheet(ns2_Ui* ui, Str path, Int cell) {
 }
 // modules/minui/ui.kt
 void ns2_uiSprite(ns2_Ui* ui, Int index, ns2_Rect rect) {
-    RawPtr _sm_base2, _sm_base6, _sm_base7, _sm_base9;
+    RawPtr _sm_base2, _sm_base6, _sm_base7, _sm_base9, _sm_expr1;
     Int _sm_base3, _sm_base4, _sm_base5, _sm_expr3, _sm_expr6, columns, column, row, _sm_expr9,
         _sm_expr11, _sm_expr12, _sm_expr13, _sm_expr14, _sm_expr15, _sm_expr16, _sm_expr17, _sm_expr18,
         _sm_expr19, _sm_expr21, _sm_expr22, _sm_expr23, _sm_expr24, _sm_expr25, _sm_expr26;
     Bool _sm_expr2;
     Int8* _sm_expr20, * _sm_expr27;
-    auto _sm_expr1 = ui->sheet;
+    _sm_expr1 = ui->sheet;
     _sm_expr2 = _sm_expr1 == nullptr;
     if (_sm_expr2) goto L1;
     _sm_expr3 = ui->cell;
