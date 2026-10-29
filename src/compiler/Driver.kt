@@ -594,6 +594,12 @@ fun main(args: List<Str>): Int {
     // rewritten ones (a module no fold reaches is the same node).
     modules = cpFoldConstParams(preludeModules, modules)
 
+    // The math folds (impl_specs/fold-math.md): the same whole-program, before-sema
+    // shape - the exact identities of the math module's calls (`sin(0.0)` is `0.0`) and
+    // the float division-by-a-power-of-two peephole (`x / 2.0` is `x * 0.5`, bit-exact).
+    // Declines on any doubt about which declaration a name resolved to.
+    modules = fmFoldMath(preludeModules, modules)
+
     // Auto-borrow (impl_specs/escape-analysis.md): the same whole-program, before-sema shape. A
     // parameter a body only reads becomes a `*T`, so every call site stops deep-copying the
     // argument - the checker, the lowering, the emitter and the call sites all see the borrowed

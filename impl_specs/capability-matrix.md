@@ -5804,3 +5804,32 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   call on another container and the member-write through the pointer keep the
   per-access spelling. Verified: `bun tools/iterate.js --full` - **148/148** and both
   fixed points; the published bootstrap refreshed.
+
+- **The math module and the math folds: `sin(0.0)` is `0.0`, and `x / 2.0` is
+  `x * 0.5`.** `modules/math` (`--module modules/math`, `import math`) is the standard
+  math library over `Float64` and `Float32` - twenty-one double and six float wrappers
+  over `<cmath>` in `_res.md`'s `libm` section, each declared `data` (pure, read-only)
+  so the borrow and purity machinery see them. `src/parser/FoldMath.kt` folds ahead of
+  sema, the `ConstParams` whole-program shape: the **exact identities** only (the
+  zero-preserving functions, `cos`/`cosh`/`exp` at zero, the logarithms at one,
+  `sqrt`, `pow`'s C99 rules, `atan2(0, 1)`, `abs` dropping a literal's sign) - never
+  an evaluated approximation, so a folded program is bit-identical to the unfolded
+  one; and the **power-of-two division peephole** (`x / 2.0` -> `x * 0.5`,
+  `x / 0.25` -> `x * 4.0`), bit-exact for every input because scaling a binary float
+  by a power of two is exact both ways and the reciprocal's decimal spelling
+  round-trips. The gate declines on any doubt: a name folds only when every
+  declaration of it in the compiled set is the module's own body-less `@SmGen`
+  wrapper with the matching symbol (a program's own `sin` is left alone). Two edges
+  found on the way: `GeneratorArgs` carries the arguments *after* the generator name
+  (the symbol sits at index 1 for `res`), and a same-name cross-package overload pair
+  does not emit today (`findFunction` picks one) - a pre-existing emitter edge the
+  gate stays sound through. The walk earned its own lesson, recorded in the spec: the
+  fold signal must be a **fresh state per child**, not a shared one-way latch - the
+  latch silently discarded every fold but the first declaration's. Measured honestly:
+  the peephole is ~3% (noise) on this machine because MSVC lowers power-of-two literal
+  float division itself (`fdiv=1 fmul=16` in both binaries by disassembly); it holds
+  at `/Od` and on backends that decline it, and composes with the fold pipeline.
+  `stress/fold-math` pins the folded literals in an emission golden, the unfolded
+  `sin(0.75)` reaching libm at run time, and both reciprocal families. Verified:
+  `bun tools/iterate.js --full` - **149/149** and both fixed points; the published
+  bootstrap refreshed.

@@ -134,7 +134,7 @@ nothing.
   `common/`, and `src/rtl/` (the prelude `.kt` files, the hand-written headers, and `_res.md`,
   which holds the runtime's generated C++).
 - `modules/` — the reusable modules (`json`, `compiler`, `xml`, `io`, `linq`, `glob`, `http`,
-  `jsonnode`, `streams`, `process`, `unsafe`, `gzip`, `zip`), one directory per module with its
+  `jsonnode`, `streams`, `process`, `unsafe`, `gzip`, `zip`, `math`), one directory per module with its
   `_res.md`; the compiler's
   own build scans them with `--root modules`, so their `generators/` sources are compiled in.
 - `bin/` — the `smt` toolset: `bin/smt.exe` (built) and its home `bin/smt-tool/` (`src/main.kt`
