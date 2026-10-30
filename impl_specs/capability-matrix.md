@@ -5912,3 +5912,28 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   ();`) - reachable with annotated parameters long before this change. Verified:
   `bun tools/stress.js` **152/152**, the two-way bootstrap fixed point, the published
   bootstrap refreshed.
+
+- **A plain call to a `this:` native resolves, spells, and types.** `count(ys)`,
+  `append(xs, 3)`, `contains(xs, 3)` - a plain call whose first argument is the
+  extension's receiver, the spelling the emitted C++ names - previously fell through
+  every stage: the IL's `callTarget` counted the extension's arity without its `this`
+  parameter (never a match), the emitter's unresolved fallback spelled the first
+  same-name overload it found, and the type pass skipped extension facts outright.
+  Three ports of one rule, checker-side already (`semaPlainCallReturn`, 283ca9c):
+  `callTarget` counts the `this` parameter as the call's first argument
+  (`plainExtOffset`) and *requires* that argument to unify with the receiver it names -
+  a lone candidate no less than an ambiguous field (`count(xs)` on a `List` is
+  `Array`'s, and refuses); `IlMethod` carries the native's own symbol beside the name
+  (the emitter's native table is keyed by name alone, and `append` on `Str` and on
+  `List` must not spell the last one registered - the `IlMethod.symbol` key keeps the
+  two entries distinct), with `ilCallNode` spelling it unqualified (a symbol is
+  global; the package qualification is for names); and `functionReturn` answers from
+  the extension facts when no plain function of the name does, binding the receiver
+  from the first argument through `semBindCallArgs`. One latent mis-spelling this
+  corrects: the math module's `sin(0.75)` used to spell the Float32 wrapper
+  (`simse_math_sinf`, the last `sin` registered) - harmless for the values the golden
+  printed, wrong for the overload the argument names; `stress/fold-math`'s golden
+  moves with it. `stress/plain-ext-call` pins the shape: both calls resolved, spelled
+  to the receiver's declaration, and the inferred `val` typed (`Bool present`, no
+  `auto`). Verified: `bun tools/stress.js` **153/153**, the two-way bootstrap fixed
+  point, the published bootstrap refreshed.

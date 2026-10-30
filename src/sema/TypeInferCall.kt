@@ -66,6 +66,12 @@ fun SemInfer.functionReturn(
     // interpolation's destination slot depends on.
     var exact: List<Int> = List<Int>()
     var packed: List<Int> = List<Int>()
+    // A `native fun` extension's `this` parameter is the first *argument* of a plain call
+    // (`count(xs)`, `contains(xs, 3)` - the spelling the emitted C++ names), so such a fact
+    // matches one argument more than its own parameter count. It is a member still, so it
+    // only answers when no plain function of the name does - the same preference the emitted
+    // call's resolution applies.
+    var extExact: List<Int> = List<Int>()
     val argCount: Int = argNodes.size()
     for (i in named) {
         val fn: *SemFnFact = *this.facts.functions[i]
@@ -76,9 +82,10 @@ fun SemInfer.functionReturn(
         if (hasReceiver != !xmlIsEmpty(receiver)) {
             continue
         }
-        // A `native fun` extension has no recorded receiver but is still a *member*: a
-        // plain call must not reach it (`functionReturn` for `fun find(...)`).
         if (!hasReceiver && fn.isExtension) {
+            if (fn.paramCount + 1 == argCount) {
+                extExact.append(i)
+            }
             continue
         }
         if (fn.paramCount == argCount) {
@@ -142,6 +149,25 @@ fun SemInfer.functionReturn(
             return answer
         }
     }
+    // The plain calls to `this:`-parameter extensions: the first argument is the receiver
+    // the binding reads, the rest are the arguments.
+    if (exact.size() == 0 && extExact.size() > 0 && argNodes.size() > 0) {
+        val extReceiver: AstXmlNode = this.infer(argNodes[0])
+        if (!xmlIsEmpty(extReceiver)) {
+            var rest: List<AstXmlNode> = List<AstXmlNode>()
+            var r: Int = 1
+            while (r < argNodes.size()) {
+                rest.append(argNodes[r])
+                r++
+            }
+            for (i in extExact) {
+                val answer: AstXmlNode = this.functionReturnOf(i, typeArgs, extReceiver, rest)
+                if (!xmlIsEmpty(answer)) {
+                    return answer
+                }
+            }
+        }
+    }
     return xmlEmptyNode()
 }
 
@@ -185,7 +211,9 @@ fun SemInfer.functionReturnOf(
         for (argNode in argNodes) {
             argTypes.append(this.infer(argNode))
         }
-        semBindCallArgs(fn.decl, xmlEmptyNode(), *argTypes, *fn.templateParams, *bindings)
+        // The receiver binds here too: an extension's plain call names it as the first
+        // argument, and `semBindCallArgs` reads the `this` parameter's type for it.
+        semBindCallArgs(fn.decl, receiver, *argTypes, *fn.templateParams, *bindings)
     }
     val result: AstXmlNode = semSubstitute(ret, bindings, fn.templateParams)
     if (!xmlIsEmpty(result)) {

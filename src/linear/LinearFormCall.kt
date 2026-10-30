@@ -432,7 +432,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
 
     if (receiverCall) {
         operands.append(
-            this.methodIndex(calleeName, IlMethodKind.Method, -1, returnType, fullTypes, recvIsValue, "")
+            this.methodIndex(calleeName, IlMethodKind.Method, -1, returnType, fullTypes, recvIsValue, "", "")
         )
         operands.append(recvSlot)
         i = 0
@@ -459,7 +459,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
             this.methodIndex(
                 calleeName, IlMethodKind.Function,
                 this.typeIndex(this.baseText(lhs), this.calleeToType(lhs)),
-                returnType, argTypes, true, ""
+                returnType, argTypes, true, "", ""
             )
         )
         i = 0
@@ -518,7 +518,17 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
     // value was materialized above, so its slot name is the method's own.
     // The package the resolution picked: a name several packages declare is two C++
     // functions, and the first-collected one is not always the call's.
-    operands.append(this.methodIndex(callName, IlMethodKind.Function, -1, returnType, argTypes, true, targetPackage))
+    // A resolved native spells its own symbol: the emitter's native table is keyed by name, and
+    // a name two natives share must not spell the last one registered.
+    var nativeSymbol: Str = ""
+    if (!xmlIsEmpty(target) && xmlAttr(target, AstNodeAttributeKind.IsNative) == "true") {
+        nativeSymbol = this.ilNativeSymbolOf(target)
+    }
+    operands.append(
+        this.methodIndex(
+            callName, IlMethodKind.Function, -1, returnType, argTypes, true, targetPackage, nativeSymbol
+        )
+    )
     i = 0
     while (i < args.size()) {
         operands.append(args[i])

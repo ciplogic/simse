@@ -373,7 +373,8 @@ fun ilPromoteApply(il: *IlBody, c: Int, at: Int): Unit {
                 il.methods.append(
                     IlMethod(
                         method.name + "_v", method.kind, method.argCount, method.staticBase,
-                        method.returnType, method.argTypes, method.packageName, method.recvIsValue
+                        method.returnType, method.argTypes, method.packageName, method.recvIsValue,
+                        method.symbol
                     )
                 )
                 var called: List<Int> = List<Int>()

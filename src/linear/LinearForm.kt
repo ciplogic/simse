@@ -105,7 +105,13 @@ data class IlMethod(
 // Whether a `Method`'s receiver is one the emitter passes as `T* self` - a value or a raw-pointer
 // receiver. A counted reference (`&T`, `PList`) is the receiver the emitter passes as the handle
 // itself, so `linear/PromoteRefs.kt` must not turn such a receiver into a raw pointer.
-    var recvIsValue: Bool
+    var recvIsValue: Bool,
+
+// The C++ symbol a *native* call spells, beside the name: the emitter's native table is keyed
+// by name alone, and a name two natives share (`append` on `Str` and on `List`) must not spell
+// the last one registered. "" for everything else - a member call resolves by its receiver, a
+// closure by its class, a plain function by its (package-qualified) name.
+    var symbol: Str
 )
 
 // One instruction. An operand's meaning is its opcode's operand kind: an index into a table,

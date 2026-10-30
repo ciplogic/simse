@@ -527,6 +527,10 @@ fun Emitter.ilCallNode(il: *IlBody, frame: *IlFrame, op: *IlOp): AstXmlNode {
         closureCall = this.ilClosureNameOf(method.name)
         if (closureCall != "") {
             callee = this.ilNameNode(closureCall + "_invoke")
+        } else if (method.symbol != "") {
+            // A resolved native spells its declaration's own symbol: the name-keyed native
+            // table cannot tell two natives that share one (`append` on `Str` and `List`).
+            callee = this.ilNameNode(method.symbol)
         } else {
             callee = this.ilNameNode(method.name)
         }
@@ -535,8 +539,9 @@ fun Emitter.ilCallNode(il: *IlBody, frame: *IlFrame, op: *IlOp): AstXmlNode {
         return xmlEmptyNode()
     }
     // The resolution's own package, for a name several packages declare: the printer
-    // spells it instead of the first-collected declaration's.
-    if (method.kind == IlMethodKind.Function && method.packageName != "") {
+    // spells it instead of the first-collected declaration's. A symbol-spelled native is
+    // global already - qualifying it would name a function that does not exist.
+    if (method.kind == IlMethodKind.Function && method.packageName != "" && method.symbol == "") {
         call.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Package, method.packageName))
     }
     if (recvSlot >= 0) {

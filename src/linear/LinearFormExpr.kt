@@ -255,9 +255,27 @@ fun IlExtractor.callTarget(callee: *AstXmlNode, receiver: *AstXmlNode, argNodes:
         val at: Int = candidates[k]
         k++
         val fact: *SemFnFact = *this.fn.facts.functions[at]
-        // The count and the pack test are the fact's own, so a candidate that does not match by
-        // arity needs no parameter list.
-        val paramCount: Int = fact.paramCount
+        // A `this:`-parameter extension reached by a *plain* call takes its receiver as the
+        // call's first argument (`append(xs, 3)`, the spelling the emitted C++ names), so its
+        // effective arity is one more than its own parameter count - and that argument must
+        // unify with the receiver it names, or the candidate is not this call's at all
+        // (`count(xs)` is `Array`'s, and `xs` is a `List`).
+        val offset: Int = this.plainExtOffset(fact, member)
+        var accepts: Bool = true
+        if (offset > 0) {
+            val argType: AstXmlNode = this.exprType(argNodes[0])
+            val pattern: AstXmlNode = this.receiverPattern(fact)
+            var recvOk: Bool = !xmlIsEmpty(argType) && !xmlIsEmpty(pattern)
+            if (recvOk) {
+                val recv: AstXmlNode = semPointeeOf(argType)
+                recvOk = !xmlIsEmpty(recv) && semUnifyType(pattern, recv, fact.templateParams)
+            }
+            accepts = recvOk
+        }
+        val paramCount: Int = fact.paramCount + offset
+        if (!accepts) {
+            continue
+        }
         if (paramCount == argCount) {
             exact = at
             exactCount++
@@ -284,11 +302,23 @@ fun IlExtractor.callTarget(callee: *AstXmlNode, receiver: *AstXmlNode, argNodes:
         while (k2 < candidates.size()) {
             val fact: *SemFnFact = *this.fn.facts.functions[candidates[k2]]
             k2++
-            if (fact.paramCount != argCount) {
+            val offset: Int = this.plainExtOffset(fact, member)
+            if (fact.paramCount + offset != argCount) {
                 continue
             }
             var unify: Bool = true
-            var t: Int = 0
+            if (offset > 0) {
+                // The first argument is the receiver: it picks the type whose member this is
+                // (`append(xs, 3)` over a `List`, not `Str`).
+                val argType: AstXmlNode = this.exprType(argNodes[0])
+                val pattern: AstXmlNode = this.receiverPattern(fact)
+                unify = !xmlIsEmpty(argType) && !xmlIsEmpty(pattern)
+                if (unify) {
+                    val recv: AstXmlNode = semPointeeOf(argType)
+                    unify = !xmlIsEmpty(recv) && semUnifyType(pattern, recv, fact.templateParams)
+                }
+            }
+            var t: Int = offset
             while (t < argCount && unify) {
                 val argType: AstXmlNode = this.exprType(argNodes[t])
                 if (xmlIsEmpty(argType)) {
@@ -296,6 +326,10 @@ fun IlExtractor.callTarget(callee: *AstXmlNode, receiver: *AstXmlNode, argNodes:
                     break
                 }
                 val params: List<AstXmlNode> = xmlChildren(fact.decl, AstNodeKind.Param)
+                if (t >= params.size()) {
+                    unify = false
+                    break
+                }
                 val paramType: *AstXmlNode = xmlChildPtr(params[t], AstNodeKind.Type)
                 if (xmlIsEmpty(paramType)) {
                     unify = false
@@ -318,6 +352,8 @@ fun IlExtractor.callTarget(callee: *AstXmlNode, receiver: *AstXmlNode, argNodes:
                 matched = candidates[k2 - 1]
                 matchedCount++
             }
+            val mText: Str = matchedCount.toString()
+            diagTrace("il", `ct disamb m=@mText`)
         }
         if (matchedCount == 1) {
             return matched
@@ -396,6 +432,18 @@ fun IlExtractor.receiverPattern(fact: *SemFnFact): AstXmlNode {
         return fact.receiver
     }
     return semExtensionReceiver(fact.decl)
+}
+
+// How many leading arguments of a plain call feed a `this:`-parameter extension's receiver:
+// one when the fact is such an extension and the call is plain (the receiver travels as the
+// first argument, `append(xs, 3)`), zero otherwise. The fact's own `receiver` is empty for
+// exactly these - the receiver is the `this` parameter - so the extension mark is the test.
+// A *member* call names its receiver separately, so its arguments need no offset.
+fun IlExtractor.plainExtOffset(fact: *SemFnFact, member: Bool): Int {
+    if (member || !fact.isExtension) {
+        return 0
+    }
+    return semReceiverParams(fact.decl)
 }
 
 // The type of an *argument*, which the pack and the handle conversions both ask for: a name

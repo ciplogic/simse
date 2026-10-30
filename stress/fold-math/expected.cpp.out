@@ -882,7 +882,7 @@ Float64 ns1_widen() {
 int main() {
     simse_initStatics();
     Float64 e, _sm_expr1, _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr5;
-    e = simse_math_sinf(0.75);
+    e = simse_math_sin(0.75);
     _sm_expr1 = 0.0 + 1.0;
     _sm_expr2 = _sm_expr1 + 1.0;
     _sm_expr3 = _sm_expr2 + 0.0;
