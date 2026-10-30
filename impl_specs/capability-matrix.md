@@ -5937,3 +5937,15 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   to the receiver's declaration, and the inferred `val` typed (`Bool present`, no
   `auto`). Verified: `bun tools/stress.js` **153/153**, the two-way bootstrap fixed
   point, the published bootstrap refreshed.
+
+- **A rewritten machine method's optimization runs to a fixed point.** `emitMachine`'s
+  post-rewrite round over `advance` (`IlMachine.kt`) used to run `linOptimizeBody` +
+  `linSimplifyBody` once; it now loops until neither moves - the interplay
+  `linFinishForEmission` runs over an authored body (the optimizer's rounds expose
+  jumps and stores the simplifier folds; a folded jump frees a label whose stores the
+  next round reads). Measured: **no machine body in the compiler's tree or the corpus
+  moves** - every rewritten `advance` converges in the first round (the optimizer
+  iterates internally), so this is the guarantee made structural, not a win claimed
+  today. Verified: `bun tools/stress.js` **153/153**, the two-way bootstrap fixed
+  point, the published bootstrap refreshed (the amalgamation moves only for the loop's
+  own source in `emitMachine`).

@@ -236,9 +236,19 @@ fun Emitter.emitMachine(
     // body is emitted (a `C4102` otherwise).
     for (*method in machine.methods) {
         // A method body has no signature of its own to key a cache under: a fresh box, which the
-        // entry invalidation leaves empty until the first pass needs it (`UseDefs.kt`).
-        linOptimizeBody(*method.body, linEmptyUseDefs())
-        method.body = linSimplifyBody(*method.body).body
+        // entry invalidation leaves empty until the first pass needs it (`UseDefs.kt`). To a
+        // fixed point, the interplay `linFinishForEmission` runs over an authored body: the
+        // optimizer's rounds expose jumps and stores the simplifier folds, and a folded jump
+        // frees a label whose stores the next round reads.
+        var round: Int = 0
+        var again: Bool = true
+        while (again && round < 8) {
+            round++
+            val optimized: Bool = linOptimizeBody(*method.body, linEmptyUseDefs())
+            val simplified: LinLowered = linSimplifyBody(*method.body)
+            method.body = simplified.body
+            again = optimized || simplified.changed
+        }
     }
     // A generic function's machine is a class template: its fields are typed with the
     // function's type parameters, so they are declared where used (impl_specs/yield.md).
