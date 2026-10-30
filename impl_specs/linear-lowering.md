@@ -410,10 +410,13 @@ collected as facts (`Emitter.collect` walks them, and `classMemberReturn` reads 
 own declarations as the fallback), and `spanOf` became a plain native. One rule the RawPtr
 typing exposed: a raw pointer has no pointee *value*, so two `RawPtr`s compare as the
 pointers they are (`binaryOperand` refuses the read-through it applies to a counted
-reference's operands) - `stress/raw-ptr-handle` pins the emission, golden included. A call
-through a function-typed *local* (a lambda parameter with neither an annotation nor an
-expected callable type) is the one gap left, and it belongs to the lambda-parameter work
-below.
+reference's operands) - `stress/raw-ptr-handle` pins the emission, golden included. The last
+gap - a lambda parameter with neither an annotation nor an expected callable type - is closed
+from the body's own side: `sema/LambdaInfer.kt` runs a constraint fixpoint inside `lambdaOf`
+(a pass-through argument, a member call's receiver or its arguments, a field's one owner;
+every arity-matching declaration must agree, a disagreement is a withdrawal, and a `*T`
+parameter of the callee becomes the closure's by-value `T`). `stress/lambda-infer` pins the
+provable side, `lambda-infer-refuse` the ambiguous one.
 
 Typing the closure frame fixed two silent errors: a `for` inside a lambda over a machine used
 to emit `iter(simse_addressOf(_sm_expr1))` for a receiver that was already a machine - a C++

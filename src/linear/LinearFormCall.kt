@@ -879,6 +879,36 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
         }
     }
 
+    // The parameters neither an annotation nor the callable type named: the body's own uses may
+    // prove them (`sema/LambdaInfer.kt`) - a pass-through argument, a member call's receiver, a
+    // field's one owner - with the enclosing frame's types for the captured names seeding the
+    // first round. A parameter the sites disagree on stays untyped, and the emitter's own
+    // diagnostic answers for it: the closure is monomorphic, so ambiguity is a refusal.
+    while (paramTypes.size() < paramNames.size()) {
+        paramTypes.append(xmlEmptyNode())
+    }
+    var missing: Bool = false
+    var missingAt: Int = 0
+    while (missingAt < paramTypes.size()) {
+        if (xmlIsEmpty(paramTypes[missingAt])) {
+            missing = true
+        }
+        missingAt++
+    }
+    if (missing) {
+        var known: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+        for (readName in read) {
+            if (declared.has(readName) || !this.hasVar(readName)) {
+                continue
+            }
+            val frameType: AstXmlNode = ilVarTypeNode(this.out, this.varIndex(readName))
+            if (!xmlIsEmpty(frameType)) {
+                known.insert(readName, frameType)
+            }
+        }
+        semInferLambdaParams(bodyList, *paramNames, *paramTypes, *known, this.fn.facts)
+    }
+
     // The closure: what the body reads that the *enclosing* frame holds. A static, a type or a
     // function is not captured.
     var captured: List<Str> = List<Str>()

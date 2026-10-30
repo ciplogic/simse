@@ -5883,3 +5883,32 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   callable-local case the lambda-parameter work owns. Verified:
   `bun tools/iterate.js --full` shape - **150/150**, both fixed points, the
   published bootstrap refreshed; the `auto` count is the headline (42 -> 0).
+
+- **A lambda's parameters, proved by its own body.** `sema/LambdaInfer.kt` closes the
+  last typing gap for closures: a parameter with neither an annotation nor an expected
+  callable type (`val w = (n) -> width(n)`) is now inferred from the body's uses, by
+  constraint fixpoint inside `IlExtractor.lambdaOf` (iterated with the lambda's own
+  type pass, so one parameter's proof is another site's argument type). Four sites,
+  each a proof rather than a guess because a Simse closure is *monomorphic* - it
+  cannot stand for a polymorphic function: *pass-through* (argument `j` of a plain
+  call, every arity-matching non-extension declaration agreeing on that parameter's
+  type), *a member call's receiver* (`p.m(args)` where every member declaration that
+  takes those arguments agrees on its receiver, type parameters bound from the
+  argument types this round knows), *a member call's argument* (the same call, the
+  known receiver picking the method: `xs.contains(seed)` proves `seed: Int` from
+  `xs: List<Int>`), and *a field selector* (`p.f` where exactly one non-generic data
+  class owns an `f`). `this:`-parameter native extensions join the candidate sets -
+  their declarations carry the signatures. A candidate the callee spells as a borrow
+  becomes the closure's by-value `T` (`width`'s borrowed `*Str` proves `n: Str`; the
+  body's own call borrows the closure's storage) - the shape a literal argument at the
+  closure's call converts to. A disagreement withdraws and permanently kills a
+  parameter: the body's sites join to an answer or to the emitter's existing
+  diagnostic, never to a prefix of themselves. `stress/lambda-infer` pins the
+  provable shapes in an emission golden (`Str n`, `ns1_Point p`, `Int seed` - no
+  `auto`, no diagnostic); `stress/lambda-infer-refuse` pins `s.size()` staying
+  ambiguous (`Str`, `List`, `Span`, `Dictionary` all own it). Found on the way and
+  left as a pre-existing edge: an expression-bodied lambda over a `Unit`-typed call
+  materializes the call's `void` result (`void _sm_expr1 = simse_list_append(...);
+  ();`) - reachable with annotated parameters long before this change. Verified:
+  `bun tools/stress.js` **152/152**, the two-way bootstrap fixed point, the published
+  bootstrap refreshed.
