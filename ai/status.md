@@ -62,7 +62,10 @@ before committing).
   indirection and `SmallVector::operator[]`'s inline/heap branch.
 - **Lambda typing stays conservative** around bodies and generic type aliases; a body/return
   mismatch can surface as a C++ error instead of a Simse diagnostic. Deeply nested generic
-  type aliases in expected callable positions are the other known weak spot.
+  type aliases in expected callable positions are the other known weak spot. Parameters are
+  no longer the gap: a lambda's own body proves them (`sema/LambdaInfer.kt` - a pass-through
+  argument, a member call's receiver or argument, a field's one owner; an ambiguous site is
+  the emitter's diagnostic, never a guess).
 - The single amalgamated translation unit (~190 KB of C++) is fine today; revisit if the
   compiler grows much.
 
