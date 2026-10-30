@@ -60,12 +60,17 @@ before committing).
 - **`SmDictionary` hit lookups** are ~1.8x slower than the `std::unordered_map` it replaced
   (misses, iteration and deep copies are faster); the cold-path suspects are the bucket
   indirection and `SmallVector::operator[]`'s inline/heap branch.
-- **Lambda typing stays conservative** around bodies and generic type aliases; a body/return
-  mismatch can surface as a C++ error instead of a Simse diagnostic. Deeply nested generic
-  type aliases in expected callable positions are the other known weak spot. Parameters are
-  no longer the gap: a lambda's own body proves them (`sema/LambdaInfer.kt` - a pass-through
-  argument, a member call's receiver or argument, a field's one owner; an ambiguous site is
-  the emitter's diagnostic, never a guess).
+- **Lambda typing is closed at the contract**: a lambda used against a callable type must
+  agree with it - its own parameter annotations and its body's proved answer against the
+  position's - and a disagreement is the compiler's report at the lambda, not a C++
+  conversion error at the call. Generic type aliases are resolved with their arguments
+  substituted (`Row<Int>`, `Row<T> = List<T>`, is `List<Int>`) in every position that walks
+  an alias (a member call's receiver and declaration, an expected callable, a view
+  parameter), one shared walk (`semResolveTypeAlias`). The known remaining boundary: a
+  lambda *declared in a yielding body* has no field type yet (the closure class is not a
+  type the machine's field can name), which the yield lowering refuses at the function -
+  and every scope of the body is collected now, so the refusal is the same wherever the
+  lambda is declared.
 - The single amalgamated translation unit (~190 KB of C++) is fine today; revisit if the
   compiler grows much.
 

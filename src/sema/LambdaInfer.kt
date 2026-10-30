@@ -244,24 +244,12 @@ fun semLambdaParamOf(
     return semLambdaValueParam(agreed)
 }
 
-// A type's own name with every `typealias` in the way walked (`StrView` is `Span<Char>`),
-// the free-function shape of `SemInfer.resolveAlias` for the walker, which has facts but no
+// A type's own name with every `typealias` in the way walked (`StrView` is `Span<Char>`;
+// a generic alias carries its arguments into the target, `Row<Int>` is `List<Int>`), the
+// free-function shape of `semResolveTypeAlias` for the walker, which has facts but no
 // `SemInfer`.
 fun semLambdaResolveAlias(facts: *SemFacts, typeNode: AstXmlNode): AstXmlNode {
-    var current: AstXmlNode = typeNode
-    var guard: Int = 0
-    while (!xmlIsEmpty(current) && guard < 16) {
-        guard++
-        if (xmlKind(current) != AstNodeCategory.TypeNamed) {
-            return current
-        }
-        val decl: *AstXmlNode = facts.types.getPtr(xmlAttr(current, AstNodeAttributeKind.Name))
-        if (decl == null || ( * decl).name != AstNodeKind.TypeAlias) {
-            return current
-        }
-        current = xmlChildPtr(*decl, AstNodeKind.TargetType)
-    }
-    return current
+    return semResolveTypeAlias(typeNode, facts.types)
 }
 
 // The type every receiver-matching non-native method named `name` agrees on for parameter

@@ -182,7 +182,11 @@ data class IlClosure(
     // The lambda expression's own line/column, so a failure can name the lambda.
     var line: Int,
     var column: Int,
-    var bodyIndex: Int
+    var bodyIndex: Int,
+    // The contract violation the construct proved: the lambda is used against a callable
+    // type its own annotations or body do not agree with. The emitter reports it at the
+    // lambda (`closureFail`), which is the position the author can act on.
+    var error: Str
 )
 
 // One function-like body and the lambdas it constructs.

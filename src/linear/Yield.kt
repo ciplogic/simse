@@ -194,6 +194,13 @@ fun yldSuspendPoint(branch: Int, value: AstXmlNode): AstXmlNode {
     return yldExprStmt(call)
 }
 
+// The statements under one container child (`Body`, `Then`, `Else`): the container holds
+// them directly, named `Stmt` (the parser's `container`, the same shape `linBlockStmts`
+// reads), so asking for the child by name would answer the container *node* itself.
+fun yldContainerStmts(stmt: *AstXmlNode, role: AstNodeKind): List<AstXmlNode> {
+    return xmlChildren(xmlChildPtr(stmt, role), AstNodeKind.Stmt)
+}
+
 // Whether a statement is a suspend marker.
 fun yldIsSuspendPoint(stmt: *AstXmlNode): Bool {
     if (xmlKind(stmt) != AstNodeCategory.StmtExprStmt) {
@@ -212,18 +219,30 @@ fun yldIsSuspendPoint(stmt: *AstXmlNode): Bool {
 
 // The marker's expansion: `current = value; branch = k; return true; LYk:;` - the one shape
 // a suspend point lowers to (`impl_specs/yield.md`). The label *is* the resumption point.
+// A suspend point inside a block (a local the hoisting could not move keeps its C++ scope)
+// expands there: the `return` leaves the method from inside the scope, and the label the
+// dispatcher jumps to is the one the block holds - legal C++, because the rewrite has made
+// every user local a field, so the block declares only the lowering's bare slots.
 fun yldExpandSuspend(stmt: AstXmlNode, out: *List<AstXmlNode>): Unit {
-    if (!yldIsSuspendPoint(stmt)) {
-        out.append(stmt)
+    if (yldIsSuspendPoint(stmt)) {
+        val expr: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Expr)
+        val branch: Int = xmlIntAttr(expr, AstNodeAttributeKind.Text, 0)
+        var value: AstXmlNode = xmlChild(expr, AstNodeKind.Arg)
+        out.append(yldAssign(yldThisMember(yldCurrentField()), value))
+        out.append(yldAssign(yldThisMember(yldBranchField()), yldIntLiteral(branch)))
+        out.append(yldReturn(yldBoolLiteral(true)))
+        out.append(linLabel(yldLabel(branch), xmlLine(stmt), xmlColumn(stmt)))
         return
     }
-    val expr: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Expr)
-    val branch: Int = xmlIntAttr(expr, AstNodeAttributeKind.Text, 0)
-    var value: AstXmlNode = xmlChild(expr, AstNodeKind.Arg)
-    out.append(yldAssign(yldThisMember(yldCurrentField()), value))
-    out.append(yldAssign(yldThisMember(yldBranchField()), yldIntLiteral(branch)))
-    out.append(yldReturn(yldBoolLiteral(true)))
-    out.append(linLabel(yldLabel(branch), xmlLine(stmt), xmlColumn(stmt)))
+    if (xmlKind(stmt) == AstNodeCategory.StmtBlock) {
+        var inner: List<AstXmlNode> = List<AstXmlNode>()
+        for (*child in yldContainerStmts(stmt, AstNodeKind.Body)) {
+            yldExpandSuspend(child, inner)
+        }
+        out.append(linBlock(inner, xmlLine(stmt), xmlColumn(stmt)))
+        return
+    }
+    out.append(stmt)
 }
 
 // Whether a receiver is a *handle*: a bare `this` is then already the value the caller
@@ -402,10 +421,9 @@ data class YldMachinery(
                     this.fieldOrder.append(yldFieldName(name))
                 }
             }
-            var locals: List<AstXmlNode> = xmlChildren(stmt, AstNodeKind.Body)
-            this.collectLocals(locals)
-            this.collectLocals(xmlChildren(stmt, AstNodeKind.Then))
-            this.collectLocals(xmlChildren(stmt, AstNodeKind.Else))
+            this.collectLocals(yldContainerStmts(stmt, AstNodeKind.Body))
+            this.collectLocals(yldContainerStmts(stmt, AstNodeKind.Then))
+            this.collectLocals(yldContainerStmts(stmt, AstNodeKind.Else))
         }
     }
 
@@ -546,7 +564,7 @@ data class YldMachinery(
 
             AstNodeCategory.StmtBlock -> {
                 var inner: List<AstXmlNode> = List<AstXmlNode>()
-                val children: List<AstXmlNode> = xmlChildren(stmt, AstNodeKind.Body)
+                val children: List<AstXmlNode> = yldContainerStmts(stmt, AstNodeKind.Body)
                 for (*child in children) {
                     this.statements(child, inner)
                 }
@@ -615,13 +633,13 @@ fun linHasYield(body: List<AstXmlNode>): Bool {
         if (xmlKind(stmt) == AstNodeCategory.StmtYield) {
             return true
         }
-        if (linHasYield(xmlChildren(stmt, AstNodeKind.Body))) {
+        if (linHasYield(yldContainerStmts(stmt, AstNodeKind.Body))) {
             return true
         }
-        if (linHasYield(xmlChildren(stmt, AstNodeKind.Then))) {
+        if (linHasYield(yldContainerStmts(stmt, AstNodeKind.Then))) {
             return true
         }
-        if (linHasYield(xmlChildren(stmt, AstNodeKind.Else))) {
+        if (linHasYield(yldContainerStmts(stmt, AstNodeKind.Else))) {
             return true
         }
     }

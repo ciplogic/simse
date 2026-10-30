@@ -627,6 +627,55 @@ fun semBindTypes(
     return false
 }
 
+// A type resolved through its `typealias` chain, substituting a generic alias's type
+// arguments into its target (`Row<T> = List<T>`, so `Row<Int>` answers `List<Int>`); a
+// plain alias answers its target as it stands (`StrView` -> `Span<Char>`). A type that is
+// not an alias answers itself, and an alias this use under-applies (fewer arguments than
+// parameters) answers itself too - there is nothing sound to substitute. The walk is
+// shared by the checker, the type pass and the extractor, so every position that resolves
+// through an alias agrees on what it names.
+fun semResolveTypeAlias(typeNode: *AstXmlNode, types: *Dictionary<Str, AstXmlNode>): AstXmlNode {
+    var current: AstXmlNode = typeNode
+    var guard: Int = 0
+    while (!xmlIsEmpty(current) && guard < 16) {
+        guard++
+        val kind: AstNodeCategory = xmlKind(current)
+        if (kind != AstNodeCategory.TypeNamed && kind != AstNodeCategory.TypeGeneric) {
+            return current
+        }
+        val name: Str = xmlAttr(current, AstNodeAttributeKind.Name)
+        val decl: *AstXmlNode = types.getPtr(name)
+        if (decl == null || decl.name != AstNodeKind.TypeAlias) {
+            return current
+        }
+        val target: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.TargetType)
+        if (xmlIsEmpty(target)) {
+            return current
+        }
+        val params: List<Str> = xmlTypeParamNames(decl)
+        if (kind == AstNodeCategory.TypeNamed || params.size() == 0) {
+            current = target
+            continue
+        }
+        val args: List<AstXmlNode> = xmlChildren(current, AstNodeKind.TypeArg)
+        if (args.size() < params.size()) {
+            return current
+        }
+        var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+        var i: Int = 0
+        while (i < params.size()) {
+            bindings.insert(params[i], args[i])
+            i++
+        }
+        val substituted: AstXmlNode = semSubstitute(target, bindings, params)
+        if (xmlIsEmpty(substituted)) {
+            return current
+        }
+        current = substituted
+    }
+    return current
+}
+
 // Replaces every type parameter of `typeNode` from `bindings`; an empty result means one
 // was unbound and there is nothing to spell. The result is re-rooted as `AstNodeKind.Type`.
 fun semSubstitute(typeNode: *AstXmlNode, bindings: *Dictionary<Str, AstXmlNode>, typeParams: *List<Str>): AstXmlNode {

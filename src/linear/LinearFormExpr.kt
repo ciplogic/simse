@@ -223,11 +223,16 @@ fun IlExtractor.callTarget(callee: *AstXmlNode, receiver: *AstXmlNode, argNodes:
     }
     if (candidates.size() > 1 && member && !xmlIsEmpty(receiver)) {
         val receiverType: AstXmlNode = this.exprType(receiver)
-        val recv: AstXmlNode = semPointeeOf(receiverType)
+        // Both sides through their `typealias` chains: the receiver's, so a generic alias
+        // carries its arguments into the target (`Row<Int>`, `Row<T> = List<T>`, is
+        // `List<Int>`), and the declaration's own, so an extension declared on the alias
+        // still matches once the receiver is resolved (`StrView.startsWith` against a
+        // `Span<Char>`).
+        val recv: AstXmlNode = semResolveTypeAlias(semPointeeOf(receiverType), *this.fn.facts.types)
         var matching: List<Int> = List<Int>()
         for (index in candidates) {
             val fact: *SemFnFact = *this.fn.facts.functions[index]
-            val pattern: AstXmlNode = this.receiverPattern(fact)
+            val pattern: AstXmlNode = semResolveTypeAlias(this.receiverPattern(fact), *this.fn.facts.types)
             if (!xmlIsEmpty(recv) && !xmlIsEmpty(pattern)) {
                 var matches: Bool = semUnifyType(pattern, recv, fact.templateParams)
                 if (!matches) {
@@ -264,10 +269,10 @@ fun IlExtractor.callTarget(callee: *AstXmlNode, receiver: *AstXmlNode, argNodes:
         var accepts: Bool = true
         if (offset > 0) {
             val argType: AstXmlNode = this.exprType(argNodes[0])
-            val pattern: AstXmlNode = this.receiverPattern(fact)
+            val pattern: AstXmlNode = semResolveTypeAlias(this.receiverPattern(fact), *this.fn.facts.types)
             var recvOk: Bool = !xmlIsEmpty(argType) && !xmlIsEmpty(pattern)
             if (recvOk) {
-                val recv: AstXmlNode = semPointeeOf(argType)
+                val recv: AstXmlNode = semResolveTypeAlias(semPointeeOf(argType), *this.fn.facts.types)
                 recvOk = !xmlIsEmpty(recv) && semUnifyType(pattern, recv, fact.templateParams)
             }
             accepts = recvOk
@@ -309,12 +314,13 @@ fun IlExtractor.callTarget(callee: *AstXmlNode, receiver: *AstXmlNode, argNodes:
             var unify: Bool = true
             if (offset > 0) {
                 // The first argument is the receiver: it picks the type whose member this is
-                // (`append(xs, 3)` over a `List`, not `Str`).
+                // (`append(xs, 3)` over a `List`, not `Str`), both sides through their
+                // `typealias` chains.
                 val argType: AstXmlNode = this.exprType(argNodes[0])
-                val pattern: AstXmlNode = this.receiverPattern(fact)
+                val pattern: AstXmlNode = semResolveTypeAlias(this.receiverPattern(fact), *this.fn.facts.types)
                 unify = !xmlIsEmpty(argType) && !xmlIsEmpty(pattern)
                 if (unify) {
-                    val recv: AstXmlNode = semPointeeOf(argType)
+                    val recv: AstXmlNode = semResolveTypeAlias(semPointeeOf(argType), *this.fn.facts.types)
                     unify = !xmlIsEmpty(recv) && semUnifyType(pattern, recv, fact.templateParams)
                 }
             }

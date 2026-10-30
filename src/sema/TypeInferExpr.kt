@@ -317,24 +317,12 @@ fun SemInfer.stmts(list: *List<AstXmlNode>): List<AstXmlNode> {
     return out
 }
 
-// A type's own name with every `typealias` in the way walked (`StrView` is `Span<Char>`),
-// the way `Analyzer.unionResolveAlias` walks them: the fan-out runs at lowering, where the
+// A type's own name with every `typealias` in the way walked (`StrView` is `Span<Char>`;
+// a generic alias carries its arguments into the target, `Row<Int>` is `List<Int>`), the
+// way `Analyzer.unionResolveAlias` walks them: the fan-out runs at lowering, where the
 // checker's tables are the facts. A non-alias name - or a cycle, bounded - answers itself.
 fun SemInfer.resolveTypeAliases(typeNode: AstXmlNode): AstXmlNode {
-    var resolved: AstXmlNode = typeNode
-    var guard: Int = 0
-    while (!xmlIsEmpty(resolved) && guard < 16) {
-        guard++
-        if (xmlKind(resolved) != AstNodeCategory.TypeNamed) {
-            break
-        }
-        val alias: *AstXmlNode = this.facts.types.getPtr(xmlAttr(resolved, AstNodeAttributeKind.Name))
-        if (alias == null || alias.name != AstNodeKind.TypeAlias) {
-            break
-        }
-        resolved = xmlChildPtr(alias, AstNodeKind.TargetType)
-    }
-    return resolved
+    return semResolveTypeAlias(typeNode, *this.facts.types)
 }
 
 // `val (a, b, _) = e` (specs/declarations.md, "Destructuring bind"): the parser's one temp

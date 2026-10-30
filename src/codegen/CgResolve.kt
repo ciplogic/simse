@@ -562,30 +562,11 @@ fun Emitter.nullTo(expected: *AstXmlNode): Str {
 
 // A receiver's type is resolved through a `typealias` before matching (`StrView` is
 // `Span<Char>`, src/rtl/StrView.kt), and so is the declared receiver, so the match works
-// from either side. A non-alias type is returned as it came in.
+// from either side. A generic alias carries its arguments into the target (`Row<Int>` is
+// `List<Int>`) - the shared walk `semResolveTypeAlias` makes. A non-alias type is returned
+// as it came in.
 fun Emitter.resolveAlias(typeNode: *AstXmlNode): AstXmlNode {
-    var current: AstXmlNode = typeNode
-    var guard: Int = 0
-    while (!xmlIsEmpty(current) && xmlKind(current) == AstNodeCategory.TypeNamed) {
-        guard++
-        if (guard >= 100) {
-            break
-        }
-        val name: Str = xmlAttr(current, AstNodeAttributeKind.Name)
-        val decl: *AstXmlNode = this.types.getPtr(name)
-        if (decl == null) {
-            break
-        }
-        if (decl.name != AstNodeKind.TypeAlias) {
-            break
-        }
-        val target: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.TargetType)
-        if (xmlIsEmpty(target)) {
-            break
-        }
-        current = target
-    }
-    return current
+    return semResolveTypeAlias(typeNode, this.types)
 }
 
 fun Emitter.expectedCallable(expected: *AstXmlNode): AstXmlNode {

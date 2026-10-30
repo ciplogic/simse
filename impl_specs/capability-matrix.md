@@ -5949,3 +5949,44 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   today. Verified: `bun tools/stress.js` **153/153**, the two-way bootstrap fixed
   point, the published bootstrap refreshed (the amalgamation moves only for the loop's
   own source in `emitMachine`).
+
+- **The typing frontier of lambdas and yieldables: the yield rewrite sees into blocks, a
+  lambda's contract is checked, and a generic alias substitutes.** Three linked fixes, each
+  found by probing the shapes the status doc named as the remaining weak spots. **The
+  yield rewrite was blind to blocks**: `Yield.kt`'s walks read `xmlChildren(stmt, Body)` -
+  which answers the container *node*, not the statements under it (the parser's
+  `container` names them `Stmt`) - so the only blocks that survive the lowering (a local
+  the hoisting cannot move: an `initByValue` construction, a lambda) had their statements
+  invisible to field collection, mangled into the method body as an empty statement
+  (`unsupported: statement`, the shape that hid the real cause), and their suspend points
+  never expanded - the dispatcher jumped to a label nothing defined. `yldContainerStmts`
+  is the one reader now (`collectLocals`, the `StmtBlock` arm, `linHasYield` - which also
+  hardens the `suspend`-with-yield refusal), and `yldExpandSuspend` recurses into a block,
+  expanding the suspension where it stands: legal C++, because the rewrite has made every
+  user local a field by then, so the block declares only bare slots. A lambda local in a
+  yielding body is the one honest refusal left (a closure class is not a type the machine's
+  field can name), and it is the same positioned report wherever the lambda is declared -
+  `stress/yield-block` pins the construction crossing a yield (emission golden, no
+  `auto`), `stress/diagnostic-yield-lambda` the refusal that used to die as
+  `unsupported: statement`. **A lambda's contract is checked where it is read**
+  (`lambdaOf`): the annotations the lambda carries and its body's proved answer
+  (`lambdaReturnOf`) must agree with the callable position's parameter and return types,
+  and the disagreement travels on the closure (`IlClosure.error`) to `closureFail` - the
+  compiler's report at the lambda, where a C++ conversion error used to surface at the call
+  (`Func<Int(Int)>` against `Func<Str(Int)>`, C2664/C2440). A `Unit` on either side is the
+  supported drop-the-value shape and is not compared. **A generic `typealias` now
+  substitutes**: `semResolveTypeAlias` binds the alias's own type parameters from the
+  arguments a use carries and substitutes them into the target (`Row<Int>`,
+  `Row<T> = List<T>`, answers `List<Int>`; `Handler<Str>` answers `(Str) -> Unit`), and the
+  six walkers that each carried a plain-name copy of the walk - a member call's receiver,
+  the destructuring bind, a view parameter, an indirect call, the emitter's receiver
+  match, the extractor's expected callable - share it. Member-call resolution unifies
+  *both* sides through their chains (the receiver and the declaration's pattern), the
+  asymmetry that first broke `borrow-prelude`: resolving only the receiver made
+  `StrView.startsWith` stop matching a resolved `Span<Char>` receiver, and the un-promoted
+  argument spelled a C++ the golden caught. `stress/type-alias-generic` pins the callable
+  chain, the nested container alias and the call through an aliased value (emission
+  golden, no `auto`), `stress/diagnostic-lambda-contract` and `-param` the two refusal
+  sides. Measured on the compiler's own tree: the amalgamation keeps **zero `auto`
+  declarations**. Verified: `bun tools/iterate.js --full` - **158/158** and both fixed
+  points; the published bootstrap refreshed.

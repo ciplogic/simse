@@ -79,6 +79,20 @@ the type its field needs), in `linear::lowerYield` (`src/linear/Yield.kt`):
    across a yield lives in the instance. A body name that would collide with one of the
    machine's own members is emitted under a mangled one (`linear::yieldFieldName`,
    `_sm_f_current`): `branch`, `current`, the receiver field and `advance` are the machine's.
+6. **A block the hoisting leaves behind** (a local it could not move - a construction the
+   backend routes through `initByValue`, a lambda, which has no field type yet) is walked
+   *into*, not past: its statements are collected as fields like any other scope's, its
+   suspend points expand where they stand (`yldExpandSuspend` recurses), and the resumption
+   label the dispatcher jumps to is the one the block holds. Legal C++, because the rewrite
+   has made every user local a field by then - the block declares only the lowering's bare
+   slots, and a jump may cross an uninitialized declaration. The container convention is
+   the parser's (`yldContainerStmts`): statements sit *under* a `Body` child, named `Stmt` -
+   asking for the child by name answers the container node itself, which is what this walk
+   used to do, and a block's contents were invisible to the machinery. A lambda local is
+   the one refusal: a closure class is not a type the field can name, so the collection
+   reports it (`yield: the local 'f' has no type to make a field of`) wherever it is
+   declared. `stress/yield-block` pins the construction crossing a yield (emission golden),
+   `stress/diagnostic-yield-lambda` the refusal.
 
 ## One protocol
 

@@ -308,30 +308,11 @@ fun semBindBestEffort(
 // The result of a member call (`recv.name(...)`): a declared extension/method, then a
 // native extension, then the built-in accessors, the way the emitter lowers it.
 // A receiver type through a `typealias` (`Emitter.resolveAlias`): `StrView` is
-// `Span<Char>`, so an extension on `Span<T>` is reachable through a view.
+// `Span<Char>`, so an extension on `Span<T>` is reachable through a view. A generic alias
+// carries its arguments into the target (`Row<Int>` is `List<Int>`), the shared walk
+// `semResolveTypeAlias` makes.
 fun SemInfer.resolveAlias(typeNode: *AstXmlNode): AstXmlNode {
-    var current: AstXmlNode = typeNode
-    var guard: Int = 0
-    while (!xmlIsEmpty(current) && guard < 16) {
-        guard++
-        if (xmlKind(current) != AstNodeCategory.TypeNamed) {
-            return current
-        }
-        val name: Str = xmlAttr(current, AstNodeAttributeKind.Name)
-        val decl: *AstXmlNode = this.facts.types.getPtr(name)
-        if (decl == null) {
-            return current
-        }
-        if (decl.name != AstNodeKind.TypeAlias) {
-            return current
-        }
-        val target: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.TargetType)
-        if (xmlIsEmpty(target)) {
-            return current
-        }
-        current = target
-    }
-    return current
+    return semResolveTypeAlias(typeNode, *this.facts.types)
 }
 
 // `x[i]` for a receiver whose type declares `operator fun get` (specs/functions.md): the
@@ -589,29 +570,14 @@ fun SemInfer.argReachesParam(pattern: *AstXmlNode, actual: AstXmlNode, typeParam
 }
 
 // A view parameter: `Span<T>`, `StrView`, or a `typealias` reaching one, followed the way
-// `Analyzer.isViewType` follows them.
+// `Analyzer.isViewType` follows them (a generic alias carries its arguments into the
+// target, the shared `semResolveTypeAlias` walk).
 fun SemInfer.paramIsView(pattern: *AstXmlNode): Bool {
-    var current: AstXmlNode = *pattern
-    var guard: Int = 0
-    while (guard < 32) {
-        guard++
-        if (semaIsSpanType(current)) {
-            return true
-        }
-        if (xmlKind(current) != AstNodeCategory.TypeNamed) {
-            return false
-        }
-        val decl: *AstXmlNode = this.facts.types.getPtr(xmlAttr(current, AstNodeAttributeKind.Name))
-        if (decl == null || xmlKind(*decl) != AstNodeCategory.TypeAlias) {
-            return false
-        }
-        val target: AstXmlNode = xmlChild(*decl, AstNodeKind.TargetType)
-        if (xmlIsEmpty(target)) {
-            return false
-        }
-        current = target
+    val resolved: AstXmlNode = semResolveTypeAlias(pattern, *this.facts.types)
+    if (xmlIsEmpty(resolved)) {
+        return false
     }
-    return false
+    return semaIsSpanType(resolved)
 }
 
 fun semIsStrType(typeNode: AstXmlNode): Bool {
@@ -689,27 +655,12 @@ fun SemInfer.classMemberReturn(recv: *AstXmlNode, calleeName: *Str): AstXmlNode 
 }
 
 // A callable's own return type: calling a *value* of function type (`predicate(x)`) is
-// an indirect call, resolved through a `typealias` as the emitter resolves it.
+// an indirect call, resolved through a `typealias` as the emitter resolves it (a generic
+// alias carries its arguments into the target, the shared `semResolveTypeAlias` walk).
 fun SemInfer.callableReturn(typeNode: *AstXmlNode): AstXmlNode {
-    var current: AstXmlNode = semPointee(typeNode)
-    var guard: Int = 0
-    while (!xmlIsEmpty(current) && guard < 16) {
-        guard++
-        if (xmlKind(current) == AstNodeCategory.TypeFunction) {
-            return xmlChild(current, AstNodeKind.ReturnType)
-        }
-        if (xmlKind(current) != AstNodeCategory.TypeNamed) {
-            return xmlEmptyNode()
-        }
-        val aliasName: Str = xmlAttr(current, AstNodeAttributeKind.Name)
-        val decl: *AstXmlNode = this.facts.types.getPtr(aliasName)
-        if (decl == null) {
-            return xmlEmptyNode()
-        }
-        if (decl.name != AstNodeKind.TypeAlias) {
-            return xmlEmptyNode()
-        }
-        current = xmlChild(decl, AstNodeKind.TargetType)
+    val resolved: AstXmlNode = semResolveTypeAlias(semPointee(typeNode), *this.facts.types)
+    if (xmlKind(resolved) == AstNodeCategory.TypeFunction) {
+        return xmlChild(resolved, AstNodeKind.ReturnType)
     }
     return xmlEmptyNode()
 }

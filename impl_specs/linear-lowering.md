@@ -418,6 +418,31 @@ every arity-matching declaration must agree, a disagreement is a withdrawal, and
 parameter of the callee becomes the closure's by-value `T`). `stress/lambda-infer` pins the
 provable side, `lambda-infer-refuse` the ambiguous one.
 
+The contract a lambda is used against is *checked*, not just read (`lambdaOf`): the
+annotations the lambda carries and its body's proved answer must agree with the callable
+position's parameter and return types, and a disagreement travels on the closure
+(`IlClosure.error`) to the emitter, which reports it at the lambda (`closureFail`) instead
+of letting the C++ conversion fail at the call (`Func<Int(Int)>` against `Func<Str(Int)>`).
+A `Unit` on either side of the answer is the supported drop-the-value shape and is not
+compared, and a piece the position could not spell (a callee's type parameter) is left
+alone. `stress/diagnostic-lambda-contract` pins the answer side,
+`-contract-param` the parameter side.
+
+A **generic** `typealias` now resolves with its arguments substituted, everywhere an alias
+is walked: `semResolveTypeAlias` (`sema/TypeInfer.kt`) binds the alias's own type
+parameters from the arguments a use carries and `semSubstitute`s them into the target
+(`Row<Int>`, `Row<T> = List<T>`, answers `List<Int>`; a chain walks step by step), and the
+walker every position delegated to its own copy of before - a member call's receiver
+(`SemInfer.resolveAlias`), the destructuring bind (`resolveTypeAliases`), a view parameter
+(`paramIsView`), an indirect call (`callableReturn`), the emitter's receiver match
+(`Emitter.resolveAlias`) and the extractor's expected-callable walk (`ilCallableOf`) - now
+shares it. The call resolution that picks a member call's declaration unifies **both**
+sides through their alias chains (the receiver and the declaration's own pattern), so an
+extension declared on the alias (`StrView.startsWith`) still matches once the receiver is
+resolved (`Span<Char>`). `stress/type-alias-generic` pins a callable alias chain
+(`Handler<T>`), a nested container alias (`Matrix<T>`) and a call through an aliased
+callable value.
+
 Typing the closure frame fixed two silent errors: a `for` inside a lambda over a machine used
 to emit `iter(simse_addressOf(_sm_expr1))` for a receiver that was already a machine - a C++
 type error - and `v.toString()` on the loop variable picked the `StrView` overload, because

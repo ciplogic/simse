@@ -999,10 +999,51 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
         returnType = this.lambdaReturnOf(lowered, *lambdaSemantics, *lambdaTypes, *innerBody)
     }
 
+    // The contract check: a lambda used against a callable type must agree with it, and the
+    // disagreement used to surface as a C++ conversion error at the call (`Func<Int(Int)>`
+    // against `Func<Str(Int)>`). Both sides are known here - the lambda's own annotations and
+    // its body's proved answer, against the callable position's - so the refusal is the
+    // compiler's, at the lambda. A `Unit` on either side of the answer is the supported
+    // drop-the-value shape (`repeat(n) { out.append(...) }`), and a piece the position could
+    // not spell (a callee's type parameter) is not compared at all.
+    var contractError: Str = ""
+    if (!xmlIsEmpty(callable)) {
+        val expectedParams: List<AstXmlNode> = xmlChildren(callable, AstNodeKind.ParamType)
+        val ownAnnotations: List<AstXmlNode> = xmlChildren(e, AstNodeKind.ParamType)
+        var at: Int = 0
+        while (at < expectedParams.size() && at < ownAnnotations.size()) {
+            val own: AstXmlNode = ownAnnotations[at]
+            val wanted: AstXmlNode = expectedParams[at]
+            if (!xmlIsEmpty(own) && !xmlIsEmpty(wanted) && !semSameType(own, wanted)) {
+                val ownText: Str = ilTypeText(own)
+                val wantedText: Str = ilTypeText(wanted)
+                var nameText: Str = ""
+                if (at < paramNames.size()) {
+                    nameText = paramNames[at]
+                }
+                contractError = `the lambda's parameter '@nameText' is @ownText, the callable position takes @wantedText`
+                break
+            }
+            at++
+        }
+        if (contractError.isEmpty() && !xmlIsEmpty(returnType)) {
+            val bodyReturn: AstXmlNode = this.lambdaReturnOf(lowered, *lambdaSemantics, *lambdaTypes, *innerBody)
+            if (!xmlIsEmpty(bodyReturn)
+                && ilTypeText(returnType) != "Unit"
+                && ilTypeText(bodyReturn) != "Unit"
+                && !semSameType(returnType, bodyReturn)
+            ) {
+                val returnText: Str = ilTypeText(returnType)
+                val bodyText: Str = ilTypeText(bodyReturn)
+                contractError = `the lambda's body answers @bodyText, the callable position answers @returnText`
+            }
+        }
+    }
+
     var closure: IlClosure = IlClosure(
         symbol, "", captured, List<AstXmlNode>(),
         List<IlVar>(), List<AstXmlNode>(), returnType, this.fn.typeParams,
-        xmlLine(e), xmlColumn(e), this.unit.lambdas.size()
+        xmlLine(e), xmlColumn(e), this.unit.lambdas.size(), contractError
     )
     for (capturedName in captured) {
         val capturedType: *AstXmlNode = info.captureTypes.getPtr(capturedName)
@@ -1106,31 +1147,16 @@ fun IlExtractor.callResultTypeOf(typeNode: AstXmlNode): AstXmlNode {
 }
 
 // The callable type a lambda is used against, following a `typealias` chain the way the
-// type rules do (`SemInfer.resolveAlias`); empty when the type is not one.
+// type rules do (`semResolveTypeAlias`, so a *generic* alias carries its arguments into
+// the target: `Handler<Int>`, `Handler<T> = (T) -> Unit`, answers `(Int) -> Unit`); empty
+// when the type is not one.
 fun IlExtractor.ilCallableOf(expected: AstXmlNode): AstXmlNode {
-    var current: AstXmlNode = expected
-    var guard: Int = 0
-    while (!xmlIsEmpty(current) && guard < 16) {
-        guard++
-        if (xmlKind(current) == AstNodeCategory.TypeFunction) {
-            return current
-        }
-        if (xmlKind(current) != AstNodeCategory.TypeNamed) {
-            return xmlEmptyNode()
-        }
-        val name: Str = xmlAttr(current, AstNodeAttributeKind.Name)
-        val decl: *AstXmlNode = this.fn.facts.types.getPtr(name)
-        if (decl == null) {
-            return xmlEmptyNode()
-        }
-        if (decl.name != AstNodeKind.TypeAlias) {
-            return xmlEmptyNode()
-        }
-        val target: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.TargetType)
-        if (xmlIsEmpty(target)) {
-            return xmlEmptyNode()
-        }
-        current = * target
+    if (xmlIsEmpty(expected)) {
+        return xmlEmptyNode()
+    }
+    val resolved: AstXmlNode = semResolveTypeAlias(expected, *this.fn.facts.types)
+    if (xmlKind(resolved) == AstNodeCategory.TypeFunction) {
+        return resolved
     }
     return xmlEmptyNode()
 }

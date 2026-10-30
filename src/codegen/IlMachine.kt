@@ -28,6 +28,14 @@ fun Emitter.emitClosureClasses(unit: *IlUnit): IlText {
     while (i < unit.closures.size()) {
         val closure: *IlClosure = *unit.closures[i]
         i++
+        if (!closure.error.isEmpty()) {
+            // A contract violation the construct proved (sema/LambdaInfer's sibling check in
+            // `lambdaOf`): the lambda's own annotations or body against the callable
+            // position it is used in.
+            this.closureFail(closure, closure.error)
+            this.closureTypes = savedClosures
+            return IlText(false, "", closure.error)
+        }
         if (this.emittedClosures.has(closure.symbol)) {
             continue
         }
