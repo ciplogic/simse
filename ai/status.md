@@ -63,14 +63,15 @@ before committing).
 - **Lambda typing is closed at the contract**: a lambda used against a callable type must
   agree with it - its own parameter annotations and its body's proved answer against the
   position's - and a disagreement is the compiler's report at the lambda, not a C++
-  conversion error at the call. Generic type aliases are resolved with their arguments
-  substituted (`Row<Int>`, `Row<T> = List<T>`, is `List<Int>`) in every position that walks
-  an alias (a member call's receiver and declaration, an expected callable, a view
-  parameter), one shared walk (`semResolveTypeAlias`). The known remaining boundary: a
-  lambda *declared in a yielding body* has no field type yet (the closure class is not a
-  type the machine's field can name), which the yield lowering refuses at the function -
-  and every scope of the body is collected now, so the refusal is the same wherever the
-  lambda is declared.
+  conversion error at the call. A lambda declared in a yielding body is a machine field
+  typed with its closure class, defined on the fly before the machine struct
+  (`impl_specs/yield.md`, "A lambda as a machine field"). Generic type aliases are resolved
+  with their arguments substituted (`Row<Int>`, `Row<T> = List<T>`, is `List<Int>`) in every
+  position that walks an alias (a member call's receiver and declaration, an expected
+  callable, a view parameter), one shared walk (`semResolveTypeAlias`). The remaining
+  boundary: a lambda nested *inside another* lambda in a machine body captures only what
+  the enclosing closure's frame carries (the same depth rule any body has), and `yield`
+  inside a lambda body is not a shape the language gives meaning to.
 - The single amalgamated translation unit (~190 KB of C++) is fine today; revisit if the
   compiler grows much.
 

@@ -129,6 +129,9 @@ fun Emitter.emitYieldable(
         var machineReserved: List<Str> = listOf<Str>("current", "branch", "_sm_self")
         // The machine class's name is the factory body's cache key.
         val finalBody: List<AstXmlNode> = linFinishForEmission(lowered, machineReserved, `machine:@className`)
+        // The lambda classes first: a lambda local is about to become a field, and a field
+        // needs the class as a name (`yldStampClosures`).
+        yldStampClosures(finalBody, className)
         val machine: Yielded = linLowerYield(decl, elementType, finalBody, "advance")
         if (!machine.error.isEmpty()) {
             this.fail(decl, machine.error)
@@ -262,6 +265,41 @@ fun Emitter.emitMachine(
     // function's type parameters, so they are declared where used (impl_specs/yield.md).
     // A machine receiver adds its own class parameter to both (`fnTemplateParams`).
     val tmplParams: List<Str> = this.fnTemplateParams(fn)
+    // The closures the advance body constructs, learned by extracting it once before
+    // anything is written. The machine struct holds them *by value* (a lambda local is a
+    // field), and the machine is emitted in the prototypes section - before the `closures`
+    // section renders - so each class is defined right here, on the fly, with its invoke
+    // declared: the struct that carries it and the body that calls it both see a complete
+    // type. The later `emitClosureClasses` (over the really extracted body) skips the marked
+    // structs and writes the invoke definitions into `closures`.
+    val savedClosureTable: Dictionary<Str, Str> = this.closureTypes
+    var dryClosures: List<IlClosure> = List<IlClosure>()
+    for (*method in machine.methods) {
+        val dryInfo: IlFunction =
+            this.ilMachineMethod(className, method, this.machineDecl, facts, inferred, tmplParams)
+        val dryUnit: IlUnit = ilExtractUnit(dryInfo, method.body, fn.file)
+        for (*held in dryUnit.closures) {
+            dryClosures.append(*held)
+        }
+    }
+    var dryTable: Dictionary<Str, Str> = Dictionary<Str, Str>()
+    for (*held in dryClosures) {
+        dryTable.insert(held.symbol, this.ilClosureTypeText(held))
+    }
+    this.closureTypes = dryTable
+    for (*held in dryClosures) {
+        if (this.emittedClosures.has(held.symbol)) {
+            continue
+        }
+        val structText: IlText = this.emitClosureStruct(held)
+        if (!structText.ok) {
+            this.closureFail(held, structText.reason)
+            this.closureTypes = savedClosureTable
+            return
+        }
+        this.sections.appendText(structText.text)
+        this.emittedClosures.insert(held.symbol, true)
+    }
     val tmpl: Str = this.templateClause(tmplParams)
     // The class carries the values that cross a yield and nothing else: the method that
     // advances it is a free *extension* function below (`advance(M* self)`), the shape a
@@ -276,7 +314,14 @@ fun Emitter.emitMachine(
             this.fail(decl, `yield: the field '@fieldNameText' has no type`)
             return
         }
-        val typeText2: Str = this.type(field.typeNode)
+        // A field holding a closure spells the class the way the closure table says it
+        // (`ns1_feed_closure1<T>` for a generic machine's) - the class is the lowering's,
+        // not a declared type the type dictionary knows.
+        var typeText2: Str = this.type(field.typeNode)
+        val closureText: Opt<Str> = this.ilClosureTypeOfNodeOpt(field.typeNode)
+        if (closureText.hasValue()) {
+            typeText2 = closureText.value()
+        }
         val fieldNameText2: Str = field.name
         this.line(1, `@typeText2 @fieldNameText2{};`)
         if (this.failed) {
@@ -285,6 +330,7 @@ fun Emitter.emitMachine(
     }
     this.line(0, "};")
     this.line(0, "")
+    this.closureTypes = savedClosureTable
     // A generic machine's class is a template, so its use as a *type* carries the
     // parameters: `List_iter_yieldable<T>* self`.
     var classTypeText: Str = className
@@ -340,8 +386,8 @@ fun Emitter.emitMachine(
         // The body goes through the same two paths as any other, with the machine's frame:
         // its fields are read and written through `self`, as a lambda body reads captures.
         this.emitBodyAt(
-            this.ilMachineMethod(className, method, this.machineDecl, facts, inferred), method.body,
-            fn.file, 1, false
+            this.ilMachineMethod(className, method, this.machineDecl, facts, inferred, tmplParams),
+            method.body, fn.file, 1, false
         )
         this.inClosureMethod = savedClosure
         this.selfKind = savedSelfKind
@@ -360,10 +406,12 @@ fun Emitter.emitMachine(
 // A machine method as the extractor's body context: no declaration, the method's
 // parameters, and - like a lambda - a class reached through `this`. Its fields are not
 // captures (the lowering already spelled every field access as `this.x`), so a parameter
-// sharing a field's name resolves to the parameter; the class travels as `selfDecl`.
+// sharing a field's name resolves to the parameter; the class travels as `selfDecl`. The
+// machine's own type parameters travel as the body's (`fn.typeParams`): a lambda inside
+// the body takes them as its closure class's template parameters.
 fun Emitter.ilMachineMethod(
     className: *Str, method: *YldMethod, selfDecl: *AstXmlNode, facts: *SemFacts,
-    inferred: *Dictionary<Str, AstXmlNode>
+    inferred: *Dictionary<Str, AstXmlNode>, templateParams: List<Str>
 ): IlFunction {
     val methodNameText2: Str = method.name
     var info: IlFunction = IlFunction(
@@ -371,7 +419,7 @@ fun Emitter.ilMachineMethod(
         `@className::@methodNameText2`, Dictionary<Str, Str>(),
         selfDecl, List<Str>(), List<AstXmlNode>(), className,
         Dictionary<Str, Bool>(), Dictionary<Str, AstXmlNode>(),
-        facts, List<Str>(), inferred,
+        facts, templateParams, inferred,
         Dictionary<Str, Bool>()
     )
     var i: Int = 0

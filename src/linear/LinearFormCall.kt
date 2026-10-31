@@ -24,23 +24,60 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
     if (member) {
         staticCall = this.isTypeBase(lhs)
     }
-    val receiverCall: Bool = member && !staticCall
-
-    // The receiver is evaluated first, and a `Method` call carries it as its first argument, so
-    // the `Var` operands after the callee match `IlMethod::argCount`.
-    var recvSlot: Int = -1
-    if (receiverCall) {
-        recvSlot = this.receiverOf(lhs)
-    }
-
     val calleeName: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
     val argNodes: List<AstXmlNode> = xmlChildren(e, AstNodeKind.Arg)
-
     // A call whose callee is a *value*: a lambda called where it stands, or one of the
     // lambda's own captured function fields. The value is materialized into a slot first, so
     // the backend makes it a normal call through a local - a free invoke reads the capture
     // as `self.f`, which C++ member lookup used to spell for a member class.
     var callName: Str = calleeName
+
+    // The receiver is evaluated first, and a `Method` call carries it as its first argument, so
+    // the `Var` operands after the callee match `IlMethod::argCount`.
+    var receiverCall: Bool = member && !staticCall
+    var recvSlot: Int = -1
+    if (receiverCall) {
+        recvSlot = this.receiverOf(lhs)
+    }
+
+    // A call through a closure-typed *field* of the machine this body advances
+    // (`this.f(args)` - the shape the yield rewrite gives `f(args)` once `f` is a field):
+    // the field read is materialized into a typed slot and the call goes flat, the free
+    // invoke taking the instance as its first argument - the same shape a captured callable
+    // takes below. Left as a `Method` call the C++ would be `self->f(args)`, and a closure
+    // struct has no `operator()` to call.
+    if (receiverCall && !xmlIsEmpty(this.fn.selfDecl)
+        && xmlKind(lhs) == AstNodeCategory.ExprName
+        && xmlAttr(lhs, AstNodeAttributeKind.Name) == "this"
+    ) {
+        val fieldType: AstXmlNode = this.exprType(callee)
+        if (xmlKind(fieldType) == AstNodeCategory.TypeNamed) {
+            val className: Str = xmlAttr(fieldType, AstNodeAttributeKind.Name)
+            var closure: *IlClosure = null
+            for (*held in this.unit.closures) {
+                if (held.symbol == className) {
+                    closure = held
+                    break
+                }
+            }
+            if (closure != null) {
+                val field: Int = this.freshSlot(ilTypeText(fieldType), fieldType)
+                this.emit(
+                    IlOpKind.GetField,
+                    ilOps3(field, recvSlot, this.poolIndex(calleeName))
+                )
+                callName = this.out.vars[field].name
+                receiverCall = false
+                if (hasDst && xmlIsEmpty(ilVarTypeNode(this.out, dst))
+                    && !xmlIsEmpty(closure.returnType)
+                ) {
+                    this.setSlotType(dst, closure.returnType)
+                    returnType = this.out.vars[dst].typeIndex
+                }
+            }
+        }
+    }
+
     if (!member && !staticCall) {
         if (xmlKind(callee) == AstNodeCategory.ExprLambda) {
             val instance: Int = this.lambdaOf(callee, -1, xmlEmptyNode(), xmlEmptyNode())
@@ -820,11 +857,21 @@ fun IlExtractor.ownerSymbol(): Str {
 // parameter types and the result type. `owner` is the declaration the expected type came
 // from (a generic callee), whose type parameters are not spellable at the lambda's site.
 fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: AstXmlNode): Int {
-    val counter: Int = this.closureCounter[0]
-    this.closureCounter[0] = counter + 1
-    val ownerSymbolText: Str = this.ownerSymbol()
-    val ilIntTextText: Str = ilIntText(counter)
-    val symbol: Str = `@(ownerSymbolText)_closure@ilIntTextText`
+    // The class this lowering takes: a stamp the machine machinery pre-assigned
+    // (`yldStampClosures`) is the name - extraction and emission alike read the one symbol,
+    // and the machine's field for the closure spells it. Without a stamp the class is named
+    // after the body being extracted, numbered per unit.
+    val stamped: Str = xmlAttr(e, AstNodeAttributeKind.SmClosure)
+    var symbol: Str = ""
+    if (!stamped.isEmpty()) {
+        symbol = stamped
+    } else {
+        val counter: Int = this.closureCounter[0]
+        this.closureCounter[0] = counter + 1
+        val ownerSymbolText: Str = this.ownerSymbol()
+        val ilIntTextText: Str = ilIntText(counter)
+        symbol = `@(ownerSymbolText)_closure@ilIntTextText`
+    }
 
     var read: List<Str> = List<Str>()
     var readSeen: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
@@ -920,7 +967,9 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
     }
 
     // The closure: what the body reads that the *enclosing* frame holds. A static, a type or a
-    // function is not captured.
+    // function is not captured. In a machine's method the enclosing storage is the machine's
+    // own fields (`selfDecl`), so a name the frame does not carry is still captured when the
+    // class declares it - the closure copies the machine field, the way it copies a local.
     var captured: List<Str> = List<Str>()
     for (name in read) {
         if (declared.has(name)) {
@@ -929,7 +978,7 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
         if (name == "this") {
             continue
         }
-        if (!this.hasVar(name)) {
+        if (!this.hasVar(name) && xmlIsEmpty(this.ilSelfFieldType(name))) {
             continue
         }
         captured.append(name)
@@ -947,8 +996,17 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
     for (capturedName in captured) {
         val name: Str = capturedName
         info.captures.insert(name, true)
-        // The field's type is the enclosing slot's, so a read in the body is typed without inference.
-        val slotType: AstXmlNode = ilVarTypeNode(this.out, this.varIndex(name))
+        // The field's type is the enclosing slot's (or the machine field's, when the
+        // enclosing storage is the machine), so a read in the body is typed without
+        // inference.
+        var slotType: AstXmlNode = xmlEmptyNode()
+        val at: Int = this.varIndex(name)
+        if (at >= 0) {
+            slotType = ilVarTypeNode(this.out, at)
+        }
+        if (xmlIsEmpty(slotType)) {
+            slotType = this.ilSelfFieldType(name)
+        }
         if (!xmlIsEmpty(slotType)) {
             info.captureTypes.insert(name, slotType)
         }
@@ -1099,11 +1157,36 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
     }
     var operands: List<Int> = listOf<Int>(target, this.typeIndex(symbol, classType))
     for (capturedName in captured) {
-        // The capture is a slot of *this* frame, so the construction passes it by index.
-        operands.append(this.varIndex(capturedName))
+        // The capture is a slot of *this* frame, so the construction passes it by index; a
+        // machine field is not a slot - it is read off the instance the method advances
+        // (`this.<name>`), the copy the closure carries from there on.
+        val at: Int = this.varIndex(capturedName)
+        if (at >= 0) {
+            operands.append(at)
+        } else {
+            val fieldRead: AstXmlNode = yldMember(
+                linName(AstNodeKind.Receiver, "this", 0, 0), capturedName
+            )
+            operands.append(this.valueOf(fieldRead))
+        }
     }
     this.emit(IlOpKind.CallCtor, operands)
     return target
+}
+
+// The type of the machine's own field `name`, when this body is a machine's method - the
+// class the lowering built travels as `selfDecl`. Empty when this body has no such class or
+// the name is none of its fields.
+fun IlExtractor.ilSelfFieldType(name: Str): AstXmlNode {
+    if (xmlIsEmpty(this.fn.selfDecl)) {
+        return xmlEmptyNode()
+    }
+    for (*field in xmlChildren(this.fn.selfDecl, AstNodeKind.Field)) {
+        if (xmlAttr(field, AstNodeAttributeKind.Name) == name) {
+            return xmlChild(field, AstNodeKind.Type)
+        }
+    }
+    return xmlEmptyNode()
 }
 
 // Whether a type node names one of the given type parameters, at any depth.

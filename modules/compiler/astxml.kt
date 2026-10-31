@@ -144,7 +144,14 @@ enum class AstNodeAttributeKind {
     // (`a,b,_`). The declaration's name is the compiler's temp (`_sm_destr<N>`) holding the
     // value; SemInfer fans the binders out as ordinary declarations. Appended last, so the
     // values already in use do not move.
-    Destructures
+    Destructures,
+
+    // The closure class a lowering pre-assigned to a lambda expression (`ns1_feed_closure1`),
+    // stamped by the yield machinery before its rewrite so the class exists as a *named type*
+    // while the body is still an AST: a machine field can then hold the closure, and
+    // `lambdaOf` mints no symbol of its own - the stamp is the name, extraction and emission
+    // alike. Appended last, so the values already in use do not move.
+    SmClosure
 }
 
 // What a node is - the schema's `kind` - as against its role (`AstNodeKind`, where it

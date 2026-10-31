@@ -770,6 +770,13 @@ fun Emitter.typeName(name: *Str, posNode: *AstXmlNode): Str {
     if (this.activeTypeParams.has(name)) {
         return name
     }
+    // A closure class the lowering built is spelled the way the unit's table says it - with a
+    // generic owner's arguments (`ns1_feed_closure1<T>`) - so a field or slot of it spells
+    // like any type. The table is empty wherever no closure is in play.
+    val closureSpelled: *Str = this.closureTypes.getPtr(name)
+    if (closureSpelled != null) {
+        return * closureSpelled
+    }
     // A declared type shadows an RTL type *name*: a compiler-side view type of the same
     // name is a different type. The RTL's own prelude types keep their C++ spelling.
     if (this.types.has(name)) {

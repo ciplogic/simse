@@ -5990,3 +5990,37 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   sides. Measured on the compiler's own tree: the amalgamation keeps **zero `auto`
   declarations**. Verified: `bun tools/iterate.js --full` - **158/158** and both fixed
   points; the published bootstrap refreshed.
+
+- **A lambda in a yielding body is a machine field, and its class is defined on the fly.**
+  The last typing boundary of the yieldable: a lambda declared anywhere in a yielding body
+  used to be refused (`the local 'f' has no type to make a field of`) because the closure
+  class did not exist as a named type while the body was still an AST. `yldStampClosures`
+  now names every lambda's class before the rewrite (`<machineClass>_closure<n>`, the
+  `SmClosure` attribute; a lambda-initializer declaration takes the class as its type), so
+  the field spells it and `lambdaOf` minting no symbol of its own keeps extraction and
+  emission on one name - the stamp is the authority. The class is defined **right before
+  the machine struct that holds the closure by value**: the machine is emitted in the
+  `prototypes` section, which renders before `closures`, so `emitMachine` extracts the
+  advance body once to learn the closures it constructs (a dry `ilExtractUnit` - fresh unit
+  and counter per call, no shared state) and writes each class - forward declaration,
+  invoke declaration, struct - inline, marking it emitted; the later `emitClosureClasses`
+  writes only the invoke definitions. The found-by-the-way emitter rule that made this one
+  line instead of ten: `Emitter.typeName` consults the unit's closure table, so *any*
+  spelling of a closure class goes through one place. The capture is the machine's own
+  storage: the lambda's free names resolve against the machine's fields (`selfDecl`, the
+  fallback `hasVar` never had), the construction reads each one off the instance
+  (`this.<name>`, the shape `exprAt`'s lambda mask preserves for the closure's own frame),
+  and a call through the field (`f(i)`, a member call once `f` is a field) is materialized
+  into a typed slot and spelled as the free invoke with the field read as its first
+  argument - the extractor routes it flat, where a `Method` call would have spelled
+  `self->f(args)` and a closure struct has no `operator()` to call. A generic machine's
+  closure is a template over the machine's own parameters (`ilMachineMethod` threads
+  `fnTemplateParams` into the body's `typeParams`), and the field spells `..._closure1<T>`
+  from the table. OneSimse-node lesson the stamping pass paid for: a `for (*stmt in stmts)`
+  loop variable is a *copy* - attribute writes through a `xmlChildPtr` reach the shared
+  child array, an `xmlAddChild` on the loop variable detaches - so the pass rebuilds the
+  declarations and blocks it changes and writes the list back, the optimizer's own
+  convention. `stress/yield-lambda` pins the three shapes (before the loop, inside the loop
+  with a capture, a generic machine) in an emission golden - zero `auto` - and replaces the
+  refusal case the change retires. Verified: `bun tools/iterate.js --full` - **158/158**
+  and both fixed points; the published bootstrap refreshed.

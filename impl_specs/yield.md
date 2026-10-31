@@ -80,19 +80,39 @@ the type its field needs), in `linear::lowerYield` (`src/linear/Yield.kt`):
    machine's own members is emitted under a mangled one (`linear::yieldFieldName`,
    `_sm_f_current`): `branch`, `current`, the receiver field and `advance` are the machine's.
 6. **A block the hoisting leaves behind** (a local it could not move - a construction the
-   backend routes through `initByValue`, a lambda, which has no field type yet) is walked
-   *into*, not past: its statements are collected as fields like any other scope's, its
-   suspend points expand where they stand (`yldExpandSuspend` recurses), and the resumption
-   label the dispatcher jumps to is the one the block holds. Legal C++, because the rewrite
-   has made every user local a field by then - the block declares only the lowering's bare
-   slots, and a jump may cross an uninitialized declaration. The container convention is
-   the parser's (`yldContainerStmts`): statements sit *under* a `Body` child, named `Stmt` -
-   asking for the child by name answers the container node itself, which is what this walk
-   used to do, and a block's contents were invisible to the machinery. A lambda local is
-   the one refusal: a closure class is not a type the field can name, so the collection
-   reports it (`yield: the local 'f' has no type to make a field of`) wherever it is
-   declared. `stress/yield-block` pins the construction crossing a yield (emission golden),
-   `stress/diagnostic-yield-lambda` the refusal.
+   backend routes through `initByValue`, a lambda) is walked *into*, not past: its statements
+   are collected as fields like any other scope's, its suspend points expand where they stand
+   (`yldExpandSuspend` recurses), and the resumption label the dispatcher jumps to is the one
+   the block holds. Legal C++, because the rewrite has made every user local a field by then -
+   the block declares only the lowering's bare slots, and a jump may cross an uninitialized
+   declaration. The container convention is the parser's (`yldContainerStmts`): statements sit
+   *under* a `Body` child, named `Stmt` - asking for the child by name answers the container
+   node itself, which is what this walk used to do, and a block's contents were invisible to
+   the machinery. `stress/yield-block` pins the construction crossing a yield (emission
+   golden).
+
+## A lambda as a machine field
+
+A lambda declared in a yielding body lives across the yields, so it is a field - and a field
+needs a type. The closure class is **defined on the fly**: before the rewrite, a stamping pass
+(`yldStampClosures`) walks the machine body and names every lambda's class
+(`<machineClass>_closure<n>`, stamped on the node as `SmClosure`, a lambda-initializer
+declaration getting the class as its type). The class is therefore a *named type* while the
+body is still an AST: the field spells it, `lambdaOf` mints no symbol of its own (the stamp is
+the name, so extraction and emission cannot disagree), and the machine's own emission defines
+the class - forward declaration, invoke declaration, struct - right before the machine struct
+that carries it by value (the machine is emitted in the `prototypes` section, which renders
+before `closures`, so the later definitions alone would be too late). A generic machine's
+closure is a template over the machine's own parameters, threaded through `ilMachineMethod`
+into `closure.templateParams`; the field spells `..._closure1<T>` from the closure table.
+
+The capture is the machine's own storage: the lambda's free names are resolved against the
+machine's fields (`selfDecl`), the construction reads each one off the instance
+(`this.<name>`), and a call through the field (`f(i)`, a member call once `f` is a field) is
+materialized into a typed slot and spelled as the free invoke with the field read as its first
+argument. A lambda nested inside another is not stamped - its class is named after the closure
+that owns it, as in any body. `stress/yield-lambda` pins the three shapes (before the loop,
+inside the loop with a capture, a generic machine) in an emission golden, no `auto`.
 
 ## One protocol
 

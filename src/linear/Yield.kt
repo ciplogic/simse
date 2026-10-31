@@ -201,6 +201,112 @@ fun yldContainerStmts(stmt: *AstXmlNode, role: AstNodeKind): List<AstXmlNode> {
     return xmlChildren(xmlChildPtr(stmt, role), AstNodeKind.Stmt)
 }
 
+// The closure class a machine body's lambda takes, stamped on the node before the rewrite:
+// `<machineClass>_closure<n>`, numbered in the order the IL extractor will meet them
+// (statements in order, expressions left to right). The stamp makes the class a *named
+// type* while the body is still an AST - a machine field can hold the closure - and
+// `lambdaOf` minting no symbol of its own keeps extraction and emission on one name.
+// A lambda nested inside another is not stamped: its class is not a machine field, and
+// `lambdaOf` names it after the closure that owns it. A generic machine's closure is a
+// template over the machine's own parameters (`closure.templateParams`, threaded through
+// `ilMachineMethod`), so every spelling of the class goes through the emitter's closure
+// table, which carries the arguments.
+data class YldStamper(
+    var machineClass: Str,
+    var counter: Int
+) {
+
+    fun stamp(node: *AstXmlNode): Str {
+        val n: Int = this.counter + 1
+        this.counter = n
+        val mc: Str = this.machineClass
+        val symbol: Str = mc + "_closure" + n.toString()
+        var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+        for (*existing in node.attributes) {
+            attrs.append(*existing)
+        }
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.SmClosure, symbol))
+        node.attributes = attrs
+        return symbol
+    }
+
+    // One statement list, rewritten in place: a declaration whose initializer *is* a lambda
+    // is rebuilt with the class as its type (the field the machine makes of it), and a block
+    // whose walk changed is rebuilt around its statements. Every expression is walked for
+    // lambdas - a call argument's lambda is stamped too (its closure is constructed in the
+    // advance body, so its class must be defined before the machine).
+    fun statements(stmts: *List<AstXmlNode>): Unit {
+        var out: List<AstXmlNode> = List<AstXmlNode>()
+        var changed: Bool = false
+        for (*stmt in stmts) {
+            var current: AstXmlNode = *stmt
+            val kind: AstNodeCategory = xmlKind(stmt)
+            if (kind == AstNodeCategory.StmtVarDecl) {
+                val init: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Init)
+                val declared: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Type)
+                if (!xmlIsEmpty(init) && xmlKind(init) == AstNodeCategory.ExprLambda
+                    && xmlIsEmpty(declared)
+                ) {
+                    val symbol: Str = this.stamp(init)
+                    var kids: List<AstXmlNode> = stmt.Children.toList()
+                    kids.append(ilNamedTypeNode(symbol))
+                    current = exprLike(stmt, kids)
+                    changed = true
+                } else {
+                    this.expr(init)
+                }
+            } else if (kind == AstNodeCategory.StmtBlock) {
+                var inner: List<AstXmlNode> = yldContainerStmts(stmt, AstNodeKind.Body)
+                var before: Int = this.counter
+                this.statements(inner)
+                if (this.counter != before) {
+                    val bodyNode: AstXmlNode =
+                        exprLike(xmlChildPtr(stmt, AstNodeKind.Body), inner)
+                    current = exprReplaceRole(stmt, AstNodeKind.Body, linOne(bodyNode))
+                    changed = true
+                }
+            } else {
+                this.expr(xmlChildPtr(stmt, AstNodeKind.Target))
+                this.expr(xmlChildPtr(stmt, AstNodeKind.Value))
+                this.expr(xmlChildPtr(stmt, AstNodeKind.Init))
+                this.expr(xmlChildPtr(stmt, AstNodeKind.Expr))
+                this.expr(xmlChildPtr(stmt, AstNodeKind.Cond))
+            }
+            out.append(current)
+        }
+        if (!changed) {
+            return
+        }
+        stmts.clear()
+        for (*stmt in out) {
+            stmts.append(stmt)
+        }
+    }
+
+    // One expression tree, left to right, in the order the extractor meets the nodes. A
+    // lambda is stamped and *not* entered: its own body's lambdas are the closure's own.
+    fun expr(node: *AstXmlNode): Unit {
+        if (xmlIsEmpty(node)) {
+            return
+        }
+        if (xmlKind(node) == AstNodeCategory.ExprLambda) {
+            this.stamp(node)
+            return
+        }
+        for (*child in node.Children) {
+            this.expr(child)
+        }
+    }
+}
+
+// The machine body with every lambda's class stamped (`YldStamper`), run between the type
+// pass and the rewrite - the point where the class must exist as a name, because the rewrite
+// is about to make the lambda's local a field of it.
+fun yldStampClosures(body: *List<AstXmlNode>, machineClass: Str): Unit {
+    var stamper: YldStamper = YldStamper(machineClass, 0)
+    stamper.statements(body)
+}
+
 // Whether a statement is a suspend marker.
 fun yldIsSuspendPoint(stmt: *AstXmlNode): Bool {
     if (xmlKind(stmt) != AstNodeCategory.StmtExprStmt) {
@@ -586,6 +692,14 @@ data class YldMachinery(
 
     fun exprAt(node: AstXmlNode, base: Bool): AstXmlNode {
         if (!this.error.isEmpty()) {
+            return node
+        }
+        if (xmlKind(node) == AstNodeCategory.ExprLambda) {
+            // A lambda is a body of its own: its free names resolve against its own frame at
+            // extraction, its captures against the machine's fields - rewriting them here
+            // (`this.i` inside the closure) would name fields the closure does not have. The
+            // node carries its stamped class (`yldStampClosures`); leave the subtree as it
+            // stands.
             return node
         }
         if (xmlKind(node) == AstNodeCategory.ExprName) {
