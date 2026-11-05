@@ -1892,17 +1892,19 @@ fun Analyzer.promoteForLoops(container: *AstXmlNode, stmts: *List<AstXmlNode>): 
     var shift: Int = 0
     while (i < stmts.size()) {
         val stmt: *AstXmlNode = *stmts[i]
-        // Every place a statement list can hide: a block's body, and an `if`'s arms. Missing
-        // `Then`/`Else` is why a `for` inside an `if` used to keep its container wrap.
-        for (*child in stmt.Children) {
-            if (child.name != AstNodeKind.Body && child.name != AstNodeKind.Then
-                && child.name != AstNodeKind.Else
-            ) {
-                continue
-            }
-            val nested: List<AstXmlNode> = xmlChildren(*child, AstNodeKind.Stmt)
+        // The one statement list the analysis walk does not promote itself: a bare block's
+        // body (parser-synthesized code - the `&&`/`||` desugar - lives there). An `if`'s
+        // arms and a `while`'s body are promoted by `analyzeStmt` *while the scope that
+        // declares their locals is still up* (`SemaAnalyze.kt`), so re-walking them here -
+        // after that scope popped - could only re-ask the same questions with the roots'
+        // types gone, and every refusal it printed was a phantom (`type unknown` for a
+        // loop the in-scope pass had already refused for its real reason, `template` for
+        // one it had bound and rewritten).
+        if (xmlKind(*stmt) == AstNodeCategory.StmtBlock) {
+            val blockBody: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Body)
+            val nested: List<AstXmlNode> = xmlChildren(blockBody, AstNodeKind.Stmt)
             if (nested.size() > 0) {
-                this.promoteForLoops(child, *nested)
+                this.promoteForLoops(blockBody, *nested)
             }
         }
         // The span rewrite is the lowering, not the borrow optimization below: a `for` over

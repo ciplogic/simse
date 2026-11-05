@@ -6024,3 +6024,24 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   with a capture, a generic machine) in an emission golden - zero `auto` - and replaces the
   refusal case the change retires. Verified: `bun tools/iterate.js --full` - **158/158**
   and both fixed points; the published bootstrap refreshed.
+
+- **The promotion trace no longer lies: each loop is walked once, in the scope that
+  declares its locals.** `promoteForLoops` used to descend into every `Body`/`Then`/
+  `Else` child of every statement, so every nested loop was walked a second time by the
+  function-level pass - *after* `analyzeStmt` had already promoted it while its scope was
+  up and then popped that scope. The second walk could never bind anything the first had
+  refused (the same structural gates re-run), but it re-asked every question with the
+  roots' types gone: on the self-transpile, 168 of the 168 `hoistSpan ... type unknown`
+  refusals and 102 of the 159 `template, receiver or static` ones (roots `_sm_spanN`, the
+  slots of loops the first pass had already *bound and rewritten*) were phantoms - echoes
+  that buried the real reasons (`storage not stable`, `no span view`) under noise a
+  measurement could not see through. The recursion now covers the one statement list the
+  analysis walk does not promote itself - a bare `StmtBlock`'s body, where the parser's
+  `&&`/`||` desugar lives - and nothing else; the `if`/`while` arms and lambda bodies
+  keep their own in-scope passes (`SemaAnalyze.kt`). Measured after: `type unknown` is 35
+  real refusals (every one a root the type pass genuinely cannot name yet - the
+  lambda-parameter and untyped-local shapes the typed-IL work owns), `template` is 57
+  real `this` roots. Emission is byte-identical on unchanged trees - every
+  `expected.cpp.out` golden passed untouched - because every decision the first pass
+  made, it still makes alone. Verified: `bun tools/iterate.js --full` - **158/158** and
+  both fixed points; the published bootstrap refreshed.
