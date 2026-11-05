@@ -6045,3 +6045,23 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `expected.cpp.out` golden passed untouched - because every decision the first pass
   made, it still makes alone. Verified: `bun tools/iterate.js --full` - **158/158** and
   both fixed points; the published bootstrap refreshed.
+
+- **Every span-hoist refusal now names the gate that actually failed: `type unknown` is
+  zero.** The 35 refusals the truthful walk left were two shapes of one hole: the root
+  collector gathers indexed names from the loop's *whole body*, and a root that is a
+  `val`/`var` of the body itself (`while (more) { var defCount = ...; defCount[i]++ }`)
+  is per-iteration storage - unhoistable, but the stability walker only counted
+  *assignments* as rebinds, so these roots fell through to the type question, which
+  answers nothing (the checking pass runs after the body's scope popped - the name is a
+  body-local). Two one-rule fixes: the syntactic gates (stability, place-context) run
+  before the type question in `hoistSpanAt` - the reason printed is the first gate that
+  genuinely fails, and neither proof needs a type - and `bpSpanWalk` counts a `StmtVarDecl`
+  of the root inside the loop as the rebind it is (a fresh binding every iteration; the
+  collected name refers to that inner declaration, so the fact holds wherever an outer
+  one exists). The for-walk's span-stability gate shares the walker and gains the same
+  truth. Measured on the self-transpile: `type unknown` 35 -> **0** (168 before the walk
+  was fixed); every remaining refusal is structural (`storage not stable` 190, `template/
+  receiver/static` 57, `pointer root not immobile` 46, `index under a deref` 19,
+  `no span view` 14). Emission byte-identical - a root the new rule refuses was never
+  bindable, the gates only reordered. Verified: `bun tools/iterate.js --full` - **158/158**
+  and both fixed points; the published bootstrap refreshed.

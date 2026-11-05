@@ -1790,6 +1790,16 @@ data class BpSpan(
 
 fun bpSpanWalk(node: *AstXmlNode, root: *Str, facts: *BpSpan): Unit {
     val kind: AstNodeCategory = xmlKind(node)
+    if (kind == AstNodeCategory.StmtVarDecl) {
+        // A declaration of the root *inside the loop* is a fresh binding every iteration -
+        // a `val entry = *table[i]` names per-iteration storage, and a span bound before
+        // the loop would name the previous iteration's. The root collector's name refers
+        // to this inner declaration wherever an outer one exists, so the rebind fact is
+        // the truth about it either way.
+        if (xmlAttr(node, AstNodeAttributeKind.Name) == *root) {
+            facts.rebind = true
+        }
+    }
     if (kind == AstNodeCategory.StmtAssign) {
         val target: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Target)
         if (xmlKind(target) == AstNodeCategory.ExprName

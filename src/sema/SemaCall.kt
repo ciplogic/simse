@@ -2298,16 +2298,10 @@ fun Analyzer.hoistSpanAt(
             AstNodeKind.Expr, AstNodeCategory.ExprName, List<AstNodeAttribute>(), Array<AstXmlNode>()
         )
         rootExpr.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, root))
-        val rootType: AstXmlNode = this.exprType(rootExpr)
-        if (xmlIsEmpty(rootType)) {
-            this.semaPromoRefuse("hoistSpan", root, "type unknown")
-            continue
-        }
-        val conversion: Str = this.spanConversion(rootType)
-        if (conversion == "") {
-            this.semaPromoRefuse("hoistSpan", root, "no span view")
-            continue
-        }
+        // The syntactic gates run before the type question: a root the loop's own body
+        // re-creates (`var counts = ...` inside the body, re-bound every iteration) is
+        // refused here for the reason that is true of it, not as `type unknown` - the name
+        // is a body-local, and the pass that checks this loop runs after its scope popped.
         var stable: Bool = bpSpanStableNode(*cond, root)
         var at: Int = 0
         while (stable && at < body.size()) {
@@ -2326,6 +2320,16 @@ fun Analyzer.hoistSpanAt(
         }
         if (placeCtx) {
             this.semaPromoRefuse("hoistSpan", root, "index read under a deref")
+            continue
+        }
+        val rootType: AstXmlNode = this.exprType(rootExpr)
+        if (xmlIsEmpty(rootType)) {
+            this.semaPromoRefuse("hoistSpan", root, "type unknown")
+            continue
+        }
+        val conversion: Str = this.spanConversion(rootType)
+        if (conversion == "") {
+            this.semaPromoRefuse("hoistSpan", root, "no span view")
             continue
         }
         // The binding decision. A pointer (or handle) root can alias storage no proof in
