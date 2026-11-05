@@ -109,8 +109,11 @@ fun Emitter.ilAnalyze(il: *IlBody, frame: *IlFrame): Unit {
     }
 }
 
-// Whether a value is inlined at its use: only an untyped temp with exactly one
-// definition and one use (`auto x;` is not a declaration, so it cannot be declared).
+// Whether a value is inlined at its use: an untyped temp with exactly one definition and
+// one use (`auto x;` is not a declaration, so it cannot be declared), and - the one typed
+// exception - a null placeholder the position typed (`RawPtr != RawPtr`, `Ui(null, ...)`,
+// impl_specs/typed-il.md): `null`'s spelling is decided by the use, so a declaration would
+// add a name the C++ never needed.
 fun Emitter.ilFolded(il: *IlBody, frame: *IlFrame, slot: Int): Bool {
     if (slot < 0 || slot >= il.vars.size()) {
         return false
@@ -120,7 +123,10 @@ fun Emitter.ilFolded(il: *IlBody, frame: *IlFrame, slot: Int): Bool {
     }
     val slotType: AstXmlNode = ilVarType(il, slot)
     if (!xmlIsEmpty(slotType)) {
-        return false // a typed slot is declared
+        val def: Int = this.ilIntAt(frame.defOp, slot, -1)
+        if (def < 0 || def >= il.ops.size() || il.ops[def].kind != IlOpKind.SetVar_Null) {
+            return false // a typed slot is declared
+        }
     }
     if (this.ilIntAt(frame.defineCount, slot, 0) != 1) {
         return false
@@ -267,12 +273,22 @@ fun Emitter.ilDeclGroups(
         }
         var types: List<Str> = List<Str>()
         var groups: List<List<Str>> = List<List<Str>>()
+        // The declare positions that print: a folded declaration (a typed null placeholder
+        // hoisted among the run, an inline untyped one) emits nothing where it stands, so
+        // it joins no group and breaks none - the group's lines land on the declarations
+        // that are storage.
+        var printed: List<Int> = List<Int>()
         var at: Int = i
         while (at < il.ops.size() && il.ops[at].kind == IlOpKind.Declare && !blockEnd.has(at)) {
             val slot: Int = this.ilOpOperand(il.ops[at].operands, 0)
-            if (slot < 0 || slot >= il.vars.size() || this.ilFolded(il, frame, slot)
-                || !this.ilDeclaredAtTop(il, slot)
-            ) {
+            if (slot < 0 || slot >= il.vars.size()) {
+                break
+            }
+            if (this.ilFolded(il, frame, slot)) {
+                at++
+                continue
+            }
+            if (!this.ilDeclaredAtTop(il, slot)) {
                 break
             }
             val typeText: Str = this.ilDeclTypeText(il, slot)
@@ -293,23 +309,23 @@ fun Emitter.ilDeclGroups(
                 index = types.size() - 1
             }
             groups[index].append(il.vars[slot].name)
+            printed.append(at)
             at++
         }
-        if (at - i < 2) {
+        if (printed.size() < 2) {
             // One declaration: nothing to group.
             i++
             continue
         }
-        var printed: Int = i
         var t: Int = 0
         while (t < types.size()) {
-            lines.insert(printed, ilDeclLines(types[t], *groups[t]))
-            printed++
+            lines.insert(printed[t], ilDeclLines(types[t], *groups[t]))
             t++
         }
-        while (printed < at) {
-            lines.insert(printed, List<Str>())
-            printed++
+        var p: Int = types.size()
+        while (p < printed.size()) {
+            lines.insert(printed[p], List<Str>())
+            p++
         }
         i = at
     }

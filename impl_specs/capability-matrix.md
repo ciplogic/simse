@@ -6065,3 +6065,26 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `no span view` 14). Emission byte-identical - a root the new rule refuses was never
   bindable, the gates only reordered. Verified: `bun tools/iterate.js --full` - **158/158**
   and both fixed points; the published bootstrap refreshed.
+
+- **The null placeholder is typed by its position, and the C++ never notices.** The
+  largest measured residue of the typed-IL inventory (320 of the 342 `?` slots in the
+  self-transpile's linear form) was the `SetVar_Null` materialization - `null` untyped on
+  purpose because "the destination decides". The destination still decides the *spelling*;
+  what the position now also names is the slot's *type*, three rules in: a null compared
+  against a typed operand takes the other side's (`ui.window != null` reads over two
+  `RawPtr` slots, 260 of the 320), a null argument against a nullable parameter takes the
+  parameter's (`Ui(null, ...)` is `RawPtr` slots, 33), and `binaryOperand` never reads a
+  null through - a typed `*Str` null has no pointee value, the one operand the handle
+  rule refuses on principle (the `RawPtr` row generalized). The emission bridge:
+  `ilFolded` folds a typed temp whose single definition is `SetVar_Null`, exactly as it
+  always folded the untyped one - `null`'s C++ is spelled at its use by the consumer, so
+  a declaration would only add a name nothing needed. That made a folded declare possible
+  *inside* the hoisted run, which exposed a latent assumption in `ilDeclGroups`: a
+  declaration run broke at a folded slot; it now skips it (a folded declare prints
+  nothing, joins no group, breaks none), and the group lines land on the declarations
+  that are storage - the accounting the first cut got wrong (the http case's undeclared
+  identifiers) by placing a type's line on a position that never prints. Measured after:
+  `?` slots 342 -> **39** (the `SetField`/`Return` nulls and the function-name references
+  below are what is left); emission byte-identical, every `expected.cpp.out` golden
+  untouched. Verified: `bun tools/iterate.js --full` - **158/158** and both fixed points;
+  the published bootstrap refreshed.

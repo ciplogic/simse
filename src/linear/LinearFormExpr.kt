@@ -547,6 +547,14 @@ fun IlExtractor.convertArgument(callee: *AstXmlNode, param: *AstXmlNode, arg: *A
     if (xmlIsEmpty(param)) {
         return this.operandOf(arg)
     }
+    // A null argument against a nullable parameter: the placeholder takes the parameter's
+    // type (`Ui(null, ...)` is seven `RawPtr` slots, not seven `?`s). The spelling is the
+    // destination's either way - the slot folds at its use (`ilFolded`).
+    if (xmlKind(arg) == AstNodeCategory.ExprNullLit && ilIsHandleType(param)) {
+        val nullSlot: Int = this.freshSlot(ilTypeText(param), param)
+        this.emit(IlOpKind.SetVar_Null, ilOps1(nullSlot))
+        return nullSlot
+    }
     // A lambda takes its contract from the parameter's callable type: an omitted parameter
     // type and the result type come from there, and the closure is built directly.
     if (xmlKind(arg) == AstNodeCategory.ExprLambda) {

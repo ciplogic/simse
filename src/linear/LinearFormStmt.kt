@@ -434,6 +434,12 @@ fun IlExtractor.operandValueType(slot: Int, e: *AstXmlNode): AstXmlNode {
 // `*T -> T` row of impl_specs/linear-il.md). A handle against a different type, or against
 // `null`, is left alone.
 fun IlExtractor.binaryOperand(me: *AstXmlNode, other: *AstXmlNode, slot: Int): Int {
+    if (xmlKind(me) == AstNodeCategory.ExprNullLit) {
+        // `null` is typed from the position it stands in (`ilTypeNullOperand`), but it has
+        // no pointee *value* to read through - the one operand the handle rule never
+        // touches, typed or not.
+        return slot
+    }
     val mine: AstXmlNode = this.operandValueType(slot, me)
     if (xmlIsEmpty(mine) || !ilIsHandleType(mine)) {
         return slot
@@ -510,6 +516,25 @@ fun IlExtractor.operandOf(expr: *AstXmlNode): Int {
     return this.freshSlotText("?")
 }
 
+// A null literal compared against a typed operand: the placeholder slot takes the other
+// side's type, so the instruction reads over two typed slots instead of a `?` (the
+// comparison is over handles of one shape - `ui.window != null` is `RawPtr != RawPtr`). The
+// C++ is unchanged: the slot still folds at its use (`ilFolded`), where the destination
+// spells the null.
+fun IlExtractor.ilTypeNullOperand(me: *AstXmlNode, other: *AstXmlNode, slot: Int): Unit {
+    if (xmlKind(me) != AstNodeCategory.ExprNullLit || slot < 0 || slot >= this.out.vars.size()) {
+        return
+    }
+    if (!xmlIsEmpty(ilVarType(this.out, slot))) {
+        return
+    }
+    val theirs: AstXmlNode = this.exprType(other)
+    if (xmlIsEmpty(theirs) || !ilIsHandleType(theirs)) {
+        return
+    }
+    this.setSlotType(slot, theirs)
+}
+
 // Writes `e` into `slot`, one instruction per operation: a value the lowering produces is
 // one operation deep.
 fun IlExtractor.into(slot: Int, e: *AstXmlNode): Unit {
@@ -570,11 +595,18 @@ fun IlExtractor.into(slot: Int, e: *AstXmlNode): Unit {
         AstNodeCategory.ExprBinary -> {
             val lhs: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Lhs)
             val rhs: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Rhs)
+            val opText: Str = xmlAttr(e, AstNodeAttributeKind.Op)
+            val leftSlot: Int = this.operandOf(lhs)
+            val rightSlot: Int = this.operandOf(rhs)
+            if (opText == "==" || opText == "!=") {
+                this.ilTypeNullOperand(lhs, rhs, leftSlot)
+                this.ilTypeNullOperand(rhs, lhs, rightSlot)
+            }
             this.emit(
                 IlOpKind.BinaryOp, ilOps4(
-                    slot, this.poolIndex(xmlAttr(e, AstNodeAttributeKind.Op)),
-                    this.binaryOperand(lhs, rhs, this.operandOf(lhs)),
-                    this.binaryOperand(rhs, lhs, this.operandOf(rhs))
+                    slot, this.poolIndex(opText),
+                    this.binaryOperand(lhs, rhs, leftSlot),
+                    this.binaryOperand(rhs, lhs, rightSlot)
                 )
             )
             return
