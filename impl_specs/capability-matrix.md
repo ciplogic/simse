@@ -6088,3 +6088,18 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   below are what is left); emission byte-identical, every `expected.cpp.out` golden
   untouched. Verified: `bun tools/iterate.js --full` - **158/158** and both fixed points;
   the published bootstrap refreshed.
+
+- **A null takes the type of the place it fills, field and return included.** The two
+  positions the first null pass measured but did not cover: a field write
+  (`ui.sheet = null` in `uiClose` - the member read's type is the place's, the same
+  `exprType` the comparison rule reads) and a plain `return null` (the declared return
+  type; a *lambda* body's null keeps its `?`, its return proved after extraction by
+  `lambdaReturnOf`). Fifteen more slots typed; `?` residue 39 -> **24**, every one of
+  them now a function *name* reference (`matchNoToken` as a `ScanFunc`, `foldGlobalRule`
+  as a `FoldRule`) - the `GetStatic` static-fallback shape the typed-IL inventory names,
+  which wants its own rule because typing it changes what the emitter prints. One
+  numbering lesson on the way: the SetField arm must extract its receiver before its
+  value - a slot's number is its creation order, and `expected.cpp.out` compares the
+  numbering byte for byte (the first cut renumbered `partControls_closure1`'s frame; the
+  corpus caught it at minui-layout). Verified: `bun tools/iterate.js --full` - **158/158**
+  and both fixed points; the published bootstrap refreshed.

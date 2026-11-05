@@ -90,7 +90,17 @@ fun IlExtractor.statement(stmt: *AstXmlNode): Unit {
                 this.call(-1, value)
                 this.emit(IlOpKind.ReturnVoid, List<Int>())
             } else {
-                this.emit(IlOpKind.Return, ilOps1(this.operandOf(value)))
+                val retSlot: Int = this.operandOf(value)
+                // `return null`: the declared return type is the place the value fills. A
+                // lambda body's return is proved after extraction (`lambdaReturnOf`), so a
+                // null there keeps its `?` until then.
+                if (xmlKind(value) == AstNodeCategory.ExprNullLit && !xmlIsEmpty(this.fn.decl)) {
+                    val declared: AstXmlNode = xmlChild(this.fn.decl, AstNodeKind.ReturnType)
+                    if (!xmlIsEmpty(declared) && ilIsHandleType(declared)) {
+                        this.setSlotType(retSlot, declared)
+                    }
+                }
+                this.emit(IlOpKind.Return, ilOps1(retSlot))
             }
             return
         }
@@ -216,10 +226,16 @@ fun IlExtractor.assign(stmt: *AstXmlNode, target: *AstXmlNode, value: *AstXmlNod
                 )
                 return
             }
+            // The receiver is extracted first - a slot's number is its creation order, and
+            // the numbering is emission (`expected.cpp.out` compares it byte for byte).
+            val recvSlot: Int = this.receiverOf(lhs)
+            val fieldSlot: Int = this.operandOf(value)
+            // `ui.sheet = null`: the field's type is the place's, and the null takes it.
+            this.ilTypeNullOperand(value, target, fieldSlot)
             this.emit(
                 IlOpKind.SetField, ilOps3(
-                    this.receiverOf(lhs), this.poolIndex(fieldName),
-                    this.operandOf(value)
+                    recvSlot, this.poolIndex(fieldName),
+                    fieldSlot
                 )
             )
             return
