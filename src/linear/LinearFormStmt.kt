@@ -242,13 +242,13 @@ fun IlExtractor.assign(stmt: *AstXmlNode, target: *AstXmlNode, value: *AstXmlNod
         }
 
         AstNodeCategory.ExprIndex -> {
-            this.emit(
-                IlOpKind.SetIndex, ilOps3(
-                    this.receiverOf(xmlChildPtr(target, AstNodeKind.Receiver)),
-                    this.operandOf(xmlChildPtr(target, AstNodeKind.Index)),
-                    this.operandOf(value)
-                )
-            )
+            // The receiver, the index, then the value: a slot's number is its creation
+            // order, and the emission compares the numbering byte for byte.
+            val storeRecv: Int = this.receiverOf(xmlChildPtr(target, AstNodeKind.Receiver))
+            val storeAt: Int = this.operandOf(xmlChildPtr(target, AstNodeKind.Index))
+            val storeVal: Int = this.operandOf(value)
+            this.ilTypeElementStore(xmlChildPtr(target, AstNodeKind.Receiver), value, storeVal)
+            this.emit(IlOpKind.SetIndex, ilOps3(storeRecv, storeAt, storeVal))
             return
         }
 
@@ -549,6 +549,65 @@ fun IlExtractor.ilTypeNullOperand(me: *AstXmlNode, other: *AstXmlNode, slot: Int
         return
     }
     this.setSlotType(slot, theirs)
+}
+
+// The element of a one-argument generic (`List<Step>` is `Step`): the type a fill
+// argument fills and an index store writes. A generic with more arguments
+// (`Dictionary<K, V>`) names no single element and answers empty.
+fun ilGenericElementOf(built: AstXmlNode): AstXmlNode {
+    if (xmlKind(built) != AstNodeCategory.TypeGeneric) {
+        return xmlEmptyNode()
+    }
+    val args: List<AstXmlNode> = xmlChildren(built, AstNodeKind.TypeArg)
+    if (args.size() != 1) {
+        return xmlEmptyNode()
+    }
+    return args[0]
+}
+
+// Whether `arg` is a bare function *name* - a reference, not a local and not a capture:
+// the shape the type rules cannot answer for itself.
+fun IlExtractor.ilIsFunctionRef(arg: *AstXmlNode): Bool {
+    if (xmlKind(arg) != AstNodeCategory.ExprName) {
+        return false
+    }
+    val nameText: Str = xmlAttr(arg, AstNodeAttributeKind.Name)
+    return this.varIndex(nameText) < 0 && !this.fn.captures.has(nameText)
+}
+
+// A construction's fill argument (`List<Step>(4, twice)`) stands where an *element* does:
+// the constructed type names the element, and a function-name reference takes it when the
+// position itself declared nothing (a native template's parameters are in no table the
+// extractor reads). The slot still folds at its use, so the C++ is the name spelled where
+// it always was.
+fun IlExtractor.ilTypeElementFill(callee: *AstXmlNode, arg: *AstXmlNode, slot: Int): Unit {
+    if (slot < 0 || slot >= this.out.vars.size() || !xmlIsEmpty(ilVarType(this.out, slot))) {
+        return
+    }
+    if (!this.ilIsFunctionRef(arg)) {
+        return
+    }
+    val element: AstXmlNode = ilGenericElementOf(this.calleeToType(callee))
+    if (xmlIsEmpty(element) || xmlIsEmpty(this.ilCallableOf(element))) {
+        return
+    }
+    this.setSlotType(slot, element)
+}
+
+// `table[i] = plusOne`: the stored value fills an element, and the receiver's type names
+// it (`List<Step>` is `Step`) - the same source the fill argument's rule reads.
+fun IlExtractor.ilTypeElementStore(recv: *AstXmlNode, value: *AstXmlNode, slot: Int): Unit {
+    if (slot < 0 || slot >= this.out.vars.size() || !xmlIsEmpty(ilVarType(this.out, slot))) {
+        return
+    }
+    if (!this.ilIsFunctionRef(value)) {
+        return
+    }
+    val element: AstXmlNode = ilGenericElementOf(this.exprType(recv))
+    if (xmlIsEmpty(element) || xmlIsEmpty(this.ilCallableOf(element))) {
+        return
+    }
+    this.setSlotType(slot, element)
 }
 
 // Writes `e` into `slot`, one instruction per operation: a value the lowering produces is

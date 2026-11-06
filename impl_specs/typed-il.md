@@ -96,11 +96,14 @@ that survive to emission) and tightens as ops gain types; when it is strict, the
   (`SetVar_Null`, `GetStatic`) folds at its use, typed or not, so the type serves the
   passes while the C++ keeps the inline `nullptr` / `compareLessThan` /
   `SmOptTypes::Value` - and dropped a declared temp per single-use static on the way
-  (the published bootstrap lost ~4,300 lines). The residue is **4** slots, one shape:
-  a function name as a *generic* constructor argument (`List<ScanFunc>(256,
-  matchNoToken)`, the parameter is the bare `T`) or as an index-store value
-  (`table[d] = matchName`) - the receiver's binding names the type, a rule not yet
-  written. Two measurement fixes came first and are what made the residue countable:
+  (the published bootstrap lost ~4,300 lines). The slot residue reached **0** with the
+  element rules (`List<Step>(4, twice)` - the fill argument takes the constructed type's
+  element; `table[i] = plusOne` - the stored value takes the receiver's;
+  `stress/callable-table` pins both with an emission golden), the one shape left being the
+  *receiver* of an extension over a machine pattern (`fun ..*T.toList<T>()` in
+  `modules/linq` types `self` as `*?`): that is a type the IL has no vocabulary for yet -
+  a machine type parameter - not a rule away. Two measurement fixes came first and are
+  what made the residue countable:
   the promotion walk visits each loop once, in the scope that declares its locals
   (`78d6670` - 168 phantom `type unknown` refusals were echoes of a second, out-of-scope
   walk), and every span-hoist refusal names the gate that actually failed (`f4c5992` -

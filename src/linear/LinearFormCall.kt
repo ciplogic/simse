@@ -464,6 +464,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
             }
         }
         val slot: Int = this.convertArgument(paramOwner, paramType, argNode)
+        this.ilTypeElementFill(callee, argNodes[i], slot)
         args.append(slot)
         argTypes.append(this.operandType(slot, argNodes[i]))
         i++

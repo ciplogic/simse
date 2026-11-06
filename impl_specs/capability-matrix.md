@@ -6155,3 +6155,18 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `step`, and a second value called bare. Verified: `bun tools/iterate.js --full` -
   **158/158** (159 with the new case) and both fixed points; the published bootstrap
   refreshed.
+
+- **The linear form is fully typed: the slot residue is zero.** The four slots the
+  function-name series left were one shape - a function name standing where an *element*
+  does - and the element has two spellings, both now rules: a construction's fill
+  argument takes the constructed type's (`List<Step>(4, twice)` names `Step` through the
+  one type argument; a native template's parameters are in no table the extractor reads,
+  so the position itself declared nothing), and an index store's value takes the
+  receiver's (`table[i] = plusOne`, the same `List<Step>` read as the receiver's type).
+  Both fold at their use exactly as the untyped slots did - `stress/callable-table`,
+  built for exactly this fix, passes its emission golden byte for byte while its three
+  slots gain `Step`. Self-transpile: `?` slots 4 -> **0** (342 when the series began);
+  the one *type* left unnamed is the `..*T` machine-pattern receiver of `modules/linq`'s
+  `toList`/`forEach` (`self: *?`) - a vocabulary the IL does not have yet, not a rule
+  away. Verified: `bun tools/iterate.js --full` - **160/160** and both fixed points; the
+  published bootstrap refreshed.
