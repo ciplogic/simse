@@ -704,10 +704,8 @@ Str plus(Span<Char>* self, Span<Char> other) {
 }
 template <class T>
 Bool simse_optHasValue(Opt<T>* self) {
-    SmOptTypes _sm_base1;
     Bool _sm_expr1;
-    _sm_base1 = SmOptTypes::Value;
-    _sm_expr1 = isOfType(self, _sm_base1);
+    _sm_expr1 = isOfType(self, SmOptTypes::Value);
     return _sm_expr1;
 }
 template <class T>
@@ -718,10 +716,8 @@ T simse_optValue(Opt<T>* self) {
 }
 template <class T>
 Bool simse_resHasValue(Res<T>* self) {
-    SmResTypes _sm_base1;
     Bool _sm_expr1;
-    _sm_base1 = SmResTypes::Value;
-    _sm_expr1 = isOfType(self, _sm_base1);
+    _sm_expr1 = isOfType(self, SmResTypes::Value);
     return _sm_expr1;
 }
 template <class T>

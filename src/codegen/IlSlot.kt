@@ -110,10 +110,12 @@ fun Emitter.ilAnalyze(il: *IlBody, frame: *IlFrame): Unit {
 }
 
 // Whether a value is inlined at its use: an untyped temp with exactly one definition and
-// one use (`auto x;` is not a declaration, so it cannot be declared), and - the one typed
-// exception - a null placeholder the position typed (`RawPtr != RawPtr`, `Ui(null, ...)`,
-// impl_specs/typed-il.md): `null`'s spelling is decided by the use, so a declaration would
-// add a name the C++ never needed.
+// one use (`auto x;` is not a declaration, so it cannot be declared), and - the typed
+// exceptions - a placeholder whose single definition *is* its spelling: a null the
+// position typed (`RawPtr != RawPtr`, `Ui(null, ...)`) and a static name (`sort(names,
+// compareLessThan)`, a function reference the call spells; an enum constant the
+// construction spells). impl_specs/typed-il.md: the type is for the passes, the use
+// already knows the C++.
 fun Emitter.ilFolded(il: *IlBody, frame: *IlFrame, slot: Int): Bool {
     if (slot < 0 || slot >= il.vars.size()) {
         return false
@@ -124,7 +126,9 @@ fun Emitter.ilFolded(il: *IlBody, frame: *IlFrame, slot: Int): Bool {
     val slotType: AstXmlNode = ilVarType(il, slot)
     if (!xmlIsEmpty(slotType)) {
         val def: Int = this.ilIntAt(frame.defOp, slot, -1)
-        if (def < 0 || def >= il.ops.size() || il.ops[def].kind != IlOpKind.SetVar_Null) {
+        if (def < 0 || def >= il.ops.size()
+            || (il.ops[def].kind != IlOpKind.SetVar_Null && il.ops[def].kind != IlOpKind.GetStatic)
+        ) {
             return false // a typed slot is declared
         }
     }

@@ -1487,10 +1487,8 @@ Str plus(Span<Char>* self, Span<Char> other) {
 }
 template <class T>
 Bool simse_optHasValue(Opt<T>* self) {
-    SmOptTypes _sm_base1;
     Bool _sm_expr1;
-    _sm_base1 = SmOptTypes::Value;
-    _sm_expr1 = isOfType(self, _sm_base1);
+    _sm_expr1 = isOfType(self, SmOptTypes::Value);
     return _sm_expr1;
 }
 template <class T>
@@ -1501,10 +1499,8 @@ T simse_optValue(Opt<T>* self) {
 }
 template <class T>
 Bool simse_resHasValue(Res<T>* self) {
-    SmResTypes _sm_base1;
     Bool _sm_expr1;
-    _sm_base1 = SmResTypes::Value;
-    _sm_expr1 = isOfType(self, _sm_base1);
+    _sm_expr1 = isOfType(self, SmResTypes::Value);
     return _sm_expr1;
 }
 template <class T>
@@ -1845,10 +1841,8 @@ void ns1_okStr2(ns1_Res2<Str>* _sm_out) {
 // stress/unions/src/main.kt
 template <class T>
 Bool ns1_isOk2(ns1_Res2<T>* r) {
-    ns1_SmRes2Types _sm_base1;
     Bool _sm_expr1;
-    _sm_base1 = ns1_SmRes2Types::Value;
-    _sm_expr1 = ns1_isOfType(r, _sm_base1);
+    _sm_expr1 = ns1_isOfType(r, ns1_SmRes2Types::Value);
     return _sm_expr1;
 }
 // stress/unions/src/main.kt
@@ -1860,27 +1854,21 @@ T* ns1_optValue2(ns1_Opt2<T>* o) {
 }
 // stress/unions/src/main.kt
 Int ns1_partUnionClass() {
-    ns1_SmDoubleOrFloatTypes _sm_base1, _sm_base6, _sm_expr2, _sm_expr3, _sm_expr11, _sm_expr13,
-        _sm_expr15;
     ns1_DoubleOrFloat* _sm_base3, * _sm_base7, * _sm_base8, * _sm_base11, * _sm_base12, * _sm_base15,
         * _sm_base16, * _sm_base17;
     Int _sm_base4, _sm_base13, _sm_base14, five, _sm_expr29, _sm_expr30;
     Float64 _sm_base10;
-    ns1_Left _sm_base18;
-    ns1_SmSideOrSideTypes _sm_base19;
-    ns1_Right _sm_base20;
     ns1_SideOrSide* _sm_base21;
-    ns1_SmMarkerTypes _sm_base22;
     Bool _sm_expr1, _sm_expr4, _sm_expr6, _sm_expr9, _sm_expr10, _sm_expr12, _sm_expr14, _sm_expr16,
         _sm_expr20, _sm_expr26, _sm_expr28;
+    ns1_SmDoubleOrFloatTypes _sm_expr2, _sm_expr3, _sm_expr11, _sm_expr13, _sm_expr15;
     Int* _sm_expr5, * i;
     Str _sm_expr7, _sm_expr17, _sm_expr18, _sm_expr19, _sm_expr21, _sm_expr22, _sm_expr23, _sm_expr24,
         _sm_expr25, _sm_expr27;
     Float64* _sm_expr8, * d;
     ns1_DoubleOrFloat a;
     ns1_initByValue(simse_addressOf(a));
-    _sm_base1 = ns1_SmDoubleOrFloatTypes::None;
-    _sm_expr1 = ns1_isOfType(simse_addressOf(a), _sm_base1);
+    _sm_expr1 = ns1_isOfType(simse_addressOf(a), ns1_SmDoubleOrFloatTypes::None);
     simse_println((_sm_expr1), stdout);
     _sm_expr2 = ns1_getTypeOf(simse_addressOf(a));
     _sm_expr3 = ns1_SmDoubleOrFloatTypes::None;
@@ -1899,8 +1887,7 @@ Int ns1_partUnionClass() {
     _sm_expr8 = ns1_getDoubleValue(simse_addressOf(a));
     _sm_expr9 = _sm_expr8 != nullptr;
     simse_println((_sm_expr9), stdout);
-    _sm_base6 = ns1_SmDoubleOrFloatTypes::IntValue;
-    _sm_expr10 = ns1_isOfType(simse_addressOf(a), _sm_base6);
+    _sm_expr10 = ns1_isOfType(simse_addressOf(a), ns1_SmDoubleOrFloatTypes::IntValue);
     simse_println((_sm_expr10), stdout);
     _sm_expr11 = ns1_SmDoubleOrFloatTypes::IntValue;
     _sm_expr12 = a == _sm_expr11;
@@ -1951,20 +1938,16 @@ Int ns1_partUnionClass() {
     ns1_tagged(&_sm_expr25, _sm_base17);
     simse_println((_sm_expr25), stdout);
     ns1_SideOrSide s;
-    _sm_base18 = ns1_Left::L;
-    ns1_initByValue(simse_addressOf(s), _sm_base18);
-    _sm_base19 = ns1_SmSideOrSideTypes::L;
-    _sm_expr26 = ns1_isOfType(simse_addressOf(s), _sm_base19);
+    ns1_initByValue(simse_addressOf(s), ns1_Left::L);
+    _sm_expr26 = ns1_isOfType(simse_addressOf(s), ns1_SmSideOrSideTypes::L);
     simse_println((_sm_expr26), stdout);
-    _sm_base20 = ns1_Right::R;
-    ns1_setR(simse_addressOf(s), _sm_base20);
+    ns1_setR(simse_addressOf(s), ns1_Right::R);
     _sm_base21 = &s;
     ns1_labelSide(&_sm_expr27, _sm_base21);
     simse_println((_sm_expr27), stdout);
     ns1_Marker m;
     ns1_initByValue(simse_addressOf(m));
-    _sm_base22 = ns1_SmMarkerTypes::None;
-    _sm_expr28 = ns1_isOfType(simse_addressOf(m), _sm_base22);
+    _sm_expr28 = ns1_isOfType(simse_addressOf(m), ns1_SmMarkerTypes::None);
     simse_println((_sm_expr28), stdout);
     ns1_WithMethod w;
     ns1_initByValue(simse_addressOf(w), 4);
@@ -1977,18 +1960,15 @@ Int ns1_partUnionClass() {
 }
 // stress/unions/src/main.kt
 Int ns1_partSameType() {
-    ns1_SmUserOrEmailTypes _sm_base1, _sm_base2, _sm_base4, _sm_base6;
     Bool _sm_expr1, _sm_expr2, _sm_expr6, _sm_expr7, _sm_expr9, _sm_expr12, _sm_expr16;
     Str* _sm_expr3, * _sm_expr5, * _sm_expr8, * _sm_expr10, * _sm_expr13, * _sm_expr15;
     Int _sm_expr4, _sm_expr11, _sm_expr14;
     ns1_UserOrEmail u;
     ns1_initByValue(simse_addressOf(u));
-    _sm_base1 = ns1_SmUserOrEmailTypes::None;
-    _sm_expr1 = ns1_isOfType(simse_addressOf(u), _sm_base1);
+    _sm_expr1 = ns1_isOfType(simse_addressOf(u), ns1_SmUserOrEmailTypes::None);
     simse_println((_sm_expr1), stdout);
     ns1_setUser(simse_addressOf(u), __sm_stringTable[15]);
-    _sm_base2 = ns1_SmUserOrEmailTypes::User;
-    _sm_expr2 = ns1_isOfType(simse_addressOf(u), _sm_base2);
+    _sm_expr2 = ns1_isOfType(simse_addressOf(u), ns1_SmUserOrEmailTypes::User);
     simse_println((_sm_expr2), stdout);
     _sm_expr3 = ns1_getUser(simse_addressOf(u));
     _sm_expr4 = simse_lenOf((*_sm_expr3));
@@ -1997,8 +1977,7 @@ Int ns1_partSameType() {
     _sm_expr6 = _sm_expr5 != nullptr;
     simse_println((_sm_expr6), stdout);
     ns1_setEmail(simse_addressOf(u), __sm_stringTable[3]);
-    _sm_base4 = ns1_SmUserOrEmailTypes::Email;
-    _sm_expr7 = ns1_isOfType(simse_addressOf(u), _sm_base4);
+    _sm_expr7 = ns1_isOfType(simse_addressOf(u), ns1_SmUserOrEmailTypes::Email);
     simse_println((_sm_expr7), stdout);
     _sm_expr8 = ns1_getUser(simse_addressOf(u));
     _sm_expr9 = _sm_expr8 != nullptr;
@@ -2008,8 +1987,7 @@ Int ns1_partSameType() {
     simse_println((_sm_expr11), stdout);
     ns1_UserOrEmail v;
     ns1_initByValue(simse_addressOf(v), __sm_stringTable[8]);
-    _sm_base6 = ns1_SmUserOrEmailTypes::User;
-    _sm_expr12 = ns1_isOfType(simse_addressOf(v), _sm_base6);
+    _sm_expr12 = ns1_isOfType(simse_addressOf(v), ns1_SmUserOrEmailTypes::User);
     simse_println((_sm_expr12), stdout);
     _sm_expr13 = ns1_getUser(simse_addressOf(v));
     _sm_expr14 = simse_lenOf((*_sm_expr13));

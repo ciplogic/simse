@@ -1014,10 +1014,8 @@ Str plus(Span<Char>* self, Span<Char> other) {
 }
 template <class T>
 Bool simse_optHasValue(Opt<T>* self) {
-    SmOptTypes _sm_base1;
     Bool _sm_expr1;
-    _sm_base1 = SmOptTypes::Value;
-    _sm_expr1 = isOfType(self, _sm_base1);
+    _sm_expr1 = isOfType(self, SmOptTypes::Value);
     return _sm_expr1;
 }
 template <class T>
@@ -1028,10 +1026,8 @@ T simse_optValue(Opt<T>* self) {
 }
 template <class T>
 Bool simse_resHasValue(Res<T>* self) {
-    SmResTypes _sm_base1;
     Bool _sm_expr1;
-    _sm_base1 = SmResTypes::Value;
-    _sm_expr1 = isOfType(self, _sm_base1);
+    _sm_expr1 = isOfType(self, SmResTypes::Value);
     return _sm_expr1;
 }
 template <class T>
@@ -1960,7 +1956,6 @@ ns1_Box* ns1_maybePointer(Ref<ns1_Box> box, Bool flag) {
 }
 // stress/objects/src/main.kt
 Int ns1_partLanguageTour() {
-    ns1_Color _sm_base1, _sm_base2, _sm_base3, _sm_base4, parsed, _sm_expr8;
     Int _sm_base6, _sm_base9, _sm_expr6, _sm_expr9, _sm_expr14, _sm_expr15, _sm_expr21, _sm_expr33,
         _sm_expr34;
     Str* _sm_base11, * _sm_base13, * _sm_base15, * _sm_base17, * _sm_base19, * _sm_base21;
@@ -1969,27 +1964,24 @@ Int ns1_partLanguageTour() {
         _sm_expr19, _sm_expr30, _sm_expr31, _sm_expr32;
     Char _sm_base26, _sm_base27, letter;
     Float64 _sm_base28, _sm_expr25;
+    ns1_Color parsed, _sm_expr8;
     Ref<ns1_Box> present, absent, boxed;
     Bool _sm_expr10, _sm_expr17, _sm_expr18, _sm_expr23, _sm_expr26, _sm_expr27, _sm_expr28, _sm_expr29;
     ns1_Box* rawPresent, * rawAbsent;
     Opt<Int> number, badNumber;
     Opt<Float64> fraction;
     Int8 small;
-    _sm_base1 = ns1_Color::Red;
-    ns1_label(&_sm_expr1, _sm_base1);
+    ns1_label(&_sm_expr1, ns1_Color::Red);
     simse_println((_sm_expr1), stdout);
-    _sm_base2 = ns1_Color::Green;
-    ns1_label(&_sm_expr2, _sm_base2);
+    ns1_label(&_sm_expr2, ns1_Color::Green);
     simse_println((_sm_expr2), stdout);
-    _sm_base3 = ns1_Color::Blue;
-    ns1_label(&_sm_expr3, _sm_base3);
+    ns1_label(&_sm_expr3, ns1_Color::Blue);
     simse_println((_sm_expr3), stdout);
     ns1_describe(&_sm_expr4, 0);
     simse_println((_sm_expr4), stdout);
     ns1_describe(&_sm_expr5, 5);
     simse_println((_sm_expr5), stdout);
-    _sm_base4 = ns1_Color::Green;
-    _sm_expr6 = static_cast<Int>(_sm_base4);
+    _sm_expr6 = static_cast<Int>(ns1_Color::Green);
     simse_println((_sm_expr6), stdout);
     parsed = ns1_simse_Color_fromInt(4);
     ns1_label(&_sm_expr7, parsed);

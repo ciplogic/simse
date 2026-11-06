@@ -6103,3 +6103,23 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   numbering byte for byte (the first cut renumbered `partControls_closure1`'s frame; the
   corpus caught it at minui-layout). Verified: `bun tools/iterate.js --full` - **158/158**
   and both fixed points; the published bootstrap refreshed.
+
+- **A function name passed as a callable is typed by the position, and a static name
+  folds at its use.** The last measured `?` population (24 slots): a function *name* in
+  a callable argument position (`markScan(*table, " ", matchSpaces)` with `scan:
+  ScanFunc`, `rules.append(foldGlobalRule)`) - the `GetStatic` static-fallback the
+  typed-IL inventory names, because the type rules cannot type the reference itself and
+  the name holds no slot. `convertArgument` now gives it the parameter's callable type
+  (the same source a lambda's contract takes; `ilCallableOf` resolves the alias). The
+  corpus then said what the emission should be: `sort(names, compareLessThan)` is the
+  golden, not a declared `Func<...>` temp - so `ilFolded`'s typed exception grew from
+  "a null the position typed" to "a placeholder whose single definition *is* its
+  spelling": `SetVar_Null` and `GetStatic`. That folds every single-use typed static,
+  function reference or enum constant alike, and the 34 goldens that moved all moved
+  the same way - `SmOptTypes _sm_base1; _sm_base1 = SmOptTypes::Value;
+  isOfType(self, _sm_base1)` is `isOfType(self, SmOptTypes::Value)`, the construction
+  argument `UiEventKind.None` inline, the declaration groups re-flowing around the
+  dropped names (every diff line classified; no other shape). Measured after: `?`
+  slots **4** (from 342 at the start of this series), the C++ shorter by a declared
+  temp per inlined static. Verified: `bun tools/iterate.js --full` - **158/158** and
+  both fixed points; the published bootstrap refreshed.

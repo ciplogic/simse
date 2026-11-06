@@ -547,6 +547,22 @@ fun IlExtractor.convertArgument(callee: *AstXmlNode, param: *AstXmlNode, arg: *A
     if (xmlIsEmpty(param)) {
         return this.operandOf(arg)
     }
+    // A function *name* passed where a callable type expects one (`markScan(*table, " ",
+    // matchSpaces)` with `scan: ScanFunc`): the name has no slot and the rules cannot type
+    // the reference itself - the parameter's callable type is the position's answer, the
+    // same source the lambda's contract takes. The slot is declared with it (a typed
+    // static is storage, the emitter's convention), so a call through the argument reads a
+    // typed operand.
+    if (xmlKind(arg) == AstNodeCategory.ExprName && !xmlIsEmpty(this.ilCallableOf(param))) {
+        val fnName: Str = xmlAttr(arg, AstNodeAttributeKind.Name)
+        if (this.varIndex(fnName) < 0 && !this.fn.captures.has(fnName)) {
+            val fnSlot: Int = this.operandOf(arg)
+            if (fnSlot >= 0 && xmlIsEmpty(ilVarType(this.out, fnSlot))) {
+                this.setSlotType(fnSlot, param)
+            }
+            return fnSlot
+        }
+    }
     // A null argument against a nullable parameter: the placeholder takes the parameter's
     // type (`Ui(null, ...)` is seven `RawPtr` slots, not seven `?`s). The spelling is the
     // destination's either way - the slot folds at its use (`ilFolded`).
