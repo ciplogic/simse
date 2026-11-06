@@ -6123,3 +6123,14 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   slots **4** (from 342 at the start of this series), the C++ shorter by a declared
   temp per inlined static. Verified: `bun tools/iterate.js --full` - **158/158** and
   both fixed points; the published bootstrap refreshed.
+
+- **A lambda body's IL row states its proved return.** The 14 closure bodies whose
+  signature printed `-> ?` on the self-transpile were not untyped: the closure *record*
+  (`IlClosure.returnType`, what the emitter spells - `Bool ns1_sort_closure1_invoke`) has
+  carried the proved type since the lambda work landed. The *body's* row was baked by
+  `begin` - which runs the inner extraction - before `lambdaReturnOf` proved the answer,
+  so the one record the dump prints said `?` for a return everything else knew.
+  `lambdaOf` now rewrites the body's signature from the proved `retText` where it builds
+  the closure's, so the IL and its dump say one thing. Dump-only: no emission moves.
+  Measured: `-> ?` 14 -> **0**. Verified in the same green loop as the entry above
+  (`bun tools/iterate.js --full` - **158/158** and both fixed points).

@@ -1142,6 +1142,21 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
     val joinStrsText: Str = joinStrs(captured, ", ")
     val paramsText: Str = joinStrs(paramTexts, ", ")
     closure.signature = `(@joinStrsText) (@paramsText) -> @retText`
+    // The body's own row was baked by `begin` before the return was proved, so it still
+    // says `?` - the proved answer is what the IL should state, and the dump should print.
+    var bodyParams: List<Str> = List<Str>()
+    for (*slot in innerBody.vars) {
+        if (slot.kind == IlVarKind.Argument) {
+            var slotTypeText: Str = "?"
+            if (slot.typeIndex >= 0 && slot.typeIndex < innerBody.types.size()) {
+                slotTypeText = innerBody.types[slot.typeIndex]
+            }
+            val bodySlotName: Str = slot.name
+            bodyParams.append(`@slotTypeText @bodySlotName`)
+        }
+    }
+    val bodyParamsText: Str = joinStrs(bodyParams, ", ")
+    innerBody.signature = `(@bodyParamsText) -> @retText`
     this.unit.lambdas.append(innerBody)
     this.unit.closures.append(closure)
 
