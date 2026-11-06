@@ -72,6 +72,15 @@ before committing).
   boundary: a lambda nested *inside another* lambda in a machine body captures only what
   the enclosing closure's frame carries (the same depth rule any body has), and `yield`
   inside a lambda body is not a shape the language gives meaning to.
+- **The linear form is typed to four slots** (typed-IL step 4, `impl_specs/typed-il.md`):
+  a `null` and a function name are typed by the position they stand in, and a temp whose
+  single definition is its spelling (`SetVar_Null`, `GetStatic`) folds at its use, so the
+  C++ keeps the inline `nullptr` / `compareLessThan` / `SmOptTypes::Value`. The residue on
+  the self-transpile is one shape: a function name as a *generic* constructor argument or
+  an index-store value (`List<ScanFunc>(256, matchNoToken)`, `table[d] = matchName`) - the
+  receiver's binding names the type, a rule not yet written. The promotion trace is
+  truthful (each loop walked once, in scope; every hoist refusal names the gate that
+  failed) - `--diagnostics sema` is the measurement to trust.
 - The single amalgamated translation unit (~190 KB of C++) is fine today; revisit if the
   compiler grows much.
 

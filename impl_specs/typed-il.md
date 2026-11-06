@@ -86,6 +86,26 @@ that survive to emission) and tightens as ops gain types; when it is strict, the
   slot-without-type failure names its line.
 - **Step 2 (typed pointer indexing) is in** (`ba0304c`): `ps[i]` over a `*Cell` types as
   `Cell`, below the container shapes.
+- **Step 4 (the null-materialization and static-fallback slots) is in** (the November
+  2026 series, `8ad8c1c`..`8ca5445`). Measured first on the self-transpile: 342 `?`
+  slots in the linear form, 320 of them `SetVar_Null`. A null is typed by the position
+  it stands in - the other side of an `==`/`!=`, the parameter it is passed to, the
+  field it is written to, the declared return it answers - and a function *name* in a
+  callable argument position by the parameter's callable type. The emission bridge is
+  `ilFolded`'s typed exception: a temp whose single definition *is* its spelling
+  (`SetVar_Null`, `GetStatic`) folds at its use, typed or not, so the type serves the
+  passes while the C++ keeps the inline `nullptr` / `compareLessThan` /
+  `SmOptTypes::Value` - and dropped a declared temp per single-use static on the way
+  (the published bootstrap lost ~4,300 lines). The residue is **4** slots, one shape:
+  a function name as a *generic* constructor argument (`List<ScanFunc>(256,
+  matchNoToken)`, the parameter is the bare `T`) or as an index-store value
+  (`table[d] = matchName`) - the receiver's binding names the type, a rule not yet
+  written. Two measurement fixes came first and are what made the residue countable:
+  the promotion walk visits each loop once, in the scope that declares its locals
+  (`78d6670` - 168 phantom `type unknown` refusals were echoes of a second, out-of-scope
+  walk), and every span-hoist refusal names the gate that actually failed (`f4c5992` -
+  the syntactic gates run before the type question, and a body-local root is the rebind
+  it is). `hoistSpan ... type unknown` is zero on the self-transpile.
 - **The buffer hoist is in (v3, landed)**: the stability walker (`bpSpanStableNode`) and
   the declaration-free rewrite (`hoistSpanAt`: every `c[i]` in a storage-stable loop
   becomes `spanOf(c)[i]`, the emitter spelling the span index through its pointer; no
