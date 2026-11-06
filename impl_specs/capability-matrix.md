@@ -6134,3 +6134,24 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   the closure's, so the IL and its dump say one thing. Dump-only: no emission moves.
   Measured: `-> ?` 14 -> **0**. Verified in the same green loop as the entry above
   (`bun tools/iterate.js --full` - **158/158** and both fixed points).
+
+- **A callable local shadows its name's declarations, alias and all.** `stress/
+  callable-table`'s first cut found it: `step(10)` with `step` a local of
+  `(Int) -> Int` (through `typealias Step`) resolved the prelude `Range.step`
+  extension and spelled the argument as its receiver - `step(simse_addressOf(10))`, a
+  `Range*` where the local's `operator()` wanted an `Int`. The callable-value rule
+  was already in the emitter (`CgCall`: "the value's own signature is the conversion
+  truth"), but its kind test read `inferType`'s answer raw, and a local typed through
+  an alias answers the alias's *name* - `TypeNamed`, not `TypeFunction` - so the rule
+  never fired and `findFunction` won. One rule, two places: the kind test resolves the
+  alias first (`semResolveTypeAlias`, the walk every other alias reader uses), and the
+  extractor's target resolution skips the declaration for a bare-name call whose name
+  is a callable local (`ilCalleeIsCallableLocal`) so the IL's method entry is the
+  value's call too - a member call (`xs.step(2)`) still resolves its extension; the
+  receiver is the callee there, not any same-named local (the first cut of that guard
+  broke every `this.`-extension call in the prelude - `contains`' `indexOf` - until
+  the member arm was exempted; the corpus caught it at cl.exe). `stress/callable-
+  shadow` pins all three spellings: the aliased local, a callable *parameter* named
+  `step`, and a second value called bare. Verified: `bun tools/iterate.js --full` -
+  **158/158** (159 with the new case) and both fixed points; the published bootstrap
+  refreshed.

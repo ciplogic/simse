@@ -390,8 +390,11 @@ fun Emitter.call(e: *AstXmlNode): Str {
             // the value's own signature is the conversion truth, never a same-named
             // declaration's - a callable parameter named `step` must not resolve
             // `Range.step` and take its argument's address as that declaration's
-            // receiver. The name is a local here, so no package can own it either.
-            val valueSig: AstXmlNode = this.inferType(callee)
+            // receiver. The name is a local here, so no package can own it either. A
+            // local typed through a `typealias` (`val step: Step` with
+            // `typealias Step = (Int) -> Int`) answers the alias's target - the kind
+            // test sees through it.
+            val valueSig: AstXmlNode = semResolveTypeAlias(this.inferType(callee), *this.types)
             if (xmlKind(valueSig) == AstNodeCategory.TypeFunction) {
                 var valueArgs: List<Str> = List<Str>()
                 val sigParams: List<AstXmlNode> = xmlChildren(valueSig, AstNodeKind.ParamType)

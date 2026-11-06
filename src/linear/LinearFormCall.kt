@@ -11,6 +11,21 @@ import common
 import sema
 
 // `dst < 0` means the result is dropped (`CallVoid`).
+// Whether `name` is a frame slot of *callable* type: a call by that bare name goes through
+// the value - the local shadows every same-named declaration (`step(10)` with a
+// `step: (Int) -> Int` local is the local's call, not the prelude `Range.step` extension
+// spelled as a plain call with its receiver as the first argument). A local of any other
+// type does not shadow: `step` held as an `Int` and called `step(10)` is the function's
+// call exactly as before.
+fun IlExtractor.ilCalleeIsCallableLocal(name: Str): Bool {
+    val at: Int = this.varIndex(name)
+    if (at < 0) {
+        return false
+    }
+    val typeNode: AstXmlNode = ilVarType(this.out, at)
+    return !xmlIsEmpty(this.ilCallableOf(typeNode))
+}
+
 fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
     val callee: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Callee)
     val hasDst: Bool = dst >= 0
@@ -142,10 +157,16 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
     }
 
     // The trailing arguments may pack into a list-valued last parameter. A static call
-    // (`Res<Str>.ok(x)`) is not looked up: its callee is a type.
+    // (`Res<Str>.ok(x)`) is not looked up: its callee is a type. A member call resolves its
+    // extension however the receiver reads - a same-named local is not the callee there -
+    // while a bare-name call through a callable local is the *value's* call, and no
+    // declaration can stand for it (`step(10)` with a `step: (Int) -> Int` local is the
+    // local's call, not the prelude `Range.step` extension's).
     var target: AstXmlNode = xmlEmptyNode()
     var targetPackage: Str = ""
-    if (!staticCall && callName == calleeName) {
+    if (!staticCall && callName == calleeName
+        && (receiverCall || !this.ilCalleeIsCallableLocal(callName))
+    ) {
         var receiverNode: AstXmlNode = xmlEmptyNode()
         if (receiverCall) {
             receiverNode = lhs
