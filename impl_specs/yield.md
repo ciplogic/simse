@@ -143,7 +143,18 @@ twice (field into the temporary, temporary into the loop variable).
 
 A yielding *extension* can take a machine as its receiver
 (`fun ..*T.select<T, U>(f: (*T) -> U): ..*U`), which is the shape a LINQ-style pipeline is
-built from (`modules/linq/linq.kt`). Two rules make it express:
+built from (`modules/linq/linq.kt`). The receiver can also be spelled through the machine
+contract's protocol - `fun Yieldable<*T>.select<T, U>(...)`, with
+`protocol fun Yieldable<TStateMachine, TItem> TStateMachine.advance(): Bool` declared in the
+prelude: the subject `TStateMachine` is the pattern's wildcard (spelled by no one, exactly
+as `..*T` spells it) and the remaining argument binds the element. The compiler normalizes
+the spelling to the `..T` pattern in place right after `collectGlobal`, keeping the
+authored name in a `MachineProtocol` attribute - every reader of `..T` reads it unchanged,
+the IL names `Yieldable<*T>` where the bare pattern read `*?`, and the two spellings of one
+extension transpile byte for byte identically. Still a constraint, not an interface
+(`impl_specs/protocols.md`): no value, no boxing, no vtable.
+
+Two rules make it express:
 
 - **The receiver's type parameter is listed in the function's own `<...>`**
   (`..*T.select<T, U>`): the parser reads type parameters from that list, and the receiver

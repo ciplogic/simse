@@ -535,28 +535,14 @@ fun ilNamedTypeNode(name: Str): AstXmlNode {
 }
 
 // A receiver slot's type: already a pointer or a handle when the source said so, else `T*`.
+// A protocol receiver's slot keeps the pointer-over-pattern node - the emitter's `type()`
+// mints the machine class from it (`_SmIter*`) - while the *table's text* carries the
+// protocol's name (`ilReceiverTypeText`): the dump names the contract, the C++ names the
+// template parameter, and no spelling path meets a name it cannot resolve.
 fun ilReceiverTypeNode(typeNode: *AstXmlNode): AstXmlNode {
     val kind: AstNodeCategory = xmlKind(typeNode)
     if (kind == AstNodeCategory.TypeReference || kind == AstNodeCategory.TypePointer) {
         return typeNode
-    }
-    if (kind == AstNodeCategory.TypeYield) {
-        // A protocol receiver's frame slot carries the *named* contract
-        // (`Yieldable<*T>`), not a pointer over a pattern no one can spell: a dump- and
-        // pass-facing type, never emitted as C++ (a machine receiver's parameter is the
-        // minted `_SmIter*`, `CgEmitFn`'s own path).
-        val protocolName: Str = xmlAttr(typeNode, AstNodeAttributeKind.MachineProtocol)
-        if (protocolName != "") {
-            var named: AstXmlNode = AstXmlNode(
-                AstNodeKind.Type, AstNodeCategory.TypeGeneric,
-                List<AstNodeAttribute>(), Array<AstXmlNode>()
-            )
-            named.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, protocolName))
-            var element: AstXmlNode = xmlChild(typeNode, AstNodeKind.Inner)
-            element.name = AstNodeKind.TypeArg
-            xmlAddChild(named, element)
-            return named
-        }
     }
     return ilPointerNode(typeNode)
 }

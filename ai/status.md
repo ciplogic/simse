@@ -77,9 +77,11 @@ before committing).
   stand in - the other comparison operand, the parameter, the field, the return, a
   construction's element, an index store's element - and a temp whose single definition is
   its spelling (`SetVar_Null`, `GetStatic`) folds at its use, so the C++ keeps the inline
-  `nullptr` / `compareLessThan` / `SmOptTypes::Value`. The one *type* the IL cannot spell
-  is a machine pattern receiver (`fun ..*T.toList<T>()` in `modules/linq` is `self: *?`) -
-  a vocabulary gap, not a rule. The promotion trace is truthful (each loop walked once, in
+  `nullptr` / `compareLessThan` / `SmOptTypes::Value`. A machine receiver can be spelled
+  through its protocol (`fun Yieldable<*T>.toList<T>()`, with `protocol fun
+  Yieldable<TStateMachine, TItem> TStateMachine.advance(): Bool` the prelude's name for
+  the machine contract) and the IL carries that name - the `*?` receiver is gone. The
+  promotion trace is truthful (each loop walked once, in
   scope; every hoist refusal names the gate that failed) - `--diagnostics sema` is the
   measurement to trust.
 - The single amalgamated translation unit (~190 KB of C++) is fine today; revisit if the

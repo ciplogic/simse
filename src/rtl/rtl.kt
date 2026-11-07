@@ -60,7 +60,7 @@ protocol fun Yieldable<TStateMachine, TItem> TStateMachine.advance(): Bool
 // The element as a *copy*: `..*T.toValues()` is the value machine a `for (x in m)` walks,
 // spelled as a pipeline step. The copy lives in the machine's `value` field across the
 // yield, so the place the machine hands out is the copy itself.
-fun ..*T.toValues<T>(): ..T {
+fun Yieldable<*T>.toValues<T>(): ..T {
     while (this.advance()) {
         var value: T = *this.current
         yield value
@@ -96,7 +96,7 @@ fun Array<T>.forEach<T>(f: (T) -> Unit): Unit {
 
 // And back: the place of what a value machine yielded (`this.current`), so a chain that
 // needs `..*T` again (`select`, `where`) takes it without a `toList` round trip.
-fun ..T.toPtrs<T>(): ..*T {
+fun Yieldable<T>.toPtrs<T>(): ..*T {
     while (this.advance()) {
         yield *this.current
     }

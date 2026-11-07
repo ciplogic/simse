@@ -101,9 +101,15 @@ that survive to emission) and tightens as ops gain types; when it is strict, the
   element; `table[i] = plusOne` - the stored value takes the receiver's;
   `stress/callable-table` pins both with an emission golden), the one shape left being the
   *receiver* of an extension over a machine pattern (`fun ..*T.toList<T>()` in
-  `modules/linq` types `self` as `*?`): that is a type the IL has no vocabulary for yet -
-  a machine type parameter - not a rule away. Two measurement fixes came first and are
-  what made the residue countable:
+  `modules/linq` typed `self` as `*?`) - closed with the **protocol receiver**:
+  `fun Yieldable<*T>.toList<T>()` names the machine contract (`protocol fun
+  Yieldable<TStateMachine, TItem> TStateMachine.advance(): Bool`, the prelude), normalizes
+  to the pattern in place, and the IL carries `Yieldable<*T>` (`ilReceiverTypeText`)
+  where the bare sigil read `*?`; the table's *node* stays the pointer-over-pattern the
+  emitter mints `_SmIter*` from, so no spelling path meets a name it cannot resolve
+  (`modules/linq` and the prelude's `toValues`/`toPtrs` converted;
+  `stress/yieldable-receiver` pins the byte-identical emission). Two measurement fixes
+  came first and are what made the residue countable:
   the promotion walk visits each loop once, in the scope that declares its locals
   (`78d6670` - 168 phantom `type unknown` refusals were echoes of a second, out-of-scope
   walk), and every span-hoist refusal names the gate that actually failed (`f4c5992` -

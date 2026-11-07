@@ -6189,3 +6189,22 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   no vtable - the `tryAdvance` single-method surface is stage 2. Verified:
   `bun tools/iterate.js --full` - **160/160** and both fixed points; the published
   bootstrap refreshed.
+
+- **The tree's machine receivers are spelled through the protocol, and the `*?` receiver
+  is gone.** `modules/linq`'s six operators (`select`, `where`, `take`, `skip`,
+  `toList`, `forEach`) and the prelude's own two (`toValues`, `toPtrs`) declare their
+  receivers as `fun Yieldable<*T>....` / `fun Yieldable<T>....` - the sigil `..*T` no
+  longer appears in a receiver position anywhere in the compiler's own tree. The IL
+  names what they mean: `ns13_toList (Yieldable<*T> self) -> List<T>` where the dump
+  read `(*? self)`; self-transpile `*?` receivers 8 -> **0**. One emitter lesson paid
+  for on the way: the frame slot's *node* must stay the pointer-over-pattern the
+  emitter mints `_SmIter*` from - a synthetic `Yieldable<...>` type node reached
+  `typeName` through a position-less spelling path and the failure fell back to the
+  declaration (`unsupported type 'Yieldable'` at linq.kt:41); the *text* carries the
+  name and the node keeps the mintable shape, and no spelling path meets a name it
+  cannot resolve. Emission byte-identical - every linq-touching golden (the `linq` and
+  `zip` cases among them) passed untouched - and `stress/yieldable-receiver` pins a
+  protocol-receiver pipeline end to end with an emission golden, the baseline stage 2
+  (`tryAdvance`, the one-method surface) moves from. Verified:
+  `bun tools/iterate.js --full` - **161/161** and both fixed points; the published
+  bootstrap refreshed.

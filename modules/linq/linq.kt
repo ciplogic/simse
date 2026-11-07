@@ -38,7 +38,7 @@ fun List<T>.iter<T>(): ..*T {
 // operator: the mapped value lives in a machine field across the yield, and the machine
 // hands out its place (`..*U`), so a chain stays pointer-typed end to end and the next
 // operator's lambda still reads in place. The place is valid until the next advance.
-fun ..*T.select<T, U>(f: (*T) -> U): ..*U {
+fun Yieldable<*T>.select<T, U>(f: (*T) -> U): ..*U {
     while (this.advance()) {
         var mapped: U = f(this.current)
         yield *mapped
@@ -46,7 +46,7 @@ fun ..*T.select<T, U>(f: (*T) -> U): ..*U {
 }
 
 // `where`: the elements `keep` accepts, lazily.
-fun ..*T.where<T>(keep: (*T) -> Bool): ..*T {
+fun Yieldable<*T>.where<T>(keep: (*T) -> Bool): ..*T {
     while (this.advance()) {
         if (keep(this.current)) {
             yield this.current
@@ -56,7 +56,7 @@ fun ..*T.where<T>(keep: (*T) -> Bool): ..*T {
 
 // `take`: at most `count` elements. The count is checked *before* the step, so the
 // source is not consumed one element past what was handed out.
-fun ..*T.take<T>(count: Int): ..*T {
+fun Yieldable<*T>.take<T>(count: Int): ..*T {
     var taken: Int = 0
     while (taken < count) {
         if (!this.advance()) {
@@ -68,7 +68,7 @@ fun ..*T.take<T>(count: Int): ..*T {
 }
 
 // `skip`: the elements after the first `count`.
-fun ..*T.skip<T>(count: Int): ..*T {
+fun Yieldable<*T>.skip<T>(count: Int): ..*T {
     var skipped: Int = 0
     while (this.advance()) {
         if (skipped < count) {
@@ -81,7 +81,7 @@ fun ..*T.skip<T>(count: Int): ..*T {
 
 // `toList`: drain the chain, copying each element once. The one operator that is not
 // lazy, and the one that reads the element's *value* (`*this.current`).
-fun ..*T.toList<T>(): List<T> {
+fun Yieldable<*T>.toList<T>(): List<T> {
     var out: List<T> = List<T>()
     while (this.advance()) {
         out.append(*this.current)
@@ -93,7 +93,7 @@ fun ..*T.toList<T>(): List<T> {
 // and nothing is collected - a loop that wants no result at all (a call, a print, an append)
 // ends here instead of draining into a list it would discard. The lambda captures by value,
 // so an accumulator it writes is captured as a pointer (`&target`).
-fun ..*T.forEach<T>(action: (*T) -> Unit): Unit {
+fun Yieldable<*T>.forEach<T>(action: (*T) -> Unit): Unit {
     while (this.advance()) {
         action(this.current)
     }
