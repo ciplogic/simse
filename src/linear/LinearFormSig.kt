@@ -258,6 +258,17 @@ fun ilReceiverTypeText(typeNode: *AstXmlNode): Str {
             }
             return "*" + ilTypeText(xmlChildPtr(typeNode, AstNodeKind.Inner))
         }
+
+        AstNodeCategory.TypeYield -> {
+            // A receiver spelled through a protocol (`fun Yieldable<*T>.toList<T>()`): the
+            // bare pattern has no class to name (`*?`), but the protocol's spelling does -
+            // the machine contract exactly as the author wrote it.
+            val protocolName: Str = xmlAttr(typeNode, AstNodeAttributeKind.MachineProtocol)
+            if (protocolName != "") {
+                val elementText: Str = ilTypeText(xmlChildPtr(typeNode, AstNodeKind.Inner))
+                return `@protocolName<@elementText>`
+            }
+        }
     }
     return "*" + ilTypeText(typeNode)
 }

@@ -48,6 +48,15 @@ fun Array<T>.iterOf<T>(): ..*T {
     }
 }
 
+// The machine contract every `yield` body compiles to (`impl_specs/yield.md`): `advance()`
+// steps and answers whether an element follows, `current` is it. A protocol, not an
+// interface - a constraint with no value, no boxing, no vtable (`impl_specs/protocols.md`)
+// - and the name a receiver can be spelled through: `fun Yieldable<*T>.toList<T>()` reads
+// where `fun ..*T.toList<T>()` sigils, and means the same machine pattern (the subject
+// `TStateMachine` is the pattern's wildcard, `TItem` the element the receiver's argument
+// binds). `ilReceiverTypeText` names it in the IL where the bare pattern reads `*?`.
+protocol fun Yieldable<TStateMachine, TItem> TStateMachine.advance(): Bool
+
 // The element as a *copy*: `..*T.toValues()` is the value machine a `for (x in m)` walks,
 // spelled as a pipeline step. The copy lives in the machine's `value` field across the
 // yield, so the place the machine hands out is the copy itself.

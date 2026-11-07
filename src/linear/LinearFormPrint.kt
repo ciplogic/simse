@@ -540,6 +540,24 @@ fun ilReceiverTypeNode(typeNode: *AstXmlNode): AstXmlNode {
     if (kind == AstNodeCategory.TypeReference || kind == AstNodeCategory.TypePointer) {
         return typeNode
     }
+    if (kind == AstNodeCategory.TypeYield) {
+        // A protocol receiver's frame slot carries the *named* contract
+        // (`Yieldable<*T>`), not a pointer over a pattern no one can spell: a dump- and
+        // pass-facing type, never emitted as C++ (a machine receiver's parameter is the
+        // minted `_SmIter*`, `CgEmitFn`'s own path).
+        val protocolName: Str = xmlAttr(typeNode, AstNodeAttributeKind.MachineProtocol)
+        if (protocolName != "") {
+            var named: AstXmlNode = AstXmlNode(
+                AstNodeKind.Type, AstNodeCategory.TypeGeneric,
+                List<AstNodeAttribute>(), Array<AstXmlNode>()
+            )
+            named.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, protocolName))
+            var element: AstXmlNode = xmlChild(typeNode, AstNodeKind.Inner)
+            element.name = AstNodeKind.TypeArg
+            xmlAddChild(named, element)
+            return named
+        }
+    }
     return ilPointerNode(typeNode)
 }
 

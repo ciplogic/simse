@@ -6170,3 +6170,22 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `toList`/`forEach` (`self: *?`) - a vocabulary the IL does not have yet, not a rule
   away. Verified: `bun tools/iterate.js --full` - **160/160** and both fixed points; the
   published bootstrap refreshed.
+
+- **A receiver can be spelled through a protocol: `fun Yieldable<*T>.toList<T>()`.** The
+  machine receiver's `..*T` sigil says what the machine *is* structurally; the protocol
+  names the *contract* (`protocol fun Yieldable<TStateMachine, TItem>
+  TStateMachine.advance(): Bool`, the prelude) and the receiver's argument binds the
+  element the pattern yields - the subject `TStateMachine` is the pattern's wildcard,
+  spelled by no one, exactly as `..*T` spells it. The compiler normalizes the spelling
+  to the machine pattern **in place** right after `collectGlobal` (the tree node becomes
+  `..<element>`, its `Name` replaced by a `MachineProtocol` attribute), so every reader
+  of `..T` - the extension match, the body's `this`, the emitter's template over the
+  machine class - reads it unchanged, and the authored spelling is what the IL carries:
+  `ilReceiverTypeText` names `Yieldable<*T>` where the bare pattern read `*?`. Proven
+  equivalent before landing: `fun Yieldable<*Int>.drain()` and `fun ..*Int.drain()`
+  transpile byte for byte identically, and an unknown name still refuses
+  (`unknown type 'Bogus'` - the pass touches only names the program's protocols carry).
+  Still a constraint, not an interface (`impl_specs/protocols.md`): no value, no boxing,
+  no vtable - the `tryAdvance` single-method surface is stage 2. Verified:
+  `bun tools/iterate.js --full` - **160/160** and both fixed points; the published
+  bootstrap refreshed.

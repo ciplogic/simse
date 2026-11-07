@@ -13,6 +13,7 @@ import errors
 fun Analyzer.run(): Unit {
     this.checkPreludeTypeNames()
     this.collectGlobal()
+    this.normalizeProtocolReceivers()
     this.checkOperators()
     this.collectUninitTypes()
     for (input in this.inputs) {
@@ -25,6 +26,68 @@ fun Analyzer.run(): Unit {
         }
         this.popScope()
     }
+}
+
+// A receiver spelled through a protocol (`fun Yieldable<*T>.toList<T>()`): the protocol
+// names the machine's contract, and the receiver's arguments bind the protocol's parameters
+// after its subject - the machine class is the pattern's wildcard, spelled by no one,
+// exactly the way `..*T` spells it. The node becomes that machine pattern in place, so
+// every reader of `..T` (the extension match, the body's `this`, the emitter's template
+// over the machine class) reads it unchanged, and the authored spelling is kept in the
+// `MachineProtocol` attribute - the name the IL carries (`ilReceiverTypeText`) where the
+// bare pattern reads `*?`. Runs after `collectGlobal` (the program's protocols are all
+// registered) and before anything reads a receiver.
+fun Analyzer.normalizeProtocolReceivers(): Unit {
+    for (input in this.inputs) {
+        this.file = input.fileName
+        for (*decl in xmlDecls(input.module)) {
+            if (xmlKind(decl) != AstNodeCategory.Function || xmlIsProtocolDecl(decl)) {
+                continue
+            }
+            val receiver: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.Receiver)
+            if (receiver != null) {
+                this.normalizeMachineProtocolReceiver(receiver)
+            }
+        }
+    }
+}
+
+// One receiver, in place: the `Yieldable<...>` generic becomes the `..<element>` pattern,
+// its `Name` replaced by the `MachineProtocol` attribute. A name the program's protocols do
+// not carry is left alone - `resolveType` reports it as the unknown type it is.
+fun Analyzer.normalizeMachineProtocolReceiver(receiver: *AstXmlNode): Unit {
+    if (xmlIsEmpty(receiver) || xmlKind(receiver) != AstNodeCategory.TypeGeneric) {
+        return
+    }
+    val protocolName: Str = xmlAttr(receiver, AstNodeAttributeKind.Name)
+    if (!this.globalProtocols.has(protocolName)) {
+        return
+    }
+    val protocol: *AstXmlNode = this.globalProtocols.getPtr(protocolName)
+    val params: List<Str> = xmlTypeParamNames(*protocol)
+    val args: List<AstXmlNode> = xmlChildren(receiver, AstNodeKind.TypeArg)
+    if (params.size() < 2 || args.size() != params.size() - 1) {
+        val wanted: Int = params.size() - 1
+        this.diag(
+            xmlLine(receiver), xmlColumn(receiver),
+            `the receiver protocol '@protocolName' names its machine; pass its @(wanted) yielded argument(s) ('@protocolName<...>')`
+        )
+        return
+    }
+    var kept: List<AstNodeAttribute> = List<AstNodeAttribute>()
+    for (*attr in receiver.attributes) {
+        if (attr.name != AstNodeAttributeKind.Name) {
+            kept.append(attr)
+        }
+    }
+    kept.append(AstNodeAttribute(AstNodeAttributeKind.MachineProtocol, protocolName))
+    receiver.attributes = kept
+    var element: AstXmlNode = args[0]
+    element.name = AstNodeKind.Inner
+    var children: List<AstXmlNode> = List<AstXmlNode>()
+    children.append(element)
+    receiver.kind = AstNodeCategory.TypeYield
+    receiver.Children = children.toArray()
 }
 
 // The operator functions (`operator fun get`/`set`, specs/functions.md): the index syntax

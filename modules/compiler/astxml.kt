@@ -151,7 +151,14 @@ enum class AstNodeAttributeKind {
     // while the body is still an AST: a machine field can then hold the closure, and
     // `lambdaOf` mints no symbol of its own - the stamp is the name, extraction and emission
     // alike. Appended last, so the values already in use do not move.
-    SmClosure
+    SmClosure,
+
+    // A receiver spelled through a protocol (`fun Yieldable<*T>.toList<T>()`,
+    // impl_specs/yield.md "A machine as a receiver"): the value is the protocol's name, and
+    // it sits on the `..T` pattern the receiver was normalized to - the authored spelling,
+    // kept for the IL to name (`ilReceiverTypeText`: `Yieldable<*T>`, not `*?`) and for
+    // diagnostics to quote. Appended last, so the values already in use do not move.
+    MachineProtocol
 }
 
 // What a node is - the schema's `kind` - as against its role (`AstNodeKind`, where it
