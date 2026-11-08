@@ -6208,3 +6208,23 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   (`tryAdvance`, the one-method surface) moves from. Verified:
   `bun tools/iterate.js --full` - **161/161** and both fixed points; the published
   bootstrap refreshed.
+
+- **`tryAdvance(slot)`: the machine's one-method surface, generated and callable.** The
+  `Yieldable` protocol now names the shape the design discussion wanted - `protocol fun
+  Yieldable<TStateMachine, TItem> TStateMachine.tryAdvance(current: *TItem): Bool` -
+  step, and the element lands in the caller's slot; the callee hands it out, no
+  `current` read. Every machine class gains the generated wrapper beside its step
+  (`Bool tryAdvance(M* self, E* out) { if (!advance(self)) return false; *out =
+  self->current; return true; }`, `IlMachine`), and the three surfaces that special-case
+  the machine ABI (`advance` in the type pass, the emitter's inference, and the
+  emitter's spelling) answer `tryAdvance` the same way. Two costs the shape forced,
+  both fixed where they belong: `&slot` as an argument *bound a `Ref<>` temporary at the
+  lowering* (`exprIsSimple` now counts `&simpleName` as simple - the box is one
+  operation where the argument stands, and `for-promote`/`strings` dropped their
+  `Ref<Str>` temps), and the extractor hands the *slot itself* to a `tryAdvance` call on
+  a machine receiver, the address taken at the call's spelling exactly as the step's
+  receiver is - `tryAdvance(self, &item)`, zero allocation per element where the first
+  cut boxed one per step. `advance()`/`current` remain the ABI the parse-time `for`
+  desugar reads (it cannot spell `TItem` before types exist) and `toPtrs`'s
+  place-of-the-source-field yield. Verified: `bun tools/iterate.js --full` - **161/161**
+  and both fixed points; the published bootstrap refreshed.

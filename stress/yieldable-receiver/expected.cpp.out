@@ -556,6 +556,15 @@ Bool advance(Span_iterValues_yieldable<T>* self) {
 }
 
 template <class T>
+Bool tryAdvance(Span_iterValues_yieldable<T>* self, T* out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
+}
+
+template <class T>
 Span_iterValues_yieldable<T> iterValues(Span<T>* self);
 template <class T>
 struct Span_iter_yieldable {
@@ -604,6 +613,15 @@ Bool advance(Span_iter_yieldable<T>* self) {
 }
 
 template <class T>
+Bool tryAdvance(Span_iter_yieldable<T>* self, T** out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
+}
+
+template <class T>
 Span_iter_yieldable<T> iter(Span<T>* self);
 template <class T, class _SmIter>
 struct toValues_yieldable {
@@ -637,6 +655,15 @@ Bool advance(toValues_yieldable<T, _SmIter>* self) {
     L2:;
     self->branch = -1;
     return false;
+}
+
+template <class T, class _SmIter>
+Bool tryAdvance(toValues_yieldable<T, _SmIter>* self, T* out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
 }
 
 template <class T, class _SmIter>
@@ -677,6 +704,15 @@ Bool advance(toPtrs_yieldable<T, _SmIter>* self) {
     L2:;
     self->branch = -1;
     return false;
+}
+
+template <class T, class _SmIter>
+Bool tryAdvance(toPtrs_yieldable<T, _SmIter>* self, T** out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
 }
 
 template <class T, class _SmIter>
@@ -742,6 +778,15 @@ Bool advance(ns2_List_iter_yieldable<T>* self) {
 }
 
 template <class T>
+Bool tryAdvance(ns2_List_iter_yieldable<T>* self, T** out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
+}
+
+template <class T>
 ns2_List_iter_yieldable<T> ns2_iter(List<T>* self);
 // modules/linq/linq.kt
 template <class T, class U, class _SmIter>
@@ -777,6 +822,15 @@ Bool advance(ns2_select_yieldable<T, U, _SmIter>* self) {
     L2:;
     self->branch = -1;
     return false;
+}
+
+template <class T, class U, class _SmIter>
+Bool tryAdvance(ns2_select_yieldable<T, U, _SmIter>* self, U** out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
 }
 
 template <class T, class U, class _SmIter>
@@ -819,6 +873,15 @@ Bool advance(ns2_where_yieldable<T, _SmIter>* self) {
     L2:;
     self->branch = -1;
     return false;
+}
+
+template <class T, class _SmIter>
+Bool tryAdvance(ns2_where_yieldable<T, _SmIter>* self, T** out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
 }
 
 template <class T, class _SmIter>
@@ -873,6 +936,15 @@ Bool advance(ns2_take_yieldable<T, _SmIter>* self) {
 }
 
 template <class T, class _SmIter>
+Bool tryAdvance(ns2_take_yieldable<T, _SmIter>* self, T** out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
+}
+
+template <class T, class _SmIter>
 ns2_take_yieldable<T, _SmIter> ns2_take(_SmIter* self, Int count);
 // modules/linq/linq.kt
 template <class T, class _SmIter>
@@ -920,6 +992,15 @@ Bool advance(ns2_skip_yieldable<T, _SmIter>* self) {
     L2:;
     self->branch = -1;
     return false;
+}
+
+template <class T, class _SmIter>
+Bool tryAdvance(ns2_skip_yieldable<T, _SmIter>* self, T** out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
 }
 
 template <class T, class _SmIter>
@@ -1032,6 +1113,14 @@ Bool advance(ns2_Str_splitIter_yieldable_StrView* self) {
     return false;
 }
 
+Bool tryAdvance(ns2_Str_splitIter_yieldable_StrView* self, Span<Char>** out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
+}
+
 ns2_Str_splitIter_yieldable_StrView ns2_splitIter(Str* self, Span<Char> separator);
 // modules/linq/linq.kt
 struct ns2_Str_splitIter_yieldable_Char {
@@ -1128,6 +1217,14 @@ Bool advance(ns2_Str_splitIter_yieldable_Char* self) {
     LYend:;
     self->branch = -1;
     return false;
+}
+
+Bool tryAdvance(ns2_Str_splitIter_yieldable_Char* self, Span<Char>** out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
 }
 
 ns2_Str_splitIter_yieldable_Char ns2_splitIter(Str* self, Char separator);

@@ -524,6 +524,14 @@ Bool advance(Range_iterValues_yieldable* self) {
     return false;
 }
 
+Bool tryAdvance(Range_iterValues_yieldable* self, Int* out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
+}
+
 Range_iterValues_yieldable iterValues(Range* self);
 template <class T>
 Int size(Span<T>* self);
@@ -598,6 +606,15 @@ Bool advance(Span_iterValues_yieldable<T>* self) {
 }
 
 template <class T>
+Bool tryAdvance(Span_iterValues_yieldable<T>* self, T* out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
+}
+
+template <class T>
 Span_iterValues_yieldable<T> iterValues(Span<T>* self);
 template <class T>
 struct Span_iter_yieldable {
@@ -643,6 +660,15 @@ Bool advance(Span_iter_yieldable<T>* self) {
     L2:;
     self->branch = -1;
     return false;
+}
+
+template <class T>
+Bool tryAdvance(Span_iter_yieldable<T>* self, T** out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
 }
 
 template <class T>
@@ -902,7 +928,7 @@ Int64 ns1_partPromoted(List<Str>* words) {
 // stress/for-promote/src/main.kt
 Int ns1_partEscaped(List<Str>* words) {
     Int _sm_base1, total;
-    Str* _sm_base2, * _sm_expr3;
+    Str* _sm_base2, * _sm_base3;
     Span<Str> _sm_expr1;
     Span_iterValues_yieldable<Str> _sm_for2;
     Bool _sm_expr2;
@@ -914,8 +940,8 @@ Int ns1_partEscaped(List<Str>* words) {
     _sm_expr2 = advance(&_sm_for2);
     if (!(_sm_expr2)) goto L2;
     w = _sm_for2.current;
-    _sm_expr3 = &w;
-    _sm_base2 = _sm_expr3;
+    _sm_base3 = &w;
+    _sm_base2 = _sm_base3;
     _sm_base1 = ns1_firstByte(_sm_base2);
     total = total + _sm_base1;
     goto L1;

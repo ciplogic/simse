@@ -511,6 +511,14 @@ Bool advance(Range_iterValues_yieldable* self) {
     return false;
 }
 
+Bool tryAdvance(Range_iterValues_yieldable* self, Int* out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
+}
+
 Range_iterValues_yieldable iterValues(Range* self);
 template <class T>
 Int size(Span<T>* self);
@@ -584,6 +592,14 @@ Bool advance(ns1_tally_yieldable* self) {
     L2:;
     self->branch = -1;
     return false;
+}
+
+Bool tryAdvance(ns1_tally_yieldable* self, Str* out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
 }
 
 ns1_tally_yieldable ns1_tally(List<Str>* words);

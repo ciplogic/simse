@@ -599,6 +599,15 @@ Bool advance(Span_iterValues_yieldable<T>* self) {
 }
 
 template <class T>
+Bool tryAdvance(Span_iterValues_yieldable<T>* self, T* out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
+}
+
+template <class T>
 Span_iterValues_yieldable<T> iterValues(Span<T>* self);
 template <class T>
 struct Span_iter_yieldable {
@@ -644,6 +653,15 @@ Bool advance(Span_iter_yieldable<T>* self) {
     L2:;
     self->branch = -1;
     return false;
+}
+
+template <class T>
+Bool tryAdvance(Span_iter_yieldable<T>* self, T** out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
 }
 
 template <class T>
@@ -734,6 +752,14 @@ Bool advance(ns1_List_everyNth_yieldable* self) {
     L2:;
     self->branch = -1;
     return false;
+}
+
+Bool tryAdvance(ns1_List_everyNth_yieldable* self, Int* out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
 }
 
 ns1_List_everyNth_yieldable ns1_everyNth(List<Int>* self, Int step);

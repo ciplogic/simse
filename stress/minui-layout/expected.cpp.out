@@ -1039,6 +1039,15 @@ Bool advance(Span_iterValues_yieldable<T>* self) {
 }
 
 template <class T>
+Bool tryAdvance(Span_iterValues_yieldable<T>* self, T* out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
+}
+
+template <class T>
 Span_iterValues_yieldable<T> iterValues(Span<T>* self);
 template <class T>
 struct Span_iter_yieldable {
@@ -1084,6 +1093,15 @@ Bool advance(Span_iter_yieldable<T>* self) {
     L2:;
     self->branch = -1;
     return false;
+}
+
+template <class T>
+Bool tryAdvance(Span_iter_yieldable<T>* self, T** out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
 }
 
 template <class T>
@@ -1307,6 +1325,14 @@ Bool advance(ns3_XmlNode_elements_yieldable* self) {
     L2:;
     self->branch = -1;
     return false;
+}
+
+Bool tryAdvance(ns3_XmlNode_elements_yieldable* self, ns3_XmlNode** out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
 }
 
 ns3_XmlNode_elements_yieldable ns3_elements(ns3_XmlNode* self);

@@ -446,9 +446,10 @@ fun Emitter.memberCallReturn(callee: *AstXmlNode): AstXmlNode {
     }
     if (!xmlIsEmpty(recv) && xmlKind(recv) == AstNodeCategory.TypeYield) {
         // A machine's own surface (`impl_specs/for.md`): `advance()` answers whether there
-        // was a value, `current` is the field holding it; the type pass answers both the
-        // same way.
-        if (calleeText == "advance") {
+        // was a value, `current` is the field holding it, and `tryAdvance(slot)` is the
+        // one-method form the `Yieldable` protocol names; the type pass answers all three
+        // the same way.
+        if (calleeText == "advance" || calleeText == "tryAdvance") {
             return this.namedType("Bool")
         }
         if (calleeText == "current") {

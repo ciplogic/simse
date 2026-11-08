@@ -575,6 +575,52 @@ fun Emitter.call(e: *AstXmlNode): Str {
                 // (`impl_specs/yield.md`): spell the call the way any receiver function's is
                 // spelled, `advance(&m)`. The machine's C++ type is the lowering's, so no
                 // declaration is collected to resolve against here.
+                // The one-method surface (`Yieldable`'s `tryAdvance(slot)`, generated per
+                // machine beside `advance`): the same receiver-address rule as the step's,
+                // with the caller's out slot riding after it. The slot argument is an
+                // *address*, not a reference value - `&slot` spells the raw address the
+                // wrapper writes through, the same spelling the step's own receiver takes
+                // (a `Ref<T>` box would allocate on every call).
+                if (calleeText == "tryAdvance" && xmlKind(receiver) == AstNodeCategory.TypeYield) {
+                    var recvText: Str = ""
+                    if (xmlKind(receiverExpr) == AstNodeCategory.ExprDeref) {
+                        val operand: *AstXmlNode = xmlChildPtr(receiverExpr, AstNodeKind.Operand)
+                        if (xmlKind(operand) == AstNodeCategory.ExprName
+                            && xmlAttr(operand, AstNodeAttributeKind.Name) == "this"
+                            && this.selfKind == NameKind.Value
+                        ) {
+                            recvText = this.selfPointer()
+                        } else if (xmlKind(this.inferType(operand)) == AstNodeCategory.TypePointer) {
+                            val ptrText: Str = this.expr(operand, 12, xmlEmptyNode())
+                            recvText = ptrText
+                        }
+                    }
+                    if (recvText == "" && xmlKind(receiverExpr) == AstNodeCategory.ExprName
+                        && xmlAttr(receiverExpr, AstNodeAttributeKind.Name) == "this"
+                        && this.selfKind == NameKind.Value
+                    ) {
+                        recvText = this.selfPointer()
+                    }
+                    if (recvText == "") {
+                        val machineText: Str = this.expr(receiverExpr, 12, xmlEmptyNode())
+                        recvText = "&" + machineText
+                    }
+                    var slotArgs: List<Str> = List<Str>()
+                    for (*argNode in argNodes) {
+                        if (xmlKind(argNode) == AstNodeCategory.ExprRef) {
+                            val slotOperand: *AstXmlNode = xmlChildPtr(argNode, AstNodeKind.Operand)
+                            val slotText: Str = this.expr(slotOperand, 0, xmlEmptyNode())
+                            slotArgs.append("&" + slotText)
+                        } else {
+                            // The IL handed the slot itself (the extractor's `tryAdvance`
+                            // rule): the address is the call's to take.
+                            val slotText2: Str = this.expr(argNode, 0, xmlEmptyNode())
+                            slotArgs.append("&" + slotText2)
+                        }
+                    }
+                    val argsText: Str = cgJoin(slotArgs, ", ")
+                    return `tryAdvance(@recvText, @argsText)`
+                }
                 if (calleeText == "advance" && xmlKind(receiver) == AstNodeCategory.TypeYield) {
                     // The step takes the machine's *address*. A receiver that already is the
                     // machine behind its pointer - `this` in a machine-receiver function, or

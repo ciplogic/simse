@@ -48,14 +48,18 @@ fun Array<T>.iterOf<T>(): ..*T {
     }
 }
 
-// The machine contract every `yield` body compiles to (`impl_specs/yield.md`): `advance()`
-// steps and answers whether an element follows, `current` is it. A protocol, not an
-// interface - a constraint with no value, no boxing, no vtable (`impl_specs/protocols.md`)
-// - and the name a receiver can be spelled through: `fun Yieldable<*T>.toList<T>()` reads
-// where `fun ..*T.toList<T>()` sigils, and means the same machine pattern (the subject
-// `TStateMachine` is the pattern's wildcard, `TItem` the element the receiver's argument
-// binds). `ilReceiverTypeText` names it in the IL where the bare pattern reads `*?`.
-protocol fun Yieldable<TStateMachine, TItem> TStateMachine.advance(): Bool
+// The machine contract every `yield` body compiles to (`impl_specs/yield.md`), as the one
+// method a consumer needs: `tryAdvance` steps the machine and, when there is an element,
+// writes it through the caller's slot - the callee hands the element out, no `current`
+// field is read. `TItem` carries the element's full shape: a pointer machine's element is
+// a place (`*T`), so the slot it fills is one and a chain stays zero-copy. The lowering
+// generates `tryAdvance` beside its own step for every machine; `advance()`/`current`
+// remain the ABI the parse-time `for` desugar reads (it cannot spell `TItem` before types
+// exist) and `toPtrs`' place-of-the-source-field yield. A protocol, not an interface - a
+// constraint with no value, no boxing, no vtable (`impl_specs/protocols.md`) - and the
+// name a receiver can be spelled through: `fun Yieldable<*T>.toList<T>()` reads where
+// `fun ..*T.toList<T>()` sigils, and means the same machine pattern.
+protocol fun Yieldable<TStateMachine, TItem> TStateMachine.tryAdvance(current: *TItem): Bool
 
 // The element as a *copy*: `..*T.toValues()` is the value machine a `for (x in m)` walks,
 // spelled as a pipeline step. The copy lives in the machine's `value` field across the

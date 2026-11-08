@@ -24,6 +24,15 @@ fun exprIsSimple(e: *AstXmlNode): Bool {
         AstNodeCategory.ExprName, AstNodeCategory.ExprGenericName, AstNodeCategory.ExprLambda -> {
             return true
         }
+
+        AstNodeCategory.ExprRef -> {
+            // `&x` over a simple name needs no temporary of its own: the box is one
+            // operation, built where the argument stands, and a `tryAdvance(&slot)` call
+            // reads the *slot* (the callee fills it by address - `&slot` as a reference
+            // value would box per call). A chain's address still binds: the chain's own
+            // reads are the operations.
+            return exprIsSimple(xmlChildPtr(e, AstNodeKind.Operand))
+        }
     }
     return false
 }

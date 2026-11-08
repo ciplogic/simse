@@ -472,9 +472,11 @@ fun SemInfer.memberReturn(callee: *AstXmlNode, argNodes: *List<AstXmlNode>): Ast
         }
     }
     if (xmlKind(recv) == AstNodeCategory.TypeYield) {
-        // A machine's surface is the lowering's ABI: `advance()` steps it, and `current`
-        // holds what it yielded. Typing them makes a `for`'s loop variable a typed binding.
-        if (calleeText == "advance") {
+        // A machine's surface is the lowering's ABI: `advance()` steps it, `current` holds
+        // what it yielded, and `tryAdvance(slot)` is the one-method form the `Yieldable`
+        // protocol names - step, and the element lands in the caller's slot. Typing them
+        // makes a `for`'s loop variable a typed binding.
+        if (calleeText == "advance" || calleeText == "tryAdvance") {
             return semNamedType("Bool")
         }
         // A machine is already iterable: `x.iterValues()` is `x` (`impl_specs/for.md`); `..T`

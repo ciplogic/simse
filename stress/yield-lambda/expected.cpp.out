@@ -514,6 +514,14 @@ Bool advance(Range_iterValues_yieldable* self) {
     return false;
 }
 
+Bool tryAdvance(Range_iterValues_yieldable* self, Int* out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
+}
+
 Range_iterValues_yieldable iterValues(Range* self);
 template <class T>
 Int size(Span<T>* self);
@@ -593,6 +601,15 @@ Bool advance(Span_iterValues_yieldable<T>* self) {
 }
 
 template <class T>
+Bool tryAdvance(Span_iterValues_yieldable<T>* self, T* out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
+}
+
+template <class T>
 Span_iterValues_yieldable<T> iterValues(Span<T>* self);
 void initByValue(Str* self);
 Int strCountDigits(Int64 value);
@@ -657,6 +674,14 @@ Bool advance(ns1_feed_yieldable* self) {
     return false;
 }
 
+Bool tryAdvance(ns1_feed_yieldable* self, Int* out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
+}
+
 ns1_feed_yieldable ns1_feed();
 // stress/yield-lambda/src/main.kt
 struct ns1_tally_yieldable_closure1;
@@ -712,6 +737,14 @@ Bool advance(ns1_tally_yieldable* self) {
     L2:;
     self->branch = -1;
     return false;
+}
+
+Bool tryAdvance(ns1_tally_yieldable* self, Int* out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
 }
 
 ns1_tally_yieldable ns1_tally(Int limit);
@@ -774,6 +807,15 @@ Bool advance(ns1_List_firstOf_yieldable<T>* self) {
     L2:;
     self->branch = -1;
     return false;
+}
+
+template <class T>
+Bool tryAdvance(ns1_List_firstOf_yieldable<T>* self, T* out) {
+    if (!advance(self)) {
+        return false;
+    }
+    *out = self->current;
+    return true;
 }
 
 template <class T>

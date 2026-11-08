@@ -401,6 +401,28 @@ fun Emitter.emitMachine(
         this.line(0, "}")
         this.line(0, "")
     }
+    // The one-method surface the `Yieldable` protocol names (`tryAdvance(current:
+    // *TItem): Bool`): step, and when there is an element write it through the caller's
+    // slot - the callee hands the element out instead of exposing a `current` field. A
+    // wrapper over the lowering's own step for now: `advance`/`current` stay the ABI the
+    // parse-time `for` desugar reads (it cannot spell `TItem` before types exist), and
+    // every authored machine-receiver body calls this one (`modules/linq`,
+    // `toValues`). The copy is the one the desugar's `val v = ...current` always made.
+    val elemTypeText: Str = this.type(elementType)
+    if (this.failed) {
+        return
+    }
+    if (tmpl != "") {
+        this.line(0, tmpl)
+    }
+    this.line(0, `Bool tryAdvance(@classTypeText* self, @elemTypeText* out) {`)
+    this.line(1, "if (!advance(self)) {")
+    this.line(2, "return false;")
+    this.line(1, "}")
+    this.line(1, "*out = self->current;")
+    this.line(1, "return true;")
+    this.line(0, "}")
+    this.line(0, "")
 }
 
 // A machine method as the extractor's body context: no declaration, the method's

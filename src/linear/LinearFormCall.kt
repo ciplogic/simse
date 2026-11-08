@@ -427,6 +427,18 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
             param = xmlChildPtr(paramNodes[paramOffset + i], AstNodeKind.Type)
         }
         var argNode: AstXmlNode = argNodes[i]
+        // `tryAdvance(slot)` - the machine's one-method surface (`Yieldable`): the
+        // argument is the *slot* the callee fills, taken by address at the call's
+        // spelling exactly as the step's receiver is (`CgCall`). The extractor therefore
+        // hands the slot itself - `&slot`'s reference value would box, and a box per
+        // step is an allocation per element.
+        if (receiverCall && calleeName == "tryAdvance" && argNodes.size() == 1
+            && xmlKind(argNode) == AstNodeCategory.ExprRef
+            && recvSlot >= 0
+            && xmlKind(semPointeeOf(ilVarType(this.out, recvSlot))) == AstNodeCategory.TypeYield
+        ) {
+            argNode = xmlChild(argNode, AstNodeKind.Operand)
+        }
         if (xmlIsEmpty(param) && xmlIsEmpty(paramOwner)
             && xmlKind(argNode) == AstNodeCategory.ExprName
             && this.ilOverloadsAllTakeValue(calleeName, i, argNodes.size())
