@@ -428,16 +428,51 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
         }
         var argNode: AstXmlNode = argNodes[i]
         // `tryAdvance(slot)` - the machine's one-method surface (`Yieldable`): the
-        // argument is the *slot* the callee fills, taken by address at the call's
-        // spelling exactly as the step's receiver is (`CgCall`). The extractor therefore
-        // hands the slot itself - `&slot`'s reference value would box, and a box per
-        // step is an allocation per element.
+        // argument is the *place* the callee fills, and the call takes its address at
+        // the spelling (`CgCall`) exactly as the step's receiver is taken. The extractor
+        // hands the place's expression: a frame name's slot, or - a machine field read
+        // by its bare name, which the frame holds no slot for - an *untyped* read that
+        // folds at the use into `self->x`, so the address the call takes is the field's
+        // own (`&(self->x)`). A typed read would declare a temp and the address would
+        // land on the copy (the first cut filled a copy and dereferenced the null
+        // field); `&slot`'s reference value would box per step.
         if (receiverCall && calleeName == "tryAdvance" && argNodes.size() == 1
             && xmlKind(argNode) == AstNodeCategory.ExprRef
             && recvSlot >= 0
-            && xmlKind(semPointeeOf(ilVarType(this.out, recvSlot))) == AstNodeCategory.TypeYield
+            && (xmlKind(semPointeeOf(ilVarType(this.out, recvSlot))) == AstNodeCategory.TypeYield
+                || (!xmlIsEmpty(this.fn.selfDecl)
+                    && xmlKind(lhs) == AstNodeCategory.ExprName
+                    && xmlAttr(lhs, AstNodeAttributeKind.Name) == "this"))
         ) {
-            argNode = xmlChild(argNode, AstNodeKind.Operand)
+            val operand: *AstXmlNode = xmlChildPtr(argNode, AstNodeKind.Operand)
+            if (xmlKind(operand) == AstNodeCategory.ExprName
+                && !this.isStaticName(xmlAttr(operand, AstNodeAttributeKind.Name))
+            ) {
+                val slotName: Str = xmlAttr(operand, AstNodeAttributeKind.Name)
+                var bound: Int = -1
+                if (this.hasVar(slotName)) {
+                    bound = this.nameOf(operand)
+                } else if (!xmlIsEmpty(this.fn.selfDecl)) {
+                    bound = this.freshSlotText("?")
+                    this.into(bound, operand)
+                }
+                if (bound >= 0) {
+                    args.append(bound)
+                    argTypes.append(this.operandType(bound, argNodes[i]))
+                    i++
+                    continue
+                }
+            } else if (xmlKind(operand) == AstNodeCategory.ExprMember) {
+                // The machine rewrite spelled the slot `this.x`: an *untyped* read of the
+                // member folds at the use into `self->x`, and the address the call takes
+                // is the field's own.
+                val bound: Int = this.freshSlotText("?")
+                this.into(bound, operand)
+                args.append(bound)
+                argTypes.append(this.operandType(bound, argNodes[i]))
+                i++
+                continue
+            }
         }
         if (xmlIsEmpty(param) && xmlIsEmpty(paramOwner)
             && xmlKind(argNode) == AstNodeCategory.ExprName

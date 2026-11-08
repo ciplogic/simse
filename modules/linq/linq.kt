@@ -39,17 +39,19 @@ fun List<T>.iter<T>(): ..*T {
 // hands out its place (`..*U`), so a chain stays pointer-typed end to end and the next
 // operator's lambda still reads in place. The place is valid until the next advance.
 fun Yieldable<*T>.select<T, U>(f: (*T) -> U): ..*U {
-    while (this.advance()) {
-        var mapped: U = f(this.current)
+    var item: *T
+    while (this.tryAdvance(&item)) {
+        var mapped: U = f(item)
         yield *mapped
     }
 }
 
 // `where`: the elements `keep` accepts, lazily.
 fun Yieldable<*T>.where<T>(keep: (*T) -> Bool): ..*T {
-    while (this.advance()) {
-        if (keep(this.current)) {
-            yield this.current
+    var item: *T
+    while (this.tryAdvance(&item)) {
+        if (keep(item)) {
+            yield item
         }
     }
 }
@@ -57,24 +59,26 @@ fun Yieldable<*T>.where<T>(keep: (*T) -> Bool): ..*T {
 // `take`: at most `count` elements. The count is checked *before* the step, so the
 // source is not consumed one element past what was handed out.
 fun Yieldable<*T>.take<T>(count: Int): ..*T {
+    var item: *T
     var taken: Int = 0
     while (taken < count) {
-        if (!this.advance()) {
+        if (!this.tryAdvance(&item)) {
             break
         }
-        yield this.current
+        yield item
         taken++
     }
 }
 
 // `skip`: the elements after the first `count`.
 fun Yieldable<*T>.skip<T>(count: Int): ..*T {
+    var item: *T
     var skipped: Int = 0
-    while (this.advance()) {
+    while (this.tryAdvance(&item)) {
         if (skipped < count) {
             skipped++
         } else {
-            yield this.current
+            yield item
         }
     }
 }
@@ -82,9 +86,10 @@ fun Yieldable<*T>.skip<T>(count: Int): ..*T {
 // `toList`: drain the chain, copying each element once. The one operator that is not
 // lazy, and the one that reads the element's *value* (`*this.current`).
 fun Yieldable<*T>.toList<T>(): List<T> {
+    var item: *T
     var out: List<T> = List<T>()
-    while (this.advance()) {
-        out.append(*this.current)
+    while (this.tryAdvance(&item)) {
+        out.append(*item)
     }
     return out
 }
@@ -94,8 +99,9 @@ fun Yieldable<*T>.toList<T>(): List<T> {
 // ends here instead of draining into a list it would discard. The lambda captures by value,
 // so an accumulator it writes is captured as a pointer (`&target`).
 fun Yieldable<*T>.forEach<T>(action: (*T) -> Unit): Unit {
-    while (this.advance()) {
-        action(this.current)
+    var item: *T
+    while (this.tryAdvance(&item)) {
+        action(item)
     }
 }
 

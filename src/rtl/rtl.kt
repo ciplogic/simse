@@ -65,8 +65,9 @@ protocol fun Yieldable<TStateMachine, TItem> TStateMachine.tryAdvance(current: *
 // spelled as a pipeline step. The copy lives in the machine's `value` field across the
 // yield, so the place the machine hands out is the copy itself.
 fun Yieldable<*T>.toValues<T>(): ..T {
-    while (this.advance()) {
-        var value: T = *this.current
+    var item: *T
+    while (this.tryAdvance(&item)) {
+        var value: T = *item
         yield value
     }
 }

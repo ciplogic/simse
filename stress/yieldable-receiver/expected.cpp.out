@@ -629,25 +629,25 @@ struct toValues_yieldable {
     T current{};
     _SmIter* _sm_self{};
     T value{};
+    T* item{};
 };
 
 template <class T, class _SmIter>
 Bool advance(toValues_yieldable<T, _SmIter>* self) {
     Bool _sm_base1, _sm_expr1;
     Int _sm_base2;
-    _SmIter* _sm_base3, * _sm_base6;
-    T _sm_base4, _sm_base7;
-    T* _sm_base5;
+    _SmIter* _sm_base3;
+    T _sm_base5, _sm_base7;
+    T* _sm_base6;
     _sm_base2 = self->branch;
     _sm_base1 = _sm_base2 == -1;
     if (_sm_base1) goto L2;
     _sm_base3 = self->_sm_self;
-    _sm_expr1 = advance(_sm_base3);
+    _sm_expr1 = tryAdvance(_sm_base3, &self->item);
     if (!(_sm_expr1)) goto L2;
-    _sm_base6 = self->_sm_self;
-    _sm_base5 = _sm_base6->current;
-    _sm_base4 = *_sm_base5;
-    self->value = _sm_base4;
+    _sm_base6 = self->item;
+    _sm_base5 = *_sm_base6;
+    self->value = _sm_base5;
     _sm_base7 = self->value;
     self->current = _sm_base7;
     self->branch = 1;
@@ -796,24 +796,24 @@ struct ns2_select_yieldable {
     _SmIter* _sm_self{};
     Func<U(T*)> f{};
     U mapped{};
+    T* item{};
 };
 
 template <class T, class U, class _SmIter>
 Bool advance(ns2_select_yieldable<T, U, _SmIter>* self) {
     Bool _sm_base1, _sm_expr1;
     Int _sm_base2;
-    _SmIter* _sm_base3, * _sm_base6;
-    T* _sm_base5;
+    _SmIter* _sm_base3;
+    T* _sm_base6;
     U* _sm_base7, * _sm_expr2;
     _sm_base2 = self->branch;
     _sm_base1 = _sm_base2 == -1;
     if (_sm_base1) goto L2;
     _sm_base3 = self->_sm_self;
-    _sm_expr1 = advance(_sm_base3);
+    _sm_expr1 = tryAdvance(_sm_base3, &self->item);
     if (!(_sm_expr1)) goto L2;
-    _sm_base6 = self->_sm_self;
-    _sm_base5 = _sm_base6->current;
-    self->mapped = self->f(_sm_base5);
+    _sm_base6 = self->item;
+    self->mapped = self->f(_sm_base6);
     _sm_base7 = simse_addressOf(self->mapped);
     _sm_expr2 = _sm_base7;
     self->current = _sm_expr2;
@@ -844,30 +844,29 @@ struct ns2_where_yieldable {
     T* current{};
     _SmIter* _sm_self{};
     Func<Bool(T*)> keep{};
+    T* item{};
 };
 
 template <class T, class _SmIter>
 Bool advance(ns2_where_yieldable<T, _SmIter>* self) {
     Bool _sm_base1, _sm_expr1;
     Int _sm_base2;
-    _SmIter* _sm_base3, * _sm_base5, * _sm_base6;
-    T* _sm_base4, * _sm_expr3;
+    _SmIter* _sm_base3;
+    T* _sm_base5, * _sm_base6;
     _sm_base2 = self->branch;
     _sm_base1 = _sm_base2 == -1;
     if (_sm_base1) goto L2;
     L1:;
     _sm_base3 = self->_sm_self;
-    _sm_expr1 = advance(_sm_base3);
+    _sm_expr1 = tryAdvance(_sm_base3, &self->item);
     if (!(_sm_expr1)) goto L2;
-    _sm_base5 = self->_sm_self;
-    _sm_base4 = _sm_base5->current;
-    _sm_expr1 = self->keep(_sm_base4);
+    _sm_base5 = self->item;
+    _sm_expr1 = self->keep(_sm_base5);
     if (_sm_expr1) goto L3;
     goto L1;
     L3:;
-    _sm_base6 = self->_sm_self;
-    _sm_expr3 = _sm_base6->current;
-    self->current = _sm_expr3;
+    _sm_base6 = self->item;
+    self->current = _sm_base6;
     self->branch = 1;
     return true;
     L2:;
@@ -896,14 +895,15 @@ struct ns2_take_yieldable {
     _SmIter* _sm_self{};
     Int count{};
     Int taken{};
+    T* item{};
 };
 
 template <class T, class _SmIter>
 Bool advance(ns2_take_yieldable<T, _SmIter>* self) {
     Bool _sm_base1, _sm_base3, _sm_expr1, _sm_expr3;
-    Int _sm_base2, _sm_base4, _sm_base5, _sm_base6, _sm_base9, _sm_base10;
-    _SmIter* _sm_base7, * _sm_base8;
-    T* _sm_expr4;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base6, _sm_base10, _sm_base11;
+    _SmIter* _sm_base7;
+    T* _sm_base9;
     _sm_base2 = self->branch;
     _sm_base1 = _sm_base2 == -1;
     if (_sm_base1) goto L2;
@@ -917,18 +917,17 @@ Bool advance(ns2_take_yieldable<T, _SmIter>* self) {
     _sm_expr1 = _sm_base5 < _sm_base6;
     if (!(_sm_expr1)) goto L2;
     _sm_base7 = self->_sm_self;
-    _sm_expr1 = advance(_sm_base7);
+    _sm_expr1 = tryAdvance(_sm_base7, &self->item);
     _sm_expr3 = !_sm_expr1;
     if (_sm_expr3) goto L2;
-    _sm_base8 = self->_sm_self;
-    _sm_expr4 = _sm_base8->current;
-    self->current = _sm_expr4;
+    _sm_base9 = self->item;
+    self->current = _sm_base9;
     self->branch = 1;
     return true;
     LY1:;
-    _sm_base9 = self->taken;
-    _sm_base10 = _sm_base9 + 1;
-    self->taken = _sm_base10;
+    _sm_base10 = self->taken;
+    _sm_base11 = _sm_base10 + 1;
+    self->taken = _sm_base11;
     goto L1;
     L2:;
     self->branch = -1;
@@ -954,14 +953,15 @@ struct ns2_skip_yieldable {
     _SmIter* _sm_self{};
     Int count{};
     Int skipped{};
+    T* item{};
 };
 
 template <class T, class _SmIter>
 Bool advance(ns2_skip_yieldable<T, _SmIter>* self) {
     Bool _sm_base1, _sm_base3, _sm_expr1;
-    Int _sm_base2, _sm_base4, _sm_base6, _sm_base7, _sm_base8, _sm_base9;
-    _SmIter* _sm_base5, * _sm_base10;
-    T* _sm_expr3;
+    Int _sm_base2, _sm_base4, _sm_base7, _sm_base8, _sm_base9, _sm_base10;
+    _SmIter* _sm_base5;
+    T* _sm_base11;
     _sm_base2 = self->branch;
     _sm_base1 = _sm_base2 == -1;
     if (_sm_base1) goto L2;
@@ -971,22 +971,21 @@ Bool advance(ns2_skip_yieldable<T, _SmIter>* self) {
     self->skipped = 0;
     L1:;
     _sm_base5 = self->_sm_self;
-    _sm_expr1 = advance(_sm_base5);
+    _sm_expr1 = tryAdvance(_sm_base5, &self->item);
     if (!(_sm_expr1)) goto L2;
-    _sm_base6 = self->skipped;
-    _sm_base7 = self->count;
-    _sm_expr1 = _sm_base6 < _sm_base7;
+    _sm_base7 = self->skipped;
+    _sm_base8 = self->count;
+    _sm_expr1 = _sm_base7 < _sm_base8;
     if (_sm_expr1) goto L3;
     goto L4;
     L3:;
-    _sm_base8 = self->skipped;
-    _sm_base9 = _sm_base8 + 1;
-    self->skipped = _sm_base9;
+    _sm_base9 = self->skipped;
+    _sm_base10 = _sm_base9 + 1;
+    self->skipped = _sm_base10;
     goto L1;
     L4:;
-    _sm_base10 = self->_sm_self;
-    _sm_expr3 = _sm_base10->current;
-    self->current = _sm_expr3;
+    _sm_base11 = self->item;
+    self->current = _sm_base11;
     self->branch = 1;
     return true;
     L2:;
@@ -1971,15 +1970,14 @@ ns2_skip_yieldable<T, _SmIter> ns2_skip(_SmIter* self, Int count) {
 template <class T, class _SmIter>
 List<T> ns2_toList(_SmIter* self) {
     T _sm_base1;
-    T* _sm_base2;
     List<T> out;
     Bool _sm_expr1;
+    T* item;
     out = List<T>();
     L1:;
-    _sm_expr1 = advance(self);
+    _sm_expr1 = tryAdvance(self, &item);
     if (!(_sm_expr1)) goto L2;
-    _sm_base2 = self->current;
-    _sm_base1 = *_sm_base2;
+    _sm_base1 = *item;
     simse_list_append(out, _sm_base1);
     goto L1;
     L2:;
@@ -1988,13 +1986,12 @@ List<T> ns2_toList(_SmIter* self) {
 // modules/linq/linq.kt
 template <class T, class _SmIter>
 void ns2_forEach(_SmIter* self, Func<void(T*)> action) {
-    T* _sm_base1;
     Bool _sm_expr1;
+    T* item;
     L1:;
-    _sm_expr1 = advance(self);
+    _sm_expr1 = tryAdvance(self, &item);
     if (!(_sm_expr1)) goto L2;
-    _sm_base1 = self->current;
-    action(_sm_base1);
+    action(item);
     goto L1;
     L2:;
 }

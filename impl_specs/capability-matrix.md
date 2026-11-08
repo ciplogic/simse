@@ -6228,3 +6228,26 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   desugar reads (it cannot spell `TItem` before types exist) and `toPtrs`'s
   place-of-the-source-field yield. Verified: `bun tools/iterate.js --full` - **161/161**
   and both fixed points; the published bootstrap refreshed.
+
+- **The authored pipeline surface is `tryAdvance`: linq's six operators and `toValues`
+  step through the one-method contract.** `select`, `where`, `take`, `skip`, `toList`,
+  `forEach` (`modules/linq`) and the prelude's `toValues` now spell their loops as
+  `var item: *T; while (this.tryAdvance(&item))` - the element arrives in the caller's
+  slot, no `current` field read, `advance()`/`current` gone from every authored body
+  (they remain the parse-time `for` desugar's ABI - it cannot spell `TItem` before types
+  exist - and `toPtrs`' place-of-the-source-field yield). The road to green taught three
+  lessons worth their cost. **One:** the machine rewrite spells the loop slot `this.item`
+  and the receiver `_sm_self`, so the extractor's `tryAdvance` rule matches the *place*
+  both ways - a frame name's slot, or an untyped member read that folds at the use into
+  `self->x` - and the call takes the address at the spelling (`&(self->x)`), because a
+  *typed* field read declares a temp and the address lands on the copy. **Two:** the
+  borrow machinery has no "address of a pointer-typed slot" spelling (`*x` reads
+  through, `FieldAddr` borrows), which is why the address is taken at the call, the way
+  the step's receiver always was. **Three:** the first cut's miscompile (the callee
+  filled a copy; the body dereferenced the null field) crashed *the compiler itself* -
+  its own sema runs `decl.Children.iterOf().where(...)` - and a broken compiler cannot
+  rebuild the tree, so the fix landed through the published bootstrap twice over (stage
+  from it, build, restore the conversion, build again). `stress/yieldable-receiver`'s
+  golden carries the new emission - the `item` fields and the `tryAdvance(self, &x)`
+  calls - as stage 3's baseline. Verified: `bun tools/iterate.js --full` - **161/161**
+  and both fixed points; the published bootstrap refreshed.

@@ -608,12 +608,15 @@ fun Emitter.call(e: *AstXmlNode): Str {
                     var slotArgs: List<Str> = List<Str>()
                     for (*argNode in argNodes) {
                         if (xmlKind(argNode) == AstNodeCategory.ExprRef) {
+                            // The AST path (a body spelled straight through): `&slot` is
+                            // the address, taken here.
                             val slotOperand: *AstXmlNode = xmlChildPtr(argNode, AstNodeKind.Operand)
                             val slotText: Str = this.expr(slotOperand, 0, xmlEmptyNode())
                             slotArgs.append("&" + slotText)
                         } else {
-                            // The IL handed the slot itself (the extractor's `tryAdvance`
-                            // rule): the address is the call's to take.
+                            // The IL path: the extractor handed the *place* - a frame
+                            // name, or the field read that folded to `self->x` - and the
+                            // address is the call's to take.
                             val slotText2: Str = this.expr(argNode, 0, xmlEmptyNode())
                             slotArgs.append("&" + slotText2)
                         }
