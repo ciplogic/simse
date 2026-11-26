@@ -244,12 +244,23 @@ fun Analyzer.checkCallArity(call: *AstXmlNode): Unit {
     )
 }
 
+// Whether a call with `argCount` arguments is a trailing pack of `overload`'s: its last
+// parameter is list-valued and takes the arguments from its own position on - one
+// argument short of the parameters is an empty pack.
+fun semaPacksCall(overload: *AstXmlNode, argCount: Int): Bool {
+    val params: List<AstXmlNode> = xmlChildren(overload, AstNodeKind.Param)
+    if (params.size() == 0 || argCount < params.size() - 1) {
+        return false
+    }
+    return semIsPackTarget(xmlChildPtr(params[params.size() - 1], AstNodeKind.Type))
+}
+
 // The declared return type of a plain call `f(args)`: the arity-matching overload's,
 // with the type parameters bound - explicitly from the callee's type arguments when it
 // names some (`optOf<Int>(...)`), otherwise shallowly from the arguments' own types
-// (`listOf(xs)` binds `T` to the element). A type parameter nothing bound - or a
-// trailing-pack match, whose element type the call site alone knows - answers empty,
-// exactly what the checker saw before calls resolved.
+// (`listOf(xs)` binds `T` to the element - and so does a trailing pack, `listOf(a, b)`,
+// from its elements). A type parameter nothing bound answers empty, exactly what the
+// checker saw before calls resolved.
 fun Analyzer.semaPlainCallReturn(call: *AstXmlNode): AstXmlNode {
     val callee: *AstXmlNode = xmlChildPtr(call, AstNodeKind.Callee)
     val generic: Bool = xmlKind(callee) == AstNodeCategory.ExprGenericName
@@ -285,7 +296,20 @@ fun Analyzer.semaPlainCallReturn(call: *AstXmlNode): AstXmlNode {
             matched.append(overload)
         }
     }
-    if (matched.size() > 1) {
+    // A trailing pack (`listOf("a", "b")`) is a candidate only when no exact-arity
+    // overload exists - the resolution rule `callTarget` applies - and its candidates
+    // answer in declaration order, with no disambiguation: their argument and parameter
+    // counts differ, so a per-position unifier has nothing to compare.
+    var packed: Bool = false
+    if (matched.size() == 0 && !generic) {
+        for (*overload in overloads) {
+            if (semaPacksCall(overload, argCount)) {
+                matched.append(overload)
+                packed = true
+            }
+        }
+    }
+    if (matched.size() > 1 && !packed) {
         var unified: List<AstXmlNode> = List<AstXmlNode>()
         for (*overload in matched) {
             if (this.semaOverloadUnifies(overload, args, argCount)) {
@@ -350,6 +374,30 @@ fun Analyzer.semaOverloadReturnType(
         // Infer from the arguments: a parameter whose type names a type parameter
         // binds it to the argument's type, when the argument's type is known.
         val declParams: List<AstXmlNode> = xmlChildren(overload, AstNodeKind.Param)
+        // A trailing pack's arguments from the last parameter's position on are the
+        // elements of the list that parameter takes; their common type binds the list's
+        // element parameter - the rule the type pass applies (`semBindCallArgs`). The
+        // loop below then pairs only the leading arguments with their parameters.
+        if (semaPacksCall(overload, argCount) && argCount > declParams.size()) {
+            var element: AstXmlNode = xmlEmptyNode()
+            var agree: Bool = true
+            var e: Int = declParams.size() - 1
+            while (e < argCount) {
+                val one: AstXmlNode = this.unionArgType(args[e])
+                if (xmlIsEmpty(one)
+                    || (!xmlIsEmpty(element) && semaTypeText(element) != semaTypeText(one))
+                ) {
+                    agree = false
+                    break
+                }
+                element = one
+                e++
+            }
+            if (agree) {
+                val listType: AstXmlNode = semPointee(xmlChild(declParams[declParams.size() - 1], AstNodeKind.Type))
+                semBindTypes(xmlChild(listType, AstNodeKind.TypeArg), element, typeParams, bindings)
+            }
+        }
         var a: Int = 0
         while (a < argCount && a < declParams.size()) {
             val paramType: *AstXmlNode = xmlChildPtr(declParams[a], AstNodeKind.Type)

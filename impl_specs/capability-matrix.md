@@ -6251,3 +6251,28 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   golden carries the new emission - the `item` fields and the `tryAdvance(self, &x)`
   calls - as stage 3's baseline. Verified: `bun tools/iterate.js --full` - **161/161**
   and both fixed points; the published bootstrap refreshed.
+
+- **A packed call's element type is the elements' own.** The language's list literal is a
+  packed call - `listOf("a", "b")` hands two arguments to one list-valued parameter - and
+  neither type rule bound its element parameter: the type pass pairs each argument with
+  the parameter at its index and stops at the last one (`semBindCallArgs`), and the
+  checker only ever considered exact-arity overloads (`semaPlainCallReturn`); both said so
+  in their comments ("a trailing-pack match, whose element type the call site alone
+  knows, answers empty"). So the literal's type was theirs to refuse, and everything that
+  consumed one in the same statement went untyped: `auto` in the C++ - five for a `for`
+  over a literal - and that loop did not compile at all, the step it emitted being no
+  member of the machine's class the `auto` deduced (`'advance': is not a member of
+  'Span_iterValues_yieldable<Str>'`). A name in between hid it (`val xs = listOf(...)`,
+  then `for (x in xs)`), which is why the compiler's own tree - zero `auto` since October
+  - never met it; the `for` template's out slot (the next entry) has to be declared, and
+  turned the silent `auto` into a report. One rule in each: the arguments that reach
+  *past* the last parameter are the elements of the list it takes, and their common type
+  binds the list's element parameter (one argument short of the parameters is an empty
+  pack; elements a pass cannot name, or that disagree, bind nothing and answer as
+  before). The first cut treated the argument *at* the last parameter as an element too
+  - `spanOf(xs)` is not a pack of one - and typed every span `Span<List<T>>`; the
+  measurement caught it, not the corpus. `stress/packed-call` pins the shapes: a member
+  call on a literal, an index into one, a `for` over a literal (promoted to the pointer
+  wrap like a named list's), and a literal of literals. Verified:
+  `bun tools/iterate.js --full` - **162/162** and both fixed points; the published
+  bootstrap refreshed.

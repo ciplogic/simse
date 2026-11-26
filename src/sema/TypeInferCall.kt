@@ -60,10 +60,12 @@ fun SemInfer.functionReturn(
     // the declaration the emitted call names. No unique unifier answers empty, exactly
     // what an unresolved call answered before. A trailing-pack fact is a candidate only
     // when no exact-arity fact exists (the resolution rule `callTarget` applies); its
-    // answer is the substitution's own - a return that still names an unbound parameter
-    // (the packed element type, `listOf(a, b)`'s `List<T>`) refuses itself, while a
-    // concrete one (`fmtStrWith('@', t, a, b)`'s `Str`) is typed, which every
-    // interpolation's destination slot depends on.
+    // answer is the substitution's own - the packed element type is bound from the
+    // elements' types (`semBindCallArgs`), so `listOf(a, b)` is `List<T>` with `T` the
+    // elements' type; a return that still names an unbound parameter (an empty pack, or
+    // elements this pass cannot name) refuses itself, while a concrete one
+    // (`fmtStrWith('@', t, a, b)`'s `Str`) is typed, which every interpolation's
+    // destination slot depends on.
     var exact: List<Int> = List<Int>()
     var packed: List<Int> = List<Int>()
     // A `native fun` extension's `this` parameter is the first *argument* of a plain call
@@ -265,6 +267,41 @@ fun semBindCallArgs(
     }
     val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
     val offset: Int = semReceiverParams(decl)
+    // A packed call (`listOf("a", "b")`, `fmtStrWith(sep, text, a, b)`): arguments that
+    // reach *past* the last parameter are the elements of the list that parameter takes,
+    // so the loop below pairs only the leading ones with their parameters. (One argument
+    // at the last parameter is that parameter's own - `spanOf(xs)` hands `spanOf` its
+    // list, and is not a pack of one.) The elements bind the list's element parameter -
+    // one list, one element type, so they have to agree. A call whose elements this pass
+    // cannot name, or that mixes types, binds nothing here and answers as it did. Before
+    // this the element type was never bound, so a list literal's own type was this pass's
+    // to refuse: everything that consumed one in the same statement - a `for` over
+    // `listOf(...)`, `listOf(...)[i]` - went untyped, and the `for` template's out slot
+    // (which has to be declared) had nothing to declare.
+    val last: Int = params.size() - 1
+    val packedFrom: Int = last - offset
+    if (packedFrom >= 0 && argTypes.size() > packedFrom + 1
+        && semIsPackTarget(xmlChildPtr(params[last], AstNodeKind.Type))
+    ) {
+        var element: AstXmlNode = xmlEmptyNode()
+        var agree: Bool = true
+        var e: Int = packedFrom
+        while (e < argTypes.size()) {
+            val one: AstXmlNode = argTypes[e]
+            if (xmlIsEmpty(one)
+                || (!xmlIsEmpty(element) && semaTypeText(element) != semaTypeText(one))
+            ) {
+                agree = false
+                break
+            }
+            element = one
+            e++
+        }
+        if (agree) {
+            val listType: AstXmlNode = semPointee(xmlChild(params[last], AstNodeKind.Type))
+            semBindBestEffort(xmlChild(listType, AstNodeKind.TypeArg), element, templateParams, bindings)
+        }
+    }
     var i: Int = 0
     while (i < argTypes.size()) {
         val at: Int = offset + i
