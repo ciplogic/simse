@@ -437,15 +437,26 @@ fun Parser.parseYield(): AstXmlNode {
 // all iterating a state machine (`..T`). Lowered here to the `while` it means, so no
 // stage downstream sees a `for` and `break`/`continue` inside are the `while`'s own.
 //
-//   for (v in m) { body }       var _sm_for1 = m
-//                               while (_sm_for1.advance()) {
-//                                   val v = _sm_for1.current
+//   for (v in m) { body }       var _sm_for1 = m.iterValues()
+//                               var _sm_item1
+//                               while (_sm_for1.tryAdvance(&_sm_item1)) {
+//                                   val v = _sm_item1
 //                                   body
 //                               }
 //
-//   for ((v, i) in m) { ... }   the same, plus `var _sm_index1: Int = -1` before the
-//                               loop, the pre-increment as the body's first statement,
-//                               and `val i = _sm_index1` after `v`.
+//   for ((v, i) in m) { ... }   the same, plus `var _sm_index1: Int = -1` between the
+//                               slot and the loop, the pre-increment as the body's first
+//                               statement, and `val i = _sm_index1` after `v`.
+//
+// The step is the machine contract's one method (`tryAdvance`, the `Yieldable` protocol,
+// impl_specs/yield.md): it fills the caller's slot. The loop variable then binds that slot
+// - a `val`, scoped to the body, exactly what a read of the machine's `current` was.
+//
+// The slot is declared with neither a type nor an initializer: its type is the machine's
+// element, which no parse knows. The checker and the type pass give it one at the
+// declaration, from the machine declared just above it (`forItemMachine`). Its name
+// is its own prefix and not `_sm_for`'s - the readers of the template tell a machine from
+// its slot by the name (`semaIsForTemplateName`, `semaForTemplateId`).
 //
 // The index pre-increments as the body's *first* statement, not in the condition:
 // `continue` jumps to the condition, so a bump at the end of the body would miss that
@@ -504,6 +515,7 @@ fun Parser.parseFor(out: *List<AstXmlNode>): Bool {
     val id: Int = this.nextTemplateId
     this.nextTemplateId++
     val machineName: Str = "_sm_for" + id.toString()
+    val itemName: Str = "_sm_item" + id.toString()
     val counterName: Str = "_sm_index" + id.toString()
 
     // A *member* `iterValues()`/`iter()` call, not `iter(x)`: that is what binds the
@@ -514,6 +526,9 @@ fun Parser.parseFor(out: *List<AstXmlNode>): Bool {
     }
     val iterated: ExprNode = this.iterCall(machine, pos, wrap)
     out.append(this.varDeclNode(machineName, true, this.emptyNode(), iterated, pos))
+    // The slot the step fills: no type and no initializer of its own - typed at this
+    // declaration from the machine above it (the template's comment).
+    out.append(this.varDeclNode(itemName, true, this.emptyNode(), this.emptyExpr(), pos))
     if (withIndex) {
         val counterInit: ExprNode = this.intLiteralAt(-1, pos)
         out.append(this.varDeclNode(counterName, true, this.namedTypeNode("Int", pos), counterInit, pos))
@@ -526,7 +541,7 @@ fun Parser.parseFor(out: *List<AstXmlNode>): Bool {
         val value: ExprNode = this.binaryExprAt("+", this.nameExprAt(counterName, pos), one, pos)
         loop.append(this.assignNode(target, value, pos))
     }
-    val stepValue: ExprNode = this.memberExprAt(machineName, "current", pos)
+    val stepValue: ExprNode = this.nameExprAt(itemName, pos)
     loop.append(this.varDeclNode(valueName, false, this.emptyNode(), stepValue, pos))
     if (withIndex) {
         val counterRef: ExprNode = this.nameExprAt(counterName, pos)
@@ -535,6 +550,10 @@ fun Parser.parseFor(out: *List<AstXmlNode>): Bool {
     for (stmt in body) {
         loop.append(stmt)
     }
-    out.append(this.whileNode(this.methodCallAt(machineName, "advance", pos), loop, pos))
+    val step: ExprNode = this.receiverCall1At(
+        this.nameExprAt(machineName, pos), "tryAdvance",
+        this.refExprAt(this.nameExprAt(itemName, pos), pos), pos
+    )
+    out.append(this.whileNode(step, loop, pos))
     return true
 }

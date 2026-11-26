@@ -213,6 +213,21 @@ fun semaIsForTemplateName(name: *Str): Bool {
     return name.startsWith("_sm_for")
 }
 
+// The element a machine's type hands out - the `Inner` of its `..T`, read through a handle
+// (`&M`, `*M` as a binding's type) - as a value type. Empty when `typeNode` names no
+// machine: what a read of the machine's `current` typed, for the slot its step fills.
+fun semaMachineElement(typeNode: AstXmlNode): AstXmlNode {
+    val machine: AstXmlNode = semPointee(typeNode)
+    if (xmlKind(machine) != AstNodeCategory.TypeYield) {
+        return xmlEmptyNode()
+    }
+    val inner: AstXmlNode = xmlChild(machine, AstNodeKind.Inner)
+    if (xmlIsEmpty(inner)) {
+        return xmlEmptyNode()
+    }
+    return semReRole(inner, AstNodeKind.Type)
+}
+
 // The schema's spelling of a type node ("List<Int>", "*Str", "(Int) -> Bool"), for
 // diagnostics that have to name one.
 fun semaTypeText(node: *AstXmlNode): Str {

@@ -79,9 +79,12 @@ before committing).
   its spelling (`SetVar_Null`, `GetStatic`) folds at its use, so the C++ keeps the inline
   `nullptr` / `compareLessThan` / `SmOptTypes::Value`. A machine receiver can be spelled
   through its protocol (`fun Yieldable<*T>.toList<T>()`, with `protocol fun
-  Yieldable<TStateMachine, TItem> TStateMachine.advance(): Bool` the prelude's name for
-  the machine contract) and the IL carries that name - the `*?` receiver is gone. The
-  promotion trace is truthful (each loop walked once, in
+  Yieldable<TStateMachine, TItem> TStateMachine.tryAdvance(current: *TItem): Bool` the
+  prelude's name for the machine contract) and the IL carries that name - the `*?`
+  receiver is gone. Every `for` steps through that one method too: the desugar's out slot
+  (`var _sm_item<n>`) takes its type from its machine, and a packed call's element type is
+  its elements' own, so `for (w in listOf("a", "b"))` is typed end to end (the published
+  compiler could not compile it). The promotion trace is truthful (each loop walked once, in
   scope; every hoist refusal names the gate that failed) - `--diagnostics sema` is the
   measurement to trust.
 - The single amalgamated translation unit (~190 KB of C++) is fine today; revisit if the

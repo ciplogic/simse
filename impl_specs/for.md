@@ -6,20 +6,29 @@ checker, the linear pass, the emitters, the IL - has a `for` statement kind to k
 
 ```text
 for (v in m) { body }              var _sm_for1 = m.iterValues()
-                                   while (_sm_for1.advance()) {
-                                       val v = _sm_for1.current
+                                   var _sm_item1
+                                   while (_sm_for1.tryAdvance(&_sm_item1)) {
+                                       val v = _sm_item1
                                        body
                                    }
 
 for ((v, i) in m) { body }         var _sm_for1 = m.iterValues()
+                                   var _sm_item1
                                    var _sm_index1: Int = -1
-                                   while (_sm_for1.advance()) {
+                                   while (_sm_for1.tryAdvance(&_sm_item1)) {
                                        _sm_index1 = _sm_index1 + 1
-                                       val v = _sm_for1.current
+                                       val v = _sm_item1
                                        val i = _sm_index1
                                        body
                                    }
 ```
+
+The step is the machine contract's one method, `tryAdvance` (`impl_specs/yield.md`, "A
+machine as a receiver": `protocol fun Yieldable<TStateMachine, TItem>
+TStateMachine.tryAdvance(current: *TItem): Bool`) - it fills the caller's slot, and the loop
+variable binds that slot. Until November 2026 the template stepped with `advance()` and the
+body read the machine's `current` field; `advance()`/`current` remain what the lowering
+generates (the machine's own step) and what a program may call by hand.
 
 A `*` on the variable is the same template with the *pointer* wrap
 (`m.iter()`), whose element type is `*T` - so `v` is the element's place, not a
@@ -32,9 +41,9 @@ slot that can expand to *several* statements, because the machine has to be decl
 the loop it runs. Everything the template generates carries the `for` token's position, so a
 diagnostic - from sema or the C++ compiler - points at the line the user wrote.
 
-- **The advance is the loop's condition, and the body starts with the value.** `advance()` is
+- **The step is the loop's condition, and the body starts with the value.** `tryAdvance` is
   the `while` condition, so the loop moves on where the step used to be, and the body's first
-  statement reads what it left in `current` (`val v = _sm_for1.current`, one field read).
+  statement binds the slot it filled (`val v = _sm_item1`, one copy).
   `continue` jumps to the condition, the machine's own step, so a skipped iteration still moves
   the machine on.
 - **The index starts at `-1` and is pre-incremented as the body's first statement**, for the
@@ -54,20 +63,29 @@ creating function's, qualified by its package and prefixed with the receiver's o
 back to `auto`. A name bound to a machine therefore stays `auto`.
 
 So the lowering-time type pass (`src/sema/TypeInfer.kt`) knows the *one* method of a
-machine's protocol and its one field, which is all the template reads:
+machine's protocol, and the slot it fills is all the template reads:
 
 | receiver | name | type |
 | --- | --- | --- |
-| `..T` | `advance()` | `Bool` |
-| `..T` | `current` (field) | `T` (the `..T`'s inner) |
+| `..T` | `tryAdvance(current: *T)` | `Bool` |
 
-With that, `_sm_for1` is the machine, `v` is `Int`, and every temporary the linear pass made
-from them is typed too. Reading `current` directly makes `v` a typed binding; the emitter needs
-no new IL op (`_sm_for1.current` is a plain `GetField`) and the machine has no `value()` to
+The out slot `_sm_item<n>` is declared with neither a type nor an initializer - its type is
+the machine's element, which no parse knows - and the checker and the type pass each give it
+one at the declaration: the element of the machine declared right above it
+(`forItemMachine`, `semaMachineElement`). With that, `_sm_for1` is the machine, `_sm_item1`
+is `Int`, `v` is `Int`, and every temporary the linear pass made from them is typed too. The
+emitter needs no new IL op for the slot (a frame slot like any local; the call takes its
+address at the spelling, `CgCall`), and the machine has no `value()` to
 call, so the element is copied *once* into `v` rather than twice (field into the method's
 return, return into `v` - `impl_specs/yield.md`, "One protocol"). `TypeKind::Yield` also
 substitutes like a pointer does (`substituteBindings`), or a generic function's `..T` loses its
 element type before reaching that rule.
+
+The slot is also where the borrow pass reads a loop's reach. For the pointer wrap it holds an
+address *into the iterated storage*, so a write through the loop variable is a write into a
+by-value parameter: `bpClassifyPlace` gives the slot the classification of its machine, which
+is what a read of the machine's `current` carried by construction
+(`stress/borrow-for-pointer`).
 
 ## What the compiler says about a `for`
 
@@ -142,9 +160,10 @@ carries the span machine and nothing of the container.
 For the rewrite to fire, the checker has to know the iterated expression's type. `exprType`
 (`src/sema/SemaCall.kt`) resolves the shapes a loop nest actually reads through: a tracked
 binding (with `this`), a literal (`val s = "x"` is a `Str`), a field read (`this.functions`,
-`box.items`), a machine's element (`_sm_for1.current`), a member call (`xs.toArray()`,
-`words.keys()`), and a construction. A loop variable binds the element of the machine its
-`...current` comes from, so `for (line in lines) for (ch in line.text)` resolves the inner
+`box.items`), a `for`'s out slot (`_sm_item1`, typed as its machine's element), a member call
+(`xs.toArray()`,
+`words.keys()`), and a construction. A loop variable binds the slot of the machine it comes
+from, so `for (line in lines) for (ch in line.text)` resolves the inner
 receiver through the outer variable.
 
 - **A user's own type**, by the same convention (an extension function returning `..T`),
@@ -184,8 +203,8 @@ in `iter()` instead of `iterValues()`. Everything downstream is existing machine
 machine is generic over its element type and `..*T` is a `..T` whose element is `*T`:
 
 - the element type is the `..T`'s `Inner` (`Codegen`'s `emitYieldable`), so `..*T` gives
-  `*T` for the `current` field with no special case;
-- `TypeInfer` types `current` as that same `Inner`, so the loop
+  `*T` for the out slot with no special case;
+- the type pass types the slot as that same `Inner`, so the loop
   variable is typed `*T` - a pointer variable the emitter reads *through* (`cell.value` is
   `cell->value`), which is exactly what a `*T` parameter does everywhere else;
 - a machine is still the identity for `iterValues`, and has none for `iter`: it
@@ -227,14 +246,15 @@ A machine's element crosses the yield as whatever the creating function yielded 
 middle of a pipeline (both `yield`ing themselves, so neither drains anything):
 
 ```kt
-fun ..*T.toValues<T>(): ..T {
-    while (this.advance()) {
-        var value: T = *this.current
+fun Yieldable<*T>.toValues<T>(): ..T {
+    var item: *T
+    while (this.tryAdvance(&item)) {
+        var value: T = *item
         yield value
     }
 }
 
-fun ..T.toPtrs<T>(): ..*T {
+fun Yieldable<T>.toPtrs<T>(): ..*T {
     while (this.advance()) {
         yield *this.current
     }
@@ -246,6 +266,12 @@ copy lives in the machine's `value` field, so it is taken once, where the elemen
 yielded. `toPtrs` goes the other way and points at the receiver's `current` field, so a value
 walk feeds the pointer operators (`spanOf(xs).iterValues().toPtrs().where(...)`) without a
 `toList` round trip - one element at a time, and the place is valid until the next step.
+
+`toPtrs` is the one authored body still on `advance()`/`current`, by choice. The contract's
+`tryAdvance` hands out a *value*; the place `toPtrs` yields is the source's own storage, which
+only the two-member surface exposes. Through the one-method form every element would be copied
+into a slot of `toPtrs`' machine first - one more copy per element - for a contract that says
+nothing about where the value came from.
 
 **The measurement.** The three shapes, on the compiler's own hot loops
 (`Linear.kt`'s `declares`/`lowerStmts`/`containsShortCircuit`, release `./simse.exe`

@@ -127,29 +127,36 @@ fun Parser.iterCall(target: *ExprNode, pos: SourcePos, wrap: *Str): ExprNode {
     return ExprNode(call, pos.line, pos.column)
 }
 
-// What the machine last yielded (`current`): the `for` template's loop variable.
-fun Parser.memberExprAt(target: *Str, field: *Str, pos: SourcePos): ExprNode {
-    var memberAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
-    memberAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, field))
-    var member: AstXmlNode =
-        AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, memberAttrs, Array<AstXmlNode>())
-    val receiver: ExprNode = this.nameExprAt(target, pos)
-    this.attach(member, AstNodeKind.Receiver, receiver.node)
-    return ExprNode(member, pos.line, pos.column)
+// `&operand`: the address-of form an out slot takes - `machine.tryAdvance(&slot)`, the
+// `for` template's step, where the callee is the one that writes the operand.
+fun Parser.refExprAt(operand: *ExprNode, pos: SourcePos): ExprNode {
+    var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+    var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprRef, attrs, Array<AstXmlNode>())
+    this.attach(node, AstNodeKind.Operand, operand.node)
+    return ExprNode(node, pos.line, pos.column)
 }
 
-// `<target>.<method>()`: the machine's `advance`.
-fun Parser.methodCallAt(target: *Str, method: *Str, pos: SourcePos): ExprNode {
-    var memberAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
-    memberAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, method))
-    var member: AstXmlNode =
-        AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, memberAttrs, Array<AstXmlNode>())
-    val receiver: ExprNode = this.nameExprAt(target, pos)
-    this.attach(member, AstNodeKind.Receiver, receiver.node)
-    var callAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
-    var call: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, callAttrs, Array<AstXmlNode>())
-    this.attach(call, AstNodeKind.Callee, member)
-    return ExprNode(call, pos.line, pos.column)
+// The machine whose step fills a `for` template's out slot: `_sm_item3` is the slot of
+// `_sm_for3` (ParserStmt.parseFor). Empty for any other name. The slot is declared with no
+// type and no initializer of its own, so whoever has to say what it holds - its type, or
+// which storage it reaches - asks this for the machine.
+fun forItemMachine(name: *Str): Str {
+    if (!name.startsWith("_sm_item")) {
+        return ""
+    }
+    val id: Str = name.substr(8, name.size() - 8)
+    if (id.size() == 0) {
+        return ""
+    }
+    var i: Int = 0
+    while (i < id.size()) {
+        val ch: Int = Int(id[i])
+        if (ch < 48 || ch > 57) {
+            return ""
+        }
+        i++
+    }
+    return "_sm_for" + id
 }
 
 // `<receiver>.<method>(<arg>)`, for a receiver that is an expression rather than a name

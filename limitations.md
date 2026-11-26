@@ -66,6 +66,11 @@ its item here retires.
   call's return type resolves (see the fixed list); a call the checker cannot type still
   fails with `has no member named iterValues`. Bind the intermediate to a name and the
   diagnostic, when there is one, points at the right line.
+  *Fixed for the common `f()`, the list literal: `for (w in listOf("a", "b"))` is typed
+  end to end - a packed call's element type is its elements' own, where neither type rule
+  bound it before - and did not compile at all until then (its `auto` slots left the step
+  no member of the machine's class). `stress/packed-call` pins it, with a literal of
+  literals and an index into a literal.*
 - **A non-generic machine cannot be consumed by `for`.** A source machine declared
   without type parameters (`fun XmlNode.elements(): ..*XmlNode`) has no `iter` member in
   its generated yieldable; the same machine feeds the `linq` operators fine. Workaround:

@@ -12,8 +12,10 @@ that remain are correctness, not preference: a yielding body, a root the loop re
 ## Why
 
 `for` over a container is the span machine (`impl_specs/for.md`): the parser's desugar
-declares `_sm_for<n>` and the loop is `while (machine.advance()) { val v =
-machine.current; ... }`, a `current` field read behind an `advance()` call. On the
+declares `_sm_for<n>` and loops on the machine's step. When this was measured (October
+2026) the step was `while (machine.advance()) { val v = machine.current; ... }` - a
+`current` field read behind an `advance()` call; the desugar now steps through the
+contract's one method, `tryAdvance(&_sm_item<n>)`, and binds `val v = _sm_item<n>`. On the
 compiler's own loops that shape measured at parity with the hand-written walk (`for.md`'s
 table: 826 vs 824 ms median) - per-iteration overhead is not the cost. The cost is the
 *shape*: the auto-vectorizers do not flatten a state-machine loop into a counted one,
@@ -127,7 +129,10 @@ there and must not perturb it.
 - **Declarations stand where the machine stood**: `var _sm_walk<n>` (and the counter, or
   the pointer pair) replaces `var _sm_for<n>` in its statement slot - correct by
   construction, no block injection, so the placement and slot-merge hazards below cannot
-  arise.
+  arise. The value form's counter takes over the template's out slot (`_sm_item<n>`, the
+  statement right after the machine) in place, and the indexed form drops that slot and
+  renames its own `_sm_index<n>`: since the template grew the slot (November 2026) the
+  walk inserts no statement at all, and answers 0, or -1 when it drops one.
 - **Variant B needs no emitter work**: span reads and writes already spell `.ptr[i]`
   directly (the `spanDirect` guards, landed with the span hoist). Variant A's pieces are
   existing spellings too (`*p[i]` as pointer-plus-offset is `Span.slice`'s own idiom,

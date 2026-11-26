@@ -803,10 +803,11 @@ int main() {
     _sm_base1 = &xs;
     _sm_expr1 = ns1_tally(_sm_base1);
     _sm_for1 = _sm_expr1;
+    Str _sm_item1;
     L1:;
-    _sm_expr2 = advance(&_sm_for1);
+    _sm_expr2 = tryAdvance(&_sm_for1, &_sm_item1);
     if (!(_sm_expr2)) goto L2;
-    s = _sm_for1.current;
+    s = _sm_item1;
     simse_println((s), stdout);
     goto L1;
     L2:;

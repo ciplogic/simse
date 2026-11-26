@@ -36,7 +36,9 @@ The step that advances it is a **free extension function** (`advance(M* self)`),
 lambda's call has (`<sym>_invoke`, `impl_specs/memory-model.md`), so the fields are reached
 through `self->` exactly as any receiver function reaches its receiver's. A *generic* machine
 is a class template, and the method is a template beside it (`advance(M<T>* self)`); a call
-site spells `advance(&m)`.
+site spells `advance(&m)`. `tryAdvance(M* self, E* out)` - the contract's one method, what
+every `for` and every authored machine-receiver body steps with - is generated beside it, as
+a wrapper over that step ("One protocol").
 
 ## The two pieces of syntax
 
@@ -118,26 +120,48 @@ inside the loop with a capture, a generic machine) in an emission golden, no `au
 
 ```kt
 val evens = everyOther(10)          // a machine on the stack
-while (evens.advance()) {           // step it, and ask whether it yielded
-    println(evens.current.toString())
+var value: Int                      // the slot the step fills
+while (evens.tryAdvance(&value)) {  // step it; the element lands in the slot
+    println(value.toString())
 }
 ```
 
-`advance()` steps the machine and answers whether there was a value, leaving what it yielded
-in `current`, the machine's field. Nothing is constructed per element - no `Opt<T>` to build,
-ask `hasValue()` of, and unwrap. All four `for` forms use it (`impl_specs/for.md`).
-
-`current` has the *element* type (`..T`'s inner), not `Opt<T>`: the type pass (`sema::Infer`)
-types it that way, which makes a `for`'s loop variable a typed binding rather than an `auto`
-the emitter would resolve the wrong native for. For the pointer wrap (`iter`) the element
-type *is* `*T`, so `current` holds the place, which makes `for (*v in xs)` a borrow rather
+`tryAdvance(current: *TItem)` is the machine contract's one method: it steps the machine,
+writes what it yielded through the caller's slot, and answers whether there was one.
+Nothing is constructed per element - no `Opt<T>` to build, ask `hasValue()` of, and unwrap.
+Every `for` form uses it (`impl_specs/for.md`), and so does every authored machine-receiver
+body (`modules/linq`, `toValues`). `TItem` carries the element's whole shape: for the pointer
+wrap (`iter`) it is `*T`, the element's place, which makes `for (*v in xs)` a borrow rather
 than a copy. The two prelude conversions between the forms - `toValues`/`toPtrs` - are
-machines themselves, so they change a chain's element without draining it (`impl_specs/for.md`,
-"The two conversions").
+machines themselves, so they change a chain's element without draining it
+(`impl_specs/for.md`, "The two conversions").
 
-**There is no `value()`.** `current` is a field of every element type (a scalar, an aggregate,
-`*T`), so one member read is the whole conversion; a `value()` accessor would copy the element
-twice (field into the temporary, temporary into the loop variable).
+The lowering generates it beside the machine's own step, as a wrapper over the two-member
+surface the machine is built of:
+
+```cpp
+Bool tryAdvance(M* self, E* out) {
+    if (!advance(self)) { return false; }
+    *out = self->current;
+    return true;
+}
+```
+
+**There is no `value()`.** One write through the slot is the whole conversion; a `value()`
+accessor would copy the element twice (field into the temporary, temporary into the loop
+variable).
+
+`advance()` and the `current` field are still there, and a program may still use them by
+hand - `while (evens.advance()) { println(evens.current.toString()) }` (`stress/machines`).
+`current` has the *element* type (`..T`'s inner), not `Opt<T>`: the type pass types it so,
+which makes a typed binding of it rather than an `auto` the emitter would resolve the wrong
+native for. That surface is why the step is a wrapper and not the lowering itself. Folding
+`advance` into
+`tryAdvance` (the machine writing through `out` where it now writes `current`) would remove
+a field and a copy from every machine; it is also a change to a surface programs use, so it
+is a decision to take rather than a cleanup. `toPtrs` would still need the old surface: its
+yield is the *place* of the source's `current`, and a contract that hands out values cannot
+give it.
 
 ## A machine as a receiver
 
@@ -145,7 +169,8 @@ A yielding *extension* can take a machine as its receiver
 (`fun ..*T.select<T, U>(f: (*T) -> U): ..*U`), which is the shape a LINQ-style pipeline is
 built from (`modules/linq/linq.kt`). The receiver can also be spelled through the machine
 contract's protocol - `fun Yieldable<*T>.select<T, U>(...)`, with
-`protocol fun Yieldable<TStateMachine, TItem> TStateMachine.advance(): Bool` declared in the
+`protocol fun Yieldable<TStateMachine, TItem> TStateMachine.tryAdvance(current: *TItem): Bool`
+declared in the
 prelude: the subject `TStateMachine` is the pattern's wildcard (spelled by no one, exactly
 as `..*T` spells it) and the remaining argument binds the element. The compiler normalizes
 the spelling to the `..T` pattern in place right after `collectGlobal`, keeping the
@@ -173,9 +198,12 @@ Two rules make it express:
   parameter (`select`'s `U`), which is why `SemInfer.infer` types a lambda with its body's
   result.
 
-Inside the body `this.advance()` steps the caller's machine (`advance(self)` - the receiver
-already *is* the machine's address) and `this.current` reads its element; `yield *this.current`
-hands out its place (`toPtrs`, `src/rtl/rtl.kt`). A `for` over
+Inside the body `this.tryAdvance(&item)` steps the caller's machine - the receiver already
+*is* the machine's address - and the element lands in the body's slot, a place for the
+pointer contract (`item: *T`), which a pipeline hands on as it is (`where` yields `item`;
+`toValues` copies it, `src/rtl/rtl.kt`). `toPtrs` is the one body still on
+`this.advance()`/`this.current`, to yield the place of the *source's* own field ("One
+protocol"). A `for` over
 `this` is still out (the machine would have to be a field); the adapters step by hand.
 
 ## What the caller gets

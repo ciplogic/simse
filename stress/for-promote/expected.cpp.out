@@ -910,10 +910,11 @@ Int64 ns1_partPromoted(List<Str>* words) {
     total = 0;
     _sm_expr1 = simse_spanOf(words);
     _sm_for1 = iter(simse_addressOf(_sm_expr1));
+    Str* _sm_item1;
     L1:;
-    _sm_expr2 = advance(&_sm_for1);
+    _sm_expr2 = tryAdvance(&_sm_for1, &_sm_item1);
     if (!(_sm_expr2)) goto L2;
-    w = _sm_for1.current;
+    w = _sm_item1;
     _sm_expr3 = simse_lenOf((*w));
     _sm_expr4 = Int64(_sm_expr3);
     _sm_expr5 = simse_lenOf((*w));
@@ -936,10 +937,11 @@ Int ns1_partEscaped(List<Str>* words) {
     total = 0;
     _sm_expr1 = simse_spanOf(words);
     _sm_for2 = iterValues(simse_addressOf(_sm_expr1));
+    Str _sm_item2;
     L1:;
-    _sm_expr2 = advance(&_sm_for2);
+    _sm_expr2 = tryAdvance(&_sm_for2, &_sm_item2);
     if (!(_sm_expr2)) goto L2;
-    w = _sm_for2.current;
+    w = _sm_item2;
     _sm_base3 = &w;
     _sm_base2 = _sm_base3;
     _sm_base1 = ns1_firstByte(_sm_base2);

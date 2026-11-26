@@ -485,6 +485,24 @@ fun bpClassifyPlace(
             val at: *Int = alias.getPtr(name)
             return *at
         }
+        val stepMachine: Str = forItemMachine(name)
+        if (stepMachine != "") {
+            // A `for` template's out slot (`_sm_item<n>`) holds what its machine's step
+            // wrote into it, so it reaches whatever the machine reaches: for the pointer
+            // wrap an element's place *in the iterated storage* - a write through the loop
+            // variable is a write into a by-value parameter, and the parameter must stay by
+            // value (`stress/borrow-for-pointer`). The slot is declared with no initializer,
+            // so on its own it is storage the body owns; what fills it is not. This is the
+            // provenance a read of the machine's `current` carried by construction.
+            val machineAt: *Int = alias.getPtr(stepMachine)
+            if (machineAt != null) {
+                return *machineAt
+            }
+            if (fresh.has(stepMachine)) {
+                return bpSlotFresh
+            }
+            return bpSlotOther
+        }
         if (fresh.has(name)) {
             return bpSlotFresh
         }
@@ -1525,15 +1543,18 @@ fun bpCallableParams(fn: *AstXmlNode): Dictionary<Str, Bool> {
 }
 
 // The `for` lowering's machine step (impl_specs/for.md): the desugar declares a local named
-// `_sm_for<n>` and steps it with `_sm_for<n>.advance()`. The prefix is the compiler's own (a
-// program's lowering never writes `_sm_`), and a machine can only come from `iterValues`/`iter`
-// in the same body - so the call that built it has already been weighed, and `advance` reads the
-// container it was built over. Trusting the step is what lets a body with a `for` borrow.
+// `_sm_for<n>` and steps it with `_sm_for<n>.tryAdvance(&_sm_item<n>)`. The prefix is the
+// compiler's own (a program's lowering never writes `_sm_`), and a machine can only come from
+// `iterValues`/`iter` in the same body - so the call that built it has already been weighed,
+// and the step reads the container it was built over. The slot it fills is the template's
+// own (`_sm_item<n>`), never a parameter of the enclosing declaration, so the write through
+// the pointer argument imposes nothing either. Trusting the step is what lets a body with a
+// `for` borrow.
 fun bpMachineStep(callee: *AstXmlNode): Bool {
     if (xmlKind(callee) != AstNodeCategory.ExprMember) {
         return false
     }
-    if (xmlAttr(callee, AstNodeAttributeKind.Name) != "advance") {
+    if (xmlAttr(callee, AstNodeAttributeKind.Name) != "tryAdvance") {
         return false
     }
     val recv: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)

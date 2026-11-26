@@ -6276,3 +6276,55 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   wrap like a named list's), and a literal of literals. Verified:
   `bun tools/iterate.js --full` - **162/162** and both fixed points; the published
   bootstrap refreshed.
+
+- **The `for` desugar steps through the contract's one method.** The template is
+  `var _sm_for<n> = m.<wrap>(); var _sm_item<n>;
+  while (_sm_for<n>.tryAdvance(&_sm_item<n>)) { val v = _sm_item<n>; ... }`: the machine,
+  an out slot its step fills, and the loop variable bound off that slot - a `val`, scoped
+  to the body, exactly what a read of the machine's `current` was. `advance()` and
+  `current` are gone from every loop the compiler generates: the self-transpile carries
+  750 machine steps, all `tryAdvance`, none `advance(&_sm_for`, none `.current`. They
+  remain what the lowering builds (the machine's own step, with `tryAdvance` a wrapper
+  over it) and what a program may call by hand (`stress/machines`), so folding one into
+  the other is a change to a surface programs use - a decision, not a cleanup
+  (`impl_specs/yield.md`, "One protocol"); `toPtrs` stays on them by choice, since its
+  yield is the place of the *source's* field. **The slot is declared with neither a type
+  nor an initializer**, because its type is the machine's element and no parse knows it:
+  the checker and the type pass each give it one at the declaration (`forItemMachine`,
+  `semaMachineElement`), the type pass annotating it like any inferred local. Its name
+  is its own prefix and not `_sm_for`'s - the readers tell a machine from its name
+  (`semaIsForTemplateName` answers for `_sm_for1_item` too, and `semaForTemplateId`
+  reads `1` off it). **The readers**: one binding predicate for the walk and the `for`
+  promotion (`semaForElementBinding`, which were two copies of the shape), `bpMachineStep`
+  trusting `tryAdvance`, and the walk taking the slot over as the value form's counter and
+  dropping it in the indexed form (`semaWalkReplaceStmtAt`) - so the walk now inserts no
+  statement and answers 0, or -1. **Two bugs, found because the slot has to be declared.**
+  (1) *A miscompile*: the borrow classifier saw the slot as storage the body owns, where
+  `m.current` carried the machine's provenance by construction, and lent `touch` the
+  caller's list - `for (*p in items)` with a write through `p` printed 102 where the
+  by-value boundary owes 2. The corpus had no such loop (`borrow-mutates-param` covers a
+  receiver mutator, not a pointer *into* a parameter); the borrow report did - 380 of its
+  lines had moved, in both directions. One rule in `bpClassifyPlace` (the classifier all
+  seventeen call sites share) gives the slot its machine's classification, and the report
+  is set-identical to the old template's again: `stress/borrow-for-pointer`, seen failing
+  (3102) with the rule disabled. (2) The published compiler could not compile
+  `for (w in listOf("ab", "cde"))` at all (the previous entry). **Proven equivalent, not
+  assumed** - same tree, old template against new: 1,151 walk decisions with
+  `--for-walk`, 0 differing by file and reason; the borrow decision set identical (2,198
+  lines); the escape report identical; and the only trace delta a relabelling, verified
+  on raw names to be the same candidates refused under another gate (`val x = m.current`
+  is a place chain - "element is not deep"; `val x = slot` a plain name - "initializer is
+  not a place"; +754 / -754). Eight goldens moved, in three shapes only: 56 steps, 54
+  bindings, the slots. **And measured**, since `for-walk.md` records the old machine loop
+  as the shape MSVC pattern-matches: the bench suite's sixteen Simse rows, built by both
+  compilers with the harness's flags and run interleaved - geometric mean 0.986, identical
+  output on all sixteen, every row within 1.5% but three; `particles` (the struct-pointer
+  walk) consistently 2-4% faster, and `blur`'s first reading of 1.099 did not reproduce
+  (0.989, 0.992, 1.005 on re-measurement). Two lessons of method: the walk is opt-in, so
+  the first comparisons ran with it off and proved nothing about it - they were redone
+  with `--for-walk`; and a zero-`auto` count is not a result until the types are read (the
+  first cut of the packed-call rule typed every span `Span<List<T>>`). `stress/for-template`
+  pins every form of the template with the walk on - the indexed list, the range, the
+  inclusive range, the machine the walk refuses, the pointer form, nested indexed loops -
+  with an emission golden. Verified: `bun tools/iterate.js --full` - **164/164** and both
+  fixed points; the published bootstrap refreshed.

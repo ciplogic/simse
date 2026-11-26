@@ -5,6 +5,7 @@
 
 package sema
 import compiler
+import parser
 
 import common
 
@@ -382,7 +383,8 @@ fun SemInfer.destructureStmt(stmtNode: AstXmlNode): List<AstXmlNode> {
             if (!xmlIsEmpty(fieldType)) {
                 xmlAddChild(binderNode, semReRole(*fieldType, AstNodeKind.Type))
             }
-            // `temp.field`, built the way the parser's `memberExprAt` builds one.
+            // `temp.field`: an `ExprMember` whose `Receiver` role is the name, the shape
+            // every member read has.
             var receiverAttrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
             receiverAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, lineText))
             receiverAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, columnText))
@@ -421,6 +423,22 @@ fun SemInfer.stmt(stmtNode: AstXmlNode): AstXmlNode {
                 typeNode = this.infer(init)
             }
             val name: Str = xmlAttr(stmtNode, AstNodeAttributeKind.Name)
+            if (xmlIsEmpty(typeNode) && xmlIsEmpty(init)) {
+                // A `for` template's out slot (`var _sm_item<n>`, ParserStmt.parseFor): the
+                // element of the machine declared right above it. Declared with no type and
+                // no initializer of its own, so - like an inferred local - it is annotated
+                // here, and the declaration spells its type from this pass on.
+                val slotMachine: Str = forItemMachine(name)
+                if (slotMachine != "") {
+                    typeNode = semaMachineElement(this.lookup(slotMachine))
+                    if (!xmlIsEmpty(typeNode)) {
+                        this.mark(name, typeNode)
+                        if (this.spellable(typeNode)) {
+                            return semWithType(stmtNode, typeNode)
+                        }
+                    }
+                }
+            }
             if (!xmlIsEmpty(typeNode)) {
                 this.mark(name, typeNode)
             }

@@ -1117,10 +1117,12 @@ fun Analyzer.semaWalkRefuse(reason: Str, machineName: Str): Int {
 
 // One `for` (the machine declaration's statement slot): every gate runs before the first
 // mutation, so a refused walk leaves the machine exactly as the desugar wrote it. The
-// container is the statement list's node - the walk's counter declaration is inserted after
-// the span slot, the one structural edit the machine template did not need, and `shift` is
-// the statements earlier walks in this list inserted (an inserted counter moves every later
-// statement's container slot). Answers the number of statements it inserted.
+// container is the statement list's node: the walk takes over the template's own slots in
+// place - the machine declaration becomes the span's, the out slot (`_sm_item<n>`, right
+// after it) becomes the value form's counter and is dropped by the indexed form, whose
+// `_sm_index<n>` is the counter - and `shift` is the offset between a statement's place in
+// `stmts` and its slot in the container (the statements earlier walks in this list
+// inserted). Answers the change in the statement count: 0, or -1 when a slot is dropped.
 fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: Int, shift: Int): Int {
     val machineDecl: *AstXmlNode = *stmts[index]
     if (xmlKind(machineDecl) != AstNodeCategory.StmtVarDecl) {
@@ -1213,13 +1215,14 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
         return this.semaWalkRefuse("body-prefix-shape", machineName)
     }
 
-    // The body prefix, by shape: the element binding reads the machine's `current`; in the
-    // indexed form the counter bump sits before it and the index binding after.
+    // The body prefix, by shape: the element binding reads the slot the step filled
+    // (`val x = _sm_item<n>`); in the indexed form the counter bump sits before it and the
+    // index binding after.
     val counterName: Str = "_sm_index" + id.toString()
     var elementAt: Int = 0
-    if (!semaWalkIsElementBinding(body[0], machineName)) {
+    if (semaForElementBinding(body[0], machineName) == "") {
         if (body.size() < 3 || xmlKind(body[0]) != AstNodeCategory.StmtAssign
-            || !semaWalkIsElementBinding(body[1], machineName)
+            || semaForElementBinding(body[1], machineName) == ""
         ) {
             return this.semaWalkRefuse("counter-slot-missing", machineName)
         }
@@ -1227,12 +1230,13 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
     }
     val indexed: Bool = elementAt == 1
     if (indexed) {
-        // The indexed form's counter declaration is the slot between the machine and the
-        // loop; the walk's counter takes it over.
-        if (index + 1 >= stmts.size()) {
+        // The indexed form's counter declaration is the template's `_sm_index<n>`, two
+        // statements past the machine (the out slot sits between); the walk's counter takes
+        // it over.
+        if (index + 2 >= stmts.size()) {
             return this.semaWalkRefuse("counter-slot-mismatch", machineName)
         }
-        val counterDecl: *AstXmlNode = *stmts[index + 1]
+        val counterDecl: *AstXmlNode = *stmts[index + 2]
         if (xmlKind(counterDecl) != AstNodeCategory.StmtVarDecl
             || xmlAttr(counterDecl, AstNodeAttributeKind.Name) != counterName
         ) {
@@ -1277,7 +1281,9 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
         val fileDiag: Str = this.file
         val kidsDiag: Str = machineDecl.Children.count().toString()
         val initDiag: Str = xmlKindText(xmlKind(init))
-        val containerDiag: Str = semaWalkContainerChildName(container, index)
+        // The copy-vs-tree probe reads the container at the statement's *shifted* slot: the
+        // list's `index` is short by every statement an earlier walk or hoist inserted.
+        val containerDiag: Str = semaWalkContainerChildName(container, index + shift)
         diagTrace(
             "sema",
             `forWalk before file=@fileDiag stmtsName=@machineName containerName=@containerDiag kids=@kidsDiag init=@initDiag wrap=@wrap`
@@ -1329,7 +1335,7 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
     // disappears: the walk's counter *is* the index. The value form's counter is inserted
     // after the slot, below.
     if (indexed) {
-        val realCounter: *AstXmlNode = semaWalkStmtAt(container, index + 1 + shift)
+        val realCounter: *AstXmlNode = semaWalkStmtAt(container, index + 2 + shift)
         if (xmlIsEmpty(realCounter)) {
             return 0
         }
@@ -1418,10 +1424,18 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
                 line, column
             )
         )
-        // The counter itself, after the span slot - the one statement the machine template
-        // never needed, which is why the walk goes through the container.
-        semaStmtInsertAfter(
-            container, index + shift,
+    }
+
+    // The out slot, last - a container rebuild, after the node edits it would detach. The
+    // value form's counter takes its place: the one statement the walk needs that the
+    // template used not to provide, and now does. The indexed form has `_sm_index<n>` for
+    // its counter and drops the slot - nothing reads it once the condition and the binding
+    // are the walk's.
+    if (indexed) {
+        semaWalkReplaceStmtAt(container, index + 1 + shift, xmlEmptyNode())
+    } else {
+        semaWalkReplaceStmtAt(
+            container, index + 1 + shift,
             semaWalkCounterDecl(stepName, isRange, walkName, line, column)
         )
     }
@@ -1438,9 +1452,9 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
         )
     }
     if (indexed) {
-        return 0
+        return -1
     }
-    return 1
+    return 0
 }
 
 // The `ordinal`-th `Stmt` child of a statement container, as a pointer into the container's
@@ -1515,20 +1529,22 @@ fun semaWalkContainerChildName(container: *AstXmlNode, index: Int): Str {
     return "<none>"
 }
 
-// Whether the statement is the template's element binding (`val x = _sm_forN.current`).
-fun semaWalkIsElementBinding(stmt: *AstXmlNode, machineName: Str): Bool {
+// The `for` template's element binding: `val x = _sm_item<n>`, the slot its machine's step
+// fills (ParserStmt.parseFor). The binding's name when `stmt` is one for `machineName`,
+// empty when it is not - the one definition of the shape the walk and the `for` promotion
+// both read.
+fun semaForElementBinding(stmt: *AstXmlNode, machineName: Str): Str {
     if (xmlKind(stmt) != AstNodeCategory.StmtVarDecl) {
-        return false
+        return ""
     }
     val init: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Init)
-    if (xmlKind(init) != AstNodeCategory.ExprMember
-        || xmlAttr(init, AstNodeAttributeKind.Name) != "current"
-    ) {
-        return false
+    if (xmlKind(init) != AstNodeCategory.ExprName) {
+        return ""
     }
-    val recv: *AstXmlNode = xmlChildPtr(init, AstNodeKind.Receiver)
-    return xmlKind(recv) == AstNodeCategory.ExprName
-            && xmlAttr(recv, AstNodeAttributeKind.Name) == machineName
+    if (forItemMachine(xmlAttr(init, AstNodeAttributeKind.Name)) != machineName) {
+        return ""
+    }
+    return xmlAttr(stmt, AstNodeAttributeKind.Name)
 }
 
 // `fresh` into a statement container right after the `index`-th Stmt child - the walk's
@@ -1577,6 +1593,28 @@ fun semaStmtInsertAfter(container: *AstXmlNode, index: Int, fresh: AstXmlNode): 
     }
     if (!inserted) {
         kids.append(fresh)
+    }
+    container.Children = kids.toArray()
+}
+
+// The `index`-th `Stmt` child of a statement container, swapped for `fresh` - or dropped
+// when `fresh` is empty. A container-children rebuild, the `semaStmtInsertAfter` mechanics,
+// and like every rebuild it runs *last*: the node edits a rebuild would detach are the
+// statements' own, and the copies the rebuild keeps carry them.
+fun semaWalkReplaceStmtAt(container: *AstXmlNode, index: Int, fresh: AstXmlNode): Unit {
+    var kids: List<AstXmlNode> = List<AstXmlNode>()
+    var seen: Int = -1
+    for (*child in container.Children) {
+        if (child.name == AstNodeKind.Stmt) {
+            seen++
+            if (seen == index) {
+                if (!xmlIsEmpty(fresh)) {
+                    kids.append(fresh)
+                }
+                continue
+            }
+        }
+        kids.append(child)
     }
     container.Children = kids.toArray()
 }
@@ -2076,23 +2114,13 @@ fun Analyzer.forLoopIndex(stmts: *List<AstXmlNode>, index: Int): Int {
     return -1
 }
 
-// The value binding the template wrote first in the loop body: `val x = machine.current`.
+// The value binding the template wrote first in the loop body: `val x = _sm_item<n>`, the
+// slot the machine's step fills.
 fun Analyzer.loopElementName(body: *List<AstXmlNode>, machineName: Str): Str {
     for (*stmt in body) {
-        if (xmlKind(stmt) != AstNodeCategory.StmtVarDecl) {
-            continue
-        }
-        val init: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Init)
-        if (xmlKind(init) != AstNodeCategory.ExprMember
-            || xmlAttr(init, AstNodeAttributeKind.Name) != "current"
-        ) {
-            continue
-        }
-        val recv: *AstXmlNode = xmlChildPtr(init, AstNodeKind.Receiver)
-        if (xmlKind(recv) == AstNodeCategory.ExprName
-            && xmlAttr(recv, AstNodeAttributeKind.Name) == machineName
-        ) {
-            return xmlAttr(stmt, AstNodeAttributeKind.Name)
+        val bound: Str = semaForElementBinding(stmt, machineName)
+        if (bound != "") {
+            return bound
         }
     }
     return ""

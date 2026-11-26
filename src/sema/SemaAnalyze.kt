@@ -851,6 +851,18 @@ fun Analyzer.analyzeStmt(stmt: *AstXmlNode): Unit {
             if (xmlIsEmpty(type) && !xmlIsEmpty(init)) {
                 type = this.exprType(init)
             }
+            if (xmlIsEmpty(type) && xmlIsEmpty(init)) {
+                // A `for` template's out slot (`var _sm_item<n>`, ParserStmt.parseFor): the
+                // element of the machine declared right above it. The binding that follows
+                // reads the slot, so the loop variable is typed here as `m.current` was.
+                val slotMachine: Str = forItemMachine(xmlAttr(stmt, AstNodeAttributeKind.Name))
+                if (slotMachine != "") {
+                    val machine: Opt<ValueBinding> = this.lookupValue(slotMachine)
+                    if (machine.hasValue()) {
+                        type = semaMachineElement(machine.value().type)
+                    }
+                }
+            }
             this.checkForIterable(stmt)
             this.declareValue(
                 xmlAttr(stmt, AstNodeAttributeKind.Name),
