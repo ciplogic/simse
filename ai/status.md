@@ -87,7 +87,15 @@ before committing).
   compiler could not compile it). The promotion trace is truthful (each loop walked once, in
   scope; every hoist refusal names the gate that failed) - `--diagnostics sema` is the
   measurement to trust.
-- The single amalgamated translation unit (~190 KB of C++) is fine today; revisit if the
-  compiler grows much.
+- **The linear form's next steps are planned**: `impl_specs/linear-form-plan.md` is the
+  measured list of what is still wrong with the compiler's middle end now that it is typed -
+  94 decisions keyed on a name, the type rule written in two to six places, 1,859 operands a
+  callee writes that the IL records as reads, 1,138 typed single-use temporaries that never
+  fold - and the order to fix them in. The largest item is one the plan's small programs
+  show: the compiler checks none of assignability, so five ordinary type errors out of
+  thirteen are left to `cl.exe` to report, in generated code.
+- The single amalgamated translation unit is 4.07 MB of C++ (118,039 lines, measured
+  November 2026 - it was ~190 KB when this note was written); revisit if the compiler grows
+  much.
 
 `docs/state-of-the-field.md` lists the rough edges a *program author* hits, with workarounds.

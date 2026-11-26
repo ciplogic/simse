@@ -135,18 +135,13 @@ that survive to emission) and tightens as ops gain types; when it is strict, the
 
 ## Order of work
 
-1. The verifier, permissive (reject `?` at emission; print op + slot + line). It is safe
-   unflagged - a `?` slot at emission is already a hard failure today, so this only
-   replaces a late, opaque message with an early, named one. Strictness beyond that rides
-   `--typed-il`.
-2. `GetIndex`/`SetIndex` over a `*T` base: typed from the pointee (the span-hoist blocker;
-   the hoist itself resumes after this lands). Under the flag.
-3. `SpanOf` + span-typed index ops (`Span<T>` in the bytecode). Under the flag.
-4. The static-fallback and null-materialization slots. Under the flag.
-5. The remaining `unsupported` categories, cheapest first, each becoming a diagnostic or a
-   typed op.
+Steps 1, 2 and 4 are in (Status, above), and this section now lives in
+`impl_specs/linear-form-plan.md`, which carries the two that remain - `SpanOf` as an op (its
+step 9) and the remaining `unsupported` categories (its step 2) - together with everything
+the measurements found once the form was typed: the calls still resolved by name, the type
+rule written in three places, the operands a callee writes but the table calls reads.
 
-The flip/deletion plan from the earlier discussion (a SmaliLike shadow backend, migrate,
-flip the default, delete the old form) stays as the fallback if a step proves too
-entangled to do inline - the bet here is that none does: the inventory is small, and every
-entry has a test shape already sitting in `stress/` or in this session's reduced cases.
+The one method this spec stated is the method the plan keeps: **inline, one operation at a
+time** - no wholesale rewrite, no second bytecode kept alive beside the first. Take one
+shape, define it as a typed operation, validate with the loop, commit; one small program
+that spells the shape, red before and green after, pinned as a stress case.
