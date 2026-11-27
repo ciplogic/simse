@@ -162,7 +162,10 @@ For the rewrite to fire, the checker has to know the iterated expression's type.
 binding (with `this`), a literal (`val s = "x"` is a `Str`), a field read (`this.functions`,
 `box.items`), a `for`'s out slot (`_sm_item1`, typed as its machine's element), a member call
 (`xs.toArray()`,
-`words.keys()`), and a construction. A loop variable binds the slot of the machine it comes
+`words.keys()`), and a construction. A literal in the header is its spelling: `0 until n`
+is an `Int`, and `for (ch in "abc")` is a `Str` - the string arm was missing until November
+2026, and that loop failed to transpile rather than iterate (`stress/for-string-literal`).
+A loop variable binds the slot of the machine it comes
 from, so `for (line in lines) for (ch in line.text)` resolves the inner
 receiver through the outer variable.
 

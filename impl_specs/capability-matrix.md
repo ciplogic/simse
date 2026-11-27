@@ -6360,3 +6360,41 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   did not move, so no program's emission changed with the walk off. Verified: `bun
   tools/iterate.js --full` - **164/164**, then **164/164 with the walk on**, and both fixed
   points; the published bootstrap refreshed.
+
+- **A `for` over a string literal iterates its bytes.** `for (ch in "abc")` did not
+  transpile: `internal: the body of 'main' is not expressible in the IL (the slot
+  '_sm_item1' has neither a type nor an initializer)`, on the default path, in the published
+  compiler. A `for` over a container reaches the span machine through the checker's rewrite
+  (`spanForAt`), which needs the receiver's type from the checker's *own* typing -
+  `Analyzer.iteratedType`, one of the copies of the rule `impl_specs/linear-form-plan.md`
+  counts. That copy had an arm for an integer literal (`0 until n`) and none for a string
+  one, so the rewrite skipped the literal, the machine stayed a member `iterValues()` on
+  it, and the template's out slot had nothing to take a type from. A name, a call and a
+  list literal all worked (`ace50bb` fixed the last of the three); only the literal in the
+  header failed. One arm, the `ExprIntLit` arm's rule. Found by accident: the *correct*
+  control program for step 1's type-check probes was the one that did not compile.
+  `stress/for-string-literal` pins the value, indexed and `*v` forms, `continue`, an empty
+  literal, an escape, and a literal nested under a literal and under a list literal - seen
+  failing on the published compiler at `8a3e179`, green with and without `--for-walk`
+  after. The counts the docs cite for the corpus stopped being numbers (they were 99, 138
+  and 164 within one day). Verified: `bun tools/iterate.js --full` - **165/165**, then
+  **165/165 with the walk on**, and both fixed points; the published bootstrap refreshed.
+
+- **A `for` over a string literal iterates its bytes.** `for (ch in "abc")` did not
+  transpile: `internal: the body of 'main' is not expressible in the IL (the slot
+  '_sm_item1' has neither a type nor an initializer)`, on the default path, in the published
+  compiler. A `for` over a container reaches the span machine through the checker's rewrite
+  (`spanForAt`), which needs the receiver's type from the checker's *own* typing -
+  `Analyzer.iteratedType`, one of the copies of the rule `impl_specs/linear-form-plan.md`
+  counts. That copy had an arm for an integer literal (`0 until n`) and none for a string
+  one, so the rewrite skipped the literal, the machine stayed a member `iterValues()` on
+  it, and the template's out slot had nothing to take a type from. A name, a call and a
+  list literal all worked (`ace50bb` fixed the last of the three); only the literal in the
+  header failed. One arm, the `ExprIntLit` arm's rule. Found by accident: the *correct*
+  control program for step 1's type-check probes was the one that did not compile.
+  `stress/for-string-literal` pins the value, indexed and `*v` forms, `continue`, an empty
+  literal, an escape, and a literal nested under a literal and under a list literal - seen
+  failing on the published compiler at `8a3e179`, green with and without `--for-walk`
+  after. The counts the docs cite for the corpus stopped being numbers (they were 99, 138
+  and 164 within one day). Verified: `bun tools/iterate.js --full` - **165/165**, then
+  **165/165 with the walk on**, and both fixed points; the published bootstrap refreshed.

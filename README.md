@@ -372,7 +372,8 @@ best of a few runs while idle):
 | compiling the published bootstrap with `cl.exe` | ~16 s release (`/O2 /Ob3` with LTO) |
 | **from the published file to a compiler that reproduces it** | **~17 s**, then under a second per self-transpile |
 
-The whole corpus - **164 end-to-end programs**, one folder each with its expected output -
+The whole corpus - **an end-to-end program per folder under `stress/`** (`bun tools/stress.js
+--list` counts them), each with its expected output -
 runs green on every build, alongside the bootstrap fixed point.
 
 ## Repository layout

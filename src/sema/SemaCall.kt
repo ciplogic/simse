@@ -1805,9 +1805,10 @@ fun Analyzer.semaReceiverNameMatches(pattern: *AstXmlNode, actual: *AstXmlNode, 
 }
 
 // The type a `for` iterates, for the shapes the checker can name: a tracked binding (with
-// `this`), a field read (`this.functions`, `box.items`), an indexed element (`lists[0]`),
-// a member call (`xs.toArray()`), a type construction, or a declared function's return
-// type. Unknown stays silent.
+// `this`), a literal written in the header (`0 until n`, `for (ch in "abc")`), a field read
+// (`this.functions`, `box.items`), an indexed element (`lists[0]`), a member call
+// (`xs.toArray()`), a type construction, or a declared function's return type. Unknown
+// stays silent.
 fun Analyzer.iteratedType(expr: *AstXmlNode): AstXmlNode {
     if (xmlKind(expr) == AstNodeCategory.ExprName) {
         return this.exprType(expr)
@@ -1829,6 +1830,14 @@ fun Analyzer.iteratedType(expr: *AstXmlNode): AstXmlNode {
             return semNamedType("Int64")
         }
         return semNamedType("Int")
+    }
+    if (xmlKind(expr) == AstNodeCategory.ExprStrLit) {
+        // A string literal receiver (`for (ch in "abc")`): its type is its spelling, the
+        // `ExprIntLit` arm's rule. Without this arm the span rewrite silently skipped, and
+        // the emitted machine stayed a member `iterValues()` on a literal whose out slot
+        // no rule could type - `internal: the slot '_sm_item1' has neither a type nor an
+        // initializer`, on a program nothing is wrong with (`stress/for-string-literal`).
+        return semNamedType("Str")
     }
     if (xmlKind(expr) == AstNodeCategory.ExprMember) {
         // A field read: the field's declared type, reached through the base's.

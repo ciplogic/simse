@@ -47,7 +47,7 @@ reading what the program printed, never as a way to make a red case green.
 
 `expected.cpp.out` is the emission golden: it pins the generated C++ for a program,
 which is how the old fixture goldens pinned it. `stress/objects` and `stress/machines`
-were the first two; forty cases carry one now. The compare ignores line endings and
+were the first two, and many cases carry one now. The compare ignores line endings and
 `--update` never rewrites it: copy `stress/.work/<name>/out.cpp` into the case by hand,
 after the case passes and after reading what moved.
 
