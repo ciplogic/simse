@@ -1118,12 +1118,12 @@ int main(int argc, char** argv) {
     Char* __sm_catP;
     List<Int>* _sm_base1, * _sm_base4, * _sm_base5, * _sm_base8;
     Int _sm_base2, _sm_base3, _sm_base6, _sm_i1, _sm_expr1, v, i, _sm_i2, _sm_v_2, _sm_i_2, _sm_i3,
-        _sm_i_3, _sm_index4, _sm_v_3, _sm_i_4, _sm_i5, _sm_expr33, _sm_expr34, cells, _sm_i7, r, _sm_i6,
-        _sm_expr43, _sm_expr44, _sm_expr45;
+        _sm_i_3, _sm_index4, _sm_v_3, _sm_i_4, _sm_i5, _sm_expr34, _sm_expr35, cells, _sm_i7, r, _sm_i6,
+        _sm_expr44, _sm_expr45, _sm_expr46;
     List<List<Int>>* _sm_base7;
-    List<Int> xs, ys, _sm_expr37, _sm_expr38, row;
-    Str out, _sm_expr4, _sm_expr5, _sm_expr6, _sm_expr7, _sm_expr8, _sm_expr46;
-    Span<Int> _sm_walk1, _sm_expr21, _sm_walk5, _sm_walk6;
+    List<Int> xs, ys, _sm_expr38, _sm_expr39, row;
+    Str out, _sm_expr4, _sm_expr5, _sm_expr6, _sm_expr7, _sm_expr8, _sm_expr47;
+    Span<Int> _sm_walk1, _sm_expr22, _sm_walk5, _sm_walk6;
     Bool _sm_expr2;
     Range _sm_walk2, _sm_walk3;
     Span_iterValues_yieldable<Int> _sm_for4;
@@ -1178,7 +1178,8 @@ int main(int argc, char** argv) {
     _sm_expr2 = _sm_i2 <= _sm_expr1;
     if (!(_sm_expr2)) goto L6;
     _sm_v_2 = _sm_i2;
-    _sm_i_2 = _sm_i2;
+    _sm_expr1 = _sm_walk2.from;
+    _sm_i_2 = _sm_i2 - _sm_expr1;
     _sm_i2 = _sm_i2 + 1;
     _sm_expr4 = toString(simse_addressOf(_sm_i_2));
     _sm_expr5.resize(out.size() + _sm_expr4.size());
@@ -1234,8 +1235,8 @@ int main(int argc, char** argv) {
     out = __sm_stringTable[7];
     ys = List<Int>{1, 2};
     _sm_base4 = &ys;
-    _sm_expr21 = simse_spanOf(_sm_base4);
-    _sm_for4 = iterValues(simse_addressOf(_sm_expr21));
+    _sm_expr22 = simse_spanOf(_sm_base4);
+    _sm_for4 = iterValues(simse_addressOf(_sm_expr22));
     Int _sm_item4;
     _sm_index4 = -1;
     L11:;
@@ -1286,9 +1287,9 @@ int main(int argc, char** argv) {
     _sm_expr1 = *p;
     _sm_base6 = _sm_expr1 + 5;
     *p = _sm_base6;
-    _sm_expr33 = *p;
-    _sm_expr34 = _sm_expr33 * 2;
-    _sm_expr4 = toString(simse_addressOf(_sm_expr34));
+    _sm_expr34 = *p;
+    _sm_expr35 = _sm_expr34 * 2;
+    _sm_expr4 = toString(simse_addressOf(_sm_expr35));
     _sm_expr5.resize(out.size() + _sm_expr4.size());
     __sm_catP = simse_str_data(&_sm_expr5);
     std::memcpy(__sm_catP, out.data(), out.size());
@@ -1302,9 +1303,9 @@ int main(int argc, char** argv) {
     goto L15;
     L16:;
     simse_println((out), stdout);
-    _sm_expr37 = List<Int>{1, 2};
-    _sm_expr38 = List<Int>{3, 4, 5};
-    grid = List<List<Int>>{_sm_expr37, _sm_expr38};
+    _sm_expr38 = List<Int>{1, 2};
+    _sm_expr39 = List<Int>{3, 4, 5};
+    grid = List<List<Int>>{_sm_expr38, _sm_expr39};
     cells = 0;
     _sm_base7 = &grid;
     _sm_walk7 = simse_spanOf(_sm_base7);
@@ -1324,16 +1325,16 @@ int main(int argc, char** argv) {
     _sm_expr2 = _sm_i6 < _sm_expr1;
     if (!(_sm_expr2)) goto L17;
     _sm_expr1 = (_sm_walk6.ptr[_sm_i6]);
-    _sm_expr33 = _sm_i6;
+    _sm_expr34 = _sm_i6;
     _sm_i6 = _sm_i6 + 1;
-    _sm_expr43 = _sm_expr1 * 10;
-    _sm_expr44 = cells + _sm_expr43;
-    _sm_expr45 = _sm_expr44 + r;
-    cells = _sm_expr45 + _sm_expr33;
+    _sm_expr44 = _sm_expr1 * 10;
+    _sm_expr45 = cells + _sm_expr44;
+    _sm_expr46 = _sm_expr45 + r;
+    cells = _sm_expr46 + _sm_expr34;
     goto L19;
     L18:;
-    _sm_expr46 = toString(simse_addressOf(cells));
-    simse_println((_sm_expr46), stdout);
+    _sm_expr47 = toString(simse_addressOf(cells));
+    simse_println((_sm_expr47), stdout);
     simse_println((__sm_stringTable[1]), stdout);
 }
 

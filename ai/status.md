@@ -94,7 +94,10 @@ before committing).
   reads, 1,138 typed single-use temporaries that never fold - and the order to fix them in.
   Its three open decisions are taken, by default: `advance()`/`current` stay and the
   machine's step folds under them; `&place` is the out argument for every callee, by
-  signature; type checks become errors as soon as they are clean. The largest item is one
+  signature; type checks become errors as soon as they are clean. Step 0 is in: the dump,
+  the `sema` trace and the walk's own corpus tell the truth - `iterate --full` runs the
+  corpus with `--for-walk` as well, and its first whole run found an indexed-range
+  miscompile. The largest item is one
   the plan's small programs show: the compiler checks none of assignability, so five
   ordinary type errors out of thirteen are left to `cl.exe` to report, in generated code.
 - The single amalgamated translation unit is 4.07 MB of C++ (118,039 lines, measured

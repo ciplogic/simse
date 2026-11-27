@@ -408,6 +408,11 @@ build compares outputs byte for byte, so it can become a golden category
 (`tests/golden/<fixture>.il.expected`). The extraction is pure and the dump goes to
 stderr, so the emitted C++ is byte-identical with and without the flag (checked).
 
+The type table lists only the entries something still names - a slot, a method record's
+return or argument type, an op's type operand (`ilLiveTypes`). An entry interned for a slot
+that was typed afterwards keeps its index (an index is an identity) but is not printed, so
+a `?` in the table is an untyped slot and nothing else.
+
 ## What the corpus says
 
 Measured over the whole compiler (`--root src`); the numbers come from

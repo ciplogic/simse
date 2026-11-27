@@ -163,7 +163,10 @@ this proposal inherits.
   `for-walk-yield` pinning the *keep-the-machine* side of the contract: a generator
   receiver and a yielding body must come out unchanged by the pass;
 - the loop (`bun tools/iterate.js --full` - the dotnet twin's pool) validates the default
-  path; the flag path is the new cases plus a flag-on self-transpile spot check.
+  path, and since 2026-11-27 the flag path too: the whole corpus once more with
+  `--for-walk`, comparing what each program prints and no golden (`stress.js`:
+  `--compiler-arg`, `--work-sub`, `--no-emission-golden`; the twin's `walk` step). Its
+  first whole run was 163 of 164 - "The indexed range's index", below.
 
 ## Measurement and acceptance
 
@@ -305,3 +308,19 @@ the retreat. The binding specified here is a **preheader sibling** - the insert 
 the for-walk already does safely (its counter declaration) - and the v3 lessons carry
 verbatim: synthetic nodes carry their role names and positions; span reads and writes
 spell `.ptr[i]` through the `spanDirect` guards.
+
+## The indexed range's index (2026-11-27)
+
+The walk's first whole run over the corpus miscompiled one program: `for ((v, index) in
+7..9)` printed `77` where `70` was owed (`stress/ranges`). Over a range the walk's counter
+starts at the range's first bound and *is* the element, and the indexed form bound the
+user's index to that counter - where over a span the counter starts at 0, so the two are
+the same number. The walk's own indexed range (`stress/for-walk`) started at 0, which is
+why no case saw it.
+
+The index is the counter's distance from the bound now, `_sm_i - walk.from`
+(`forWalkAt`): the language's index counts iterations from 0 whatever the range
+(`specs/functions.md`). That is one subtraction per iteration and one temporary per loop -
+`stress/for-template`'s golden moved by exactly that, and nothing else. `stress/for-walk`
+pins `3..6` as `0:3 1:4 2:5 3:6`, seen printing `3:3 4:4 5:5 6:6` on the published
+compiler.

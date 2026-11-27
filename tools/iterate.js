@@ -17,9 +17,10 @@
 //   3. bootstrap  one transpile: is the published file still what the tree emits? When the
 //                 emission moved, the file is refreshed and the line says so
 //
-// `--full` is the commit loop: the release build, the corpus, the bootstrap refresh and the
-// two-way fixed point (including the published file's own compile). Run it before committing;
-// iterate with the fast loop.
+// `--full` is the commit loop: the release build, the corpus, the corpus once more with
+// `--for-walk` (what each program does - the walk changes the emission by design, so that
+// pass compares no golden), the bootstrap refresh and the two-way fixed point (including
+// the published file's own compile). Run it before committing; iterate with the fast loop.
 //
 // Every step's output is captured: a passing run prints one line per step and the total, and
 // a failing step's whole output. `--quiet` prints only the total. All of this is JS on bun -
@@ -54,7 +55,8 @@ function findDotnet() {
 function usage() {
   console.log(`usage: bun tools/iterate.js [options]
 
-  --full            the commit loop: release build + corpus + bootstrap refresh + fixed point
+  --full            the commit loop: release build + corpus + corpus with --for-walk
+                    + bootstrap refresh + fixed point
                     (default: the fast loop - debug build + corpus + bootstrap in-sync check)
   --filter <text>   only stress cases whose path contains <text> (repeatable)
   --quiet           only the final line
@@ -137,10 +139,16 @@ async function jsLoop(raw) {
   }
 
   const filterArgs = opts.filters.flatMap((filter) => ["--filter", filter]);
+  // The walk step is the corpus with `--for-walk` (impl_specs/for-walk.md): what each
+  // program does, once more. It changes the emission by design, so it compares no golden -
+  // the pass before it did - and writes `stress/.work/walk/` to keep that pass's files.
+  const walkArgs = ["tools/stress.js", "--quiet", "--compiler-arg", "--for-walk", "--work-sub", "walk",
+    "--no-emission-golden", ...filterArgs];
   const steps = opts.full
       ? [
         ["build", ["build.js", "--release", "--no-lto", "--quiet"]],
         ["stress", ["tools/stress.js", "--quiet", ...filterArgs]],
+        ["walk", walkArgs],
         ["refresh", ["build.js", "--release", "--no-compile", "--bootstrap", "--quiet"]],
         ["bootstrap", ["tools/bootstrap.js", "--fast"]],
       ]

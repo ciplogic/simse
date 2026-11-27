@@ -1095,22 +1095,36 @@ fun semaForTemplateId(name: *Str): Int {
     return id
 }
 
+// A node's line for a trace: the number, or `?` when the node carries none - a missing
+// position shows as one instead of reading as a line.
+fun semaTraceLine(node: *AstXmlNode): Str {
+    val line: Int = xmlLine(*node)
+    if (line <= 0) {
+        return "?"
+    }
+    return line.toString()
+}
+
 // One refused promotion or hoist, traced (`--diagnostics sema`): the pass, the candidate
-// name, and the reason the proof did not close. Silent unless the topic is on.
-fun Analyzer.semaPromoRefuse(pass: Str, candidate: Str, reason: Str): Unit {
+// name, the reason the proof did not close, and the line the candidate stands on (`at` is
+// the declaration or the loop it was refused for). Silent unless the topic is on.
+fun Analyzer.semaPromoRefuse(pass: Str, candidate: Str, reason: Str, at: *AstXmlNode): Unit {
     if (diagOn("sema")) {
         val fileDiag: Str = this.file
-        diagTrace("sema", `@pass refuse @candidate: @reason file=@fileDiag`)
+        val lineDiag: Str = semaTraceLine(at)
+        diagTrace("sema", `@pass refuse @candidate: @reason file=@fileDiag line=@lineDiag`)
     }
 }
 
-// One refused walk, traced: the reason names the gate, the file and line name the `for`.
+// One refused walk, traced: the reason names the gate, the file, the line and the template
+// name of the `for` (`at` is the machine declaration the desugar wrote in its place).
 // `--diagnostics sema` prints it; the machine keeps the loop either way.
-fun Analyzer.semaWalkRefuse(reason: Str, machineName: Str): Int {
+fun Analyzer.semaWalkRefuse(reason: Str, machineName: Str, at: *AstXmlNode): Int {
     val fileDiag: Str = this.file
+    val lineDiag: Str = semaTraceLine(at)
     diagTrace(
         "sema",
-        `forWalk refuse @reason file=@fileDiag template=@machineName`
+        `forWalk refuse @reason file=@fileDiag line=@lineDiag template=@machineName`
     )
     return 0
 }
@@ -1135,11 +1149,11 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
     }
     val init: *AstXmlNode = xmlChildPtr(machineDecl, AstNodeKind.Init)
     if (xmlKind(init) != AstNodeCategory.ExprCall) {
-        return this.semaWalkRefuse("init-not-a-call", machineName)
+        return this.semaWalkRefuse("init-not-a-call", machineName, machineDecl)
     }
     val callee: *AstXmlNode = xmlChildPtr(init, AstNodeKind.Callee)
     if (xmlKind(callee) != AstNodeCategory.ExprMember) {
-        return this.semaWalkRefuse("callee-not-a-member", machineName)
+        return this.semaWalkRefuse("callee-not-a-member", machineName, machineDecl)
     }
     val wrap: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
     // Both wraps walk - the flag's contract is "a span every time". The measured tradeoff
@@ -1159,7 +1173,7 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
     // borrowed buffer needs.
     val receiverType: AstXmlNode = this.iteratedType(receiver)
     if (xmlIsEmpty(receiverType)) {
-        return this.semaWalkRefuse("receiver-type-unknown", machineName)
+        return this.semaWalkRefuse("receiver-type-unknown", machineName, machineDecl)
     }
     val outer: AstXmlNode = this.semaReceiverOuter(receiverType)
     val outerName: Str = xmlAttr(outer, AstNodeAttributeKind.Name)
@@ -1167,7 +1181,7 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
     if (!isRange
         && (xmlKind(outer) != AstNodeCategory.TypeGeneric || outerName != "Span")
     ) {
-        return this.semaWalkRefuse("receiver-neither-range-nor-span", machineName)
+        return this.semaWalkRefuse("receiver-neither-range-nor-span", machineName, machineDecl)
     }
 
     // The root the span's stability is proved on: `spanForAt`'s conversion call over a place
@@ -1188,31 +1202,31 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
     // The element the walk hands out, from the machine the wrap builds - `E`.
     val machine: AstXmlNode = this.semaMemberCall(init)
     if (xmlKind(machine) != AstNodeCategory.TypeYield) {
-        return this.semaWalkRefuse("machine-type-unknown", machineName)
+        return this.semaWalkRefuse("machine-type-unknown", machineName, machineDecl)
     }
     val element: AstXmlNode = this.semaYieldElement(machine)
     if (xmlIsEmpty(element)) {
-        return this.semaWalkRefuse("element-type-unknown", machineName)
+        return this.semaWalkRefuse("element-type-unknown", machineName, machineDecl)
     }
 
     val loopIndex: Int = this.forLoopIndex(stmts, index)
     if (loopIndex < 0) {
-        return this.semaWalkRefuse("loop-not-found", machineName)
+        return this.semaWalkRefuse("loop-not-found", machineName, machineDecl)
     }
     val loop: *AstXmlNode = *stmts[loopIndex]
     val cond: *AstXmlNode = xmlChildPtr(loop, AstNodeKind.Cond)
     if (xmlKind(cond) != AstNodeCategory.ExprCall
         || !bpMachineStep(xmlChildPtr(cond, AstNodeKind.Callee))
     ) {
-        return this.semaWalkRefuse("condition-not-advance", machineName)
+        return this.semaWalkRefuse("condition-not-advance", machineName, machineDecl)
     }
     val bodyNode: *AstXmlNode = xmlChildPtr(loop, AstNodeKind.Body)
     if (xmlIsEmpty(bodyNode) || semaBodyYields(bodyNode)) {
-        return this.semaWalkRefuse("body-empty-or-yields", machineName)
+        return this.semaWalkRefuse("body-empty-or-yields", machineName, machineDecl)
     }
     val body: List<AstXmlNode> = xmlChildren(bodyNode, AstNodeKind.Stmt)
     if (body.size() == 0) {
-        return this.semaWalkRefuse("body-prefix-shape", machineName)
+        return this.semaWalkRefuse("body-prefix-shape", machineName, machineDecl)
     }
 
     // The body prefix, by shape: the element binding reads the slot the step filled
@@ -1224,7 +1238,7 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
         if (body.size() < 3 || xmlKind(body[0]) != AstNodeCategory.StmtAssign
             || semaForElementBinding(body[1], machineName) == ""
         ) {
-            return this.semaWalkRefuse("counter-slot-missing", machineName)
+            return this.semaWalkRefuse("counter-slot-missing", machineName, machineDecl)
         }
         elementAt = 1
     }
@@ -1234,13 +1248,13 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
         // statements past the machine (the out slot sits between); the walk's counter takes
         // it over.
         if (index + 2 >= stmts.size()) {
-            return this.semaWalkRefuse("counter-slot-mismatch", machineName)
+            return this.semaWalkRefuse("counter-slot-mismatch", machineName, machineDecl)
         }
         val counterDecl: *AstXmlNode = *stmts[index + 2]
         if (xmlKind(counterDecl) != AstNodeCategory.StmtVarDecl
             || xmlAttr(counterDecl, AstNodeAttributeKind.Name) != counterName
         ) {
-            return this.semaWalkRefuse("counter-slot-mismatch", machineName)
+            return this.semaWalkRefuse("counter-slot-mismatch", machineName, machineDecl)
         }
     }
 
@@ -1252,18 +1266,19 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
     // reach that storage to move it.
     if (!isRange && root != "") {
         if (!bpSpanStableNode(cond, root)) {
-            return this.semaWalkRefuse("span-unstable", machineName)
+            return this.semaWalkRefuse("span-unstable", machineName, machineDecl)
         }
         var at: Int = 0
         while (at < body.size()) {
             if (!bpSpanStableNode(body[at], root)) {
                 val stmtDiag: Str = xmlKindText(xmlKind(body[at]))
                 val fileDiag2: Str = this.file
+                val lineDiag2: Str = semaTraceLine(loop)
                 diagTrace(
                     "sema",
-                    `forWalk unstable stmt@at @stmtDiag file=@fileDiag2 template=@machineName root=@root`
+                    `forWalk unstable stmt@at @stmtDiag file=@fileDiag2 line=@lineDiag2 template=@machineName root=@root`
                 )
-                return this.semaWalkRefuse("span-unstable-body", machineName)
+                return this.semaWalkRefuse("span-unstable-body", machineName, machineDecl)
             }
             at++
         }
@@ -1401,7 +1416,21 @@ fun Analyzer.forWalkAt(container: *AstXmlNode, stmts: *List<AstXmlNode>, index: 
     if (indexed) {
         // The bump retargets to the walk's counter, in place; the index binding reads it.
         semaWalkRenameNames(realBump, counterName, stepName)
-        semaWalkSetChild(realIndexDecl, AstNodeKind.Init, semaWalkNameExpr(stepName, line, column))
+        var indexInit: AstXmlNode = semaWalkNameExpr(stepName, line, column)
+        if (isRange) {
+            // Over a span the counter starts at 0 and *is* the iteration's index. Over a
+            // range it starts at the range's own first bound and is the element, so the
+            // index - which counts iterations from 0 whatever the range (`specs/functions.md`)
+            // - is the counter's distance from that bound. Bound to the counter itself, an
+            // indexed `7..9` hands out index 7 (`stress/for-walk`, `ranges`).
+            indexInit = semaWalkBinaryExpr(
+                "-",
+                semaWalkNameExpr(stepName, line, column),
+                semaWalkMemberExpr(walkName, "from", line, column),
+                line, column
+            )
+        }
+        semaWalkSetChild(realIndexDecl, AstNodeKind.Init, indexInit)
         // The template's order is bump, element, index - a `-1` counter pre-incremented
         // before a `current` the machine had already filled. The walk reads through the
         // counter, so it must read *first*: element, index binding, then the step - or
@@ -2039,27 +2068,27 @@ fun Analyzer.promoteForAt(stmts: *List<AstXmlNode>, index: Int): Unit {
     }
     var ptrWrap: Str = "iter"
     if (!this.hasWrap(ptrWrap, receiverType)) {
-        this.semaPromoRefuse("promoteFor", machineName, "no pointer wrap for the receiver")
+        this.semaPromoRefuse("promoteFor", machineName, "no pointer wrap for the receiver", machineDecl)
         return
     }
     if (!this.promoteElementDeep(receiverType)) {
-        this.semaPromoRefuse("promoteFor", machineName, "element is not deep")
+        this.semaPromoRefuse("promoteFor", machineName, "element is not deep", machineDecl)
         return
     }
     val loopIndex: Int = this.forLoopIndex(stmts, index)
     if (loopIndex < 0) {
-        this.semaPromoRefuse("promoteFor", machineName, "loop not found")
+        this.semaPromoRefuse("promoteFor", machineName, "loop not found", machineDecl)
         return
     }
     val loop: *AstXmlNode = *stmts[loopIndex]
     val body: List<AstXmlNode> = xmlChildren(xmlChildPtr(loop, AstNodeKind.Body), AstNodeKind.Stmt)
     val elementName: Str = this.loopElementName(*body, machineName)
     if (elementName == "") {
-        this.semaPromoRefuse("promoteFor", machineName, "element binding not found")
+        this.semaPromoRefuse("promoteFor", machineName, "element binding not found", machineDecl)
         return
     }
     if (!bpLoopReadOnly(*body, *elementName)) {
-        this.semaPromoRefuse("promoteFor", machineName, `body writes @elementName`)
+        this.semaPromoRefuse("promoteFor", machineName, `body writes @elementName`, machineDecl)
         return
     }
     var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
@@ -2151,21 +2180,21 @@ fun Analyzer.promotePlaceAt(stmts: *List<AstXmlNode>, index: Int): Unit {
     }
     val initKind: AstNodeCategory = xmlKind(init)
     if (initKind != AstNodeCategory.ExprIndex && initKind != AstNodeCategory.ExprMember) {
-        this.semaPromoRefuse("promotePlace", name, "initializer is not a place")
+        this.semaPromoRefuse("promotePlace", name, "initializer is not a place", decl)
         return
     }
     val root: Str = this.placeRootName(init)
     if (root == "") {
-        this.semaPromoRefuse("promotePlace", name, "place root not a plain name")
+        this.semaPromoRefuse("promotePlace", name, "place root not a plain name", decl)
         return
     }
     val elementType: AstXmlNode = this.iteratedType(init)
     if (xmlIsEmpty(elementType) || !bpDeepElement(elementType)) {
-        this.semaPromoRefuse("promotePlace", name, "element is not deep")
+        this.semaPromoRefuse("promotePlace", name, "element is not deep", decl)
         return
     }
     if (index + 1 >= stmts.size()) {
-        this.semaPromoRefuse("promotePlace", name, "nothing follows the binding")
+        this.semaPromoRefuse("promotePlace", name, "nothing follows the binding", decl)
         return
     }
     var rest: List<AstXmlNode> = List<AstXmlNode>()
@@ -2175,7 +2204,7 @@ fun Analyzer.promotePlaceAt(stmts: *List<AstXmlNode>, index: Int): Unit {
         j++
     }
     if (!bpPlaceReadOnly(*rest, *name, *root)) {
-        this.semaPromoRefuse("promotePlace", name, "the block does not only read it")
+        this.semaPromoRefuse("promotePlace", name, "the block does not only read it", decl)
         return
     }
     // The declaration's initializer becomes `*(place)` - `*x` is the address of a value,
@@ -2367,7 +2396,7 @@ fun Analyzer.hoistSpanAt(
     }
     for (*root in roots) {
         if (root.startsWith("_sm_") || root == "this" || bpStaticNames.has(root)) {
-            this.semaPromoRefuse("hoistSpan", root, "template, receiver or static")
+            this.semaPromoRefuse("hoistSpan", root, "template, receiver or static", loop)
             continue
         }
         var rootExpr: AstXmlNode = AstXmlNode(
@@ -2385,7 +2414,7 @@ fun Analyzer.hoistSpanAt(
             at++
         }
         if (!stable) {
-            this.semaPromoRefuse("hoistSpan", root, "storage not stable in the loop")
+            this.semaPromoRefuse("hoistSpan", root, "storage not stable in the loop", loop)
             continue
         }
         var placeCtx: Bool = semaSpanPlaceContext(*cond, root, false)
@@ -2395,17 +2424,17 @@ fun Analyzer.hoistSpanAt(
             stmtAt++
         }
         if (placeCtx) {
-            this.semaPromoRefuse("hoistSpan", root, "index read under a deref")
+            this.semaPromoRefuse("hoistSpan", root, "index read under a deref", loop)
             continue
         }
         val rootType: AstXmlNode = this.exprType(rootExpr)
         if (xmlIsEmpty(rootType)) {
-            this.semaPromoRefuse("hoistSpan", root, "type unknown")
+            this.semaPromoRefuse("hoistSpan", root, "type unknown", loop)
             continue
         }
         val conversion: Str = this.spanConversion(rootType)
         if (conversion == "") {
-            this.semaPromoRefuse("hoistSpan", root, "no span view")
+            this.semaPromoRefuse("hoistSpan", root, "no span view", loop)
             continue
         }
         // The binding decision. A pointer (or handle) root can alias storage no proof in
@@ -2425,7 +2454,9 @@ fun Analyzer.hoistSpanAt(
                 immobileAt++
             }
             if (!bind) {
-                this.semaPromoRefuse("hoistSpan", root, "pointer root: loop not immobile (grows call or deref write)")
+                this.semaPromoRefuse(
+                    "hoistSpan", root, "pointer root: loop not immobile (grows call or deref write)", loop
+                )
             }
         }
         if (bind) {
@@ -2435,7 +2466,7 @@ fun Analyzer.hoistSpanAt(
             if (xmlIsEmpty(xmlChildPtr(*binding, AstNodeKind.Type))) {
                 // The span type could not be named for this site: keep the per-access
                 // rewrite rather than a binding the checker cannot type.
-                this.semaPromoRefuse("hoistSpan", root, "binding type unknown")
+                this.semaPromoRefuse("hoistSpan", root, "binding type unknown", loop)
                 bind = false
             } else {
                 // The insert goes through the tree's own container (`forWalkAt`'s rule:

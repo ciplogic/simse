@@ -104,10 +104,10 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
         }
 
         IlOpKind.SetField -> {
-            val ilVarNameText21: Str = ilVarName(body, ilOperandAt(operands, 1))
-            val ilPoolTextText4: Str = ilPoolText(body, ilOperandAt(operands, 0))
-            val ilVarNameText22: Str = ilVarName(body, ilOperandAt(operands, 2))
-            return `@ilVarNameText21.@ilPoolTextText4 = @ilVarNameText22`
+            val baseText: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val fieldText: Str = ilPoolText(body, ilOperandAt(operands, 1))
+            val valueText: Str = ilVarName(body, ilOperandAt(operands, 2))
+            return `@baseText.@fieldText = @valueText`
         }
 
         IlOpKind.GetIndex -> {
@@ -118,10 +118,10 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
         }
 
         IlOpKind.SetIndex -> {
-            val ilVarNameText26: Str = ilVarName(body, ilOperandAt(operands, 1))
-            val ilVarNameText27: Str = ilVarName(body, ilOperandAt(operands, 2))
-            val ilVarNameText28: Str = ilVarName(body, ilOperandAt(operands, 3))
-            return `@ilVarNameText26[@ilVarNameText27] = @ilVarNameText28`
+            val baseText: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val indexText: Str = ilVarName(body, ilOperandAt(operands, 1))
+            val valueText: Str = ilVarName(body, ilOperandAt(operands, 2))
+            return `@baseText[@indexText] = @valueText`
         }
 
         IlOpKind.FieldAddr -> {
@@ -237,6 +237,59 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
     return Str()
 }
 
+// The type entries something still names: a slot, a method record's return or argument
+// type, an op's type operand. An entry interned for a slot that was typed afterwards stays
+// in the table (an index is an identity), but no untyped slot is it - and the dump is what
+// the measurements grep, so it lists only what is named.
+fun ilLiveTypes(body: *IlBody): List<Bool> {
+    var live: List<Bool> = List<Bool>()
+    var i: Int = 0
+    while (i < body.types.size()) {
+        live.append(false)
+        i++
+    }
+    i = 0
+    while (i < body.vars.size()) {
+        val slotType: Int = body.vars[i].typeIndex
+        if (slotType >= 0 && slotType < live.size()) {
+            live[slotType] = true
+        }
+        i++
+    }
+    i = 0
+    while (i < body.methods.size()) {
+        val method: IlMethod = body.methods[i]
+        var named: List<Int> = List<Int>()
+        named.append(method.returnType)
+        named.append(method.staticBase)
+        for (argType in method.argTypes) {
+            named.append(argType)
+        }
+        for (typeIndex in named) {
+            if (typeIndex >= 0 && typeIndex < live.size()) {
+                live[typeIndex] = true
+            }
+        }
+        i++
+    }
+    i = 0
+    while (i < body.ops.size()) {
+        val op: IlOp = body.ops[i]
+        var j: Int = 0
+        while (j < op.operands.size()) {
+            if (ilOperandKind(op, j) == IlOperandKind.Type) {
+                val typeIndex: Int = op.operands[j]
+                if (typeIndex >= 0 && typeIndex < live.size()) {
+                    live[typeIndex] = true
+                }
+            }
+            j++
+        }
+        i++
+    }
+    return live
+}
+
 // The dump: the tables, then one line per instruction, operands resolved.
 fun printIlBody(body: *IlBody): Str {
     var out: Str
@@ -244,11 +297,14 @@ fun printIlBody(body: *IlBody): Str {
     +body.signature + "\n"
 
     var types: List<Str> = List<Str>()
+    val live: List<Bool> = ilLiveTypes(body)
     var i: Int = 0
     while (i < body.types.size()) {
-        val ilIntTextText2: Str = ilIntText(i)
-        val typesText: Str = body.types[i]
-        types.append(`@ilIntTextText2 @typesText`)
+        if (live[i]) {
+            val ilIntTextText2: Str = ilIntText(i)
+            val typesText: Str = body.types[i]
+            types.append(`@ilIntTextText2 @typesText`)
+        }
         i++
     }
     ilAppendTable(out, "types:   ", types)

@@ -6328,3 +6328,35 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   inclusive range, the machine the walk refuses, the pointer form, nested indexed loops -
   with an emission golden. Verified: `bun tools/iterate.js --full` - **164/164** and both
   fixed points; the published bootstrap refreshed.
+
+- **The measurement is true: the dump, the trace, and the walk's own corpus.** Step 0 of
+  `impl_specs/linear-form-plan.md`. The IL dump's type table carried a `?` entry in 198 of
+  the compiler's 1,905 bodies and not one of them was a slot's type: each was interned for a
+  slot the rules typed afterwards and stayed, because an index is an identity. The dump now
+  lists only what something still names - a slot, a method record's return or argument type,
+  an op's type operand (`ilLiveTypes`) - so a `?` there is an untyped slot and nothing else:
+  198 to 0, the untyped slots 0 before and after. All 609 `SetField`/`SetIndex` comments
+  were wrong, because `ilOpComment` read a load's layout for a store (`a[i] = b` printed as
+  `index[value] = ?p0` - 105 visibly, the rest an unrelated pool entry); both arms read the
+  store's layout now. And every `sema` refusal named a file and no line:
+  `semaPromoRefuse` and `semaWalkRefuse` take the node their 32 call sites already held
+  (the `for`'s machine declaration, the binding's declaration, the loop) and print
+  `line=N`, `?` when the node carries none - 5,266 refusals on the self-transpile, 0
+  without a line. One thing the step's acceptance could not have known: a bare `grep -c '?'`
+  over the dump never reaches 0, since the compiler's own source holds `?` inside literals;
+  the type table is what the measurement reads. **The walk's own corpus.** `iterate --full`
+  runs the corpus twice now: as the cases declare it, and once more with `--for-walk` for
+  every case, comparing what each program prints and no golden (`stress.js`:
+  `--compiler-arg`, `--work-sub`, `--no-emission-golden`; the C# twin's `walk` step;
+  `stress/.work/walk/`). It had never run whole: **163 of 164, and the one was a
+  miscompile** - `for ((v, index) in 7..9)` printed 77 where 70 was owed. Over a range the
+  walk's counter starts at the range's first bound and *is* the element, and the indexed
+  form bound the user's index to that counter: 7 on the first iteration. The walk's own
+  indexed range started at 0, where the two coincide. The index is the counter's distance
+  from the bound now (`counter - walk.from`); `stress/for-walk` pins `3..6` as
+  `0:3 1:4 2:5 3:6`, seen printing `3:3 4:4 5:5 6:6` on the published compiler. One golden
+  moved, `stress/for-template`, read in full: one `Int` temporary for `_sm_walk2.from`, the
+  index binding a subtraction, the later `_sm_expr` slots renumbered by one; the other 39
+  did not move, so no program's emission changed with the walk off. Verified: `bun
+  tools/iterate.js --full` - **164/164**, then **164/164 with the walk on**, and both fixed
+  points; the published bootstrap refreshed.

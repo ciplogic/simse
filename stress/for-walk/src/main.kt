@@ -162,12 +162,22 @@ fun partWalkRange(): Int {
     }
     println(picked)
 
-    // The indexed range form: the walk's counter is the index, as over a span.
+    // The indexed range form: the walk's counter is the range's element and starts at the
+    // range's first bound, so the index is its distance from that bound. Both are 0 here.
     var scale: Int64 = 0
     for ((i, k) in 0 until 5) {
         scale += Int64(i) * Int64(k)
     }
     println(scale)
+
+    // A range that starts away from zero is the proof: `3..6` hands out (3, 0), (4, 1),
+    // (5, 2), (6, 3) - the index counts iterations from 0 (`specs/functions.md`). Bound to
+    // the counter itself it handed out 3, 4, 5, 6.
+    var places: Str = ""
+    for ((i, k) in 3..6) {
+        places = places + k.toString() + ":" + i.toString() + " "
+    }
+    println(places)
 
     // `continue` lands after the step, as over a span.
     var odds: Int64 = 0

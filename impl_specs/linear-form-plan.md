@@ -1,6 +1,7 @@
 # The linear form: what to fix next
 
-Status: in progress - the decisions are taken (2026-11-27) and step 0 is next. The typed IL
+Status: in progress - the decisions are taken (2026-11-27), step 0 is in and step 1 is
+next. The typed IL
 is done as a typing exercise - the compiler's own output has no untyped slot and no `auto` -
 and what the measurements show now is not a missing type but the shape around the types.
 This plan continues `typed-il.md`: its steps 1, 2 and 4 are in, and its steps 3 and 5 are
@@ -226,6 +227,15 @@ where it is created. The second pass is one `stress.js` step with three options 
 two passes do not overwrite each other) and `--no-emission-golden` (the walk changes
 emission by design) - the same step in the C# twin and in both of `iterate.js`'s step
 arrays.
+
+*Landed (2026-11-27).* Type tables with a `?`: 198 to 0, untyped slots 0 before and after;
+store comments showing `?p<n>`: 105 to 0; refusal lines without a line: 0 of 5,266. A bare
+`grep -c '?'` over the dump cannot reach 0 - the compiler's own source holds `?` inside
+literals - so the type table is what the measurement reads. The second pass had never run
+whole, and was 163 of 164: an indexed `for` over a range bound the index to the walk's
+counter, which starts at the range's first bound (`for ((v, index) in 7..9)` printed 77).
+Fixed in `forWalkAt` and pinned by `stress/for-walk`; one golden moved
+(`stress/for-template`). The record is `impl_specs/capability-matrix.md`.
 
 ### 1. Type checks, report-only (M)
 

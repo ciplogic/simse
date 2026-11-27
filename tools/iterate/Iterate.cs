@@ -25,8 +25,10 @@
 //   3. bootstrap  one transpile (native): is the published file still what the tree emits?
 //                 when the emission moved, the file is refreshed and the line says so
 //
-// `--full` is the commit loop: the release build, the corpus, the bootstrap refresh
-// (bun build.js --bootstrap) and the two-way fixed point (bun tools/bootstrap.js).
+// `--full` is the commit loop: the release build, the corpus, the corpus once more with
+// `--for-walk` (what each program does; the walk changes the emission by design), the
+// bootstrap refresh (bun build.js --bootstrap) and the two-way fixed point
+// (bun tools/bootstrap.js).
 //
 // Every spawned step's output is captured: a passing run prints one line per step and the
 // total, and a failing step's whole output. Corpus options are stress.js's: --simse,
@@ -143,7 +145,8 @@ public static class Program
         Console.WriteLine("""
             usage: dotnet run --project tools/iterate -- [options]
 
-              --full            the commit loop: release build + corpus + bootstrap refresh + fixed point
+              --full            the commit loop: release build + corpus + corpus with --for-walk
+                                + bootstrap refresh + fixed point
                                 (default: the fast loop - debug build + corpus + bootstrap in-sync check)
               --filter <text>   only stress cases whose path contains <text> (repeatable)
               --jobs <n>        stress cases to run at once (default: 16)
@@ -382,6 +385,12 @@ public static class Program
         public required List<string> Flags;
         public required Options Opts;
         public required string Work;
+        // What every case is transpiled with, after its own `compiler-args` - the commit
+        // loop's second pass spells `--for-walk` here.
+        public List<string> ExtraCompilerArgs { get; init; } = new();
+        // That pass changes the emission by design, so it compares what a program does and
+        // leaves `expected.cpp.out` to the first.
+        public bool SkipEmissionGolden { get; init; }
     }
 
     // One case: transpile, compile, run, compare - runCase in tools/stress.js.
@@ -414,6 +423,7 @@ public static class Program
             build.Simse, "--root", Path.Join("stress", name, "src"), "-o", outCpp,
         };
         transpileCommand.AddRange(compilerArgs);
+        transpileCommand.AddRange(build.ExtraCompilerArgs);
         var transpile = await RunProcess(transpileCommand, build.Env);
         var verbose = build.Opts.Verbose ? $"\n{transpile.Stdout}{transpile.Stderr}" : "";
 
@@ -444,7 +454,8 @@ public static class Program
             return new CaseResult(name, false,
                 $"transpile failed (exit {transpile.Exit})\n{transpile.Stderr}{verbose}");
         }
-        if (expectedCpp is not null && Normalize(ReadIfPresent(outCpp) ?? "") != Normalize(expectedCpp))
+        if (expectedCpp is not null && !build.SkipEmissionGolden
+            && Normalize(ReadIfPresent(outCpp) ?? "") != Normalize(expectedCpp))
         {
             return new CaseResult(name, false,
                 $"the emitted C++ differs from expected.cpp.out\n{FirstDifference(ReadIfPresent(outCpp) ?? "", expectedCpp)}");
@@ -600,9 +611,10 @@ public static class Program
         var stopped = false;
         using var cancel = new CancellationTokenSource();
         var atATime = build.Opts.Jobs > 1 ? $", {build.Opts.Jobs} at a time" : "";
+        var extraArgs = build.ExtraCompilerArgs.Count > 0 ? $" [+{string.Join(" ", build.ExtraCompilerArgs)}]" : "";
         Console.WriteLine(
             $"stress: {Path.GetRelativePath(Repo, build.Simse)} ({(build.Opts.Release ? "release" : "debug")} programs, " +
-            $"{cases.Count} cases{atATime})");
+            $"{cases.Count} cases{atATime}){extraArgs}");
         var started = Stopwatch.StartNew();
         try
         {
@@ -877,6 +889,30 @@ public static class Program
             return 1;
         }
 
+        // The walk step, the commit loop only: the whole corpus once more with `--for-walk`
+        // (impl_specs/for-walk.md), checking what each program does. The walk changes the
+        // emission by design, so no golden is compared here - the first pass did - and it
+        // writes its own work directory, so the two passes keep each other's files.
+        if (opts.Full)
+        {
+            var walk = new CorpusBuild
+            {
+                Simse = simse,
+                Env = build.Env,
+                Cl = cl,
+                Flags = flags,
+                Opts = opts,
+                Work = Path.Combine(Stress, ".work", "walk"),
+                ExtraCompilerArgs = new List<string> { "--for-walk" },
+                SkipEmissionGolden = true,
+            };
+            if (await RunCorpus(walk, cases) != 0)
+            {
+                Console.WriteLine("iterate: stopped at 'walk'; nothing after it ran");
+                return 1;
+            }
+        }
+
         if (opts.Full && OnWindows)
         {
             if (await RunBunStep("refresh",
@@ -899,9 +935,12 @@ public static class Program
             }
         }
 
+        var stepCount = OnWindows
+            ? (opts.Full ? 5 : 3)   // build, stress, walk, refresh, bootstrap
+            : (opts.Full ? 3 : 2);  // stress, walk, bootstrap
         Console.WriteLine(
             $"iterate: {(opts.Full ? "full" : "fast")} loop ok " +
-            $"({(OnWindows ? (opts.Full ? 4 : 3) : 2)} steps, {Seconds(totalWatch.Elapsed.TotalSeconds)})");
+            $"({stepCount} steps, {Seconds(totalWatch.Elapsed.TotalSeconds)})");
         return 0;
     }
 }

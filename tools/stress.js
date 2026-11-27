@@ -15,7 +15,7 @@
 //   expected.stdout           the program's stdout (required; else see below)
 //   expected.stderr           the program's stderr
 //   expected.exit             the program's exit code (default 0)
-//   expected.cpp.out          the transpiled amalgamation, byte for byte
+//   expected.cpp.out          the transpiled amalgamation (line endings aside)
 //   expected.transpile-error  substring of the transpiler's stderr; the case
 //                             passes when the transpile fails and prints it
 //                             (no compile or run happens)
@@ -43,6 +43,14 @@
 //   --list            list the cases and their expectations, then exit
 //   --keep-going      report every failure instead of stopping at the first
 //   --verbose         print the commands, and each program's output
+//   --compiler-arg <text>  one more argument for the *transpiler*, after the case's own
+//                     `compiler-args` (repeatable). The commit loop's second pass uses
+//                     `--for-walk`: the whole corpus once more with the walk on
+//   --work-sub <name> write under `stress/.work/<name>/` instead of `stress/.work/`, so a
+//                     second pass does not overwrite the first one's files
+//   --no-emission-golden  do not compare `expected.cpp.out`: for a pass whose extra
+//                     compiler argument changes the emission by design, which then
+//                     checks what the program *does* and leaves the golden to pass one
 //   -h, --help        this text
 //
 // One case at a time by default, and a case whose *harness* plumbing failed (a process
@@ -84,6 +92,9 @@ function parseArgs(argv) {
     list: false,
     keepGoing: false,
     verbose: false,
+    compilerArgs: [],
+    workSub: null,
+    noEmissionGolden: false,
     help: false,
   };
   const value = (i) => {
@@ -103,6 +114,9 @@ function parseArgs(argv) {
       case "--list": opts.list = true; break;
       case "--keep-going": opts.keepGoing = true; break;
       case "--verbose": opts.verbose = true; break;
+      case "--compiler-arg": opts.compilerArgs.push(value(i)); i++; break;
+      case "--work-sub": opts.workSub = value(i); i++; break;
+      case "--no-emission-golden": opts.noEmissionGolden = true; break;
       case "-h": case "--help": opts.help = true; break;
       default: fail(`unknown option '${argv[i]}' (try --help)`);
     }
@@ -194,7 +208,7 @@ async function runProcess(command, options) {
 // One case: transpile, compile, run, compare. Returns { name, ok, detail, ms }.
 async function runCase(build, study) {
   const { name, dir } = study;
-  const work = path.join(WORK, name);
+  const work = path.join(build.work, name);
   rmSync(work, { recursive: true, force: true });
   mkdirSync(work, { recursive: true });
 
@@ -208,7 +222,8 @@ async function runCase(build, study) {
   const stdin = readIfPresent(path.join(dir, "stdin"));
 
   const outCpp = path.join(work, "out.cpp");
-  const transpile = await runProcess([build.simse, "--root", path.join("stress", name, "src"), "-o", outCpp, ...compilerArgs], {
+  const transpile = await runProcess([build.simse, "--root", path.join("stress", name, "src"), "-o", outCpp,
+    ...compilerArgs, ...build.opts.compilerArgs], {
     env: build.env,
   });
   const verbose = build.opts.verbose ? `\n${transpile.stdout}${transpile.stderr}` : "";
@@ -229,7 +244,8 @@ async function runCase(build, study) {
   if (transpile.exit !== 0) {
     return { name, ok: false, detail: `transpile failed (exit ${transpile.exit})\n${transpile.stderr}${verbose}` };
   }
-  if (expectedCpp !== null && normalize(readIfPresent(outCpp)) !== normalize(expectedCpp)) {
+  if (expectedCpp !== null && !build.opts.noEmissionGolden
+    && normalize(readIfPresent(outCpp)) !== normalize(expectedCpp)) {
     return {
       name, ok: false,
       detail: `the emitted C++ differs from expected.cpp.out\n${firstDifference(readIfPresent(outCpp), expectedCpp)}`,
@@ -341,9 +357,13 @@ async function main() {
   const flags = opts.release ? ["/MD", "/O2", "/Ob3", "/DNDEBUG"] : ["/MDd"];
   for (const define of opts.defines) flags.push(`/D${define}`);
 
+  const extraArgs = opts.compilerArgs.length > 0 ? ` [+${opts.compilerArgs.join(" ")}]` : "";
   console.log(`${TOOL}: ${path.relative(REPO, simse)} (${opts.release ? "release" : "debug"} programs, ` +
-      `${cases.length} cases${opts.jobs > 1 ? `, ${opts.jobs} at a time` : ""})`);
-  const build = { simse, env, flags, opts, started: performance.now() };
+      `${cases.length} cases${opts.jobs > 1 ? `, ${opts.jobs} at a time` : ""})${extraArgs}`);
+  const build = {
+    simse, env, flags, opts, started: performance.now(),
+    work: opts.workSub ? path.join(WORK, opts.workSub) : WORK,
+  };
 
   const results = new Array(cases.length);
   let next = 0;

@@ -14,16 +14,18 @@ per step, and a failing one prints the failing step's whole output and stops the
 
 ```sh
 bun tools/iterate.js                # the loop: build + corpus + bootstrap check (~20 s)
-bun tools/iterate.js --full         # the commit loop: release build + corpus + refresh +
-                                    # the two-way fixed point (~50 s)
+bun tools/iterate.js --full         # the commit loop: release build + corpus + the corpus
+                                    # with --for-walk + refresh + the two-way fixed point
 bun tools/iterate.js --filter linq  # ... on a slice of the corpus
 ```
 
 It builds the compiler, runs the whole corpus, and checks the published bootstrap. The **fast**
 loop builds `--fast` (`/MD /O1`, no `/GL`; the emitted C++ does not depend on the optimizer) and
 checks the published file with a single transpile, refreshing it when the emission moved.
-`--full` is the commit loop: the release build, the corpus, the refresh, and the two-step fixed
-point. The commands below are what it runs.
+`--full` is the commit loop: the release build, the corpus, the corpus once more with
+`--for-walk` (what each program does - the walk changes the emission by design, so that pass
+compares no golden), the refresh, and the two-step fixed point. The commands below are what
+it runs.
 
 The same loop exists as a C# tool (`tools/iterate/`, .NET 8+) whose corpus runs through a pool
 of Tasks, 16 cases at a time by default — the whole corpus in ~9 s where the sequential JS run
@@ -63,6 +65,9 @@ bun tools/stress.js                      # or ./stress.bat; the format is stress
 bun tools/stress.js --list               # what the corpus contains
 bun tools/stress.js --filter modules --jobs 4
 bun tools/stress.js --simse ./other.exe  # test another compiler build
+bun tools/stress.js --compiler-arg --for-walk --work-sub walk --no-emission-golden
+                                    # the corpus with the walk on: the commit loop's second
+                                    # pass (its own work directory, no emission golden)
 
 # the published bootstrap: the same amalgamation, kept in the sibling `simse_bootstrap`
 # checkout so the compiler can be built with a C++ compiler alone (docs/getting-started.md).

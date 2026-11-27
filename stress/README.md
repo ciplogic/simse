@@ -15,7 +15,10 @@ bun tools/stress.js --simse ./some_other_simse.exe   # test another compiler bui
 ```
 
 After a change, the loop is one command: `bun tools/iterate.js` runs this corpus with the build
-and the bootstrap check (`ai/building.md`).
+and the bootstrap check (`ai/building.md`). Its `--full` form runs the corpus twice: as the
+cases declare it, and once more with `--for-walk` for every case, comparing what each program
+prints and no golden - the walk changes the emission by design. The three options that pass
+needs are in the script's own help text (`bun tools/stress.js --help`).
 
 The compiler under test is the point: by default the harness runs `./simse.exe`, the
 compiler built from the published bootstrap (`bun build.js`).
