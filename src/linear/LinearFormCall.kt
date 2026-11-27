@@ -195,6 +195,14 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
         }
     }
 
+    // The check (impl_specs/linear-form-plan.md, step 1): a member call the extraction
+    // resolved to nothing about, on a receiver whose type the rules can name.
+    if (semCheckTypes() && receiverCall && xmlIsEmpty(target) && packFrom < 0
+        && callName == calleeName
+    ) {
+        this.tcCheckMemberCall(lhs, calleeName, e)
+    }
+
     // `listOf<T>(a, b, c)` is the language's list literal: the same `Pack` a packed call builds,
     // so its elements convert the same way. It is not a call - the native it names exists only
     // so the checker has a signature to read.

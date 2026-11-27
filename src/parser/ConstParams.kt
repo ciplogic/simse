@@ -66,6 +66,56 @@ fun cpIsPlaceType(typeNode: *AstXmlNode): Bool {
     return kind == AstNodeCategory.TypePointer || kind == AstNodeCategory.TypeReference
 }
 
+// The type name a literal argument's value has (`Str`, `Int`, `Float64`, `Char`, `Bool`),
+// or "" when it is not a literal. The same spelling the type rules answer (`literalTypeText`).
+fun cpLiteralTypeName(arg: *AstXmlNode): Str {
+    val kind: AstNodeCategory = xmlKind(arg)
+    if (kind == AstNodeCategory.ExprIntLit) {
+        return "Int"
+    }
+    if (kind == AstNodeCategory.ExprFloatLit) {
+        return "Float64"
+    }
+    if (kind == AstNodeCategory.ExprStrLit) {
+        return "Str"
+    }
+    if (kind == AstNodeCategory.ExprCharLit) {
+        return "Char"
+    }
+    if (kind == AstNodeCategory.ExprBoolLit) {
+        return "Bool"
+    }
+    return ""
+}
+
+// Whether a literal reaches the parameter it would fold into (the assignability question,
+// `semArgumentReaches`, in the literal-only form the fold can answer before `sema` has run):
+// numerics reach numerics both ways (the implicit conversion), a string reaches `Str` or the
+// view spelled over it, a bool reaches `Bool`. Anything else - a `Str` into an `Int`, say -
+// does not fold: the argument stays at the call, where the type check (or the C++ compiler)
+// answers it at its own line. Folding first would move the mistake into the body.
+fun cpLiteralReaches(declared: *AstXmlNode, arg: *AstXmlNode): Bool {
+    val givenName: Str = cpLiteralTypeName(arg)
+    if (givenName.isEmpty()) {
+        return false
+    }
+    val kind: AstNodeCategory = xmlKind(declared)
+    if (kind != AstNodeCategory.TypeNamed) {
+        return false // a generic or callable parameter takes no literal this rule can compare
+    }
+    val wantedName: Str = xmlAttr(declared, AstNodeAttributeKind.Name)
+    if (givenName == "Bool") {
+        return wantedName == "Bool"
+    }
+    if (givenName == "Str") {
+        return wantedName == "Str" || wantedName == "StrView"
+    }
+    // int, float, char: the numeric set, both ways.
+    return wantedName == "Int" || wantedName == "Int8" || wantedName == "Int16"
+            || wantedName == "Int32" || wantedName == "Int64" || wantedName == "Float32"
+            || wantedName == "Float64" || wantedName == "Char"
+}
+
 // One plain-name call site: its arguments, in order. A node copy - the pass only reads it, so
 // the shared children block is fine.
 data class ConstCallSite(
@@ -249,7 +299,7 @@ fun cpDecide(
             && !cpMentionsTypeParam(declared, typeParams)
         ) {
             val key: Opt<Str> = cpUniformLiteral(group, i)
-            if (key.hasValue()) {
+            if (key.hasValue() && cpLiteralReaches(declared, *group[0].args[i])) {
                 val local: AstXmlNode = cpBuildLocal(*params[i], *group[0].args[i])
                 return (ConstFold(name, i, local))
             }

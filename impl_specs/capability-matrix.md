@@ -6398,3 +6398,34 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   after. The counts the docs cite for the corpus stopped being numbers (they were 99, 138
   and 164 within one day). Verified: `bun tools/iterate.js --full` - **165/165**, then
   **165/165 with the walk on**, and both fixed points; the published bootstrap refreshed.
+
+- **The compiler compares assignability - as reports (`--check-types`)**, step 1 of
+  `impl_specs/linear-form-plan.md`. The comparison is `semArgumentReaches`
+  (`src/sema/TypeCheck.kt`), the conversion table of `specs/functions.md` as one question,
+  read by the conversion (`convertArgument`) and by the check alike: pointees against
+  pointees through the callee's type parameters, derived-to-base allowed, `Str` reaching a
+  view and a view reaching `Str`, numerics reaching numerics both ways (the C4244s that
+  fall out are step 2's to spell), any `*T` widening to `RawPtr`. It runs where the two
+  types already are: an argument in `convertArgument`; an initializer, an assignment and a
+  return in the extractor's statement walk; a member read and a member call at the two
+  `GetField`/call sites - reporting at the expression's own line, both sides in the
+  language's names (`the argument is a Str and the parameter wants a Int` at the call, not
+  cl.exe's `C2440: cannot convert from 'Span<Char>' to 'Int'` in the generated file).
+  Reports never fail the transpile and the emitted C++ is unchanged; the flag exists to be
+  measured, and the flip (step 1b) is the next commit. **The measurement is clean**: the
+  corpus, 165 transpiled with the flag, 0 reports; the compiler's own tree, 0 reports. The
+  exemptions each earned their place by a false positive on the tree: compound assignments
+  (the raw operand is not the operation's type - `Str += Char` appends), the
+  stringification builtins (`print`/`println` take any value; an `fmtStr` part reaches the
+  runtime through its own typed helper), a field of the body's own class (a machine's
+  `f(item)`, linq), the `Opt`/`Res` surface (`hasValue`/`isOk`), and a parameter naming a
+  type nothing declares (`Opt2<T>.initByValue(value: T)`: the receiver or the explicit
+  instantiation binds it, and comparing against the raw `T` is meaningless). **One bug
+  found on the way, in the const-params fold**: a wrong-typed literal folded into the body
+  (`twice("a")` specialized to `val n: Int = "a"`), moving the mistake from the call to a
+  line inside the callee - the fold now declines a literal that does not reach the
+  parameter it would become (`cpLiteralReaches`, the literal-only form of the same
+  question), so the ordinary check reports it at the call. The corpus's pinned folds still
+  fold (`stress/fold-const-params`, golden unchanged). Verified: `bun tools/iterate.js
+  --full` - **165/165**, then **165/165 with the walk on**, and both fixed points; the
+  published bootstrap refreshed.

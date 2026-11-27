@@ -606,6 +606,23 @@ fun IlExtractor.convertArgument(callee: *AstXmlNode, param: *AstXmlNode, arg: *A
     if (xmlIsEmpty(wanted)) {
         return this.operandOf(arg)
     }
+    // The check (impl_specs/linear-form-plan.md, step 1): the same question the conversion
+    // is about to answer, asked as a report - an argument whose type does not reach its
+    // parameter has reached C++ as the call's mistake, in C++'s names. The predicate is the
+    // conversion's own (`semArgumentReaches`), so a shape converted above is exactly a
+    // shape allowed here. The stringification builtins are exempt: their parts reach the
+    // runtime typed (`strAddInt` for an `Int` part, the C++ overload for a `println` of a
+    // float), and a part the rules type as a number is the interface, not a mistake.
+    if (semCheckTypes() && !tcIsStringifyBuiltin(xmlAttr(callee, AstNodeAttributeKind.Name))
+        && !semArgumentReaches(callee, param, actual, this.fn.facts.types, this.fn.typeParams)
+    ) {
+        val givenText: Str = semaTypeText(actual)
+        val wantedText: Str = semaTypeText(param)
+        tcReport(
+            this.out.file, xmlLine(arg), xmlColumn(arg),
+            `the argument is a @givenText and the parameter wants a @wantedText`
+        )
+    }
     // Whether the argument is a *derived* type standing where its base is expected
     // (specs/declarations.md, "Inheritance"): the value form copies the prefix, the pointer
     // form is the same address, and an exact match is not a conversion.

@@ -262,6 +262,15 @@ the report-only mode is for, and each one found is a typing bug worth its own co
 `diagRender` with `semaTypeText` after a one-line banner, and the emitted C++ does not
 change.
 
+*Landed (2026-11-27).* The corpus with the flag: 165 transpiled, 0 reports; the
+self-transpile: 0 reports. The five cl.exe-reported mistakes report at their own line in
+the language's names. The exemptions the tree taught: compound assignments, the
+stringification builtins, the body's own class's fields, the `Opt`/`Res` surface, and a
+parameter naming a type nothing declares. One bug found on the way: the const-params fold
+moved a wrong-typed literal into the callee's body - it now declines a literal that does
+not reach the parameter, so the mistake reports at the call. The record is
+`impl_specs/capability-matrix.md`.
+
 ### 1b. Errors by default (S)
 
 The commit after: the checks run for every program and a report fails the transpile,

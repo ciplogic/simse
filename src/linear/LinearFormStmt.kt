@@ -57,6 +57,26 @@ fun IlExtractor.statement(stmt: *AstXmlNode): Unit {
             if (xmlIsEmpty(init)) {
                 this.emit(IlOpKind.Declare, ilOps1(slot))
             } else {
+                // The check (impl_specs/linear-form-plan.md, step 1): an initializer
+                // against the type the writer declared. A lambda is not compared here - its
+                // contract is the callable position's, checked at its own extraction
+                // (`stress/diagnostic-lambda-contract`).
+                if (!xmlIsEmpty(typeNode) && semCheckTypes()
+                    && xmlKind(init) != AstNodeCategory.ExprLambda
+                ) {
+                    val initType: AstXmlNode = this.exprType(init)
+                    if (!semArgumentReaches(
+                            this.fn.decl, typeNode, initType, this.fn.facts.types, this.fn.typeParams
+                        )
+                    ) {
+                        val initText: Str = semaTypeText(initType)
+                        val declText: Str = semaTypeText(typeNode)
+                        tcReport(
+                            this.out.file, xmlLine(stmt), xmlColumn(stmt),
+                            `the initializer is a @initText and @name is declared a @declText`
+                        )
+                    }
+                }
                 this.emit(IlOpKind.DeclareInit, ilOps1(slot))
                 if (xmlAttr(stmt, AstNodeAttributeKind.InitByValue) == "true") {
                     // `var x = T(a)`, a construction: the default-built `x` is set by
@@ -75,7 +95,38 @@ fun IlExtractor.statement(stmt: *AstXmlNode): Unit {
         }
 
         AstNodeCategory.StmtAssign -> {
-            this.assign(stmt, xmlChildPtr(stmt, AstNodeKind.Target), xmlChildPtr(stmt, AstNodeKind.Value))
+            val target: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Target)
+            val value: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Value)
+            // The check (impl_specs/linear-form-plan.md, step 1): the value against the
+            // target's own type, where the target is a name or a field - the shapes whose
+            // type the rules answer from the frame. A compound assignment is not compared:
+            // its value is the raw right-hand operand, and the operation's own typing
+            // (`Str += Char` appends) is the emitter's `+=` resolution. Anything else (an
+            // index, a deref) is not compared either: the element/place typing is the
+            // passes' business, and a report that guesses is worse than none.
+            if (semCheckTypes()
+                && !isCompoundAssignOp(xmlAttr(stmt, AstNodeAttributeKind.Op))
+                && (xmlKind(target) == AstNodeCategory.ExprName
+                    || xmlKind(target) == AstNodeCategory.ExprMember)
+                && xmlKind(value) != AstNodeCategory.ExprLambda
+            ) {
+                val wanted: AstXmlNode = this.exprType(target)
+                if (!xmlIsEmpty(wanted)) {
+                    val given: AstXmlNode = this.exprType(value)
+                    if (!semArgumentReaches(
+                            this.fn.decl, wanted, given, this.fn.facts.types, this.fn.typeParams
+                        )
+                    ) {
+                        val givenText: Str = semaTypeText(given)
+                        val wantedText: Str = semaTypeText(wanted)
+                        tcReport(
+                            this.out.file, xmlLine(stmt), xmlColumn(stmt),
+                            `the value is a @givenText and the target is a @wantedText`
+                        )
+                    }
+                }
+            }
+            this.assign(stmt, target, value)
             return
         }
 
@@ -98,6 +149,30 @@ fun IlExtractor.statement(stmt: *AstXmlNode): Unit {
                     val declared: AstXmlNode = xmlChild(this.fn.decl, AstNodeKind.ReturnType)
                     if (!xmlIsEmpty(declared) && ilIsHandleType(declared)) {
                         this.setSlotType(retSlot, declared)
+                    }
+                }
+                // The check (impl_specs/linear-form-plan.md, step 1): the returned value
+                // against the declared return, where one is written and neither side is a
+                // machine or nothing (a lambda body has no declaration - its contract is
+                // checked at its own extraction).
+                if (semCheckTypes() && !xmlIsEmpty(this.fn.decl)) {
+                    val declared: AstXmlNode = xmlChild(this.fn.decl, AstNodeKind.ReturnType)
+                    if (!xmlIsEmpty(declared)
+                        && xmlKind(declared) != AstNodeCategory.TypeYield
+                        && !semReturnsNothing(declared)
+                    ) {
+                        val given: AstXmlNode = this.exprType(value)
+                        if (!semArgumentReaches(
+                                this.fn.decl, declared, given, this.fn.facts.types, this.fn.typeParams
+                            )
+                        ) {
+                            val givenText: Str = semaTypeText(given)
+                            val declaredText: Str = semaTypeText(declared)
+                            tcReport(
+                                this.out.file, xmlLine(stmt), xmlColumn(stmt),
+                                `the value is a @givenText and the function returns a @declaredText`
+                            )
+                        }
                     }
                 }
                 this.emit(IlOpKind.Return, ilOps1(retSlot))
@@ -653,6 +728,11 @@ fun IlExtractor.into(slot: Int, e: *AstXmlNode): Unit {
                 )
                 return
             }
+            // The check (impl_specs/linear-form-plan.md, step 1): a member the receiver's
+            // own type does not declare.
+            if (semCheckTypes()) {
+                this.tcCheckMemberRead(lhs, fieldName, e)
+            }
             this.emit(IlOpKind.GetField, ilOps3(slot, this.receiverOf(lhs), this.poolIndex(fieldName)))
             return
         }
@@ -909,6 +989,108 @@ fun IlExtractor.staticAddr(e: AstXmlNode): Int {
     this.emit(IlOpKind.GetStaticAddr, ilOps2(slot, this.poolIndex(name)))
     return slot
 }
+
+// The check for a member read (impl_specs/linear-form-plan.md, step 1): a member the
+// receiver's own type does not declare is a mistake C++ used to report, in C++'s names.
+// The check speaks only where the rules can name both sides: the receiver's type resolves,
+// names a declared class or one of the scalars, and mentions no type parameter of the
+// enclosing body (a generic body resolves at instantiation). A machine or a closure class -
+// which the lowering built, and which no declaration in the program names - reports
+// nothing, and so does any type the facts do not hold.
+fun IlExtractor.tcCheckMemberRead(lhs: *AstXmlNode, member: *Str, at: *AstXmlNode): Unit {
+    val receiverType: AstXmlNode = this.exprType(lhs)
+    if (xmlIsEmpty(receiverType) || xmlKind(receiverType) == AstNodeCategory.TypeYield) {
+        return
+    }
+    if (tcTypeMentionsAny(receiverType, this.fn.typeParams)) {
+        return
+    }
+    // A field of the body's own class - a machine's or a closure's, which no declaration in
+    // the program names - is its context's, not a mistake.
+    if (!xmlIsEmpty(this.ilSelfFieldType(member))) {
+        return
+    }
+    val recvText: Str = semaTypeText(receiverType)
+    val outer: AstXmlNode = semPointeeOf(semResolveTypeAlias(receiverType, *this.fn.facts.types))
+    val kind: AstNodeCategory = xmlKind(outer)
+    if (kind != AstNodeCategory.TypeNamed && kind != AstNodeCategory.TypeGeneric) {
+        return
+    }
+    val typeName: Str = xmlAttr(outer, AstNodeAttributeKind.Name)
+    if (typeName.isEmpty()) {
+        return
+    }
+    if (tcIsScalarName(typeName)) {
+        tcReport(
+            this.out.file, xmlLine(at), xmlColumn(at),
+            `@recvText has no member '@member'`
+        )
+        return
+    }
+    val decl: *AstXmlNode = this.fn.facts.types.getPtr(typeName)
+    if (decl == null) {
+        return // a machine or a closure class the lowering built, or a builtin with a surface
+    }
+    if (tcDeclaresMember(this.fn.facts, *decl, typeName, member)) {
+        return
+    }
+    tcReport(
+        this.out.file, xmlLine(at), xmlColumn(at),
+        `@recvText has no member '@member'`
+    )
+}
+
+// The check for a member call that resolved to no declaration (impl_specs/linear-form-plan.md,
+// step 1). A name any declaration in the program shares is the overload zone - the call
+// resolved to no single fact here and C++ overload resolution answers it, so a report would
+// guess; the check speaks only about a name nothing declares at all, on a receiver whose
+// type the rules can name and whose class does not declare it.
+fun IlExtractor.tcCheckMemberCall(lhs: *AstXmlNode, calleeName: *Str, at: *AstXmlNode): Unit {
+    if (this.fn.facts.functionsByName.has(calleeName)) {
+        return
+    }
+    val receiverType: AstXmlNode = this.exprType(lhs)
+    if (xmlIsEmpty(receiverType) || xmlKind(receiverType) == AstNodeCategory.TypeYield) {
+        return
+    }
+    if (tcTypeMentionsAny(receiverType, this.fn.typeParams)) {
+        return
+    }
+    // A callable field of the body's own class (`f(item)` in a machine, once `f` is a
+    // field): called through the class the lowering built, not through a declaration.
+    if (!xmlIsEmpty(this.ilSelfFieldType(calleeName))) {
+        return
+    }
+    val recvText: Str = semaTypeText(receiverType)
+    val outer: AstXmlNode = semPointeeOf(semResolveTypeAlias(receiverType, *this.fn.facts.types))
+    val kind: AstNodeCategory = xmlKind(outer)
+    if (kind != AstNodeCategory.TypeNamed && kind != AstNodeCategory.TypeGeneric) {
+        return
+    }
+    val typeName: Str = xmlAttr(outer, AstNodeAttributeKind.Name)
+    if (typeName.isEmpty()) {
+        return
+    }
+    if (tcIsScalarName(typeName)) {
+        tcReport(
+            this.out.file, xmlLine(at), xmlColumn(at),
+            `@recvText has no method '@calleeName'`
+        )
+        return
+    }
+    val decl: *AstXmlNode = this.fn.facts.types.getPtr(typeName)
+    if (decl == null) {
+        return // a machine or a closure class the lowering built, or a builtin with a surface
+    }
+    if (tcDeclaresMember(this.fn.facts, *decl, typeName, calleeName)) {
+        return
+    }
+    tcReport(
+        this.out.file, xmlLine(at), xmlColumn(at),
+        `@recvText has no method '@calleeName'`
+    )
+}
+
 
 // A base through which something is reached. A plain name *is* that base; a handle value is
 // one too; an inline value must have its address taken - what `FieldAddr`/`IndexAddr` are -

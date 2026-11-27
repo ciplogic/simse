@@ -113,6 +113,8 @@ nothing.
 ./simse.exe --root src --root modules -o a.cpp --showEscape 2> escape.txt             # per-name escape-parameter kinds (prelude + modules)
 ./simse.exe --root stress/concat/src -o fused.cpp                      # the concat fusion (on)
 ./simse.exe --root stress/concat/src -o unfused.cpp --no-concat        # ... and its A/B off
+./simse.exe --root my/src -o a.cpp --check-types                      # assignability as reports
+                                                                      # (TypeCheck.kt; report-only)
 ./simse.exe --root src --root modules -o unborrowed.cpp --no-borrow                    # the auto-borrow rewrite off (params and for)
 ./simse.exe --root src --root modules -o noescape.cpp --no-escape                      # the escape-parameter analysis off (promotion's call rules)
 ./simse.exe --root stress/when-strings/src -o when.cpp                  # the when-over-strings lowering

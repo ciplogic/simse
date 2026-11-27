@@ -97,9 +97,12 @@ before committing).
   signature; type checks become errors as soon as they are clean. Step 0 is in: the dump,
   the `sema` trace and the walk's own corpus tell the truth - `iterate --full` runs the
   corpus with `--for-walk` as well, and its first whole run found an indexed-range
-  miscompile. The largest item is one
-  the plan's small programs show: the compiler checks none of assignability, so five
-  ordinary type errors out of thirteen are left to `cl.exe` to report, in generated code.
+  miscompile. Step 1 is in, report-only: the compiler compares assignability under
+  `--check-types` (`src/sema/TypeCheck.kt`) - argument against parameter, initializer,
+  assignment and return against their declared types, member against its class - and on
+  the corpus and the self-transpile it reports nothing; the five ordinary type mistakes the
+  plan's small programs show now report at their own line in the language's names instead
+  of in cl.exe's generated code. Step 1b - the flip - is next.
 - The single amalgamated translation unit is 4.07 MB of C++ (118,039 lines, measured
   November 2026 - it was ~190 KB when this note was written); revisit if the compiler grows
   much.
