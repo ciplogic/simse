@@ -280,6 +280,13 @@ are `stress/diagnostic-type-*`, and the flip is a release note.
 *Accept:* the five cases fail at their own line; the corpus and the self-transpile do not
 move.
 
+*Landed (2026-11-27).* Seven `stress/diagnostic-type-*` cases, one per shape - argument,
+initializer, assignment, return, member read, member call, scalar member - each failing at
+its own line; the escape hatch verified (`--no-check-types` transpiles a wrong program);
+the corpus 172/172 and the self-transpile clean. One lesson: the slot hoisting turns an
+initialized declaration into a bare declaration plus an assignment before the IL, so the
+initializer comparison is the assignment's - there is no separate "initializer" wording.
+
 ### 2. Positions on ops, then the refusals (M)
 
 An op carries a column as well as a line; the reconstructors stamp the op's position on

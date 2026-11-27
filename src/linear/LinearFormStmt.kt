@@ -57,26 +57,6 @@ fun IlExtractor.statement(stmt: *AstXmlNode): Unit {
             if (xmlIsEmpty(init)) {
                 this.emit(IlOpKind.Declare, ilOps1(slot))
             } else {
-                // The check (impl_specs/linear-form-plan.md, step 1): an initializer
-                // against the type the writer declared. A lambda is not compared here - its
-                // contract is the callable position's, checked at its own extraction
-                // (`stress/diagnostic-lambda-contract`).
-                if (!xmlIsEmpty(typeNode) && semCheckTypes()
-                    && xmlKind(init) != AstNodeCategory.ExprLambda
-                ) {
-                    val initType: AstXmlNode = this.exprType(init)
-                    if (!semArgumentReaches(
-                            this.fn.decl, typeNode, initType, this.fn.facts.types, this.fn.typeParams
-                        )
-                    ) {
-                        val initText: Str = semaTypeText(initType)
-                        val declText: Str = semaTypeText(typeNode)
-                        tcReport(
-                            this.out.file, xmlLine(stmt), xmlColumn(stmt),
-                            `the initializer is a @initText and @name is declared a @declText`
-                        )
-                    }
-                }
                 this.emit(IlOpKind.DeclareInit, ilOps1(slot))
                 if (xmlAttr(stmt, AstNodeAttributeKind.InitByValue) == "true") {
                     // `var x = T(a)`, a construction: the default-built `x` is set by
@@ -118,10 +98,12 @@ fun IlExtractor.statement(stmt: *AstXmlNode): Unit {
                         )
                     ) {
                         val givenText: Str = semaTypeText(given)
+                        val givenArticle: Str = tcArticleText(given)
                         val wantedText: Str = semaTypeText(wanted)
+                        val wantedArticle: Str = tcArticleText(wanted)
                         tcReport(
                             this.out.file, xmlLine(stmt), xmlColumn(stmt),
-                            `the value is a @givenText and the target is a @wantedText`
+                            `the value is @givenArticle @givenText and the target is @wantedArticle @wantedText`
                         )
                     }
                 }
@@ -167,10 +149,12 @@ fun IlExtractor.statement(stmt: *AstXmlNode): Unit {
                             )
                         ) {
                             val givenText: Str = semaTypeText(given)
+                            val givenArticle: Str = tcArticleText(given)
                             val declaredText: Str = semaTypeText(declared)
+                            val declaredArticle: Str = tcArticleText(declared)
                             tcReport(
                                 this.out.file, xmlLine(stmt), xmlColumn(stmt),
-                                `the value is a @givenText and the function returns a @declaredText`
+                                `the value is @givenArticle @givenText and the function returns @declaredArticle @declaredText`
                             )
                         }
                     }

@@ -1,13 +1,15 @@
 // TypeCheck.kt
 //
-// The assignability check (impl_specs/linear-form-plan.md, step 1): the compiler computes
-// the types and has declined to compare them, so an ordinary type mistake reached cl.exe as
-// an error in the generated code, named in C++'s types (`Span<Char>` where `Str` was
-// written). This file is the comparison and its sink. It runs where the two types already
-// are - the extractor's argument conversion, and the extractor's statement walk for
-// initializers, assignments and returns - and reports through `tcReport`, one line per
-// finding, which the driver prints after emission. Under `--check-types` a report is a
-// report: the transpile succeeds and the emitted C++ is unchanged. The comparison is
+// The assignability check (impl_specs/linear-form-plan.md, steps 1 and 1b): the compiler
+// computes the types and compares them - an argument against its parameter, an initializer
+// against its declaration, a value against its assignment's target, a return against the
+// declared return, a member against its class - and a comparison that fails is an *error*,
+// the compiler's, at the expression's own line, in the language's names. Before 2026-11-27
+// it computed the types and declined to compare, so an ordinary type mistake reached
+// cl.exe as an error in the generated code (`Span<Char>` where `Str` was written).
+// `--no-check-types` turns the comparison off. It runs where the two types already are -
+// the extractor's argument conversion and statement walk - and reports through `tcReport`,
+// one line per finding, which the driver prints and fails on. The comparison is
 // `semArgumentReaches`, the one definition the conversion and the check share, so a shape
 // the conversion converts is exactly a shape the check allows.
 
@@ -16,7 +18,7 @@ import compiler
 
 import common
 
-var semCheckTypesFlag: Bool = false
+var semCheckTypesFlag: Bool = true
 
 fun semCheckTypes(): Bool {
     return semCheckTypesFlag
@@ -40,6 +42,25 @@ fun tcReport(file: *Str, line: Int, column: Int, message: *Str): Unit {
 
 fun tcReportLines(): List<Str> {
     return tcReports
+}
+
+// The articles of the language: the type's name decides (`an Int`, `an Opt`, `an Array`;
+// `a Str`, `a List`; `a Unit` - the letter is not the sound), and a handle or a callable
+// spells a symbol, where `a` reads.
+fun tcArticleText(typeNode: *AstXmlNode): Str {
+    val kind: AstNodeCategory = xmlKind(typeNode)
+    if (kind != AstNodeCategory.TypeNamed && kind != AstNodeCategory.TypeGeneric) {
+        return "a"
+    }
+    val name: Str = xmlAttr(typeNode, AstNodeAttributeKind.Name)
+    if (name.size() == 0) {
+        return "a"
+    }
+    val first: Char = name[0]
+    if (first == 'A' || first == 'E' || first == 'I' || first == 'O') {
+        return "an"
+    }
+    return "a"
 }
 
 // The stringification builtins, whose argument conversion is the emitter's business, not

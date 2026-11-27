@@ -291,13 +291,14 @@ fun main(args: List<Str>): Int {
                 semaSetForWalk(true)
             }
 
-            // The assignability check (src/sema/TypeCheck.kt, impl_specs/linear-form-plan.md
-            // step 1): the places an argument, an initializer, an assignment, a return or a
-            // member read does not type are *reports* on stderr after emission - the
-            // transpile succeeds and the output is unchanged. The flag exists to measure the
-            // check against the corpus and the compiler's own tree; step 1b is the flip.
-            "--check-types" -> {
-                semSetCheckTypes(true)
+            // The assignability check off (src/sema/TypeCheck.kt, impl_specs/linear-form-plan.md
+            // step 1b): the compiler compares an argument against its parameter, an initializer,
+            // an assignment and a return against their declared types, and a member against its
+            // class - a comparison that fails is an error at the expression's own line. The
+            // escape hatch when a report is wrong (each one is a typing bug to chase, or an
+            // exemption to widen, not a flag to live behind).
+            "--no-check-types" -> {
+                semSetCheckTypes(false)
             }
 
             // The escape-parameter optimization off (src/parser/EscapeParams.kt): no analysis, so
@@ -369,7 +370,7 @@ fun main(args: List<Str>): Int {
 
             "-h", "--help" -> {
                 println("simse " + simseVersion)
-                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>]... [--module <dir>]... [--tests] [--no-concat] [--no-borrow] [--for-walk] [--check-types] [--no-escape] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showBorrow] [--showEscape] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos] [--diagnostics <topics>] [--version]")
+                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>]... [--module <dir>]... [--tests] [--no-concat] [--no-borrow] [--no-check-types] [--for-walk] [--no-escape] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showBorrow] [--showEscape] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos] [--diagnostics <topics>] [--version]")
                 return 0
             }
 
@@ -698,6 +699,17 @@ fun main(args: List<Str>): Int {
         eprintln(diagRender(emitted.Error))
         return 1
     }
+    if (semCheckTypes()) {
+        // The check's findings are errors: the transpile fails, nothing is written. They
+        // render like the checker's own diagnostics - position, source line, caret.
+        val reports: List<Str> = tcReportLines()
+        if (reports.size() > 0) {
+            for (report in reports) {
+                eprintln(diagRender(report))
+            }
+            return 1
+        }
+    }
     if (!writeFile(output, emitted.Value)) {
         eprintln("simse: cannot write " + output)
         return 1
@@ -706,17 +718,6 @@ fun main(args: List<Str>): Int {
         val bytesDiag: Str = emitted.Value.size().toString()
         val elapsedDiag: Str = ((nowMicros() - driverStartedAt) / 1000).toString()
         diagTrace("driver", `wrote @output (@bytesDiag bytes) in @elapsedDiag ms`)
-    }
-    if (semCheckTypes()) {
-        // The check's reports, rendered like the checker's own diagnostics but not failing
-        // the transpile (step 1 is report-only; step 1b flips that). One banner line, then
-        // each report with its source line and caret.
-        val reports: List<Str> = tcReportLines()
-        val countDiag: Str = reports.size().toString()
-        eprintln(`check-types: @countDiag report(s)`)
-        for (report in reports) {
-            eprintln(diagRender(report))
-        }
     }
     return 0
 }

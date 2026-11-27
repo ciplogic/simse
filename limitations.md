@@ -96,9 +96,10 @@ its item here retires.
   `ai/status.md`). A fold over materialized rows is a plain `for`.
 - **A function reference silently coerces to a value.** Passing `SQLITE_TRANSIENT`
   where `SQLITE_TRANSIENT()` was meant - a function name without its call - compiled
-  and emitted the function's address where a `RawPtr` slot was wanted. Until a
-  diagnostic exists, a wrong-typed argument at a native declaration is worth reading
-  twice.
+  and emitted the function's address where a `RawPtr` slot was wanted. A wrong-typed
+  *argument* is the compiler's report now (the assignability check,
+  `impl_specs/linear-form-plan.md` step 1b); the bare-name coercion itself has no
+  diagnostic yet.
 
 ## The `native` boundary's own hazards
 

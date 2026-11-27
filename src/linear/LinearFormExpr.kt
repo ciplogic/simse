@@ -617,10 +617,12 @@ fun IlExtractor.convertArgument(callee: *AstXmlNode, param: *AstXmlNode, arg: *A
         && !semArgumentReaches(callee, param, actual, this.fn.facts.types, this.fn.typeParams)
     ) {
         val givenText: Str = semaTypeText(actual)
+        val givenArticle: Str = tcArticleText(actual)
         val wantedText: Str = semaTypeText(param)
+        val wantedArticle: Str = tcArticleText(param)
         tcReport(
             this.out.file, xmlLine(arg), xmlColumn(arg),
-            `the argument is a @givenText and the parameter wants a @wantedText`
+            `the argument is @givenArticle @givenText and the parameter wants @wantedArticle @wantedText`
         )
     }
     // Whether the argument is a *derived* type standing where its base is expected

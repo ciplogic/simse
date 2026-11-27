@@ -100,9 +100,9 @@ before committing).
   miscompile. Step 1 is in, report-only: the compiler compares assignability under
   `--check-types` (`src/sema/TypeCheck.kt`) - argument against parameter, initializer,
   assignment and return against their declared types, member against its class - and on
-  the corpus and the self-transpile it reports nothing; the five ordinary type mistakes the
-  plan's small programs show now report at their own line in the language's names instead
-  of in cl.exe's generated code. Step 1b - the flip - is next.
+  the corpus and the self-transpile it reported nothing; step 1b flipped it: a comparison
+  that fails is an error at the expression's own line, in the language's names
+  (`stress/diagnostic-type-*` pins one per shape), and `--no-check-types` is the hatch.
 - The single amalgamated translation unit is 4.07 MB of C++ (118,039 lines, measured
   November 2026 - it was ~190 KB when this note was written); revisit if the compiler grows
   much.

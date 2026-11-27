@@ -6429,3 +6429,25 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   fold (`stress/fold-const-params`, golden unchanged). Verified: `bun tools/iterate.js
   --full` - **165/165**, then **165/165 with the walk on**, and both fixed points; the
   published bootstrap refreshed.
+
+- **Type mistakes are errors - the flip (step 1b).** The assignability check runs for every
+  program: a comparison that fails is the compiler's error at the expression's own line,
+  rendered like any diagnostic (position, source line, caret), and the transpile fails
+  before anything is written. `--no-check-types` is the escape hatch. A program that
+  compiled yesterday can now stop, which is the right outcome for a statically typed
+  language and still a release note. Seven `stress/diagnostic-type-*` cases pin the shapes,
+  one mistake per program - argument, initializer, assignment, return, member read, member
+  call, a member on a scalar - each seen green (`transpile succeeded`) under step 1's
+  report-only build and red now. The messages gained their articles (`an Int`, `a Str`) on
+  the way into golden text. One simplification the flip forced: the slot hoisting turns an
+  initialized declaration into a bare declaration plus an assignment before the IL exists,
+  so there is no separate initializer comparison - `val x: Int = "a"` is the assignment's
+  report, and the arm that would have compared one is deleted rather than left dead. The
+  docs a reader checks now say so (`docs/state-of-the-field.md`'s error-messages row -
+  which also finally admits the caret exists - `limitations.md`'s read-it-twice note,
+  `ai/dx.md`'s `Str`-method note stays: an unknown method on a `Str` is still not the
+  compiler's, because no Simse declaration of `Str` exists to check against). Measured
+  before the flip: the seventeen bench programs transpile clean - they are not the
+  corpus's, and the flip would have met them first at `bench/run.js`. Verified: `bun
+  tools/iterate.js --full` - **172/172**, then **172/172 with the walk on**, and both
+  fixed points; the published bootstrap refreshed.

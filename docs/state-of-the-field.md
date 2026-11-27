@@ -89,7 +89,7 @@ program a user would try to write:
 | Lambda body placement | a parenthesized `(x: Int) ->` followed by a newline is a syntax error | keep the body on the arrow's line, open a block there, or use the trailing brace form `f(x) { ... }`, whose body spans lines |
 | Enum printing | `println(Color.Red)` prints an integer; there is no automatic member name | write a `when`-based `label()` function |
 | Float printing | `println` goes through C++'s default formatting | format manually; a defined shortest-round-trip rule is on the roadmap |
-| Error messages | position and message, no source excerpt or caret | read the generated C++ next to it |
+| Error messages | position, source line and caret; a type mistake (an argument, an initializer, an assignment, a return, a member) is the compiler's own error at its line | `--no-check-types` turns the assignability comparison off |
 | Confusing overloads | a lambda argument that fits both a plain `T` and a callable parameter of the same-named declarations is reported instead of silently picking the plain one | pass the instantiation explicitly (`pick<Int>(...)`) |
 | Vocabulary | no `foreach` over a container (only `for` over a machine), no `when` pattern labels, no default parameter values, no capture-by-reference, no `Set`, no `map`/`filter` | `while` + `Span`, explicit code, `List` helpers; interpolation is `@name` in a backtick string or `$name`/`${expr}` in a quoted one |
 | Ownership and borrowing | `&x` on a local boxes a *copy*, so a handle does not alias the local; `&T` cycles are not collected | borrow with `*x` (a raw pointer) when you mean "the original"; break cycles by nulling a handle |
