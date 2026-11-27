@@ -347,6 +347,9 @@ fun printIlBody(body: *IlBody): Str {
         if (method.returnType >= 0) {
             text = text + ":ret=" + ilTypeName(body, method.returnType)
         }
+        if (!method.writes.isEmpty()) {
+            text = text + ":writes=" + method.writes
+        }
         methods.append(text)
         i++
     }
@@ -375,7 +378,7 @@ fun printIlBody(body: *IlBody): Str {
         var rendered: List<Str> = List<Str>()
         var j: Int = 0
         while (j < op.operands.size()) {
-            rendered.append(ilRenderOperand(body, ilOperandKindAt(tokens, j), op.operands[j]))
+            rendered.append(ilRenderOperand(body, ilOperandKindIn(body, op, j), op.operands[j]))
             j++
         }
 

@@ -29,8 +29,9 @@ enum class IlMethodKind {
     Constructor
 }
 
-// `Var` is a slot - a destination, or a place read; `Value` is a slot or a constant. The
-// opcodes say nothing about types; the frame does.
+// `Var` is a slot - a destination, or a place read; `Value` is a slot or a constant. `Out`
+// is a call argument the *callee* writes (`IlMethod.writes`): the machine step's out slot,
+// a mutator's receiver. The opcodes say nothing about types; the frame does.
 enum class IlOperandKind {
     Var,
     Value,
@@ -38,6 +39,7 @@ enum class IlOperandKind {
     Type,
     Method,
     Label,
+    Out,
     None
 }
 
@@ -111,7 +113,21 @@ data class IlMethod(
 // by name alone, and a name two natives share (`append` on `Str` and on `List`) must not spell
 // the last one registered. "" for everything else - a member call resolves by its receiver, a
 // closure by its class, a plain function by its (package-qualified) name.
-    var symbol: Str
+    var symbol: Str,
+
+// The argument positions the callee writes, comma-separated, the receiver at 0 - the IL's
+// record of "the callee writes this" (impl_specs/linear-form-plan.md, step 3): the machine
+// step's out slot, a mutator's receiver. From the borrow fixpoint's table
+// (`bpWritesNames`), and for a name it does not carry from one rule: a handle-typed
+// position is written unless the callee is proved to write nothing. "" writes nothing.
+    var writes: Str,
+
+// Whether the callee may *move* the buffer of what it writes - the declaration's own
+// `grows` mark (`bpGrowsMark`), else the name-level closure (`bpGrowsNames`). A write
+// that replaces storage is a different fact from one that fills it: the promotion's Box
+// rule weighs a written slot as a construction of it only when the write cannot have
+// moved the buffer out from under the box.
+    var grows: Bool
 )
 
 // One instruction. An operand's meaning is its opcode's operand kind: an index into a table,

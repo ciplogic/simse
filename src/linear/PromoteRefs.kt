@@ -142,32 +142,6 @@ fun ilPromoteNullTest(op: *IlOp, j: Int, nulls: *List<Bool>): Bool {
     return other >= 0 && other < nulls.size() && ( * nulls)[other]
 }
 
-// The slot a construction call *writes*, or -1: the receiver of an `initByValue` call, the
-// `union class` construction convention the lowering routes a `&U(v)` through. The receiver is
-// storage the call sets, so the `Box` rule below counts it as a definition of the slot - the
-// opcode's own destination (`ilWritesDestination`) is not involved.
-fun ilPromoteInitReceiver(op: *IlOp, il: *IlBody): Int {
-    if (op.kind != IlOpKind.Call && op.kind != IlOpKind.CallVoid) {
-        return -1
-    }
-    val at: Int = ilReuseMethodIndex(op)
-    if (at < 0 || at >= il.methods.size()) {
-        return -1
-    }
-    if (il.methods[at].name != "initByValue") {
-        return -1
-    }
-    val method: IlMethod = il.methods[at]
-    if (method.kind != IlMethodKind.Method || !method.recvIsValue) {
-        return -1
-    }
-    val base: Int = ilReuseArgBase(op.kind)
-    if (op.operands.size() <= base) {
-        return -1
-    }
-    return op.operands[base]
-}
-
 // A slot name nothing in the body already uses.
 fun ilPromoteStackName(il: *IlBody, c: Int): Str {
     val base: Str = "_sm_stk" + c.toString()
@@ -377,7 +351,7 @@ fun ilPromoteApply(il: *IlBody, c: Int, at: Int): Unit {
                     IlMethod(
                         method.name + "_v", method.kind, method.argCount, method.staticBase,
                         method.returnType, method.argTypes, method.packageName, method.recvIsValue,
-                        method.symbol
+                        method.symbol, method.writes, method.grows
                     )
                 )
                 var called: List<Int> = List<Int>()
@@ -488,10 +462,40 @@ fun ilPromoteRefs(il: *IlBody, facts: *SemFacts, fresh: *Dictionary<Str, Bool>):
                 i++
                 continue
             }
-            val built: Int = ilPromoteInitReceiver(op, il)
-            if (built >= 0 && built < slots) {
-                initCount[built]++
-                initOp[built] = i
+            // A call argument in the method's write mask (`IlMethod.writes`, the `Out`
+            // role) is storage the *callee* sets - an initialization of the slot, not a
+            // read of it (`impl_specs/linear-form-plan.md`, step 3). The old test keyed
+            // this on the name `initByValue` and its value receiver; the mask carries the
+            // fact for every callee the borrow pass proved or marked, and the record's
+            // `grows` keeps the movers out - the Box rule below assumes the initialized
+            // slot's storage is stable, which an `append`'s receiver does not promise.
+            // The operand still counts as a use and is still escape-checked below: a
+            // callee that retains what it writes (`leak`) makes the handle unsafe to
+            // promote whatever it wrote.
+            if (op.kind == IlOpKind.Call || op.kind == IlOpKind.CallVoid) {
+                val at: Int = ilReuseMethodIndex(op)
+                if (at >= 0 && at < il.methods.size() && !il.methods[at].grows) {
+                    val base: Int = ilReuseArgBase(op.kind)
+                    var w: Int = base
+                    while (w < op.operands.size()) {
+                        if (ilWritesHas(il.methods[at].writes, w - base)) {
+                            // The receiver position keeps the old rule's ABI condition: a
+                            // receiver written through the value spelling is the caller's
+                            // own storage; a counted one is the box's.
+                            val isReceiver: Bool = w == base
+                            if (!isReceiver || (il.methods[at].kind == IlMethodKind.Method
+                                    && il.methods[at].recvIsValue)
+                            ) {
+                                val written: Int = op.operands[w]
+                                if (written >= 0 && written < slots) {
+                                    initCount[written]++
+                                    initOp[written] = i
+                                }
+                            }
+                        }
+                        w++
+                    }
+                }
             }
             val writes: Bool = ilWritesDestination(op.kind)
             for ((operand, j) in op.operands) {

@@ -6479,3 +6479,36 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   break is spelled as a scalar conversion (`Char(10)`) - `diagHint`'s own `\n` stays where
   it is, in `src/errors`. Verified: `bun tools/iterate.js --full` - **176/176**, then
   **176/176 with the walk on**, and both fixed points; the published bootstrap refreshed.
+
+- **The IL can say "the callee writes this" (step 3a of `impl_specs/linear-form-plan.md`).**
+  `IlMethod` carries `writes` - the argument positions the callee writes, the receiver at 0 -
+  and a new operand role `Out` names such an argument where it stands. The mask is filled
+  once per record, in `methodIndex`, from three sources in order: the borrow fixpoint's own
+  table (`bpWritesNames`, whose position indexing is the mask's); the callee's resolved
+  declaration, whose parameter types are the callee's word on what it writes through - the
+  fact the argument's slot type could not carry (the machine contract's
+  `tryAdvance(current: *TItem)` writes its out slot whether the element is a value or a
+  place); and over a machine receiver with one argument, the protocol contract itself, keyed
+  on the receiver's `..T` type and not on any name. `ilPromoteInitReceiver` - the write
+  accounting that tested the name `initByValue` - is deleted; PromoteRefs and ReusePure read
+  the mask. Two soundness guards the corpus taught: an `Out` argument still counts as a use
+  and is still escape-checked - a callee that *retains* what it writes (`leak`,
+  `stress/escape-params`) makes the handle unsafe to promote whatever it wrote - and the
+  promotion's init counting excludes callees whose record says `grows`, because the Box rule
+  assumes the initialized slot's storage is stable and an `append`'s does not. `grows` rides
+  the record from the resolved declaration's own mark (`bpGrowsMark`), which is what
+  distinguishes the union's `initByValue` (a builder) from the Str's (a mover) - a
+  distinction the name-level table cannot make. ReusePure's escape rule reads the mask, with
+  a measurable win: a handle argument handed to a *proved-clean* callee no longer blocks the
+  pure-call merge, and `Str.split`'s second `lenOf(separator)` folds away
+  (`stress/strings`, `stress/minui-layout` goldens, re-pinned after reading - one line
+  each). **The scan of section 3 now tells the truth**: `tools/_outscan.mjs` walks the dump
+  classifying operands by role, and over the compiler's 1,938 bodies reports **0 reads
+  before a write** with the masks - the same walk believing the old table reports 33, and
+  the plan's original 1,859 was this measurement before the role existed, on a smaller
+  tree. Two accounting decisions recorded in the tool: arguments arrive written, and a
+  `Declare` defines its slot with the type's default value (`Str out;` constructs - the
+  early `return out` on an empty path, `arrayEmpty`, reads a defined slot). What the scan
+  cannot yet say is *on which paths* - step 4's verifier is the tool that answers that with
+  real dataflow. Verified: `bun tools/iterate.js --full` - **176/176**, then **176/176 with
+  the walk on**, and both fixed points; the published bootstrap refreshed.

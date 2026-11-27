@@ -1581,7 +1581,6 @@ List<Str> split(Str* self, Str* separator) {
     _sm_expr6 = found - pos;
     _sm_expr7 = substr(self, pos, _sm_expr6);
     simse_list_append(parts, _sm_expr7);
-    _sm_expr1 = simse_lenOf((*separator));
     pos = found + _sm_expr1;
     goto L3;
     L4:;

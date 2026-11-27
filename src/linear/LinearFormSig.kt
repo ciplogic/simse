@@ -7,6 +7,7 @@ package linear
 import compiler
 
 import common
+import parser
 import sema
 
 
@@ -450,6 +451,163 @@ fun ilOperandKind(op: *IlOp, index: Int): IlOperandKind {
     return ilOperandKindAt(tokens, index)
 }
 
+// Whether `writes` - a method record's comma-separated positions - names `position`.
+fun ilWritesHas(writes: *Str, position: Int): Bool {
+    if (position < 0 || writes.isEmpty()) {
+        return false
+    }
+    var start: Int = 0
+    var i: Int = 0
+    while (i <= writes.size()) {
+        if (i == writes.size() || writes[i] == ',') {
+            val piece: Str = writes.substr(start, i - start)
+            val at: Opt<Int> = piece.toInt()
+            if (at.hasValue() && at.value() == position) {
+                return true
+            }
+            start = i + 1
+        }
+        i++
+    }
+    return false
+}
+
+// The argument positions a callee writes, comma-separated, the receiver at 0: the mask a
+// method record carries (`IlMethod.writes`). The borrow fixpoint's table is the source -
+// proved bodies and the author's `mutates` marks (`bpWritesNames`, the receiver seeded at
+// 0 exactly as this mask spells it). A name the table does not carry - a machine's
+// generated step, a native without a mark, a body the fixpoint could not attribute -
+// answers with the callee's own signature: a position whose declared parameter is a handle
+// is written (the machine contract's `tryAdvance(current: *TItem)` writes its out slot
+// whatever the argument's own slot type spells), then narrowed by the marks - a `mutates`
+// mark to the receiver, and a callee proved to write nothing to none. No declaration at
+// all, the argument types are what is left: a handle-typed position is written.
+fun ilWritesOf(name: *Str, argTypes: *List<Int>, il: *IlBody, target: *AstXmlNode): Str {
+    val proved: *Str = bpWritesNames.getPtr(name)
+    if (proved != null) {
+        return *proved
+    }
+    if (bpTrustedNames.has(name) || bpResultTrusted.has(name)) {
+        return ""
+    }
+    if (bpMutatesNames.has(name)) {
+        if (argTypes.size() > 0) {
+            return "0"
+        }
+        return ""
+    }
+    var fromDecl: Str = ""
+    if (!xmlIsEmpty(target)) {
+        // The receiver is position 0 over a `Method` record; the parameters follow. The
+        // declaration's own parameter type is the callee's word on what it writes through.
+        var position: Int = 0
+        val receiver: *AstXmlNode = xmlChildPtr(target, AstNodeKind.Receiver)
+        if (!xmlIsEmpty(receiver)) {
+            val typeNode: *AstXmlNode = xmlChildPtr(receiver, AstNodeKind.Type)
+            if (!xmlIsEmpty(typeNode) && ilDeclParamIsHandle(typeNode)) {
+                fromDecl = "0"
+            }
+            position = 1
+        } else if (semReceiverParams(target) > 0) {
+            // A `this:`-first receiver: the first Param child is the receiver.
+            val first: *AstXmlNode = xmlChildPtr(target, AstNodeKind.Param)
+            if (!xmlIsEmpty(first)) {
+                val typeNode: *AstXmlNode = xmlChildPtr(first, AstNodeKind.Type)
+                if (!xmlIsEmpty(typeNode) && ilDeclParamIsHandle(typeNode)) {
+                    fromDecl = "0"
+                }
+            }
+            position = 1
+        }
+        val params: List<AstXmlNode> = xmlChildren(target, AstNodeKind.Param)
+        var p: Int = semReceiverParams(target)
+        while (p < params.size()) {
+            val typeNode: *AstXmlNode = xmlChildPtr(params[p], AstNodeKind.Type)
+            if (!xmlIsEmpty(typeNode) && ilDeclParamIsHandle(typeNode)) {
+                if (!fromDecl.isEmpty()) {
+                    fromDecl.append(',')
+                }
+                fromDecl.appendStr(position.toString())
+            }
+            p++
+            position++
+        }
+        if (!fromDecl.isEmpty()) {
+            return fromDecl
+        }
+    }
+    var mask: Str = ""
+    var i: Int = 0
+    while (i < argTypes.size()) {
+        val text: Str = ilTypeName(il, argTypes[i])
+        if (text.size() > 0 && (text[0] == '*' || text[0] == '&')) {
+            if (!mask.isEmpty()) {
+                mask.append(',')
+            }
+            mask.appendStr(i.toString())
+        }
+        i++
+    }
+    return mask
+}
+
+// Whether a declaration's parameter type is a handle: the callee may write through it.
+fun ilDeclParamIsHandle(typeNode: *AstXmlNode): Bool {
+    val kind: AstNodeCategory = xmlKind(typeNode)
+    return kind == AstNodeCategory.TypePointer || kind == AstNodeCategory.TypeReference
+}
+
+// Whether this call may move the buffer of what it writes: the resolved declaration's own
+// `grows` mark (`bpGrowsMark`), where there is one - the Str `initByValue` carries it and
+// the union's does not, a distinction the name-level table cannot make - else the
+// name-level closure (`bpGrowsNames`), which a name shared with a growing declaration
+// answers yes to.
+fun IlExtractor.ilCallGrows(name: *Str, target: *AstXmlNode): Bool {
+    if (!xmlIsEmpty(target)) {
+        return bpGrowsMark(target)
+    }
+    return bpGrowsNames.has(name)
+}
+
+// The method record a call-like op names, or null (`CallIndirect` names a slot, and a
+// construction names a type - neither carries a mask).
+fun ilMethodOf(il: *IlBody, op: *IlOp): *IlMethod {
+    if (op.kind != IlOpKind.Call && op.kind != IlOpKind.CallVoid) {
+        return null
+    }
+    val at: Int = ilReuseMethodIndex(op)
+    if (at < 0 || at >= il.methods.size()) {
+        return null
+    }
+    return *il.methods[at]
+}
+
+// Whether operand `index` of `op` is an `Out` position: a call argument whose position the
+// method record's mask names. The receiver of a `Method` record is position 0, and the
+// record's `argTypes` index operands the same way (`fullTypes` appends the receiver first),
+// so an argument's position is its distance from the first one.
+fun ilOperandIsOut(il: *IlBody, op: *IlOp, index: Int): Bool {
+    val method: *IlMethod = ilMethodOf(il, op)
+    if (method == null) {
+        return false
+    }
+    val base: Int = ilReuseArgBase(op.kind)
+    if (index < base) {
+        return false
+    }
+    return ilWritesHas(method.writes, index - base)
+}
+
+// What operand `index` of `op` is, the mask consulted: a `Value` position the callee
+// writes is `Out` (impl_specs/linear-form-plan.md, step 3). Everything else is the
+// signature table's answer.
+fun ilOperandKindIn(il: *IlBody, op: *IlOp, index: Int): IlOperandKind {
+    if (ilOperandIsOut(il, op, index)) {
+        return IlOperandKind.Out
+    }
+    return ilOperandKind(op, index)
+}
+
 // An operand read without trusting the arity: out of range shows up as -1.
 fun ilOperandAt(operands: *List<Int>, index: Int): Int {
     if (index < 0 || index >= operands.size()) {
@@ -516,7 +674,7 @@ fun ilPoolAsText(text: Str): Str {
 // The operand as the reader wants it: the name from the table it indexes.
 fun ilRenderOperand(body: *IlBody, kind: IlOperandKind, value: Int): Str {
     when (kind) {
-        IlOperandKind.Var, IlOperandKind.Value -> {
+        IlOperandKind.Var, IlOperandKind.Value, IlOperandKind.Out -> {
             return ilVarName(body, value)
         }
 

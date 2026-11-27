@@ -12,10 +12,9 @@
 //     `pureCallees` (`Codegen.kt`), such as `spanOfStr`, the length accessors, and any user `data
 //     fun`. A `data` mark is a *promise* the reuse relies on;
 //   - the argument is a frame slot this body never writes (`defCount`) and never hands to a call
-//     that could write it (`escapes`): a raw pointer or a counted reference a callee receives may
-//     be written through, which would change what a *later* view sees (a view is valid only while
-//     its source is unchanged, specs/built-in-types.md). A by-value parameter a callee cannot
-//     write through is safe (`ilReuseArgSafe`);
+//     that could write it (`escapes`): a position in the callee's write mask (`IlMethod.writes`,
+//     the `Out` role) may be written through, which would change what a *later* view sees (a
+//     view is valid only while its source is unchanged, specs/built-in-types.md);
 //   - the first call of a key must stand in the body's first block - under the hoisted
 //     declarations, before any label or branch. It is the call that stays, so it has to dominate
 //     every use, and the first block is the one position that does; and
@@ -81,23 +80,18 @@ fun ilReuseArgBase(kind: IlOpKind): Int {
 // Whether reading a slot in an argument of this call is safe for the slot: the callee is one
 // this pass reuses (a pure read), or the parameter is *by value* - a value the callee cannot
 // write through. A raw pointer or a counted reference is not.
-fun ilReuseArgSafe(il: *IlBody, pure: *Dictionary<Str, Bool>, methodIndex: Int, argIndex: Int): Bool {
+// Whether a call-like op writes the slot at operand `j`: the method record's write mask
+// (`IlMethod.writes`, the `Out` role - impl_specs/linear-form-plan.md, step 3). A call
+// with no record - the indirect forms, a construction - may write anything it is given.
+// This replaces the old conservative rule (a handle-typed argument to any non-pure callee
+// counts as written): the mask is that rule per callee, proved where the borrow fixpoint
+// closed and marked where the author did.
+fun ilReuseWritesArg(il: *IlBody, op: *IlOp, j: Int): Bool {
+    val methodIndex: Int = ilReuseMethodIndex(op)
     if (methodIndex < 0 || methodIndex >= il.methods.size()) {
-        return false
-    }
-    val method: IlMethod = il.methods[methodIndex]
-    if (ilReuseCall(pure, method.name)) {
         return true
     }
-    if (argIndex < 0 || argIndex >= method.argTypes.size()) {
-        return false
-    }
-    val text: Str = ilTypeName(il, method.argTypes[argIndex])
-    if (text.size() == 0) {
-        return false
-    }
-    val first: Char = text[0]
-    return first != '*' && first != '&'
+    return ilWritesHas(il.methods[methodIndex].writes, j - ilReuseArgBase(op.kind))
 }
 
 // One reusable call: the callee's name, the argument slot it reads, and the slot it writes.
@@ -212,12 +206,11 @@ fun ilReusePure(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
             defCount[dst]++
         }
         if (ilReuseIsCallLike(op.kind)) {
-            val methodIndex: Int = ilReuseMethodIndex(op)
             val base: Int = ilReuseArgBase(op.kind)
             var j: Int = base
             while (j < op.operands.size()) {
                 val slot: Int = op.operands[j]
-                if (slot >= 0 && slot < count && !ilReuseArgSafe(il, pure, methodIndex, j - base)) {
+                if (slot >= 0 && slot < count && ilReuseWritesArg(il, op, j)) {
                     escapes[slot] = true
                 }
                 j++

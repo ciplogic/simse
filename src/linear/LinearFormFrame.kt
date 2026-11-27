@@ -72,22 +72,27 @@ fun IlExtractor.labelIndex(name: *Str): Int {
 }
 
 // A method's identity is its name, kind, static base and argument types, so the same name
-// over two receivers is two entries.
+// over two receivers is two entries. The write mask and the grows mark ride the key: two
+// calls answering the same shape but computed under different facts must not share a record.
 fun IlExtractor.methodIndex(
     name: *Str, kind: IlMethodKind, staticBase: Int, returnType: Int,
-    argTypes: *List<Int>, recvIsValue: Bool, packageName: Str, symbol: Str
+    argTypes: *List<Int>, recvIsValue: Bool, packageName: Str, symbol: Str, writes: Str, grows: Bool
 ): Int {
     var key: Str = name + "|" + ilMethodKindText(kind) + "|" + ilIntText(staticBase) + "|" + packageName
     key = key + "|" + symbol
     for (argType in argTypes) {
         key = key + "|" + ilIntText(argType)
     }
+    key = key + "|" + writes
+    if (grows) {
+        key = key + "|g"
+    }
     val found: *Int = this.methodAt.getPtr(key)
     if (found != null) {
         return * found
     }
     this.out.methods.append(
-        IlMethod(name, kind, argTypes.size(), staticBase, returnType, argTypes, packageName, recvIsValue, symbol)
+        IlMethod(name, kind, argTypes.size(), staticBase, returnType, argTypes, packageName, recvIsValue, symbol, writes, grows)
     )
     this.methodAt.insert(key, this.out.methods.size() - 1)
     return this.out.methods.size() - 1

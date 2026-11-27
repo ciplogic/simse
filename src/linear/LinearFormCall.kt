@@ -545,8 +545,21 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
     }
 
     if (receiverCall) {
+        // The mask: the borrow tables and the callee's own signature. Over a machine
+        // receiver with one argument, the protocol contract is the answer - the step
+        // fills the caller's out slot (`tryAdvance(current: *TItem)`, the one method the
+        // `Yieldable` surface names), whatever the element's own type spells.
+        var writes: Str = ilWritesOf(calleeName, fullTypes, this.out, target)
+        if (writes.isEmpty() && fullTypes.size() >= 2
+            && xmlKind(this.exprType(lhs)) == AstNodeCategory.TypeYield
+        ) {
+            writes = "1"
+        }
         operands.append(
-            this.methodIndex(calleeName, IlMethodKind.Method, -1, returnType, fullTypes, recvIsValue, "", "")
+            this.methodIndex(
+                calleeName, IlMethodKind.Method, -1, returnType, fullTypes, recvIsValue, "", "",
+                writes, ilCallGrows(calleeName, target)
+            )
         )
         operands.append(recvSlot)
         i = 0
@@ -573,7 +586,8 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
             this.methodIndex(
                 calleeName, IlMethodKind.Function,
                 this.typeIndex(this.baseText(lhs), this.calleeToType(lhs)),
-                returnType, argTypes, true, "", ""
+                returnType, argTypes, true, "", "",
+                ilWritesOf(calleeName, argTypes, this.out, target), ilCallGrows(calleeName, target)
             )
         )
         i = 0
@@ -640,7 +654,8 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
     }
     operands.append(
         this.methodIndex(
-            callName, IlMethodKind.Function, -1, returnType, argTypes, true, targetPackage, nativeSymbol
+            callName, IlMethodKind.Function, -1, returnType, argTypes, true, targetPackage, nativeSymbol,
+            ilWritesOf(callName, argTypes, this.out, target), ilCallGrows(callName, target)
         )
     )
     i = 0

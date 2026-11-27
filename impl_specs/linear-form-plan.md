@@ -341,6 +341,15 @@ argument follows "Decisions" below - `&place` bound to a `*P` parameter, by sign
 `convertArgument`, which retires the extractor's rule and the `&slot` half of `CgCall`'s;
 the receiver half joins `advance`'s twin as one rule keyed on the receiver's type.
 
+*Landed (2026-11-27, 3a).* `IlMethod` carries `writes` and `grows`; `IlOperandKind.Out`
+names the argument. The mask: `bpWritesNames` first, then the resolved declaration's own
+parameter types, then - over a machine receiver with one argument - the protocol contract
+keyed on the receiver's type. `ilPromoteInitReceiver` is deleted; PromoteRefs and ReusePure
+read the mask. The scan (`tools/_outscan.mjs`): 0 reads before a write over 1,938 bodies,
+33 with the masks off. Two guards the corpus taught: Out arguments stay escape-checked
+(`leak`), and init counting excludes `grows` callees (an `append` after the box would move
+the buffer out from under it). The record is `impl_specs/capability-matrix.md`.
+
 ### 4. The verifier goes strict (M)
 
 With `Out` in the table the permissive verifier can check what it was meant to: every read
