@@ -1,6 +1,8 @@
 # A typed linear form, one operation at a time
 
-Status: proposal - the plan the span-hoist attempt motivated (2026-10-23).
+Status: steps 1, 2 and 4 and the buffer hoist are in; what remains is ordered, with its
+decisions taken, in `impl_specs/linear-form-plan.md` (2026-11-27). This is the spec the
+span-hoist attempt motivated (2026-10-23), and the method it states is the one still kept.
 
 ## Why
 
@@ -46,15 +48,14 @@ shape, define it as a typed operation category, rewrite just it, validate with t
 session used is the template: one small program that spells the shape, red before, green
 after, pinned as a stress case.
 
-**Every step lands under a flag** (`--typed-il`, default off - the `--no-borrow`/
-`--no-escape` convention): the off path is the old lowering, byte for byte, so a broken
-step never poisons the bootstrap chain or needs the two-build recovery dance - the
-published bootstrap always compiles a tree whose default behavior is the last green one.
-The loop validates both sides while the flag is off-by-default (the corpus with and
-without the flag, the fixed point on the default path); the default flips only when a
-step has been green on both paths, and the flag (and the old lowering arm behind it) is
-deleted only when the next step's history gives reason to trust it. Breakage under the
-flag costs a revert of one commit; breakage of the default never happens.
+**Every step was to land under a flag** (`--typed-il`, default off - the `--no-borrow`/
+`--no-escape` convention), so that a broken step never poisoned the bootstrap chain or
+needed the two-build recovery dance. No such flag was ever built: each step landed on the
+default path instead, small enough to be one commit and green in the loop before it was
+made - one shape, one rule, the corpus and the fixed point after it. That is the method the
+steps that remain keep (`impl_specs/linear-form-plan.md`). A flag comes back only for a
+step too large to be one commit, and `--for-walk` (`impl_specs/for-walk.md`) is what that
+looks like.
 
 Each step is one of:
 
@@ -103,7 +104,9 @@ that survive to emission) and tightens as ops gain types; when it is strict, the
   *receiver* of an extension over a machine pattern (`fun ..*T.toList<T>()` in
   `modules/linq` typed `self` as `*?`) - closed with the **protocol receiver**:
   `fun Yieldable<*T>.toList<T>()` names the machine contract (`protocol fun
-  Yieldable<TStateMachine, TItem> TStateMachine.advance(): Bool`, the prelude), normalizes
+  Yieldable<TStateMachine, TItem> TStateMachine.tryAdvance(current: *TItem): Bool`, the
+  prelude - `advance(): Bool` when this step landed, before the one-method surface),
+  normalizes
   to the pattern in place, and the IL carries `Yieldable<*T>` (`ilReceiverTypeText`)
   where the bare sigil read `*?`; the table's *node* stays the pointer-over-pattern the
   emitter mints `_SmIter*` from, so no spelling path meets a name it cannot resolve

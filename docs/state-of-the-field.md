@@ -32,7 +32,7 @@ server).
 (`../simse_bootstrap/builds/simse_bootstrap.cpp`) builds a compiler with a C++ compiler
 alone, and that compiler transpiles the sources back into the same file byte for byte. One
 implementation, checked by `bun tools/iterate.js --full` - the bootstrap fixed
-point and the end-to-end stress corpus (138 programs) in one command, with
+point and the end-to-end stress corpus (164 programs) in one command, with
 `tools/bootstrap.js` and `tools/stress.js` as the tools underneath.
 
 **The performance story.** Transpiling the compiler's own 50,212-line source

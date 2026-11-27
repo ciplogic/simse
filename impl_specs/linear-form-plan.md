@@ -1,13 +1,15 @@
 # The linear form: what to fix next
 
-Status: proposal (2026-11-26). The typed IL is done as a typing exercise - the compiler's
-own output has no untyped slot and no `auto` - and what the measurements show now is not a
-missing type but the shape around the types. This plan continues `typed-il.md`: its steps 1,
-2 and 4 are in, and its steps 3 and 5 are steps 9 and 2 here. Its "Order of work" section
-points back to this one.
+Status: in progress - the decisions are taken (2026-11-27) and step 0 is next. The typed IL
+is done as a typing exercise - the compiler's own output has no untyped slot and no `auto` -
+and what the measurements show now is not a missing type but the shape around the types.
+This plan continues `typed-il.md`: its steps 1, 2 and 4 are in, and its steps 3 and 5 are
+steps 9 and 2 here. Its "Order of work" section points back to this one.
 
 Every number below was measured on this tree; the last section says how to take each one
-again.
+again. The first draft left three decisions open, and six of its statements do not hold
+against the code; both are settled below ("What reading the code corrected", then
+"Decisions"). Where a step disagrees with those two sections, they are right.
 
 ## Where it stands
 
@@ -94,7 +96,12 @@ name because the table cannot carry the fact: `ilPromoteInitReceiver` tests for
 a pointer or the address of `x`. Which one is decided by the operand's type. So a
 pointer-typed local has **no spelling for its own address** - `*p` where `p: *T` is a
 deref, and `&p` is a `Ref<T*>` - which is why the out argument is spelled `&slot` and
-special-cased. It took three attempts to emit `&(self->item)` for a machine field in the
+special-cased. In the surface `&x` is otherwise always a box of a copy
+(`specs/memory-model.md`), so that `&slot` is an exception two sites make by name; and the
+hole itself has one cause: `convertArgument` (`src/linear/LinearFormExpr.kt`) returns a
+pointer-typed argument untouched - the *same shape* as a pointer parameter - before it
+compares the pointees, so `p: *T` never reaches the address row of a `*(*T)` parameter.
+It took three attempts to emit `&(self->item)` for a machine field in the
 last stage: a `Deref` op reads a pointer-typed field *through*, and a `FieldAddr` borrows
 one. The borrow machinery has the same gap - its rule for a callee that writes through a
 fresh local is "the local stays fresh", which is right for a value and wrong for an address
@@ -155,18 +162,51 @@ Sixteen files under `src/optimizations/` fold and clean *lowered statements* (AS
 gotos), each pass with its own walk, and `UseDefs.kt` is a use-def for that level; four
 passes in `src/linear/` (`PromoteRefs`, `ReuseExprs`, `ReusePure`, `MergeConcat`) work on
 *ops*, and the emitter's `IlFrame` is a second use-def. Five proofs in the checker rewrite
-the tree *before* the type pass has run (`spanFor`, `promoteFor`, `promotePlace`,
-`hoistSpan`, `forWalk`), which is why the checker needs its own typing (section 2). On the
+the tree *before* the type pass has run (`spanForAt`, `promoteForAt`, `promotePlaceAt`,
+`hoistSpanAt`, `forWalkAt`, all in `src/sema/SemaCall.kt`; the `sema` trace calls them
+`spanFor`, `promoteFor`, `promotePlace`, `hoistSpan`, `forWalk`), which is why the checker
+needs its own typing (section 2). On the
 self-transpile, in the default configuration, place promotion is refused 4,315 times as
 "not a place" and 233 as "not deep": types no longer block a promotion, the structure of
 the proofs does.
+
+## What reading the code corrected
+
+Read against the tree before the first step (2026-11-27). Each correction is folded into
+the step it changes.
+
+- **The type pass does not see every statement.** `SemInfer.stmt`
+  (`src/sema/TypeInferExpr.kt`) visits declarations and blocks only, never infers an
+  initializer that has a declared type, and has no expected type. The comparison the first
+  draft called declined is in the extractor: `convertArgument` computes both types and
+  returns the operand "not the same type" (`src/linear/LinearFormExpr.kt`).
+- **No flag exists for it.** `--typed-il`, `--verify-il` and `--check-types` are names in
+  documents, not in `Driver.kt`. The verifier does exist (`ilVerifyBody`,
+  `src/codegen/IlEmit.kt`): unflagged, run at emission only, and jump targets are all it
+  checks.
+- **Fourteen refusal sites, not eleven.** Three more carry messages of their own - a
+  lambda's ambiguous overload, a union-class construction, a type parameter that cannot be
+  inferred. All of them go through `IlExtractor.unsupported`
+  (`src/linear/LinearFormFrame.kt`), whose op already records its line; the report is what
+  never reads it.
+- **The `?p0` in a store's comment is the printer's bug** (`ilOpComment`,
+  `src/linear/LinearFormPrint.kt`): the `SetField` and `SetIndex` arms read a load's
+  layout, so the comment shows the fourth operand of a three-operand op. The op line is
+  right, as said.
+- **Step 3's acceptance asked more than the step.** `initByValue` is the union
+  construction's declared extension, named at about twenty sites that are the construction
+  rule itself. What can stop naming it is the write accounting.
+- **The five proofs have other names** (section 9): the first draft used their trace labels.
 
 ## The order of work
 
 One step at a time, each measured before and after, pinned by a stress case, and green in
 the loop before the next. A step that moves emission re-pins its goldens after reading them;
 one that can reject a program lands report-only first. Sizes: S is a rule, M is a pass, L is
-a subsystem.
+a subsystem. Each step is one validated commit, pushed, and the published bootstrap is
+refreshed in the sibling checkout whenever the emitted C++ moves. Where a step forks, the
+default is one rule: non-breaking before breaking, measured before kept, report-only before
+enforced. Every default a step took is written under it.
 
 ### 0. Make the measurement true (S)
 
@@ -179,13 +219,25 @@ with a golden today).
 *Accept:* `grep -c '?'` on a dump equals the count of untyped slots; every refusal line
 names a line.
 
+*Default:* the dump's type table lists only the entries something still names (a slot, an
+operand, a method record), and a `?` interned for a slot that is typed later is typed
+where it is created. The second pass is one `stress.js` step with three options of its own
+- `--compiler-arg <text>`, `--work-sub <name>` (it writes `stress/.work/<name>/`, so the
+two passes do not overwrite each other) and `--no-emission-golden` (the walk changes
+emission by design) - the same step in the C# twin and in both of `iterate.js`'s step
+arrays.
+
 ### 1. Type checks, report-only (M)
 
-The type pass sees every lowered statement with its position and knows three types for each:
-declared, inferred, and expected. Add the comparison it declines to make. For a call with a
-resolved target, each argument against its parameter; for a declaration with a type, its
-initializer; for a member access whose receiver's type is a declared class, that the member
-exists on it. The conversions
+The type pass does not see every statement (above), so each comparison goes where its two
+types already are. *An argument against its parameter:* in `convertArgument`, whose reach
+test becomes one named predicate that the conversion and the check both read. *An
+initializer against a declared type, a value against its assignment's target, a return
+against the declared return:* new arms in `SemInfer.stmt`, which infers the value where a
+type is declared. *A member against its receiver's class:* where the extractor meets the
+member read - the class's fields (`semAllFields`), a declaration of that name, the type
+pass's `memberReturn` - and a construction's arguments against the class's fields. The
+conversions
 the language already applies are the allowed list (`convertArgument` is the definition): a
 borrow, a read through a handle, a derived value where its base is wanted, `null` for a
 handle, a string literal where a view is wanted, a lambda where a callable is. A type the
@@ -196,16 +248,39 @@ are reported at their own line with both types in the language's names (`Str`, n
 `Span<Char>`). *Risk:* a false positive on a shape the rules name imprecisely - that is what
 the report-only mode is for, and each one found is a typing bug worth its own commit.
 
+*Default:* reports go to a sink of their own (`src/sema/TypeCheck.kt`), rendered by
+`diagRender` with `semaTypeText` after a one-line banner, and the emitted C++ does not
+change.
+
+### 1b. Errors by default (S)
+
+The commit after: the checks run for every program and a report fails the transpile,
+`--no-check-types` is the escape hatch (the `--no-borrow` convention), the five programs
+are `stress/diagnostic-type-*`, and the flip is a release note.
+
+*Accept:* the five cases fail at their own line; the corpus and the self-transpile do not
+move.
+
 ### 2. Positions on ops, then the refusals (M)
 
 An op carries a column as well as a line; the reconstructors stamp the op's position on
 every node they build; a report with no position is an `internal:` diagnostic naming the op,
-never a user diagnostic on the declaration. Then typed-IL step 5: each of the eleven
-refusals becomes a typed op or a diagnostic with a position and a hint (`expression
+never a user diagnostic on the declaration. Then typed-IL step 5: each of the fourteen
+refusals becomes a diagnostic with a position and a hint (`expression
 statement` becomes "an expression statement must be a call"). Also the three `C4244`s: the
 prelude's `Int.toString` narrows `Int64` to `Int` three times, in every program ever built.
 
-*Accept:* the four misplaced reports point at their statement; one case per message.
+*Accept:* the four misplaced reports point at their statement; one case per message; a
+hello-world builds without a warning.
+
+*Default:* none becomes a typed op. Six are the author's, each with a hint - `expression
+statement` ("an expression statement must be a call"), `assignment target`, `compound
+assignment target`, `type name in a value position`, `a cast with no destination`,
+`constructor call with no destination`; three are the compiler's and stay `internal:` -
+`statement`, `structured statement reached the IL`, `expression`. The `Unsupported` marker
+is deleted in step 4, and only if nothing produces it then. The `C4244`s are `intToStr` and
+`Str.addInt` (`src/rtl/rtl.kt`): each narrowing is spelled as the scalar conversion it is.
+One helper appends an op with its line and its column, and every pass goes through it.
 
 ### 3. The `Out` role (M)
 
@@ -216,10 +291,21 @@ are known at extraction. They flow into `IlMethod` as a write mask. Then delete
 `ilPromoteInitReceiver`'s name test and both `tryAdvance(&slot)` special cases, and give
 `&`/`*` one meaning each in the IL - an `Addr` op is an address, a `Box` op is a reference.
 
-*Accept:* the scan of section 3 reports the 3 captures and nothing else; no extractor or
-emitter site names `tryAdvance` or `initByValue`. *Risk:* the address-of spellings - the
-machine-field case is pinned by `stress/yieldable-receiver`, the parameter case by
-`stress/borrow-for-pointer`.
+*Accept:* the scan of section 3 reports the 3 captures and nothing else;
+`ilPromoteInitReceiver` and both `tryAdvance(&slot)` sites are gone (`initByValue` is the
+union construction's declared extension and keeps its other sites). *Risk:* the address-of
+spellings - the machine-field case is pinned by `stress/yieldable-receiver`, the parameter
+case by `stress/borrow-for-pointer`.
+
+*Default, two commits.* *3a:* `IlOperandKind.Out`, and `IlMethod` carries `writes` - the
+argument positions the callee writes, the receiver at 0 - filled once in `methodIndex` from
+the borrow pass's table and otherwise by one rule: a handle parameter is written unless the
+callee is `data`, `borrow` or proved borrow-clean, and `mutates` narrows that to the
+receiver. ReusePure and PromoteRefs read the mask. *3b:* `Addr dst, src` is the address of a
+slot and `Deref` keeps only read-through, with the emission byte-identical. The out
+argument follows "Decisions" below - `&place` bound to a `*P` parameter, by signature - in
+`convertArgument`, which retires the extractor's rule and the `&slot` half of `CgCall`'s;
+the receiver half joins `advance`'s twin as one rule keyed on the receiver's type.
 
 ### 4. The verifier goes strict (M)
 
@@ -227,6 +313,13 @@ With `Out` in the table the permissive verifier can check what it was meant to: 
 is preceded by a write on every path that reaches it (the CFG is the labels), every operand agrees with
 its role, every call's arguments agree with its method record, every jump has a label.
 `--verify-il` first, then after every pass in a debug build.
+
+*Default:* `ilVerifyBody` moves to `src/linear/VerifyIl.kt` and always checks an operand
+against its role, a call's arity against its method record, and every jump's label. Under
+`--verify-il` - a new flag; there is none today - a forward must-be-defined dataflow over
+the labels (an intersection at every join; an `Addr` that feeds an `Out` argument defines
+the slot it addresses) reports `<slot> read before a write`, after every op-level pass in
+`emitBodyAt` and `dumpIl`, naming the pass. The flag joins the corpus's second pass.
 
 *Accept:* zero reports on the corpus and the self-transpile. *Why here:* every later step
 is a rewrite, and this is what makes a rewrite that breaks a body name the pass that broke
@@ -241,6 +334,11 @@ the same basic block. A call's result stays declared.
 *Accept:* 1,138 falls to about 500; the goldens shrink, read and re-pinned; the bench rows
 do not move.
 
+*Default:* kind `Temp` or `Expression`, one definition, one use, a pure definition
+(`GetField`, `GetIndex`, `GetStatic`, `SetVar`, `CopyValue`, `BinaryOp`, `UnaryOp`), no
+`Label` between the definition and the use, a spellable type, no closure; the slot's
+`Declare` goes with it.
+
 ### 6. The element lands in the loop variable (S, after 3 and 5)
 
 The `for` binding (`val v = _sm_item<n>`) becomes the step's own out argument: `v` is
@@ -249,6 +347,24 @@ steps, 734 copies and 750 slots, in 471 bodies. The out slot stops being a name-
 template part and becomes what it is: a temporary a pass can forward.
 
 *Accept:* no `SetVar v, _sm_item<n>` remains in a dump.
+
+*Default:* the template declares the loop variable as the out slot itself, and its
+declaration carries the template's id as an attribute; `forItemMachine`, the checker's
+val-ness rule, `bpClassifyPlace` and `forWalkAt` read that attribute where they read a
+`_sm_item` name today. Assigning to a loop variable stays the diagnostic it is.
+
+### 6b. The machine writes through its out slot (M, measured)
+
+The machine-side twin of step 6. Today `tryAdvance(self, out)` is a wrapper generated over
+the step (`src/codegen/IlMachine.kt`): the step writes the `current` field and the wrapper
+copies it out, on every element of every loop. The step takes the `out` parameter itself -
+each suspend point writes `*out` (`yldExpandSuspend`, `src/linear/Yield.kt`) - and
+`advance(self)` is what gets generated, as `tryAdvance(self, &self->current)`.
+
+*Accept:* no `current` store on a suspend; `stress/machines` and the `yield*` goldens read
+and re-pinned; the bench rows interleaved, `particles` among them (the machine's step is
+the shape MSVC pattern-matches there, `impl_specs/for-walk.md`). If no row moves, the
+number is recorded here and the fold is not kept.
 
 ### 7. One type oracle (L)
 
@@ -261,6 +377,12 @@ what they need. `semPointeeOf` goes with them.
 
 *Accept:* 17 expression kinds, each typed by one function.
 
+*Default:* `SemInfer.infer` is the oracle - it is the rule-set that covers all 17 and left
+no `?`. The emitter's reconstructed nodes carry their slot and `inferType` answers from the
+frame first; a counter per arm under `--diagnostics codegen` says which arms still fire, and
+each is deleted at zero. The checker's `exprType`/`iteratedType` keep their scope bindings
+and ask `semTypeOfExpr` for every type, so the five proofs stay where they run.
+
 ### 8. Calls are spelled from a record (L)
 
 `IlMethod` carries what the extractor resolved: the symbol, the package, the kind, the
@@ -271,6 +393,10 @@ protocol, static, machine step.
 
 *Accept:* a call resolves once; no `calleeText ==` remains in `src/codegen/`.
 
+*Default:* `ilCallNode` is replaced by `ilCallText`, spelled from the record, and the
+name-keyed sites retire one call kind per commit: construction, extension, native, protocol
+(`Opt`/`Res`, `toInt`, `size`), static, machine step.
+
 ### 9. `SpanOf`, and the proofs on the form (L)
 
 typed-IL step 3: `spanOf(c)` as an op whose result is `Span<T>`, with typed load and store
@@ -280,20 +406,45 @@ template part is an operand, not a spelling.
 
 *Accept:* `--for-walk` measured on the new form before it is considered for a default.
 
-## Decisions that are not the compiler's alone
+*Default, three commits:* `SpanOf dst, src` first, spelled as today's `spanOf` call, with a
+span-typed base for index load and store; then the for-walk as an op-level pass that finds
+the loop by its ops, with no `_sm_for` prefix; then the span binding as `ilSpanHoist`, its
+stability proof a dataflow. Each tree-level twin is deleted when its decision traces match
+as sets. `--for-walk` stays off by default: its flip is measured on the new form, not
+assumed.
 
-- **`advance()` and `current`.** No loop the compiler generates and no authored body but
-  `toPtrs` uses them now. Folding the machine's step into `tryAdvance` removes a field and a
-  copy from every machine; it also breaks every program that steps a machine by hand
-  (`stress/machines` does), and the spec never defined either surface - `specs/functions.md`
-  says "advanced once per iteration" and names no method. Retiring them should be one change
-  with the spec text that defines `tryAdvance` in their place.
-- **The address of a pointer-typed slot** (section 4) is a hole in the surface language.
-  The IL can be given an `Addr` op on its own; what a program writes for it is a language
-  decision.
-- **Type errors become errors.** Step 1 is report-only until the corpus is clean; when it
-  turns on, a program that compiled yesterday may stop. That is the right outcome for a
-  static language and still a release note.
+## Decisions
+
+The first draft left three decisions to the language's author, as "not the compiler's
+alone". They are taken here by default (2026-11-27), each the way that breaks nothing and
+keeps the measurement as the judge; the reasoning stays with each, so a different choice
+can see what it trades.
+
+- **`advance()` and `current` stay, and the step folds anyway.** Retiring the pair would
+  break every program that steps a machine by hand (`stress/machines` does), and it would
+  cost more than a migration: `toPtrs` yields the *place* of the source's `current` by
+  choice (`impl_specs/for.md`), which a contract that hands out values cannot give - one
+  more copy per element. The gain the retirement was for - a field store and a copy off
+  every element of every loop - does not need it. The step takes the `out` parameter
+  itself and `advance()` becomes the wrapper (step 6b): nothing breaks, and `current`
+  stays a field for the hand-stepped surface. `specs/functions.md` says "advanced once per
+  iteration" and names no method; it gains the contract's text - `tryAdvance` as the one
+  method every loop steps through, the pair as what a program may still call by hand -
+  with the step that changes it. The fold is kept only if the bench rows move.
+- **`&place` is the out argument, for every callee, by signature.** An argument spelled
+  `&x` and bound to a `*P` parameter where `x: P` is `x`'s address; every other `&x` stays
+  what `specs/memory-model.md` says, a box of a copy. This is what `m.tryAdvance(&slot)`
+  already means, today only because two sites match the name. The spec's own row - "a `*T`
+  parameter takes a `T` argument's address" - covers a value-typed slot on its own, but for
+  a pointer-typed one it is ambiguous against the same-shape row wherever the parameter's
+  pointee is a bare type parameter, which is exactly the machine contract's; and every
+  authored call site, the `for` template and the docs already write `&slot`. So no program
+  is rewritten and the hole closes for any slot type. One row joins "Handles at a call",
+  and the IL spells it `Addr` (step 3).
+- **Type errors become errors as soon as they are clean.** Step 1 is report-only for one
+  commit; the next turns it on (step 1b). When it turns on, a program that compiled
+  yesterday may stop. That is the right outcome for a static language and still a release
+  note.
 
 ## What this plan does not do
 

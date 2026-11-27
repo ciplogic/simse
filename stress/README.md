@@ -28,7 +28,7 @@ stress/<name>/
   expected.stdout           what the program prints (the one required file)
   expected.stderr           optional: what it writes to stderr
   expected.exit             optional: its exit code (default 0)
-  expected.cpp.out         optional: the emitted C++ must match byte for byte
+  expected.cpp.out         optional: the emitted C++ must match (line endings aside)
   expected.transpile-error  optional: the transpile must fail and its stderr must
                             contain this text; nothing is compiled or run
   args                      optional: one line of arguments for the program
@@ -43,10 +43,10 @@ passing one: the harness fails it and tells you to capture the output with
 reading what the program printed, never as a way to make a red case green.
 
 `expected.cpp.out` is the emission golden: it pins the generated C++ for a program,
-which is how the old fixture goldens pinned it. `stress/objects` and
-`stress/machines` carry one each (they replaced the cases that pinned the emitted
-shapes); drop one into any case by copying `stress/.work/<name>/out.cpp` after the
-case passes.
+which is how the old fixture goldens pinned it. `stress/objects` and `stress/machines`
+were the first two; forty cases carry one now. The compare ignores line endings and
+`--update` never rewrites it: copy `stress/.work/<name>/out.cpp` into the case by hand,
+after the case passes and after reading what moved.
 
 ## Categories
 
@@ -93,9 +93,7 @@ What stays one folder per case, and why:
 
 ## The work directory
 
-`stress/.work/<name>/` holds `out.cpp`, `prog.exe`, and the run's `actual.*`
-files. It is ignored by git and rebuilt on every run (the shared objects for the
-native translation units are cached per flag set, which is what makes repeated
-runs fast; the cache is invalidated by a newer `src/**` header too, because
-`Str`/`List`/`Array` are header-defined and mixing two versions of them in one
-binary is an ODR violation).
+`stress/.work/<name>/` holds `out.cpp`, `out.obj` and `prog.exe`. It is ignored by
+git and wiped at the start of every run. Every generated program is one translation
+unit - the runtime is generated into it - so nothing is compiled once per flag set
+or shared between two cases, which is why one case is one `cl.exe`.
