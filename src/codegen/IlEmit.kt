@@ -210,6 +210,19 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
         val op: *IlOp = *il.ops[i]
         val kind: IlOpKind = op.kind
         val dst: Int = this.ilDst(op)
+        // The op's position, for the reconstructors to stamp on every node they build: a
+        // failure inside the spelling names this statement, not the declaration being
+        // emitted (`impl_specs/linear-form-plan.md`, step 2).
+        if (i < il.lines.size()) {
+            this.ilAtLine = il.lines[i]
+        } else {
+            this.ilAtLine = 0
+        }
+        if (i < il.cols.size()) {
+            this.ilAtCol = il.cols[i]
+        } else {
+            this.ilAtCol = 0
+        }
 
         val crossing: *IlCrossing = blockEnd.getPtr(i)
         if (crossing != null) {
@@ -282,7 +295,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                     var u: Int = 0
                     while (u < il.ops.size()) {
                         if (il.ops[u].kind == IlOpKind.Unsupported) {
-                            return IlText(false, "", this.ilUnsupportedReason(il, u))
+                            return IlText(false, "", this.ilUnsupportedFailure(il, u))
                         }
                         u++
                     }
@@ -302,7 +315,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                 ) {
                     // The initializer is the extractor's own report: carry it out instead of
                     // the generic shape message (the report names the construct).
-                    return IlText(false, "", this.ilUnsupportedReason(il, def))
+                    return IlText(false, "", this.ilUnsupportedFailure(il, def))
                 }
                 if (this.ilWhy.isEmpty()) {
                     return IlText(false, "", "an initializer with no expression form")
@@ -509,7 +522,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             var target: AstXmlNode = AstXmlNode(
                 AstNodeKind.Expr,
                 AstNodeCategory.ExprDeref,
-                List<AstNodeAttribute>(),
+                ilPosAttrs(),
                 Array<AstXmlNode>()
             )
             xmlAddChild(target, this.renameRole(ptr, AstNodeKind.Operand))
@@ -699,7 +712,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             return IlText(false, "", "a lambda body")
         }
         if (kind == IlOpKind.Unsupported) {
-            return IlText(false, "", this.ilUnsupportedReason(il, i))
+            return IlText(false, "", this.ilUnsupportedFailure(il, i))
         }
         val ilOpKindTextText2: Str = ilOpKindText(kind)
         return IlText(false, "", `the instruction '@ilOpKindTextText2'`)
@@ -716,11 +729,105 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
 // instruction's text operand.
 fun Emitter.ilUnsupportedReason(il: *IlBody, opIndex: Int): Str {
     val op: *IlOp = *il.ops[opIndex]
-    val textIndex: Int = this.ilOpOperand(op.operands, 1)
+    return "unsupported: " + ilUnsupportedText(il, op)
+}
+
+// The refusal's own text, without the prefix.
+fun ilUnsupportedText(il: *IlBody, op: *IlOp): Str {
+    val textIndex: Int = ilOperandAt(op.operands, 1)
     if (textIndex >= 0 && textIndex < il.pool.size()) {
-        return "unsupported: " + il.pool[textIndex]
+        return il.pool[textIndex]
     }
     return "an unsupported shape"
+}
+
+// Whether a refusal is the compiler's, not the author's: a statement kind or an expression
+// kind the extractor has no arm for is a gap in the compiler (a shape the lowering should
+// never produce), and the report says so instead of sending the reader hunting for a
+// mistake that is not theirs.
+fun ilUnsupportedInternal(what: *Str): Bool {
+    return what == "statement" || what == "structured statement reached the IL"
+            || what == "expression"
+}
+
+// One refusal, reported: the author's fails here - the message with its hint, positioned at
+// the op's own statement (`impl_specs/linear-form-plan.md`, step 2) - and the reason string
+// keeps the old `unsupported:` spelling for the caller's classification; the compiler's
+// travels bare, for `emitBodyAt` to name the body, since a gap in the compiler is nobody's
+// mistake to fix at a line.
+fun Emitter.ilUnsupportedFailure(il: *IlBody, opIndex: Int): Str {
+    val what: Str = ilUnsupportedText(il, *il.ops[opIndex])
+    if (ilUnsupportedInternal(what)) {
+        return what
+    }
+    var line: Int = 0
+    var col: Int = 0
+    if (opIndex < il.lines.size()) {
+        line = il.lines[opIndex]
+    }
+    if (opIndex < il.cols.size()) {
+        col = il.cols[opIndex]
+    }
+    // The report is formed here, where the op's position is: `emitBodyAt` would position
+    // the raw reason at the declaration, because `ilEmitOpsChecked` rolls the fail state
+    // back. The full line travels on `ilRefusalError`, which the rollback does not touch.
+    this.ilAtLine = line
+    this.ilAtCol = col
+    var at: AstXmlNode = AstXmlNode(
+        AstNodeKind.Expr, AstNodeCategory.None, ilPosAttrs(), Array<AstXmlNode>()
+    )
+    this.fail(at, ilUnsupportedMessage(what))
+    val messageText: Str = ilUnsupportedMessage(what)
+    val curFileText: Str = this.curFile
+    this.ilRefusalError = `@curFileText:@line:@col: @messageText` + ilUnsupportedHint(what)
+    return "unsupported: " + what
+}
+
+// The author's refusal, with the hint that says what the shape wants instead (`diagRender`
+// prints the hint under the caret). The old text - `unsupported: expression statement` -
+// is the reason the shape exists, not the words a reader acts on.
+fun ilUnsupportedMessage(what: *Str): Str {
+    if (what == "expression statement") {
+        return "an expression statement must be a call"
+    }
+    if (what == "assignment target" || what == "compound assignment target") {
+        return "the target is not a place"
+    }
+    if (what == "type name in a value position") {
+        return "a type name is not a value"
+    }
+    if (what == "a cast with no destination") {
+        return "the cast needs a place to go"
+    }
+    if (what == "constructor call with no destination") {
+        return "the construction needs a place"
+    }
+    return what
+}
+
+// The refusal's hint, after the message (`diagRender` prints it under the caret): what the
+// shape wants instead.
+fun ilUnsupportedHint(what: *Str): Str {
+    // The newline is spelled as a scalar conversion, so no string literal here
+    // holds one: the pool writes literals verbatim, and a raw newline inside a C++
+    // string does not compile.
+    val nl: Str = "" + Char(10) + "hint: "
+    if (what == "expression statement") {
+        return nl + "bind the value to a local, or drop the statement"
+    }
+    if (what == "assignment target" || what == "compound assignment target") {
+        return nl + "assign to a variable, a field, an index, or through a pointer"
+    }
+    if (what == "type name in a value position") {
+        return nl + "construct it (Point(1, 2)) or name a value of the type"
+    }
+    if (what == "a cast with no destination") {
+        return nl + "bind it (val p: *T = h.getAs<T>())"
+    }
+    if (what == "constructor call with no destination") {
+        return nl + "bind it (val p = Point(1, 2)) or pass it on"
+    }
+    return ""
 }
 
 // One body's text, with its frame analysed and the type pass's failure state kept out

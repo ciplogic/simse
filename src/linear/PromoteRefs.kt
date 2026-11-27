@@ -343,6 +343,7 @@ fun ilPromoteApply(il: *IlBody, c: Int, at: Int): Unit {
 
     var ops: List<IlOp> = List<IlOp>()
     var lines: List<Int> = List<Int>()
+    var cols: List<Int> = List<Int>()
     var declared: Bool = false
     var i: Int = 0
     while (i < il.ops.size()) {
@@ -353,6 +354,7 @@ fun ilPromoteApply(il: *IlBody, c: Int, at: Int): Unit {
             if (!box) {
                 ops.append(IlOp(IlOpKind.Declare, ilOps1(stack)))
                 lines.append(il.lines[i])
+                cols.append(il.cols[i])
             }
             declared = true
         }
@@ -361,6 +363,7 @@ fun ilPromoteApply(il: *IlBody, c: Int, at: Int): Unit {
                 // `c = &src`, the storage `src` already has.
                 ops.append(IlOp(IlOpKind.Deref, ilOps2(c, stack)))
                 lines.append(il.lines[i])
+                cols.append(il.cols[i])
             } else if (def.kind == IlOpKind.Call) {
                 // The fresh-handle call retargeted to its value twin: the method clone
                 // carries the twin's name (and its package, so the emitter qualifies the
@@ -387,8 +390,10 @@ fun ilPromoteApply(il: *IlBody, c: Int, at: Int): Unit {
                 }
                 ops.append(IlOp(IlOpKind.Call, called))
                 lines.append(il.lines[i])
+                cols.append(il.cols[i])
                 ops.append(IlOp(IlOpKind.Deref, ilOps2(c, stack)))
                 lines.append(il.lines[i])
+                cols.append(il.cols[i])
             } else {
                 // The construction now builds the stack value, and the handle points at it.
                 var built: List<Int> = List<Int>()
@@ -401,8 +406,10 @@ fun ilPromoteApply(il: *IlBody, c: Int, at: Int): Unit {
                 }
                 ops.append(IlOp(IlOpKind.CallCtor, built))
                 lines.append(il.lines[i])
+                cols.append(il.cols[i])
                 ops.append(IlOp(IlOpKind.Deref, ilOps2(c, stack)))
                 lines.append(il.lines[i])
+                cols.append(il.cols[i])
             }
             i++
             continue
@@ -411,19 +418,23 @@ fun ilPromoteApply(il: *IlBody, c: Int, at: Int): Unit {
         if (op.kind == IlOpKind.Deref && op.operands.size() >= 2 && op.operands[1] == c) {
             ops.append(IlOp(IlOpKind.SetVar, ilOps2(op.operands[0], c)))
             lines.append(il.lines[i])
+            cols.append(il.cols[i])
             i++
             continue
         }
         ops.append(IlOp(op.kind, op.operands))
         lines.append(il.lines[i])
+        cols.append(il.cols[i])
         i++
     }
     if (!declared && !box) {
         ops.insert(0, IlOp(IlOpKind.Declare, ilOps1(stack)))
         lines.insert(0, 0)
+        cols.insert(0, 0)
     }
     il.ops = ops
     il.lines = lines
+    il.cols = cols
 }
 
 // The body with every promotable counted-reference local promoted to a stack value and a raw

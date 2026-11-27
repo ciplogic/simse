@@ -297,6 +297,7 @@ fun ilReusePure(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
     // declaration of a slot nothing writes any more both go.
     var ops: List<IlOp> = List<IlOp>()
     var lines: List<Int> = List<Int>()
+    var cols: List<Int> = List<Int>()
     i = 0
     while (i < il.ops.size()) {
         val op: *IlOp = *il.ops[i]
@@ -326,10 +327,12 @@ fun ilReusePure(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
         }
         ops.append(IlOp(op.kind, operands))
         lines.append(il.lines[i])
+        cols.append(il.cols[i])
         i++
     }
     il.ops = ops
     il.lines = lines
+    il.cols = cols
     return true
 }
 

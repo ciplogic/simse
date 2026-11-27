@@ -18,6 +18,7 @@ fun IlExtractor.stmts(list: *List<AstXmlNode>): Unit {
 
 fun IlExtractor.statement(stmt: *AstXmlNode): Unit {
     this.line = xmlLine(stmt)
+    this.col = xmlColumn(stmt)
     val kind: AstNodeCategory = xmlKind(stmt)
     when (kind) {
         AstNodeCategory.StmtLabel -> {

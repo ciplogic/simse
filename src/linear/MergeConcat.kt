@@ -242,21 +242,24 @@ data class IlConcatFuser(
     var uses: List<Int>,
     var ops: List<IlOp>,
     var lines: List<Int>,
+    var cols: List<Int>,
     var replaced: Dictionary<Int, Bool>,
     var changed: Bool,
     // The instructions a rewrite has taken off the end of the walk but not yet committed to:
     // a refusal puts them back (`rollback`), a commit drops them (`emitConcat`). Last taken
     // first, so restoring walks them backwards.
     var taken: List<IlOp>,
-    var takenLines: List<Int>
+    var takenLines: List<Int>,
+    var takenCols: List<Int>
 ) {
 
-    fun keep(op: *IlOp, line: Int): Unit {
+    fun keep(op: *IlOp, line: Int, col: Int): Unit {
         this.ops.append(*op)
         this.lines.append(line)
+        this.cols.append(col)
     }
 
-    fun emitConcat(dst: Int, parts: *List<Int>, line: Int): Unit {
+    fun emitConcat(dst: Int, parts: *List<Int>, line: Int, col: Int): Unit {
         var operands: List<Int> = List<Int>()
         operands.append(dst)
         for (part in parts) {
@@ -264,8 +267,10 @@ data class IlConcatFuser(
         }
         this.ops.append(IlOp(IlOpKind.Concat, operands))
         this.lines.append(line)
+        this.cols.append(col)
         this.taken = List<IlOp>()
         this.takenLines = List<Int>()
+        this.takenCols = List<Int>()
         this.changed = true
     }
 
@@ -274,31 +279,39 @@ data class IlConcatFuser(
     fun take(): IlOp {
         val last: IlOp = this.ops[this.ops.size() - 1]
         val line: Int = this.lines[this.lines.size() - 1]
+        val col: Int = this.cols[this.cols.size() - 1]
         this.ops.removeAt(this.ops.size() - 1)
         this.lines.removeAt(this.lines.size() - 1)
+        this.cols.removeAt(this.cols.size() - 1)
         this.taken.append(last)
         this.takenLines.append(line)
+        this.takenCols.append(col)
         return last
     }
 
     // Puts back what a refused rewrite had already consumed. A consume only ever *removes*
     // the last instruction, so cutting the lists back is not enough: the taken instructions
     // go back in the order they were taken from (`taken` is the reverse).
-    fun rollback(opsAt: Int, linesAt: Int): Unit {
+    fun rollback(opsAt: Int, linesAt: Int, colsAt: Int): Unit {
         if (this.ops.size() > opsAt) {
             this.ops.removeRange(opsAt, this.ops.size())
         }
         if (this.lines.size() > linesAt) {
             this.lines.removeRange(linesAt, this.lines.size())
         }
+        if (this.cols.size() > colsAt) {
+            this.cols.removeRange(colsAt, this.cols.size())
+        }
         var t: Int = this.taken.size() - 1
         while (t >= 0) {
             this.ops.append(this.taken[t])
             this.lines.append(this.takenLines[t])
+            this.cols.append(this.takenCols[t])
             t--
         }
         this.taken = List<IlOp>()
         this.takenLines = List<Int>()
+        this.takenCols = List<Int>()
     }
 
     // Drops the previous instruction and hands its parts back, in order.
@@ -398,14 +411,15 @@ data class IlConcatFuser(
         }
         val opsAt: Int = this.ops.size()
         val linesAt: Int = this.lines.size()
+        val colsAt: Int = this.cols.size()
         if (!this.appendOperand(ilOperandAt(*op.operands, 2), *parts)
             || !this.appendOperand(ilOperandAt(*op.operands, 3), *parts)
         ) {
-            this.rollback(opsAt, linesAt)
+            this.rollback(opsAt, linesAt, colsAt)
             return List<Int>()
         }
         if (!ilConcatDstOk(dst, *parts)) {
-            this.rollback(opsAt, linesAt)
+            this.rollback(opsAt, linesAt, colsAt)
             return List<Int>()
         }
         return parts
@@ -581,16 +595,17 @@ data class IlConcatFuser(
         while (i < this.il.ops.size()) {
             val op: *IlOp = *this.il.ops[i]
             val line: Int = this.il.lines[i]
+            val col: Int = this.il.cols[i]
             if (op.kind == IlOpKind.Call) {
                 val fmtParts: List<Int> = this.fmtStrParts(op)
                 if (fmtParts.size() > 0) {
-                    this.emitConcat(ilConcatDst(op), *fmtParts, line)
+                    this.emitConcat(ilConcatDst(op), *fmtParts, line, col)
                     i++
                     continue
                 }
                 val withParts: List<Int> = this.fmtStrWithParts(op)
                 if (withParts.size() > 0) {
-                    this.emitConcat(ilConcatDst(op), *withParts, line)
+                    this.emitConcat(ilConcatDst(op), *withParts, line, col)
                     i++
                     continue
                 }
@@ -598,12 +613,12 @@ data class IlConcatFuser(
             if (op.kind == IlOpKind.BinaryOp) {
                 val parts: List<Int> = this.plusParts(op)
                 if (parts.size() > 0) {
-                    this.emitConcat(ilConcatDst(op), *parts, line)
+                    this.emitConcat(ilConcatDst(op), *parts, line, col)
                     i++
                     continue
                 }
             }
-            this.keep(op, line)
+            this.keep(op, line, col)
             i++
         }
     }
@@ -643,8 +658,9 @@ fun ilFuseConcat(il: *IlBody): Bool {
         return false
     }
     var fuser: IlConcatFuser = IlConcatFuser(
-        il, ilConcatUseCounts(il), List<IlOp>(), List<Int>(), Dictionary<Int, Bool>(), false,
-        List<IlOp>(), List<Int>()
+        il, ilConcatUseCounts(il), List<IlOp>(), List<Int>(), List<Int>(),
+        Dictionary<Int, Bool>(), false,
+        List<IlOp>(), List<Int>(), List<Int>()
     )
     fuser.run()
     if (!fuser.changed) {
@@ -655,6 +671,7 @@ fun ilFuseConcat(il: *IlBody): Bool {
     val written: List<Bool> = ilConcatWrittenSlots(*fuser.ops, il.vars.size())
     var ops: List<IlOp> = List<IlOp>()
     var lines: List<Int> = List<Int>()
+    var cols: List<Int> = List<Int>()
     var i: Int = 0
     while (i < fuser.ops.size()) {
         val op: IlOp = fuser.ops[i]
@@ -667,10 +684,12 @@ fun ilFuseConcat(il: *IlBody): Bool {
         }
         ops.append(op)
         lines.append(fuser.lines[i])
+        cols.append(fuser.cols[i])
         i++
     }
     il.ops = ops
     il.lines = lines
+    il.cols = cols
     return true
 }
 

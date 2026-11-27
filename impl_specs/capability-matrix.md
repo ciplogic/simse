@@ -6451,3 +6451,31 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   corpus's, and the flip would have met them first at `bench/run.js`. Verified: `bun
   tools/iterate.js --full` - **172/172**, then **172/172 with the walk on**, and both
   fixed points; the published bootstrap refreshed.
+
+- **A report points where it happened (step 2 of `impl_specs/linear-form-plan.md`).** An op
+  now carries a column beside its line (`IlBody.cols`, through the extractor, the hoist and
+  all four op-level passes, whose rebuilds carry the parallel list), the reconstructors
+  stamp the op's position on every node they build (`ilPosAttrs`, eleven builders), and an
+  extractor refusal is reported at the statement it stands on - with the hint that says
+  what the shape wants instead - instead of at the enclosing declaration. The positioning
+  had to survive `ilEmitOpsChecked`'s save/restore of the fail state, so the formed report
+  travels on its own field (`ilRefusalError`) and `emitBodyAt` uses it as it stands. The
+  six author's refusals gained their reader's wording (`an expression statement must be a
+  call`, `the target is not a place`, `a type name is not a value`, `the cast needs a place
+  to go`, `the construction needs a place`), each with a hint; `stress/diagnostic-*` pins
+  four of them, one per shape, seen failing at the enclosing declaration before. The
+  compiler's three - `statement`, `structured statement reached the IL`, `expression` -
+  travel bare and keep the `internal:` wrap: a gap in the compiler is nobody's mistake to
+  fix at a line. Two refusal sites turned out to be **unreachable** now - `type name in a
+  value position` and `constructor call with no destination` (a bare `Point` and a
+  statement `Point(1, 2)` both build, routed as constructions) - left in place, unpinned.
+  **And the three `C4244`s are gone**: the prelude's digit bodies (`intToStr`,
+  `Str.addInt`) spell their narrowings as the scalar conversions they are (`Int(rest %
+  10)`, `Char('0' + digit)`, `Char('0' + Int(0 - rest))`), and a hello-world builds with
+  **zero warnings**. 32 emission goldens carried the two bodies and moved, all of them by
+  exactly that spelling - every changed golden line audited against the digit-body
+  vocabulary before re-pinning. One plumbing lesson: a string literal in the compiler's own
+  source may not hold a newline (the pool writes literals verbatim), so the hint's line
+  break is spelled as a scalar conversion (`Char(10)`) - `diagHint`'s own `\n` stays where
+  it is, in `src/errors`. Verified: `bun tools/iterate.js --full` - **176/176**, then
+  **176/176 with the walk on**, and both fixed points; the published bootstrap refreshed.

@@ -532,8 +532,17 @@ fun Emitter.emitBodyAt(info: *IlFunction, body: *List<AstXmlNode>, file: *Str, l
     if (!emitted.ok) {
         val infoSymbolText: Str = info.symbol
         val emittedReasonText: Str = emitted.reason
-        // A shape the extractor itself reported is the author's, not an internal one.
+        // A shape the extractor itself reported is the author's, not an internal one. The
+        // report may already be formed and positioned (`ilUnsupportedFailure` sets it, and
+        // `ilEmitOpsChecked`'s save/restore rolled the fail state back): use it as it
+        // stands, at the statement the shape stands on.
         if (emittedReasonText.startsWith("unsupported: ")) {
+            if (this.ilRefusalError != "") {
+                this.failed = true
+                this.error = this.ilRefusalError
+                this.ilRefusalError = ""
+                return
+            }
             this.failFromInfo(info, emittedReasonText)
             return
         }

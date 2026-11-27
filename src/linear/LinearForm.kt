@@ -133,7 +133,11 @@ data class IlBody(
     var methods: List<IlMethod>,
     var labels: List<Str>,
     var ops: List<IlOp>,
-    var lines: List<Int>
+    var lines: List<Int>,
+// The column beside each line, from the statement the extraction stood on: a report the
+// IL carries points where the statement was written, not at the declaration
+// (impl_specs/linear-form-plan.md, step 2).
+    var cols: List<Int>
 )
 
 // What the extractor needs to know about the body's function. A lambda (or machine-method)
@@ -222,6 +226,7 @@ data class IlExtractor(
     var labelAt: Dictionary<Str, Int>,
     var nextBase: Int,
     var line: Int,
+    var col: Int,
     // Synthesized slots that carry a type, declared at the top of the instruction list.
     var hoisted: List<Int>,
     var hoistedLines: List<Int>,
@@ -318,7 +323,7 @@ fun ilEmptyBody(): IlBody {
     return IlBody(
         "", 0, "", "", List<Str>(), List<AstXmlNode>(), Dictionary<Str, AstXmlNode>(),
         List<IlVar>(), List<Str>(),
-        List<IlMethod>(), List<Str>(), List<IlOp>(), List<Int>()
+        List<IlMethod>(), List<Str>(), List<IlOp>(), List<Int>(), List<Int>()
     )
 }
 
@@ -350,7 +355,7 @@ fun ilExtractUnit(fn: *IlFunction, body: *List<AstXmlNode>, file: *Str): IlUnit 
         fn, *unit, *counter, ilEmptyBody(),
         Dictionary<Str, Int>(), Dictionary<Str, Int>(),
         Dictionary<Str, Int>(), Dictionary<Str, Int>(),
-        Dictionary<Str, Int>(), 1, 0, List<Int>(), List<Int>(),
+        Dictionary<Str, Int>(), 1, 0, 0, List<Int>(), List<Int>(),
         *context, false, Dictionary<Str, AstXmlNode>(), true
     )
     extractor.begin(file)

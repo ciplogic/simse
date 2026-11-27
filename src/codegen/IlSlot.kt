@@ -38,9 +38,21 @@ fun Emitter.ilOpOperand(operands: *List<Int>, index: Int): Int {
     return -1
 }
 
+// The position attributes of the op being emitted: what every reconstructed node carries,
+// so `fail` reports the statement the spelling stood on instead of falling back to the
+// declaration (`impl_specs/linear-form-plan.md`, step 2). Empty between ops.
+fun Emitter.ilPosAttrs(): List<AstNodeAttribute> {
+    var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+    if (this.ilAtLine > 0) {
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, this.ilAtLine.toString()))
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, this.ilAtCol.toString()))
+    }
+    return attrs
+}
+
 fun Emitter.ilNameNode(text: *Str): AstXmlNode {
     var node: AstXmlNode =
-        AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprName, List<AstNodeAttribute>(), Array<AstXmlNode>())
+        AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprName, ilPosAttrs(), Array<AstXmlNode>())
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, text))
     return node
 }
@@ -340,7 +352,7 @@ fun Emitter.ilDeclGroups(
 // kind is left (`true` a BoolLit, `"abc"` a StrLit, a digit run an IntLit or FloatLit).
 fun Emitter.ilLiteralNode(text: *Str): AstXmlNode {
     var node: AstXmlNode =
-        AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprIntLit, List<AstNodeAttribute>(), Array<AstXmlNode>())
+        AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprIntLit, ilPosAttrs(), Array<AstXmlNode>())
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Text, text))
     var dot: Bool = false
     var i: Int = 0
@@ -401,7 +413,7 @@ fun Emitter.ilMemberNode(base: *AstXmlNode, name: *Str): AstXmlNode {
         return xmlEmptyNode()
     }
     var node: AstXmlNode =
-        AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, List<AstNodeAttribute>(), Array<AstXmlNode>())
+        AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, ilPosAttrs(), Array<AstXmlNode>())
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
     xmlAddChild(node, this.renameRole(base, AstNodeKind.Receiver))
     return node
@@ -415,7 +427,7 @@ fun Emitter.ilBorrowNode(place: *AstXmlNode, depth: Int): AstXmlNode {
         return xmlEmptyNode()
     }
     var node: AstXmlNode =
-        AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprDeref, List<AstNodeAttribute>(), Array<AstXmlNode>())
+        AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprDeref, ilPosAttrs(), Array<AstXmlNode>())
     xmlAddChild(node, this.renameRole(place, AstNodeKind.Operand))
     return node
 }
@@ -425,7 +437,7 @@ fun Emitter.ilBinaryNode(lhs: *AstXmlNode, op: *Str, rhs: *AstXmlNode): AstXmlNo
         return xmlEmptyNode()
     }
     var node: AstXmlNode =
-        AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprBinary, List<AstNodeAttribute>(), Array<AstXmlNode>())
+        AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprBinary, ilPosAttrs(), Array<AstXmlNode>())
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Op, op))
     xmlAddChild(node, this.renameRole(lhs, AstNodeKind.Lhs))
     xmlAddChild(node, this.renameRole(rhs, AstNodeKind.Rhs))
@@ -504,7 +516,7 @@ fun Emitter.ilCallNode(il: *IlBody, frame: *IlFrame, op: *IlOp): AstXmlNode {
     val method: *IlMethod = *il.methods[methodIndex]
 
     var call: AstXmlNode =
-        AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, List<AstNodeAttribute>(), Array<AstXmlNode>())
+        AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, ilPosAttrs(), Array<AstXmlNode>())
     var first: Int = methodAt + 1
     var callee: AstXmlNode = xmlEmptyNode()
     var closureCall: Str = ""
@@ -734,7 +746,7 @@ fun Emitter.ilOpValueNode(il: *IlBody, frame: *IlFrame, opIndex: Int, depth: Int
                 category = AstNodeCategory.ExprRef
             }
             var node: AstXmlNode =
-                AstXmlNode(AstNodeKind.Expr, category, List<AstNodeAttribute>(), Array<AstXmlNode>())
+                AstXmlNode(AstNodeKind.Expr, category, ilPosAttrs(), Array<AstXmlNode>())
             xmlAddChild(node, this.renameRole(operand, AstNodeKind.Operand))
             return node
         }

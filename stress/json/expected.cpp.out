@@ -820,9 +820,9 @@ Int strCountDigits(Int64 value) {
     return digits;
 }
 void strAddInt(Char* target, Int64 value, Int count) {
-    Int64 rest, _sm_expr5;
+    Int64 rest, _sm_expr5, _sm_expr8;
     Bool _sm_expr1;
-    Int at, _sm_expr3;
+    Int at, _sm_expr3, digit, _sm_expr7, _sm_expr10;
     Char ch;
     rest = value;
     _sm_expr1 = rest > 0;
@@ -842,16 +842,20 @@ void strAddInt(Char* target, Int64 value, Int count) {
     _sm_expr1 = rest <= _sm_expr3;
     if (!(_sm_expr1)) goto L6;
     _sm_expr5 = rest % 10;
-    _sm_expr3 = 0 - _sm_expr5;
+    _sm_expr3 = Int(_sm_expr5);
+    digit = 0 - _sm_expr3;
     at = at - 1;
-    ch = '0' + _sm_expr3;
+    _sm_expr7 = '0' + digit;
+    ch = Char(_sm_expr7);
     target[at] = ch;
     rest = rest / 10;
     goto L4;
     L6:;
     at = at - 1;
-    _sm_expr5 = 0 - rest;
-    ch = '0' + _sm_expr5;
+    _sm_expr8 = 0 - rest;
+    _sm_expr3 = Int(_sm_expr8);
+    _sm_expr10 = '0' + _sm_expr3;
+    ch = Char(_sm_expr10);
     target[at] = ch;
 }
 Span<Char> strBoolView(Bool value) {
@@ -917,7 +921,7 @@ Str intToStr(Int64 value) {
     Int64 rest, _sm_expr4;
     Bool _sm_expr1;
     Str reversed, out;
-    Int digit, _sm_expr6, i;
+    Int _sm_expr5, digit, _sm_expr6, _sm_expr8, i;
     Span<Char> _sm_span4;
     rest = value;
     _sm_expr1 = rest > 0;
@@ -936,24 +940,26 @@ Str intToStr(Int64 value) {
     _sm_expr1 = rest < 0;
     if (!(_sm_expr1)) goto L6;
     _sm_expr4 = rest % 10;
-    digit = 0 - _sm_expr4;
-    ch = '0' + digit;
+    _sm_expr5 = Int(_sm_expr4);
+    digit = 0 - _sm_expr5;
+    _sm_expr6 = '0' + digit;
+    ch = Char(_sm_expr6);
     simse_str_append(reversed, ch);
     rest = rest / 10;
     goto L4;
     L6:;
     out = __sm_stringTable[13];
-    digit = simse_lenOf(reversed);
-    _sm_expr6 = digit + 1;
-    simse_str_reserve(out, _sm_expr6);
+    _sm_expr5 = simse_lenOf(reversed);
+    _sm_expr8 = _sm_expr5 + 1;
+    simse_str_reserve(out, _sm_expr8);
     _sm_expr1 = value < 0;
     if (_sm_expr1) goto L7;
     goto L8;
     L7:;
     simse_str_append(out, '-');
     L8:;
-    digit = simse_lenOf(reversed);
-    i = digit - 1;
+    _sm_expr5 = simse_lenOf(reversed);
+    i = _sm_expr5 - 1;
     _sm_base1 = &reversed;
     _sm_span4 = simse_spanOfStr(_sm_base1);
     L9:;

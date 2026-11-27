@@ -813,9 +813,9 @@ Int strCountDigits(Int64 value) {
     return digits;
 }
 void strAddInt(Char* target, Int64 value, Int count) {
-    Int64 rest, _sm_expr5;
+    Int64 rest, _sm_expr5, _sm_expr8;
     Bool _sm_expr1;
-    Int at, _sm_expr3;
+    Int at, _sm_expr3, digit, _sm_expr7, _sm_expr10;
     Char ch;
     rest = value;
     _sm_expr1 = rest > 0;
@@ -835,16 +835,20 @@ void strAddInt(Char* target, Int64 value, Int count) {
     _sm_expr1 = rest <= _sm_expr3;
     if (!(_sm_expr1)) goto L6;
     _sm_expr5 = rest % 10;
-    _sm_expr3 = 0 - _sm_expr5;
+    _sm_expr3 = Int(_sm_expr5);
+    digit = 0 - _sm_expr3;
     at = at - 1;
-    ch = '0' + _sm_expr3;
+    _sm_expr7 = '0' + digit;
+    ch = Char(_sm_expr7);
     target[at] = ch;
     rest = rest / 10;
     goto L4;
     L6:;
     at = at - 1;
-    _sm_expr5 = 0 - rest;
-    ch = '0' + _sm_expr5;
+    _sm_expr8 = 0 - rest;
+    _sm_expr3 = Int(_sm_expr8);
+    _sm_expr10 = '0' + _sm_expr3;
+    ch = Char(_sm_expr10);
     target[at] = ch;
 }
 Span<Char> strBoolView(Bool value) {

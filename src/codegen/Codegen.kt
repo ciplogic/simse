@@ -375,7 +375,19 @@ data class Emitter(
 // `data class Derived(...) : Base`: every derived class's base by name (collected in
 // `collect`). The relation is read through `sema.Inherit.kt`, which flattens it into the
 // field list and decides the value/pointer conversions a subtype needs.
-    var typeBases: Dictionary<Str, Str>
+    var typeBases: Dictionary<Str, Str>,
+
+// The position of the op being emitted: the reconstructors stamp it on every node they
+// build, so a failure inside the spelling names the statement, not the declaration being
+// emitted (`impl_specs/linear-form-plan.md`, step 2). Zero between bodies.
+    var ilAtLine: Int,
+    var ilAtCol: Int,
+
+// The refusal the IL already positioned (`ilUnsupportedFailure`): `ilEmitOpsChecked`
+// saves and restores `failed`/`error` around the emit, so a refusal that fired inside it
+// travels here, and `emitBodyAt` - which would otherwise re-fail at the declaration -
+// reads it. Empty when none.
+    var ilRefusalError: Str
 ) {
 }
 
@@ -436,7 +448,10 @@ fun newEmitter(inputs: *List<CgInput>, resourceStored: *List<Str>): Emitter {
         Dictionary<Str, Str>(),
         Dictionary<Str, List<Str>>(),
         Dictionary<Str, Bool>(),
-        Dictionary<Str, Str>()
+        Dictionary<Str, Str>(),
+        0,
+        0,
+        ""
     )
 }
 

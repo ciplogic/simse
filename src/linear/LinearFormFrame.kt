@@ -205,6 +205,7 @@ fun IlExtractor.slotTypeText(typeNode: *AstXmlNode): Str {
 fun IlExtractor.emit(kind: IlOpKind, operands: *List<Int>): Unit {
     this.out.ops.append(IlOp(kind, operands))
     this.out.lines.append(this.line)
+    this.out.cols.append(this.col)
 }
 
 fun IlExtractor.unsupported(what: Str): Unit {
@@ -244,10 +245,12 @@ fun IlExtractor.run(body: *List<AstXmlNode>): IlBody {
     if (this.hoisted.size() > 0) {
         var ops: List<IlOp> = List<IlOp>()
         var lines: List<Int> = List<Int>()
+        var cols: List<Int> = List<Int>()
         var i: Int = 0
         while (i < this.hoisted.size()) {
             ops.append(IlOp(IlOpKind.Declare, ilOps1(this.hoisted[i])))
             lines.append(this.hoistedLines[i])
+            cols.append(0)
             i++
         }
         i = 0
@@ -260,8 +263,14 @@ fun IlExtractor.run(body: *List<AstXmlNode>): IlBody {
             lines.append(this.out.lines[i])
             i++
         }
+        i = 0
+        while (i < this.out.cols.size()) {
+            cols.append(this.out.cols[i])
+            i++
+        }
         this.out.ops = ops
         this.out.lines = lines
+        this.out.cols = cols
     }
     return this.out
 }

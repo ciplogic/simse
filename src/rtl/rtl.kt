@@ -454,14 +454,14 @@ fun strAddInt(target: *Char, value: Int64, count: Int): Unit {
         target[0] = '-'
     }
     while (rest <= -10) {
-        val digit: Int = 0 - (rest % 10)
+        val digit: Int = 0 - Int(rest % 10)
         at--
-        val ch: Char = '0' + digit
+        val ch: Char = Char('0' + digit)
         target[at] = ch
         rest = rest / 10
     }
     at--
-    val last: Char = '0' + (0 - rest)
+    val last: Char = Char('0' + Int(0 - rest))
     target[at] = last
 }
 
@@ -848,8 +848,8 @@ fun intToStr(value: Int64): Str {
         reversed.append('0')
     }
     while (rest < 0) {
-        val digit: Int = 0 - (rest % 10)
-        val ch: Char = '0' + digit
+        val digit: Int = 0 - Int(rest % 10)
+        val ch: Char = Char('0' + digit)
         reversed.append(ch)
         rest = rest / 10
     }

@@ -1121,7 +1121,7 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
         info, this.unit, this.closureCounter,
         ilEmptyBody(), Dictionary<Str, Int>(),
         Dictionary<Str, Int>(), Dictionary<Str, Int>(),
-        Dictionary<Str, Int>(), Dictionary<Str, Int>(), 1, 0,
+        Dictionary<Str, Int>(), Dictionary<Str, Int>(), 1, 0, 0,
         List<Int>(), List<Int>(),
         *innerContext, false, Dictionary<Str, AstXmlNode>(), true
     )
