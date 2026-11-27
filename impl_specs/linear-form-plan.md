@@ -308,6 +308,14 @@ is deleted in step 4, and only if nothing produces it then. The `C4244`s are `in
 `Str.addInt` (`src/rtl/rtl.kt`): each narrowing is spelled as the scalar conversion it is.
 One helper appends an op with its line and its column, and every pass goes through it.
 
+*Landed (2026-11-27).* Columns ride through the four passes and the hoist; the
+reconstructors stamp; the six author's refusals report at their statement with hints (four
+pinned, one per shape), the compiler's three keep the `internal:` wrap, and two refusal
+sites proved unreachable (a bare `Point` and a statement construction both build) - left
+in place, unpinned. The `C4244`s are spelled as the scalar conversions they are, and a
+hello-world builds with zero warnings; 32 goldens moved by exactly that spelling, audited.
+The record is `impl_specs/capability-matrix.md`.
+
 ### 3. The `Out` role (M)
 
 The signature table gains a role for an operand the callee writes. The facts exist: the
