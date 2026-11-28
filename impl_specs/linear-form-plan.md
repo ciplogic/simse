@@ -341,14 +341,16 @@ argument follows "Decisions" below - `&place` bound to a `*P` parameter, by sign
 `convertArgument`, which retires the extractor's rule and the `&slot` half of `CgCall`'s;
 the receiver half joins `advance`'s twin as one rule keyed on the receiver's type.
 
-*Landed (2026-11-27, 3a).* `IlMethod` carries `writes` and `grows`; `IlOperandKind.Out`
-names the argument. The mask: `bpWritesNames` first, then the resolved declaration's own
-parameter types, then - over a machine receiver with one argument - the protocol contract
-keyed on the receiver's type. `ilPromoteInitReceiver` is deleted; PromoteRefs and ReusePure
-read the mask. The scan (`tools/_outscan.mjs`): 0 reads before a write over 1,938 bodies,
-33 with the masks off. Two guards the corpus taught: Out arguments stay escape-checked
-(`leak`), and init counting excludes `grows` callees (an `append` after the box would move
-the buffer out from under it). The record is `impl_specs/capability-matrix.md`.
+*Landed (2026-11-27, 3a and 3b).* 3a: `IlMethod` carries `writes` and `grows`;
+`IlOperandKind.Out` names the argument; `ilPromoteInitReceiver` is deleted; the scan
+(`tools/_outscan.mjs`) reads 0 over 1,938 bodies. 3b: the interceptor is deleted - the
+place rule lives in `convertArgument`, gated on the mask, running before the parameter
+question (the machine step resolves no declaration); `CgCall`'s two machine arms are one,
+keyed on the receiver's `..T` type and on resolving to no declaration; `Addr` is an
+opcode (4,565 over the compiler's tree); the recorded place and the mask's position both
+gate the emitter's `&` spelling (slot indices are reused by the passes). Emission
+byte-identical, no golden moved. The typing twins in `CgExpr.kt`/`TypeInferCall.kt` stay
+for steps 7 and 8. The record is `impl_specs/capability-matrix.md`.
 
 ### 4. The verifier goes strict (M)
 

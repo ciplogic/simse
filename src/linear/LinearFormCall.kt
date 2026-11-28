@@ -218,7 +218,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
             packing.append(dst)
             var p: Int = packFrom
             while (p < argNodes.size()) {
-                packing.append(this.convertArgument(target, element, argNodes[p]))
+                packing.append(this.convertArgument(target, element, argNodes[p], false))
                 p++
             }
             this.emit(IlOpKind.Pack, packing)
@@ -428,6 +428,27 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
             }
         }
     }
+    // The write mask, before the arguments convert: an `Out` position's argument is the
+    // place the callee fills, and the conversion hands the place instead of a converted
+    // value (impl_specs/linear-form-plan.md, step 3b). Over a machine receiver with one
+    // argument, the protocol contract is the answer - the step fills the caller's out
+    // slot (`tryAdvance(current: *TItem)`, the one method the `Yieldable` surface
+    // names), whatever the element's own type spells.
+    var writesMask: Str = ""
+    if (receiverCall) {
+        writesMask = ilWritesOf(calleeName, List<Int>(), this.out, target)
+        if (recvSlot >= 0 && argNodes.size() == 1
+            && (xmlKind(this.exprType(lhs)) == AstNodeCategory.TypeYield
+                || xmlKind(semPointeeOf(ilVarType(this.out, recvSlot))) == AstNodeCategory.TypeYield
+                || (!xmlIsEmpty(this.fn.selfDecl)
+                    && xmlKind(lhs) == AstNodeCategory.ExprName
+                    && xmlAttr(lhs, AstNodeAttributeKind.Name) == "this"))
+        ) {
+            // The machine contract wins over whatever the name tables answered: the
+            // generated surface's one method fills the caller's out slot.
+            writesMask = "1"
+        }
+    }
     var i: Int = 0
     while (i < plain) {
         var param: AstXmlNode = xmlEmptyNode()
@@ -435,53 +456,6 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
             param = xmlChildPtr(paramNodes[paramOffset + i], AstNodeKind.Type)
         }
         var argNode: AstXmlNode = argNodes[i]
-        // `tryAdvance(slot)` - the machine's one-method surface (`Yieldable`): the
-        // argument is the *place* the callee fills, and the call takes its address at
-        // the spelling (`CgCall`) exactly as the step's receiver is taken. The extractor
-        // hands the place's expression: a frame name's slot, or - a machine field read
-        // by its bare name, which the frame holds no slot for - an *untyped* read that
-        // folds at the use into `self->x`, so the address the call takes is the field's
-        // own (`&(self->x)`). A typed read would declare a temp and the address would
-        // land on the copy (the first cut filled a copy and dereferenced the null
-        // field); `&slot`'s reference value would box per step.
-        if (receiverCall && calleeName == "tryAdvance" && argNodes.size() == 1
-            && xmlKind(argNode) == AstNodeCategory.ExprRef
-            && recvSlot >= 0
-            && (xmlKind(semPointeeOf(ilVarType(this.out, recvSlot))) == AstNodeCategory.TypeYield
-                || (!xmlIsEmpty(this.fn.selfDecl)
-                    && xmlKind(lhs) == AstNodeCategory.ExprName
-                    && xmlAttr(lhs, AstNodeAttributeKind.Name) == "this"))
-        ) {
-            val operand: *AstXmlNode = xmlChildPtr(argNode, AstNodeKind.Operand)
-            if (xmlKind(operand) == AstNodeCategory.ExprName
-                && !this.isStaticName(xmlAttr(operand, AstNodeAttributeKind.Name))
-            ) {
-                val slotName: Str = xmlAttr(operand, AstNodeAttributeKind.Name)
-                var bound: Int = -1
-                if (this.hasVar(slotName)) {
-                    bound = this.nameOf(operand)
-                } else if (!xmlIsEmpty(this.fn.selfDecl)) {
-                    bound = this.freshSlotText("?")
-                    this.into(bound, operand)
-                }
-                if (bound >= 0) {
-                    args.append(bound)
-                    argTypes.append(this.operandType(bound, argNodes[i]))
-                    i++
-                    continue
-                }
-            } else if (xmlKind(operand) == AstNodeCategory.ExprMember) {
-                // The machine rewrite spelled the slot `this.x`: an *untyped* read of the
-                // member folds at the use into `self->x`, and the address the call takes
-                // is the field's own.
-                val bound: Int = this.freshSlotText("?")
-                this.into(bound, operand)
-                args.append(bound)
-                argTypes.append(this.operandType(bound, argNodes[i]))
-                i++
-                continue
-            }
-        }
         if (xmlIsEmpty(param) && xmlIsEmpty(paramOwner)
             && xmlKind(argNode) == AstNodeCategory.ExprName
             && this.ilOverloadsAllTakeValue(calleeName, i, argNodes.size())
@@ -518,7 +492,9 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
                 paramType = mapped
             }
         }
-        val slot: Int = this.convertArgument(paramOwner, paramType, argNode)
+        val slot: Int = this.convertArgument(
+            paramOwner, paramType, argNode, receiverCall && ilWritesHas(writesMask, i + 1)
+        )
         this.ilTypeElementFill(callee, argNodes[i], slot)
         args.append(slot)
         argTypes.append(this.operandType(slot, argNodes[i]))
@@ -545,20 +521,16 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
     }
 
     if (receiverCall) {
-        // The mask: the borrow tables and the callee's own signature. Over a machine
-        // receiver with one argument, the protocol contract is the answer - the step
-        // fills the caller's out slot (`tryAdvance(current: *TItem)`, the one method the
-        // `Yieldable` surface names), whatever the element's own type spells.
-        var writes: Str = ilWritesOf(calleeName, fullTypes, this.out, target)
-        if (writes.isEmpty() && fullTypes.size() >= 2
-            && xmlKind(this.exprType(lhs)) == AstNodeCategory.TypeYield
-        ) {
-            writes = "1"
+        // The mask was computed before the arguments converted; the record now carries it
+        // with the argument types the record spells (`fullTypes` - the mask's positions
+        // are the same numbering).
+        if (writesMask.isEmpty()) {
+            writesMask = ilWritesOf(calleeName, fullTypes, this.out, target)
         }
         operands.append(
             this.methodIndex(
                 calleeName, IlMethodKind.Method, -1, returnType, fullTypes, recvIsValue, "", "",
-                writes, ilCallGrows(calleeName, target)
+                writesMask, ilCallGrows(calleeName, target)
             )
         )
         operands.append(recvSlot)

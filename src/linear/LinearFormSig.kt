@@ -54,7 +54,10 @@ fun makeIlSignatures(): List<IlSignature> {
         IlSignature(IlOpKind.Return, "Value"),
         IlSignature(IlOpKind.ReturnVoid, ""),
         IlSignature(IlOpKind.Lambda, "Var"),
-        IlSignature(IlOpKind.Unsupported, "Var,Text")
+        IlSignature(IlOpKind.Unsupported, "Var,Text"),
+        // The address of a slot, one operation (`impl_specs/linear-form-plan.md`, step 3b):
+        // what the conversion to a `*T` parameter spelled through a `Deref` over a value.
+        IlSignature(IlOpKind.Addr, "Var,Var")
     )
     return table
 }
@@ -98,7 +101,8 @@ fun makeIlOpKindTexts(): List<Str> {
         "Return",
         "ReturnVoid",
         "Lambda",
-        "Unsupported"
+        "Unsupported",
+        "Addr"
     )
     return texts
 }
@@ -279,6 +283,10 @@ fun ilReceiverTypeText(typeNode: *AstXmlNode): Str {
 fun ilWritesDestination(kind: IlOpKind): Bool {
     // Written out rather than derived: deriving it needs to know which operands produce a value.
     when (kind) {
+        IlOpKind.Addr -> {
+            return true
+        }
+
         IlOpKind.SetVar -> {
             return true
         }

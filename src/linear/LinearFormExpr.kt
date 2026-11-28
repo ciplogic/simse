@@ -508,7 +508,7 @@ fun IlExtractor.packArguments(target: AstXmlNode, args: List<AstXmlNode>, from: 
     operands.append(slot)
     var i: Int = from
     while (i < args.size()) {
-        operands.append(this.convertArgument(target, element, args[i]))
+        operands.append(this.convertArgument(target, element, args[i], false))
         i++
     }
     this.emit(IlOpKind.Pack, operands)
@@ -543,8 +543,47 @@ fun IlExtractor.readThrough(pointeeType: *AstXmlNode, from: Int): Int {
 //
 // Nothing is converted when the two are not the same type; a `*T` binding is a different
 // question, so the writer writes it.
-fun IlExtractor.convertArgument(callee: *AstXmlNode, param: *AstXmlNode, arg: *AstXmlNode): Int {
+fun IlExtractor.convertArgument(
+    callee: *AstXmlNode, param: *AstXmlNode, arg: *AstXmlNode, outPos: Bool
+): Int {
+    // The argument is the *place* the callee fills (`&x` bound to a `*P` parameter at an
+    // `Out` position - `IlMethod.writes`, impl_specs/linear-form-plan.md step 3b): the
+    // operand's own place rides to the call, and the spelling takes its address - a frame
+    // name's slot, or, where the frame holds no slot for the read, an *untyped* read that
+    // folds at the use into `self->x`, so the address the call takes is the field's own
+    // (`&(self->x)`). A typed read would declare a temp and the address would land on the
+    // copy; the reference value `&x` spells would box. The rule is the machine contract's
+    // (`tryAdvance(current: *TItem)`) opened to every callee the mask marks - what the old
+    // interceptor keyed on the name `tryAdvance` is keyed on now. A temporary's address is
+    // still the call's to take, so anything but a name or a member read falls through to
+    // the conversion below.
+    if (outPos && xmlKind(arg) == AstNodeCategory.ExprRef) {
+        val operand: *AstXmlNode = xmlChildPtr(arg, AstNodeKind.Operand)
+        val kind: AstNodeCategory = xmlKind(operand)
+        if (kind == AstNodeCategory.ExprName && !this.isStaticName(xmlAttr(operand, AstNodeAttributeKind.Name))) {
+            val slotName: Str = xmlAttr(operand, AstNodeAttributeKind.Name)
+            var bound: Int = -1
+            if (this.hasVar(slotName)) {
+                bound = this.nameOf(operand)
+            } else if (!xmlIsEmpty(this.fn.selfDecl)) {
+                bound = this.freshSlotText("?")
+                this.into(bound, operand)
+            }
+            if (bound >= 0) {
+                this.out.outPlaces.insert(bound, true)
+                return bound
+            }
+        } else if (kind == AstNodeCategory.ExprMember) {
+            val bound: Int = this.freshSlotText("?")
+            this.into(bound, operand)
+            this.out.outPlaces.insert(bound, true)
+            return bound
+        }
+    }
     if (xmlIsEmpty(param)) {
+        // A machine step resolves no declaration - its parameter is the contract's, not
+        // a node here - so the place rule above runs first, and only what it does not
+        // take falls through to a conversion against no parameter.
         return this.operandOf(arg)
     }
     // A function *name* passed where a callable type expects one (`markScan(*table, " ",
@@ -664,12 +703,20 @@ fun IlExtractor.convertArgument(callee: *AstXmlNode, param: *AstXmlNode, arg: *A
             this.emit(IlOpKind.SetVar, ilOps2(ptrSlot, this.operandOf(arg)))
             return ptrSlot
         }
-        // The address, spelled as an explicit `*` spells it (`into`'s `Deref` arm is the
-        // definition): a member/index chain *is* its own address (`&a.f`, never the address of a
-        // copy), a static name is its `GetStaticAddr`, a name is `&x`.
+        // The address. A plain value name is one `Addr` operation - the address said
+        // (`impl_specs/linear-form-plan.md`, step 3b), where a `Deref` over the value
+        // spelled it and the rebuild was the same node; a member/index chain *is* its own
+        // address (`&a.f`, never the address of a copy), and a static name its
+        // `GetStaticAddr`, both through `into`'s arms as before.
         val handle: AstXmlNode = param
         val bound: Int = this.freshSlot(ilTypeText(handle), handle)
-        this.into(bound, ilDerefNode(arg))
+        if (xmlKind(arg) == AstNodeCategory.ExprName
+            && !this.isStaticName(xmlAttr(arg, AstNodeAttributeKind.Name))
+        ) {
+            this.emit(IlOpKind.Addr, ilOps2(bound, this.nameOf(arg)))
+        } else {
+            this.into(bound, ilDerefNode(arg))
+        }
         return bound
     }
     if (wantShared) {

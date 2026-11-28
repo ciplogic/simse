@@ -581,7 +581,21 @@ fun Emitter.call(e: *AstXmlNode): Str {
                 // *address*, not a reference value - `&slot` spells the raw address the
                 // wrapper writes through, the same spelling the step's own receiver takes
                 // (a `Ref<T>` box would allocate on every call).
-                if (calleeText == "tryAdvance" && xmlKind(receiver) == AstNodeCategory.TypeYield) {
+                // The machine's generated surface (`impl_specs/yield.md`): `advance` -
+                // the step, an *extension* on the machine's class spelled `advance(&m)` -
+                // and `tryAdvance`, the one-method contract, spelled
+                // `tryAdvance(&m, &slot)` - the receiver's address, then the caller's out
+                // slot's. No declaration is collected for either (the wrapper is
+                // generated beside the machine's C++ class), which is what keys this arm:
+                // a machine receiver whose callee resolves to nothing is the generated
+                // surface; a declared machine-receiver extension (`select`, `where`)
+                // resolves below and spells its own way. An `Out` argument arrives as the
+                // place itself (`IlBody.outPlaces`, wrapped in the reference node), so the
+                // `&` spells the raw address the wrapper writes through - a `Ref<T>` box
+                // would allocate on every call.
+                if (xmlKind(receiver) == AstNodeCategory.TypeYield
+                    && this.findExtensionFn(calleeText, receiverExpr, args.size()) < 0
+                ) {
                     var recvText: Str = ""
                     if (xmlKind(receiverExpr) == AstNodeCategory.ExprDeref) {
                         val operand: *AstXmlNode = xmlChildPtr(receiverExpr, AstNodeKind.Operand)
@@ -605,53 +619,26 @@ fun Emitter.call(e: *AstXmlNode): Str {
                         val machineText: Str = this.expr(receiverExpr, 12, xmlEmptyNode())
                         recvText = "&" + machineText
                     }
+                    if (args.size() == 0) {
+                        // The step: `advance(&m)`.
+                        return `advance(@recvText)`
+                    }
+                    // The one-method contract: `tryAdvance(&m, &slot)` - the out slot's
+                    // address, whether the place is a frame name, a machine field read
+                    // that folded to `self->x`, or the wrapper's own spelling of `&x`.
                     var slotArgs: List<Str> = List<Str>()
                     for (*argNode in argNodes) {
                         if (xmlKind(argNode) == AstNodeCategory.ExprRef) {
-                            // The AST path (a body spelled straight through): `&slot` is
-                            // the address, taken here.
                             val slotOperand: *AstXmlNode = xmlChildPtr(argNode, AstNodeKind.Operand)
                             val slotText: Str = this.expr(slotOperand, 0, xmlEmptyNode())
                             slotArgs.append("&" + slotText)
                         } else {
-                            // The IL path: the extractor handed the *place* - a frame
-                            // name, or the field read that folded to `self->x` - and the
-                            // address is the call's to take.
                             val slotText2: Str = this.expr(argNode, 0, xmlEmptyNode())
                             slotArgs.append("&" + slotText2)
                         }
                     }
                     val argsText: Str = cgJoin(slotArgs, ", ")
                     return `tryAdvance(@recvText, @argsText)`
-                }
-                if (calleeText == "advance" && xmlKind(receiver) == AstNodeCategory.TypeYield) {
-                    // The step takes the machine's *address*. A receiver that already is the
-                    // machine behind its pointer - `this` in a machine-receiver function, or
-                    // a deref of a machine-pointer slot - spells that address directly; a
-                    // machine *value* has its address taken.
-                    if (xmlKind(receiverExpr) == AstNodeCategory.ExprDeref) {
-                        val operand: *AstXmlNode = xmlChildPtr(receiverExpr, AstNodeKind.Operand)
-                        if (xmlKind(operand) == AstNodeCategory.ExprName
-                            && xmlAttr(operand, AstNodeAttributeKind.Name) == "this"
-                            && this.selfKind == NameKind.Value
-                        ) {
-                            val selfText: Str = this.selfPointer()
-                            return `advance(@selfText)`
-                        }
-                        if (xmlKind(this.inferType(operand)) == AstNodeCategory.TypePointer) {
-                            val ptrText: Str = this.expr(operand, 12, xmlEmptyNode())
-                            return `advance(@(ptrText))`
-                        }
-                    }
-                    if (xmlKind(receiverExpr) == AstNodeCategory.ExprName
-                        && xmlAttr(receiverExpr, AstNodeAttributeKind.Name) == "this"
-                        && this.selfKind == NameKind.Value
-                    ) {
-                        val selfText2: Str = this.selfPointer()
-                        return `advance(@selfText2)`
-                    }
-                    val machineText: Str = this.expr(receiverExpr, 12, xmlEmptyNode())
-                    return `advance(&@(machineText))`
                 }
                 val fnIndex: Int = this.findExtensionFn(calleeText, receiverExpr, args.size())
                 if (fnIndex >= 0) {

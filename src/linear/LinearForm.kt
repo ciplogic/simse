@@ -85,7 +85,13 @@ enum class IlOpKind {
     Return,
     ReturnVoid,
     Lambda,
-    Unsupported
+    Unsupported,
+
+// The address of a slot, as one operation: the conversion's answer to a `*T` parameter
+// (`impl_specs/linear-form-plan.md`, step 3b) - what a `Deref` over a value spelled, now
+// said instead of spelled. The emitter writes `&slot` or `simse_addressOf(...)` by the
+// operand's kind, the text the `Deref`-over-a-value spelled.
+    Addr
 }
 
 data class IlVar(var name: Str, var typeIndex: Int, var kind: IlVarKind)
@@ -153,7 +159,13 @@ data class IlBody(
 // The column beside each line, from the statement the extraction stood on: a report the
 // IL carries points where the statement was written, not at the declaration
 // (impl_specs/linear-form-plan.md, step 2).
-    var cols: List<Int>
+    var cols: List<Int>,
+
+// The slots an `Out` argument rides as the *place itself* - no conversion op, the call's
+// spelling takes the address (`&slot`). The extractor records them when the place rule
+// fires (`convertArgument`); the emitter's call spelling reads the set - the fact "this
+// argument is the place" travels beside the instruction, not through a name test.
+    var outPlaces: Dictionary<Int, Bool>
 )
 
 // What the extractor needs to know about the body's function. A lambda (or machine-method)
@@ -339,7 +351,8 @@ fun ilEmptyBody(): IlBody {
     return IlBody(
         "", 0, "", "", List<Str>(), List<AstXmlNode>(), Dictionary<Str, AstXmlNode>(),
         List<IlVar>(), List<Str>(),
-        List<IlMethod>(), List<Str>(), List<IlOp>(), List<Int>(), List<Int>()
+        List<IlMethod>(), List<Str>(), List<IlOp>(), List<Int>(), List<Int>(),
+        Dictionary<Int, Bool>()
     )
 }
 

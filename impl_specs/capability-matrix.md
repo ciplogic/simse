@@ -6512,3 +6512,33 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   cannot yet say is *on which paths* - step 4's verifier is the tool that answers that with
   real dataflow. Verified: `bun tools/iterate.js --full` - **176/176**, then **176/176 with
   the walk on**, and both fixed points; the published bootstrap refreshed.
+
+- **`&place` is the out argument, by signature, and both `tryAdvance` name tests are gone
+  (step 3b)**. The extractor's interceptor - the rule that matched the callee's *name* to
+  hand the machine step its out slot raw - is deleted; the rule lives in `convertArgument`
+  now, gated on the method record's write mask (`Out` position) instead of the name, and
+  open to every callee the mask marks: an argument spelled `&x` at an `Out` position rides
+  to the call as the *place* - a frame name's slot, or an untyped read that folds at the
+  use into `self->x` - and the spelling takes its address. The rule runs before the
+  parameter question, because the machine step resolves no declaration: its parameter is
+  the contract's, not a node at the call. The extractor records the slots it handed over
+  raw (`IlBody.outPlaces`), and the emitter's call spelling wraps exactly those - both
+  facts, the recorded place *and* the mask's position, since slot indices are reused by the
+  passes and a stale index alone would box a value (the corpus caught it:
+  `action(item)` spelled as a `makeRef` of a lambda parameter). `CgCall`'s two machine-step
+  arms - `tryAdvance` and `advance`, each gated on the callee's *name* - are one arm now,
+  gated on the receiver's `..T` type and on the callee resolving to *no* declaration: the
+  generated surface is what has no declaration; a declared machine-receiver extension
+  (`select`, `where`) resolves and spells its own way. `Addr` is an opcode: the address the
+  conversion to a `*T` parameter takes is said (`Addr dst, src`, spelled `&slot` as the
+  `Deref`-over-a-value it replaces), not spelled - 4,565 of them over the compiler's own
+  tree. **Emission is byte-identical**: no golden moved, in the corpus or in the
+  self-transpile; the scan stays at **0 reads before a write** over 1,938 bodies. Two
+  lessons of method from the landing: the restage-from-bootstrap recovery
+  (`ai/building.md`) was needed twice when the compiler's own broken loops blocked the
+  build of their own fix, and a debugging trace left in the compiler's own source is a
+  build break of its own (a list literal of mixed types - the assignability check is
+  report-only no more). The remaining `tryAdvance`/`advance` names in `CgExpr.kt` and
+  `TypeInferCall.kt` are the *typing* twins, step 7 and 8's to retire. Verified: `bun
+  tools/iterate.js --full` - **176/176**, then **176/176 with the walk on**, and both
+  fixed points; the published bootstrap refreshed.

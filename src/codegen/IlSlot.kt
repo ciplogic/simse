@@ -586,11 +586,25 @@ fun Emitter.ilCallNode(il: *IlBody, frame: *IlFrame, op: *IlOp): AstXmlNode {
     }
     var i: Int = first
     while (i < op.operands.size()) {
-        val arg: AstXmlNode = this.ilOperandNode(il, frame, op.operands[i], 0)
+        var arg: AstXmlNode = this.ilOperandNode(il, frame, op.operands[i], 0)
         if (xmlIsEmpty(arg)) {
             val methodNameText3: Str = method.name
             this.ilWhy = `an argument of '@methodNameText3'`
             return xmlEmptyNode()
+        }
+        // A slot the extractor handed over as the *place* (`IlBody.outPlaces` - an `Out`
+        // argument the callee fills) is spelled `&`: wrapped in the reference node the
+        // call spelling takes the address through (impl_specs/linear-form-plan.md, step
+        // 3b - what the machine step's name test did, keyed on the fact the IL carries).
+        // Both facts must hold - the recorded place and the mask's position - since slot
+        // indices are reused by the passes, and a stale index alone would wrap a value.
+        if (il.outPlaces.has(op.operands[i])
+            && ilWritesHas(method.writes, i - first + 1)
+        ) {
+            var ref: AstXmlNode =
+                AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprRef, ilPosAttrs(), Array<AstXmlNode>())
+            xmlAddChild(ref, this.renameRole(arg, AstNodeKind.Operand))
+            arg = ref
         }
         xmlAddChild(call, this.renameRole(arg, AstNodeKind.Arg))
         i++
@@ -734,7 +748,7 @@ fun Emitter.ilOpValueNode(il: *IlBody, frame: *IlFrame, opIndex: Int, depth: Int
             return this.ilBorrowNode(node, depth)
         }
 
-        IlOpKind.Deref, IlOpKind.CopyValue, IlOpKind.Box -> {
+        IlOpKind.Deref, IlOpKind.CopyValue, IlOpKind.Box, IlOpKind.Addr -> {
             val operand: AstXmlNode = this.ilSlotNode(il, frame, this.ilOpOperand(op.operands, 1), depth)
             if (xmlIsEmpty(operand)) {
                 return xmlEmptyNode()
@@ -745,6 +759,9 @@ fun Emitter.ilOpValueNode(il: *IlBody, frame: *IlFrame, opIndex: Int, depth: Int
             } else if (kind == IlOpKind.Box) {
                 category = AstNodeCategory.ExprRef
             }
+            // An `Addr` is the address the conversion takes (`impl_specs/linear-form-plan.md`,
+            // step 3b): said, where a `Deref` over a value operand spelled it. The `ExprDeref`
+            // node is the same node, and the operand is a value - the spelling is `&x`.
             var node: AstXmlNode =
                 AstXmlNode(AstNodeKind.Expr, category, ilPosAttrs(), Array<AstXmlNode>())
             xmlAddChild(node, this.renameRole(operand, AstNodeKind.Operand))

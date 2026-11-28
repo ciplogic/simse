@@ -78,6 +78,12 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
             return `@ilVarNameText11 = &@ilVarNameText12`
         }
 
+        IlOpKind.Addr -> {
+            val addrDst: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val addrSrc: Str = ilVarName(body, ilOperandAt(operands, 1))
+            return `@addrDst = the address of @addrSrc`
+        }
+
         IlOpKind.Deref -> {
             val ilVarNameText13: Str = ilVarName(body, ilOperandAt(operands, 0))
             val ilVarNameText14: Str = ilVarName(body, ilOperandAt(operands, 1))
